@@ -26,3 +26,7 @@ generated/
 
 
 *.zip
+
+# Prestop's checked-in data (bays, stop fixes, train tracks, hand-kept timetables) is not a download.
+!/prestop_api/data/
+!/prestop_api/data/gtfs/

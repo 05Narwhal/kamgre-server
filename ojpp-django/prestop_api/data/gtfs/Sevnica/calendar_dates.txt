@@ -1,0 +1,15 @@
+service_id,date,exception_type
+delavnik,20261225,2
+delavnik,20270101,2
+delavnik,20270208,2
+delavnik,20270329,2
+delavnik,20270427,2
+prvi_petek,20260904,1
+prvi_petek,20261002,1
+prvi_petek,20261106,1
+prvi_petek,20261204,1
+prvi_petek,20270205,1
+prvi_petek,20270305,1
+prvi_petek,20270402,1
+prvi_petek,20270507,1
+prvi_petek,20270604,1

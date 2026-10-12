@@ -1,0 +1,8 @@
+# One operator per company where names cannot decide (see operators.py). Ids whose names normalize the same
+# (LPP's "Ljubljanski Potniški Promet" and "Ljubljanski potniški promet, d.o.o.") merge without a row here;
+# a row also picks the canonical id and the name shown for the merged operator.
+source_id,canonical_id,name
+IJPP:1118,LPP:lpp,Ljubljanski potniški promet (LPP)
+Postojna:Postojna,IJPP:1119,Nomago
+MOMS:1121,IJPP:1121,AP Murska Sobota
+bolt_359:bike,bolt_359:scooter,Bolt

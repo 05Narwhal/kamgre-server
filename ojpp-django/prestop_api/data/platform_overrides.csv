@@ -1,0 +1,4 @@
+# Bays set by hand; they win over the station's departure board (platforms.py).
+# station: the feed stop of the bus station (IJPP:1126954 = Ljubljana AP); time: scheduled departure HH:MM;
+# destination: as the trip shows it (matched loosely, "Koper" ~ "Koper AP"); bay: the bay number (local_ref).
+station,time,destination,bay,note

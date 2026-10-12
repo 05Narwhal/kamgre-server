@@ -1,0 +1,27 @@
+# Hand-checked stop corrections; they win over the feeds and the automatic road snap (see stopfix.py).
+# type: stop (move this stop; merge_into joins it to another stop's station) | station (pin the merged station's marker)
+#       | replacement (where SZ replacement buses leave for station stop_id; label is shown to riders)
+# note: where the position comes from.
+stop_id,type,lat,lon,merge_into,label,note
+IJPP:1121103,stop,45.538642,13.737744,,,"Koper AP: OSM node 1638019237 'Avtobusna postaja Koper' (gtfs:stop_id:ijpp=1121103, edited 2026-08); feed had it ~55 m SE"
+IJPP:1121103,station,45.538642,13.737744,,,Koper AP station marker on the AP platform (bus_station area way 305048183 lies just north)
+MOKoper:1121103,stop,,,IJPP:1121103,,Koper city-bus stop at the AP (same OSM node)
+IJPP:1123012,stop,,,IJPP:1121103,,"Koper: stop by the railway station (SZ buses), part of the AP/station hub"
+IJPP:1126449,stop,45.607759,13.934327,,,Kozina: OSM node 12344378961 (bus stop with shelter on road 409)
+IJPP:1126450,stop,45.607759,13.934327,IJPP:1126449,,Kozina: same bus stop (OSM node 12344378961)
+IJPP:1126451,stop,45.607759,13.934327,IJPP:1126449,,Kozina: same bus stop (OSM node 12344378961)
+IJPP:1126449,station,45.607759,13.934327,,,Kozina station marker on the road (OSM node 12344378961)
+IJPP:1122804,replacement,46.058118,14.513669,,"Avtobusna postaja Ljubljana (peroni 37, 38, 39)","SŽ notices 10088 (Ljubljana - Logatec) and 11049 (Ljubljana - Jesenice), ovire 2026-10-10: 'Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39)', map link maps.app.goo.gl/sKV8o5F6W1YYLmLZ6 → pin 46.058118,14.513669"
+IJPP:1122804,replacement,46.0578823,14.5120725,,Avtobusna postaja Ljubljana (Masarykova cesta),"SŽ notice 'Vlak vozi samo do/z postaje Ljubljana Šiška' (ovire, 2026-10-10): at the entrance to the station underpass"
+IJPP:1167093,replacement,46.0610393,14.5002318,,Avtobusno postajališče SŽ Šiška,"SŽ notice 'Vlak vozi samo do/z postaje Ljubljana Šiška' (ovire, 2026-10-10): next to the temporary station"
+IJPP:1122801,stop,46.059555,14.582183,,,"Ljubljana Polje rail stop: OSM halt node 1867166628 (checked 2026-10-11); feed had it 196 m off"
+IJPP:1122874,stop,45.669482,14.837785,,,"Stara Cerkev rail stop: OSM halt node 2373003636 (checked 2026-10-11); feed had it 207 m off"
+IJPP:1122903,stop,46.400880,15.731156,,,"Cirkovce rail stop: OSM halt node 10083852855 (checked 2026-10-11); feed had it 523 m off"
+IJPP:1122925,stop,46.605356,15.110471,,,"Trbonje rail stop: OSM halt node 979608956 (checked 2026-10-11); feed had it 1587 m off"
+IJPP:1122931,stop,46.608178,15.191376,,,"Sveti Vid rail stop: OSM halt node 1304777277 (checked 2026-10-11); feed had it 456 m off"
+IJPP:1122934,stop,46.644891,15.663549,,,"Cirknica rail stop: OSM halt node 10195858627 (checked 2026-10-11); feed had it 276 m off"
+IJPP:1122942,stop,46.550440,14.985970,,,"Dobrije rail stop: OSM halt node 1867208269 (checked 2026-10-11); feed had it 385 m off"
+IJPP:1122988,stop,46.236701,15.255854,,,"Celje Lava rail stop: OSM halt node 939949697 (checked 2026-10-11); feed had it 290 m off"
+IJPP:1123032,stop,45.955230,13.635280,,,"Nova Gorica rail stop: OSM station node 13908278283 (checked 2026-10-11); feed had it 332 m off"
+IJPP:1123033,stop,45.975070,13.647963,,,"Solkan rail stop: OSM halt node 9907002126 (checked 2026-10-11); feed had it 303 m off"
+IJPP:1168304,stop,46.393829,16.203577,,,"Frankovci rail stop: OSM halt node 422472910 (checked 2026-10-11); feed had it 653 m off"

@@ -1,0 +1,302 @@
+# SŽ replacement-bus stops per line (potniski.sz.si 'Lokacije postankov nadomestnih prevozov'),
+# imported by manage.py import_sz_stops. source: how the position was read from SŽ's map link;
+# map_camera_only is only where the map was looking (treated as unverified). Fix a stop in
+# stop_overrides.csv (type replacement), which wins over this list.
+route,station,lat,lon,label,source
+Ljubljana – Kranj – Jesenice,Ljubljana,46.058118,14.513669,"Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39).",place_pin
+Ljubljana – Kranj – Jesenice,Litostroj,46.076810,14.488618,"Avtobusno postajališče mestnega prometa Litostrojska (naprej, ob Litostrojski cesti in ne obračališče!)",directions_last_waypoint_candidate
+Ljubljana – Kranj – Jesenice,Ljubljana Stegne,46.086712,14.479941,"Avtobusno postajališče mestnega prometa Tehnounion, ob železniški postaji",place_pin
+Ljubljana – Kranj – Jesenice,Ljubljana Vižmarje,46.100397,14.464469,Zunanja stran železniške postaje,place_pin
+Ljubljana – Kranj – Jesenice,Medno,46.124461,14.436951,"Avtobusno postajališče primestnega prometa ob gostilni Cirman, ob regionalni cesti",directions_destination
+Ljubljana – Kranj – Jesenice,Medvode,46.138281,14.413459,"Avtobusni postajališči Medvoška AP na Gorenjski cesti (obe strani, za pripadajočo smer potovanja)",place_pin
+Ljubljana – Kranj – Jesenice,Reteče,46.157667,14.370556,Avtobusno postajališče primestnega prometa Reteče na lokalni cesti,directions_destination
+Ljubljana – Kranj – Jesenice,Škofja Loka,46.174239,14.335544,Zunanja stran železniške postaje,place_pin
+Ljubljana – Kranj – Jesenice,Kranj,46.239003,14.348442,Zunanja stran železniške postaje,place_pin
+Ljubljana – Kranj – Jesenice,Podnart,46.293361,14.258421,Zunanja stran železniške postaje,search_coordinates
+Ljubljana – Kranj – Jesenice,Otoče,46.310534,14.231336,Zunanja stran železniške postaje,place_pin
+Ljubljana – Kranj – Jesenice,Globoko,46.323253,14.209195,Ob vznožju stopnic do železniške postaje,search_coordinates
+Ljubljana – Kranj – Jesenice,Radovljica,46.343505,14.172824,Avtobusna postaja Radovljica,directions_last_waypoint_candidate
+Ljubljana – Kranj – Jesenice,Lesce Bled,46.360748,14.157908,"Avtobusno postajališče Lesce ŽP, zunanja stran železniške postaje",place_pin
+Ljubljana – Kranj – Jesenice,Žirovnica,46.404400,14.133666,"Avtobusno postajališče Žirovnica OPC, ob regionalni cesti",directions_destination
+Ljubljana – Kranj – Jesenice,Slovenski Javornik,46.426709,14.088664,"Avtobusno postajališče Slovenski Javornik TURIST, ob odcepu",place_pin
+Ljubljana – Kranj – Jesenice,Jesenice,46.436458,14.055030,Zunanja stran železniške postaje,place_pin
+Ljubljana – Zidani Most – Dobova,Ljubljana,46.058118,14.513669,"Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39).",place_pin
+Ljubljana – Zidani Most – Dobova,Ljubljana Polje,46.059804,14.583655,"Avtobusno postajališče Polje kolodvor, ob podvozu",directions_explicit_destination
+Ljubljana – Zidani Most – Dobova,Ljubljana Zalog,46.059613,14.615184,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Laze,46.087970,14.687300,Zunanja stran železniške postaje,place_pin
+Ljubljana – Zidani Most – Dobova,Jevnica,46.088377,14.735318,"Avtobusno postajališče Senožeti, ob krožišču",directions_last_waypoint_candidate
+Ljubljana – Zidani Most – Dobova,Kresnice,46.103449,14.788883,Avtobusno obračališče pri pošti,directions_destination
+Ljubljana – Zidani Most – Dobova,Litija,46.057847,14.825635,Zunanja stran železniške postaje,directions_destination
+Ljubljana – Zidani Most – Dobova,Sava,46.089764,14.897669,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Zidani Most – Dobova,Zagorje,46.120590,14.991078,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Trbovlje,46.126446,15.036601,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Hrastnik,46.123215,15.093077,"Avtobusno postajališče Logar ŽP, pod železniško postajo",directions_last_waypoint_candidate
+Ljubljana – Zidani Most – Dobova,Zidani Most,46.085494,15.170708,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Radeče,46.064306,15.191770,"Avtobusno postajališče Radeče, ob železniški postaji",google_place
+Ljubljana – Zidani Most – Dobova,Loka,46.053783,15.205748,"Ob glavni cesti, pri odcepu za železniško postajo, ob Domu upokojencev",directions_destination
+Ljubljana – Zidani Most – Dobova,Breg,46.041817,15.236184,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Sevnica,46.009545,15.301520,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Blanca,45.989951,15.396709,Makadamsko parkirišče na glavni cesti ob železniški postaji,google_place
+Ljubljana – Zidani Most – Dobova,Brestanica,45.988017,15.469240,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Krško,45.956301,15.493586,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Libna,45.945503,15.540358,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Brežice,45.923576,15.589989,Zunanja stran železniške postaje,google_place
+Ljubljana – Zidani Most – Dobova,Dobova,45.898325,15.654927,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Zidani Most,46.085494,15.170708,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Rimske Toplice,46.123204,15.203234,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Laško,46.154570,15.232314,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Celje,46.227956,15.267382,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Štore,46.221785,15.321519,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Šentjur,46.213181,15.396244,Avtobusno obračališče pri pošti,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Grobelno,46.213090,15.439771,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Ponikva,46.247864,15.430778,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Ostrožno,46.264011,15.472886,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Dolga Gora,46.277150,15.497797,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Poljčane,46.313571,15.577002,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Slovenska Bistrica,46.363614,15.598232,"Avtobusno postajališče Črešnjevec, ob železniški postaji",google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Pragersko,46.395461,15.661950,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Rače,46.453751,15.664048,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Orehova vas,46.473089,15.663553,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Hoče,46.501036,15.663063,Zunanja stran železniške postaje,google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Maribor Tezno,46.539447,15.651313,Zunanja stran železniške postaje,directions_last_waypoint_candidate
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Maribor,46.561728,15.656944,"Avtobusno postajališče ŽP Maribor, pred železniško postajo",google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Pesnica,46.608041,15.675821,Avtobusno postajališče Pesnica pri Mariboru,directions_destination
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Cirknica,46.646537,15.666325,Avtobusno postajališče Cirknica Švajncer,directions_destination
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Šentilj,46.675005,15.656747,Avtobusno postajališče Šentilj v Slovenskih Goricah (zunanja stran železniške postaje),google_place
+Zidani Most – Celje – Pragersko – Maribor – Špilje / Spielfeld-Strass (A),Špilje / Spielfeld-Strass (A),46.709874,15.629267,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Pragersko,46.395461,15.661950,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Šikole,46.400910,15.697165,Zunanja stran železniške postaje,map_camera_only
+Pragersko – Ormož – Murska Sobota – Hodoš,Cirkovce,46.400780,15.731479,Zunanja stran železniške postaje,directions_destination
+Pragersko – Ormož – Murska Sobota – Hodoš,Strnišče,46.400615,15.770365,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Kidričevo,46.400000,15.800000,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Hajdina,46.403157,15.855077,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Ptuj,46.422395,15.878659,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Moškanjci,46.423043,15.983571,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Zamušani,46.421131,16.017265,Zunanja stran železniške postaje,directions_destination
+Pragersko – Ormož – Murska Sobota – Hodoš,Osluševci,46.419200,16.048078,Zunanja stran železniške postaje,directions_destination
+Pragersko – Ormož – Murska Sobota – Hodoš,Velika Nedelja,46.415057,16.104858,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Ormož,46.403303,16.156018,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Pušenci,46.409938,16.176591,Zunanja stran železniške postaje,directions_destination
+Pragersko – Ormož – Murska Sobota – Hodoš,Pavlovci,46.426585,16.179311,Avtobusno postajališče Pavlovci ob glavni cesti,directions_destination
+Pragersko – Ormož – Murska Sobota – Hodoš,Ivanjkovci,46.458993,16.156238,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Mekotnjak,46.500989,16.155217,"Pri gostilni Tramšek, ob glavni cesti",directions_last_waypoint_candidate
+Pragersko – Ormož – Murska Sobota – Hodoš,Ljutomer mesto,46.520986,16.199626,Ob železniški postaji,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Ljutomer,46.529016,16.189246,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Grlava,46.556135,16.175129,Avtobusno postajališče Krištanci ob železniški postaji,directions_destination
+Pragersko – Ormož – Murska Sobota – Hodoš,Veržej,46.573031,16.180901,Pri odcepu za železniško postajo,directions_destination
+Pragersko – Ormož – Murska Sobota – Hodoš,Lipovci,46.623649,16.211591,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Murska Sobota,46.659392,16.171597,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Puconci,46.703374,16.153648,Avtobusno postajališče Puconci ob železniški postaji,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Mačkovci,46.783457,16.164354,Zunanja stran železniške postaje,map_camera_only
+Pragersko – Ormož – Murska Sobota – Hodoš,Gornji Petrovci,46.800909,16.218603,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Šalovci,46.820959,16.280934,Zunanja stran železniške postaje,google_place
+Pragersko – Ormož – Murska Sobota – Hodoš,Hodoš,46.820320,16.330099,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Ljubljana,46.058118,14.513669,"Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39).",place_pin
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Ljubljana Tivoli,46.047037,14.493839,Avtobusno postajališče mestnega prometa Tobačna,directions_destination
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Ljubljana Dolgi most,46.036833,14.465202,Avtobusno postajališče mestnega prometa Dolgi most,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Brezovica,46.021500,14.426335,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Notranje Gorice,45.987949,14.401769,Avtobusno postajališče Notranje Gorice in avtobusno postajališče Notranje Gorice Š,directions_last_waypoint_candidate
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Preserje,45.965650,14.396367,Zunanja stran železniške postaje,place_pin
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Borovnica,45.921235,14.367898,Zunanja stran železniške postaje,place_pin
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Logatec,45.917753,14.235469,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Planina,45.861636,14.274828,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Rakek,45.815221,14.312286,Zunanja stran železniške postaje,place_pin
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Postojna,45.772975,14.221296,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Prestranek,45.730494,14.186556,"Avtobusno postajališče Prestranek, ob regionalni cesti",directions_last_waypoint_candidate
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Pivka,45.675167,14.191483,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Košana,45.670386,14.105837,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Gornje Ležeče,45.666369,14.072003,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Divača,45.681740,13.965281,Zunanja stran železniške postaje,google_place
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Povir,45.701116,13.935092,"Avtobusno postajališče Povir, ob regionalni cesti",directions_destination
+Ljubljana – Divača – Sežana – Opčine / Villa Opicina (I),Sežana,45.704274,13.863173,Zunanja stran železniške postaje,google_place
+Divača – Koper,Divača,45.681740,13.965281,Zunanja stran železniške postaje,google_place
+Divača – Koper,Rodik,45.628354,13.976047,"Avtobusno postajališče Rodik, ob glavni cesti nad železniško postajo",directions_last_waypoint_candidate
+Divača – Koper,Hrplje – Kozina,45.603767,13.934856,Zunanja stran železniške postaje,google_place
+Divača – Koper,Prešnica,45.571247,13.938932,Pri cerkvi v naselju Prešnica,directions_destination
+Divača – Koper,Črnotiče,45.552255,13.891773,"Avtobusno postajališče Črnotiče, pri cerkvi v naselju Črnotiče",directions_destination
+Divača – Koper,Hrastovlje,45.501713,13.908930,Zunanja stran železniške postaje,map_camera_only
+Divača – Koper,Koper,45.539000,13.738000,Na platoju ob tirih oz. peronu (tir 4),google_place
+Pivka – Ilirska Bistrica,Pivka,45.675167,14.191483,Zunanja stran železniške postaje,google_place
+Pivka – Ilirska Bistrica,Narin,45.641278,14.198042,"Avtobusno postajališče v naselju Narin, ob gostilni “Pri Cerotu”",directions_last_waypoint_candidate
+Pivka – Ilirska Bistrica,Kilovče,45.615466,14.185380,Zunanja stran železniške postaje,map_camera_only
+Pivka – Ilirska Bistrica,Ilirska Bistrica,45.569464,14.236253,Zunanja stran železniške postaje,google_place
+Ljubljana – Domžale – Kamnik Graben,Ljubljana,46.058118,14.513669,"Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39).",place_pin
+Ljubljana – Domžale – Kamnik Graben,Ljubljana Brinje,46.076660,14.505476,Avtobusno postajališče mestnega prometa Vodovodna,directions_destination
+Ljubljana – Domžale – Kamnik Graben,Ljubljana Ježica,46.089856,14.507392,Avtobusno postajališče mestnega prometa 7. septembra,directions_last_waypoint_candidate
+Ljubljana – Domžale – Kamnik Graben,Ljubljana Črnuče,46.101229,14.527840,Ploščad železniške postaje ob tiru 1,directions_destination
+Ljubljana – Domžale – Kamnik Graben,Trzin ind. cona,46.119019,14.551008,Avtobusno postajališče Trzin ind. cona ob železniški postaji,directions_explicit_destination
+Ljubljana – Domžale – Kamnik Graben,Trzin Mlake,46.128007,14.558377,Avtobusno postajališče Trzin Mlake K ob železniški postaji,directions_destination
+Ljubljana – Domžale – Kamnik Graben,Trzin,46.133153,14.567833,Zunanja stran železniške postaje,directions_destination
+Ljubljana – Domžale – Kamnik Graben,Domžale,46.139288,14.592543,Zunanja stran železniške postaje,google_place
+Ljubljana – Domžale – Kamnik Graben,Rodica,46.149096,14.592402,Avtobusno postajališče Rodica ob železniški postaji,directions_explicit_destination
+Ljubljana – Domžale – Kamnik Graben,Jarše-Mengeš,46.166404,14.594317,Avtobusno postajališče Preserje pri Radomljah ob lokalni cesti,directions_last_waypoint_candidate
+Ljubljana – Domžale – Kamnik Graben,Homec pri Kamniku,46.179794,14.590901,Avtobusno postajališče Homec ob lokalni cesti,directions_explicit_destination
+Ljubljana – Domžale – Kamnik Graben,Šmarca,46.192622,14.588314,Avtobusno postajališče Šmarca K ob lokalni cesti,directions_last_waypoint_candidate
+Ljubljana – Domžale – Kamnik Graben,Duplica-Bakovnik,46.206396,14.594481,Avtobusno postajališče Bakovnik Pošta ob lokalni cesti,directions_explicit_destination
+Ljubljana – Domžale – Kamnik Graben,Kamnik,46.220711,14.603958,Zunanja stran železniške postaje,google_place
+Ljubljana – Domžale – Kamnik Graben,Kamnik mesto,46.224681,14.608980,Ob vznožju do železniške postaje,directions_destination
+Ljubljana – Domžale – Kamnik Graben,Kamnik Graben,46.228877,14.609531,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Ljubljana,46.058118,14.513669,"Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39).",place_pin
+Ljubljana – Novo mesto – Metlika,Ljubljana Vodmat,46.055718,14.528982,Postanek na Grablovičevi ulici ob železniški postaji,directions_destination
+Ljubljana – Novo mesto – Metlika,Ljubljana Rakovnik,46.037167,14.519106,Zunanja stran železniške postaje,directions_destination
+Ljubljana – Novo mesto – Metlika,Lavrica,46.000941,14.553765,Avtobusno postajališče Lavrica ob trgovini HOFER (za smer Ljubljana) in avtobusno postajališče Lavrica pri Malči ob trgovini SPAR (za smer Novo mesto),directions_explicit_destination
+Ljubljana – Novo mesto – Metlika,Škofljica,45.986204,14.571352,Avtobusno postajališče Škofljica Špica – ob kapelici (za smer Ljubljana) in avtobusno postajališče Škofljica Žaga – ob tržnici (za smer Novo mesto),directions_last_waypoint_candidate
+Ljubljana – Novo mesto – Metlika,Šmarje Sap,45.974972,14.617572,Avtobusno postajališče Šmarje Sap ŽP ob glavni cesti,directions_last_waypoint_candidate
+Ljubljana – Novo mesto – Metlika,Grosuplje,45.955998,14.652565,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Mlačevo,45.940176,14.685363,"Avtobusno postajališče V. Mlačevo ŽP, zunanja stran železniške postaje",google_place
+Ljubljana – Novo mesto – Metlika,Žalna,45.939486,14.707586,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Višnja Gora,45.957869,14.742480,"Avtobusno postajališče Višnja Gora, v bližini železniške postaje",directions_destination
+Ljubljana – Novo mesto – Metlika,Polževo,45.940668,14.778898,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Ivančna Gorica,45.938213,14.802892,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Šentvid pri Stični,45.940791,14.850092,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Radohova vas,45.943563,14.872896,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Gaber,45.940659,14.908953,Pri odcepu za železniško postajo,directions_destination
+Ljubljana – Novo mesto – Metlika,Šentlovrenc,45.938414,14.940489,Pri odcepu za železniško postajo,directions_destination
+Ljubljana – Novo mesto – Metlika,Velika Loka,45.932237,14.969983,Zunanja stran železniške postaje,directions_destination
+Ljubljana – Novo mesto – Metlika,Štefan,45.910276,14.985108,Avtobusno postajališče Štefan,directions_destination
+Ljubljana – Novo mesto – Metlika,Trebnje,45.907054,15.008848,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Ponikve na Dolenjskem,45.897768,15.042032,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Mirna Peč,45.866596,15.091238,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Hudo,45.833000,15.136000,Ob železniški postaji,google_place
+Ljubljana – Novo mesto – Metlika,Novo mesto,45.811012,15.155917,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Novo mesto center,45.804428,15.162166,Avtobusno postajališče Novo mesto novi most (za smer Ljubljana) in avtobusno postajališče Šmihelski most (za smer Metlika),directions_destination
+Ljubljana – Novo mesto – Metlika,Novo mesto Kandija,45.799000,15.160000,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Novo mesto Šmihel,45.795520,15.160099,"Avtobusno postajališče ŠČ, ob šolskem centru",map_camera_only
+Ljubljana – Novo mesto – Metlika,Birčna vas,45.758474,15.148598,Avtobusno postajališče Birčna vas ŽP,directions_last_waypoint_candidate
+Ljubljana – Novo mesto – Metlika,Uršna sela,45.714595,15.126755,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Rožni Dol,45.681739,15.148765,Pri odcepu za železniško postajo,directions_destination
+Ljubljana – Novo mesto – Metlika,Semič,45.643307,15.161337,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Otovec,45.598557,15.161218,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Črnomelj,45.579915,15.190434,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Gradac,45.614697,15.242076,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Dobravice,45.632202,15.268954,Zunanja stran železniške postaje,map_camera_only
+Ljubljana – Novo mesto – Metlika,Metlika,45.642208,15.322341,Zunanja stran železniške postaje,google_place
+Ljubljana – Novo mesto – Metlika,Rosalnice,45.648885,15.336218,Zunanja stran železniške postaje,google_place
+Grosuplje – Kočevje,Grosuplje,45.955998,14.652565,Zunanja stran železniške postaje,google_place
+Grosuplje – Kočevje,Spodnja Slivnica,45.934634,14.654501,Zunanja stran železniške postaje,map_camera_only
+Grosuplje – Kočevje,Čušperk,45.890608,14.699967,Avtobusno postajališče Čušperk – makadamski prostor ob železniški postaji,directions_destination
+Grosuplje – Kočevje,Dobrepolje,45.858363,14.681503,Zunanja stran železniške postaje,google_place
+Grosuplje – Kočevje,Velike Lašče,45.841657,14.645307,Zunanja stran železniške postaje,google_place
+Grosuplje – Kočevje,Ortnek,45.790000,14.680000,Zunanja stran železniške postaje,google_place
+Grosuplje – Kočevje,Žlebič,45.767723,14.691298,Avtobusno postajališče Žlebič ob glavni cesti,directions_destination
+Grosuplje – Kočevje,Ribnica,45.744755,14.727378,Avtobusno postajališče Ribnica/Dol ob železnici,directions_last_waypoint_candidate
+Grosuplje – Kočevje,Stara Cerkev,45.667648,14.837553,Avtobusno postajališče Stara Cerkev ob glavni cesti,directions_destination
+Grosuplje – Kočevje,Kočevje,45.646146,14.856811,Zunanja stran železniške postaje,google_place
+Trebnje – Sevnica,Trebnje,45.907054,15.008848,Zunanja stran železniške postaje,google_place
+Trebnje – Sevnica,Trebnje Kamna Gora,45.907013,15.023246,Avtobusno postajališče Trebnje Labod,directions_explicit_destination
+Trebnje – Sevnica,Gomila,45.935022,15.044195,Avtobusno postajališče Gomila,map_camera_only
+Trebnje – Sevnica,Mirna,45.949178,15.062019,Zunanja stran železniške postaje,map_camera_only
+Trebnje – Sevnica,Šentrupert,45.959649,15.086914,Zunanja stran železniške postaje,map_camera_only
+Trebnje – Sevnica,Mokronog,45.957566,15.120733,Zunanja stran železniške postaje,map_camera_only
+Trebnje – Sevnica,Pijavice,45.968462,15.164024,Avtobusno postajališče Skrovnik ob glavni cesti Mokronog – Sevnica,directions_explicit_destination
+Trebnje – Sevnica,Tržišče,45.966476,15.189867,Zunanja stran železniške postaje,map_camera_only
+Trebnje – Sevnica,Jelovec,45.989523,15.240089,Avtobusno postajališče Jelovec pri Boštanju,directions_destination
+Trebnje – Sevnica,Boštanj,46.007347,15.289176,Zunanja stran železniške postaje,map_camera_only
+Trebnje – Sevnica,Sevnica,46.009545,15.301520,Zunanja stran železniške postaje,google_place
+Celje – Velenje,Celje,46.227956,15.267382,Zunanja stran železniške postaje,google_place
+Celje – Velenje,Celje Lava,46.235801,15.253750,Ob postaji,directions_destination
+Celje – Velenje,Petrovče,46.245953,15.189686,Zunanja stran železniške postaje,google_place
+Celje – Velenje,Žalec,46.249692,15.166272,Zunanja stran železniške postaje,google_place
+Celje – Velenje,Šempeter v Savinjski dolini,46.260464,15.112158,Zunanja stran železniške postaje,google_place
+Celje – Velenje,Polzela,46.282697,15.066044,Avtobusno obračališče pri pošti,google_place
+Celje – Velenje,Šmartno ob Paki,46.327986,15.037714,Zunanja stran železniške postaje,google_place
+Celje – Velenje,Paška vas,46.247864,15.430778,Zunanja stran železniške postaje,google_place
+Celje – Velenje,Florjan,46.381366,15.030135,Avtobusno postajališče Florjan pri Šoštanju,google_place
+Celje – Velenje,Šoštanj,46.377271,15.048888,Avtobusno postajališče Šoštanju,google_place
+Celje – Velenje,Velenje Pesje,46.313571,15.577002,Avtobusno postajališče Velenje Pesje (ob železniški postaji),google_place
+Celje – Velenje,Velenje,46.363313,15.103593,Zunanja stran železniške postaje,map_camera_only
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Grobelno,46.213090,15.439771,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Šentvid pri Grobelnem,46.227337,15.469622,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Šmarje pri Jelšah,46.230525,15.516900,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Stranje,46.217349,15.560280,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Mestinje,46.235050,15.564267,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Podplat,46.244182,15.572558,Zunanja stran železniške postaje,map_camera_only
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Tekačevo,46.240000,15.618000,Parkirišče ob železniški postaji,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Rogaška Slatina,46.231847,15.638297,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Rjavica,46.219786,15.652289,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Rogatec,46.224586,15.697922,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Vidna,46.216753,15.729717,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Dobovec,46.220742,15.751617,Zunanja stran železniške postaje,google_place
+Grobelno – Rogaška Slatina – Sveti Rok ob Sotli – Đurmanec (HR),Sveti Rok ob Sotli,46.208931,15.760056,Zunanja stran železniške postaje,google_place
+Stranje – Podčetrtek Toplice – Imeno,Stranje,46.217349,15.560280,Zunanja stran železniške postaje,google_place
+Stranje – Podčetrtek Toplice – Imeno,Pristava,46.199018,15.581756,Zunanja stran železniške postaje,directions_destination
+Stranje – Podčetrtek Toplice – Imeno,Sodna vas,46.176089,15.601640,Zunanja stran železniške postaje,directions_destination
+Stranje – Podčetrtek Toplice – Imeno,Podčetrtek Toplice,46.165520,15.604456,Zunanja stran železniške postaje,directions_destination
+Stranje – Podčetrtek Toplice – Imeno,Atomske Toplice hotel,46.158238,15.608208,Zunanja stran železniške postaje,directions_destination
+Stranje – Podčetrtek Toplice – Imeno,Podčetrtek,46.150416,15.599187,Zunanja stran železniške postaje,directions_destination
+Stranje – Podčetrtek Toplice – Imeno,Imeno,46.127067,15.600726,Zunanja stran železniške postaje,map_camera_only
+Maribor – Dravograd – Pliberk / Bleiburg (A),Maribor,46.561728,15.656944,"Avtobusno postajališče ŽP Maribor, pred železniško postajo",google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Maribor Tabor,46.552755,15.645782,Avtobusno postajališče Magdalenski park,directions_last_waypoint_candidate
+Maribor – Dravograd – Pliberk / Bleiburg (A),Maribor Studenci,46.554000,15.635000,Zunanja stran železniške postaje,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Maribor Sokolska,46.557061,15.624301,"Zunanja stran železniške postaje, pri krožišču",directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Marles,46.558828,15.596987,Zunanja stran železniške postaje,map_camera_only
+Maribor – Dravograd – Pliberk / Bleiburg (A),Limbuš,46.558875,15.582638,Zunanja stran železniške postaje,map_camera_only
+Maribor – Dravograd – Pliberk / Bleiburg (A),Bistrica ob Dravi,46.557526,15.553534,Zunanja stran železniške postaje,map_camera_only
+Maribor – Dravograd – Pliberk / Bleiburg (A),Ruše tovarna,46.545015,15.515165,Parkirišče ob železniški postaji,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Ruše,46.540720,15.503982,Zunanja stran železniške postaje,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Fala,46.548100,15.450909,Zunanja stran železniške postaje,map_camera_only
+Maribor – Dravograd – Pliberk / Bleiburg (A),Ruta,46.563000,15.431000,Zunanja stran železniške postaje,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Ožbalt,46.575043,15.410279,"Prečkanje HE Ožbalt do avtobusnega postajališča Ožbalt HE, glavna cesta ob železniški postaji",directions_last_waypoint_candidate
+Maribor – Dravograd – Pliberk / Bleiburg (A),Podvelka,46.590606,15.330573,Zunanja stran železniške postaje,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Vuhred elektrarna,46.586336,15.279416,Zunanja stran železniške postaje,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Vuhred,46.596289,15.235697,Zunanja stran železniške postaje,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Sveti Vid,46.608694,15.187217,"Pri odcepu za železniško postajo, ob Mizarstvo Zdravko Tretjak",directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Vuzenica,46.593942,15.158517,Zunanja stran železniške postaje,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Trbonjsko jezero,46.593817,15.126256,Zunanja stran železniške postaje,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Trbonje,46.604920,15.110983,Na parkirišču nad železniško postajo,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Sveti Danijel,46.602592,15.063669,Na lokalni cesti nad železniško postajo,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Dravograd,46.587170,15.026747,Zunanja stran železniške postaje,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Podklanc,46.574113,15.021121,Avtobusno postajališče ob železniški postaji,map_camera_only
+Maribor – Dravograd – Pliberk / Bleiburg (A),Dobrije,46.549724,14.984001,Zunanja stran železniške postaje,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Ravne na Koroškem,46.546459,14.962160,Zunanja stran železniške postaje,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Prevalje,46.549807,14.922033,Zunanja stran železniške postaje,google_place
+Maribor – Dravograd – Pliberk / Bleiburg (A),Holmec,46.566540,14.841490,Zunanja stran železniške postaje,directions_destination
+Maribor – Dravograd – Pliberk / Bleiburg (A),Pliberk / Bleiburg (A),46.574600,14.786905,Zunanja stran železniške postaje,google_place
+Jesenice – Nova Gorica – Sežana,Jesenice,46.436458,14.055030,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Kočna,46.422104,14.083288,Avtobusno postajališče Kočna (ob odcepu za železniško postajo),directions_destination
+Jesenice – Nova Gorica – Sežana,Vintgar,46.410205,14.098114,"Avtobusno postajališče Blejska Dobrava trgovina, zunanja stran železniške postaje",directions_destination
+Jesenice – Nova Gorica – Sežana,Podhom,46.387561,14.094183,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Bled Jezero,46.368202,14.082766,Zunanja stran železniške postaje,google_place
+Jesenice – Nova Gorica – Sežana,Bohinjska Bela,46.337631,14.060242,"Avtobusno postajališče Bohinjska Bela vojašnica, pod železniško postajo",place_pin
+Jesenice – Nova Gorica – Sežana,Nomenj,46.289230,14.002192,"Avtobusno postajališče Nomenj, na regionalni cesti pod železniško postajo",place_pin
+Jesenice – Nova Gorica – Sežana,Bohinjska Bistrica,46.274353,13.958850,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Podbrdo,46.209281,13.966769,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Hudajužna,46.179808,13.919608,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Grahovo,46.151569,13.856967,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Podmelec,46.160275,13.810884,"Avtobusno postajališče Klavže, ob odcepu za železniško postajo",directions_last_waypoint_candidate
+Jesenice – Nova Gorica – Sežana,Most na Soči,46.146523,13.759594,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Avče,46.108092,13.684228,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Kanal,46.085292,13.634349,Avtobusno postajališče Kanal v naselju Kanal,directions_last_waypoint_candidate
+Jesenice – Nova Gorica – Sežana,Anhovo,46.058357,13.617482,Zunanja stran železniške postaje,map_camera_only
+Jesenice – Nova Gorica – Sežana,Plave,46.045283,13.590002,Na regionalni cesti ob železniški postaji,place_pin
+Jesenice – Nova Gorica – Sežana,Solkan,45.974893,13.648118,"Avtobusno postajališče Solkan, nad železniško postajo",search_coordinates
+Jesenice – Nova Gorica – Sežana,Nova Gorica,45.955375,13.636588,"Zunanja, vzhodna stran železniške postaje (P+R parkirišče pri Prvomajski ulici)",directions_destination
+Jesenice – Nova Gorica – Sežana,Šempeter pri Gorici,45.928144,13.646729,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Volčja Draga,45.905846,13.676599,"Avtobusno postajališče Volčja Draga, nad železniško postajo",place_pin
+Jesenice – Nova Gorica – Sežana,Okroglica,45.897981,13.686612,Parkirni prostor ob cestišču v naselju Dombrava ob odcepu za železniško postajo,directions_explicit_destination
+Jesenice – Nova Gorica – Sežana,Prvačina,45.887663,13.722851,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Dornberk,45.885830,13.734091,Zunanja stran železniške postaje,search_coordinates
+Jesenice – Nova Gorica – Sežana,Steske,45.876106,13.757575,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Branik,45.856108,13.784535,Zunanja stran železniške postaje,place_pin
+Jesenice – Nova Gorica – Sežana,Štanjel,45.817845,13.847705,Zunanja stran železniške postaje,google_place
+Jesenice – Nova Gorica – Sežana,Kopriva,45.782290,13.834212,"Avtobusno postajališče Kopriva, na regionalni cesti v naselju Kopriva",directions_last_waypoint_candidate
+Jesenice – Nova Gorica – Sežana,Dutovlje,45.764374,13.829158,"Avtobusno postajališče Dutovlje, ob odcepu za železniško postajo",directions_last_waypoint_candidate
+Jesenice – Nova Gorica – Sežana,Kreplje,45.743032,13.828201,Na regionalni cesti ob odcepu za železniško postajo,directions_destination
+Jesenice – Nova Gorica – Sežana,Sežana,45.704414,13.863647,Zunanja stran železniške postaje,directions_destination
+Prvačina – Ajdovščina,Prvačina,45.887663,13.722851,Zunanja stran železniške postaje,place_pin
+Prvačina – Ajdovščina,Dornberk vas,45.889897,13.736300,Zunanja stran železniške postaje,place_pin
+Prvačina – Ajdovščina,Dobravlje,45.882592,13.845317,Zunanja stran železniške postaje,place_pin
+Prvačina – Ajdovščina,Cesta,45.887794,13.865221,Avtobusna postaja Cesta ob regionalni cesti,directions_explicit_destination
+Prvačina – Ajdovščina,Ajdovščina,45.886000,13.900000,Zunanja stran železniške postaje,place_pin
+Ormož – Središče – Čakovec (HR),Ormož,46.403303,16.156018,Zunanja stran železniške postaje,google_place
+Ormož – Središče – Čakovec (HR),Frankovci,46.394897,16.195286,Zunanja stran železniške postaje: (nova ),google_place
+Ormož – Središče – Čakovec (HR),Obrež,46.391000,16.225000,Zunanja stran železniške postaje,google_place
+Ormož – Središče – Čakovec (HR),Središče,46.389191,16.277250,Zunanja stran železniške postaje,google_place
+Ormož – Središče – Čakovec (HR),Čakovec (HR),46.384077,16.420967,Zunanja stran železniške postaje,google_place
+Divača – Prešnica – Buzet (HR),Divača,45.681740,13.965281,Zunanja stran železniške postaje,google_place
+Divača – Prešnica – Buzet (HR),Rodik,45.628354,13.976047,"Avtobusno postajališče Rodik, ob glavni cesti nad železniško postajo",directions_last_waypoint_candidate
+Divača – Prešnica – Buzet (HR),Hrplje – Kozina,45.603767,13.934856,Zunanja stran železniške postaje,google_place
+Divača – Prešnica – Buzet (HR),Prešnica,45.571247,13.938932,Pri cerkvi v naselju Prešnica,directions_destination
+Divača – Prešnica – Buzet (HR),Podgorje,45.534381,13.943014,Zunanja stran železniške postaje,google_place
+Divača – Prešnica – Buzet (HR),Rakitovec,45.466011,13.955585,Zunanja stran železniške postaje,google_place
+Divača – Prešnica – Buzet (HR),Buzet (HR),45.426221,13.984993,Zunanja stran železniške postaje,google_place
