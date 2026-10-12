@@ -60,7 +60,9 @@ fi
 # Prestop's own additions (Web Push), with the upstream lock as constraints so nothing upstream moves.
 extra_hash="$(cat "$APP/requirements-prestop.txt" "$STATE/requirements.txt" | sha256sum | cut -d' ' -f1)"
 if [ "$(cat "$STATE/.requirements-prestop" 2>/dev/null)" != "$extra_hash" ]; then
-  "$VENV/bin/pip" install -q -r "$APP/requirements-prestop.txt" -c "$STATE/requirements.txt"
+  # pip rejects options (-i ...) and extras (zeep[async]) in constraint files: keep only name==version.
+  sed -E '/^-/d; s/^([A-Za-z0-9._-]+)\[[^]]*\]/\1/' "$STATE/requirements.txt" > "$STATE/constraints.txt"
+  "$VENV/bin/pip" install -q -r "$APP/requirements-prestop.txt" -c "$STATE/constraints.txt"
   echo "$extra_hash" > "$STATE/.requirements-prestop"
 fi
 
