@@ -23,6 +23,11 @@ class GeometryTests(SimpleTestCase):
         zigzag = [[14.5 + i * 0.001, 46.05 + (0.0005 if i % 2 else 0)] for i in range(1000)]
         self.assertLessEqual(len(trips.simplify(zigzag, limit=50)), 50)
 
+    def test_simplify_keeps_a_loop_that_ends_where_it_starts(self):
+        # Marprom G3 runs a 17 km circle from Tabor back to Tabor; it was cut down to its two end points.
+        square = [[14.50, 46.05], [14.51, 46.05], [14.51, 46.06], [14.50, 46.06], [14.50, 46.05]]
+        self.assertEqual(trips.simplify(square), square)
+
     def test_stop_distances_are_ordered_along_the_shape(self):
         stops = [{'lat': 46.0501, 'lon': 14.50}, {'lat': 46.0502, 'lon': 14.51}, {'lat': 46.0499, 'lon': 14.52}]
         distances = trips.stop_distances(STREET, stops)

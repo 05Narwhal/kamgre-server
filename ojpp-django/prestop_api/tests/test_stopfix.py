@@ -70,20 +70,59 @@ class NormalizeTests(SimpleTestCase):
 
 
 class MergeRadiusTests(SimpleTestCase):
-    def test_city_and_intercity_stop_within_150_m_merge(self):
-        merged, _ = stopgroups.merge([stop('IJPP:1', 'Koper', 45.53824, 13.73824), stop('MOKoper:1', 'Koper AP', 45.53864, 13.73767)])
+    def test_city_and_intercity_stop_going_the_same_way_merge(self):
+        merged, _ = stopgroups.merge([stop('IJPP:1', 'Koper', 45.53824, 13.73824), stop('MOKoper:1', 'Koper AP', 45.53864, 13.73767)],
+                                     ways={'IJPP:1': [(1.0, 0.0)], 'MOKoper:1': [(0.9, 0.44)]})
         self.assertEqual(merged[0]['memberIds'], ['IJPP:1', 'MOKoper:1'])
 
     def test_namesakes_beyond_150_m_stay_apart(self):
         merged, _ = stopgroups.merge([stop('IJPP:1', 'Koper', 45.5380, 13.7380), stop('MOKoper:1', 'Koper', 45.5395, 13.7380)])  # ~166 m
         self.assertEqual(len(merged), 2)
 
-    def test_three_bays_of_one_feed_become_one_station(self):
-        merged, groups = stopgroups.merge([
+    def test_namesakes_of_one_feed_stay_apart(self):
+        # A village's stops on both sides of the road and a third at the junction: three stops.
+        merged, _ = stopgroups.merge([
             stop('IJPP:1126449', 'Kozina', 45.6077743, 13.9345464), stop('IJPP:1126450', 'Kozina', 45.6077029, 13.9344103),
             stop('IJPP:1126451', 'Kozina', 45.6075275, 13.9344812), stop('IJPP:1126452', 'Kozina pošta', 45.6094029, 13.9388835)])
+        self.assertEqual(len(merged), 4)
+
+    def test_bus_stops_named_after_the_railway_station_join_it(self):
+        merged, _ = stopgroups.merge([stop('IJPP:1', 'Celje ŽP', 46.2312, 15.2687), stop('IJPP:2', 'Celje ŽP', 46.2314, 15.2690),
+                                      stop('IJPP:rail', 'Celje', 46.2318, 15.2694, modes=('rail',))])
+        self.assertEqual(merged[0]['memberIds'], ['IJPP:rail', 'IJPP:1', 'IJPP:2'])
+
+
+EAST, WEST, NORTH = [(1.0, 0.0)], [(-1.0, 0.0)], [(0.0, 1.0)]
+
+
+class DirectionTests(SimpleTestCase):
+    def test_city_and_intercity_stops_going_the_same_way_merge(self):
+        merged, _ = stopgroups.merge([stop('IJPP:1', 'Primskovo', 46.2400, 14.3600), stop('MOKranj:1', 'Primskovo', 46.2402, 14.3601)],
+                                     ways={'IJPP:1': EAST, 'MOKranj:1': EAST})
+        self.assertEqual(merged[0]['memberIds'], ['IJPP:1', 'MOKranj:1'])
+
+    def test_opposite_sides_of_the_road_stay_apart(self):
+        merged, _ = stopgroups.merge([stop('IJPP:1', 'Primskovo', 46.2400, 14.3600), stop('MOKranj:1', 'Primskovo', 46.2402, 14.3601)],
+                                     ways={'IJPP:1': EAST, 'MOKranj:1': WEST})
         self.assertEqual(len(merged), 2)
-        self.assertEqual(len(groups['IJPP:1126451']), 3)
+
+    def test_both_sides_do_not_chain_through_one_city_stop(self):
+        stops = [stop('IJPP:1', 'Primskovo', 46.2400, 14.3600), stop('IJPP:2', 'Primskovo', 46.2403, 14.3600),
+                 stop('MOKranj:1', 'Primskovo', 46.2401, 14.3600)]
+        _, groups = stopgroups.merge(stops)  # no directions known: only the nearest pair at one spot
+        self.assertEqual(groups['MOKranj:1'], ['IJPP:1', 'MOKranj:1'])
+        self.assertNotIn('IJPP:2', groups)
+
+    def test_far_apart_without_a_direction_stay_apart(self):
+        merged, _ = stopgroups.merge([stop('IJPP:1', 'Primskovo', 46.2400, 14.3600), stop('MOKranj:1', 'Primskovo', 46.2404, 14.3600)])  # ~44 m
+        self.assertEqual(len(merged), 2)
+
+    def test_directions_from_patterns(self):
+        ways = stopgroups.directions([['a', 'b', 'c']], {'a': (46.0, 14.0), 'b': (46.0, 14.001), 'c': (46.001, 14.001)})
+        self.assertEqual(ways['a'], [(1.0, 0.0)])
+        self.assertTrue(stopgroups.same_way(ways['b'], NORTH))
+        self.assertFalse(stopgroups.same_way(EAST, WEST))
+        self.assertIsNone(stopgroups.same_way(None, EAST))
 
     def test_forced_merge_and_pinned_marker(self):
         merged, _ = stopgroups.merge([stop('IJPP:1121103', 'Koper', 45.53824, 13.73824), stop('IJPP:1123012', 'Koper', 45.53897, 13.73853)],
@@ -93,7 +132,7 @@ class MergeRadiusTests(SimpleTestCase):
 
     def test_report_lists_each_member_with_its_distance(self):
         stops = [stop('IJPP:1', 'Koper', 45.53824, 13.73824), stop('MOKoper:1', 'Koper', 45.53864, 13.73767)]
-        merged, _ = stopgroups.merge(stops)
+        merged, _ = stopgroups.merge(stops, ways={'IJPP:1': [(1.0, 0.0)], 'MOKoper:1': [(1.0, 0.0)]})
         rows = stopgroups.report(stops, merged)
         self.assertEqual([r['stop_id'] for r in rows], ['IJPP:1', 'MOKoper:1'])
         self.assertTrue(all(0 < r['meters'] < 75 for r in rows))

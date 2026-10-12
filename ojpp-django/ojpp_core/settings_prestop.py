@@ -63,10 +63,18 @@ PRESTOP_OTP_URLS = env.list('PRESTOP_OTP_URLS', default=[
 ])
 PRESTOP_RT_VEHICLES_URL = env('PRESTOP_RT_VEHICLES_URL', default='https://rt.gtfs.ijpp.prometko.si/combined/rt/vl')
 PRESTOP_RT_TRIP_UPDATES_URL = env('PRESTOP_RT_TRIP_UPDATES_URL', default='https://rt.gtfs.ijpp.prometko.si/combined/rt/tu?type=json')
-PRESTOP_PELIAS_URL = env('PRESTOP_PELIAS_URL', default='http://pelias.ojpp.derp.si/v1')
+# The Kranj city buses' full timetable from the operator (Ridango), read instead of OTP's broken copy
+# (prestop_api/supplement.py); '' turns it off.
+PRESTOP_KRANJ_GTFS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_KRANJ_GTFS_URL', default='https://kranj-avl-prod.ridango.cloud/data/gtfs/v2/gtfs.zip')
+# City bus timetables kept by hand in prestop_api/data/gtfs/<feedId>/ (read like the Kranj file).
+PRESTOP_LOCAL_GTFS = False if 'test' in sys.argv[1:2] else env.bool('PRESTOP_LOCAL_GTFS', default=True)
+PRESTOP_PELIAS_URL =env('PRESTOP_PELIAS_URL', default='http://pelias.ojpp.derp.si/v1')
 PRESTOP_PHOTON_URL = env('PRESTOP_PHOTON_URL', default='https://photon.komoot.io/api/')
 # SZ live train delays/positions (community feed used by derp-si/ijpp-rt); '' turns it off.
 PRESTOP_SZ_LIVE_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIVE_URL', default='https://api.modra.ninja/sz/lokacije')
+# SŽ track numbers announced today (derp-si/sz-platform-scraper, as brezavta.si uses it; prestop_api/tracks.py);
+# '' turns it off (trains then show their usual track from data/sz_tracks.json).
+PRESTOP_SZ_TRACKS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TRACKS_URL', default='http://l10wspc3n0hqslvh6xuyd8la.141.255.217.12.sslip.io:12669/train_data')
 # SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py).
 PRESTOP_SZ_NOTICES_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_URL', default='https://api.modra.ninja/sz/ovire_raw?lang=sl')
 # Road routing (bus costing) for bus patterns without a usable shape; empty disables it.

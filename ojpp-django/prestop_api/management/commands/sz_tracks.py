@@ -1,0 +1,51 @@
+"""Each SŽ train's usual track at each station, from the track scraper's history, into data/sz_tracks.json
+(see tracks.py).
+
+    manage.py sz_tracks              # the last 60 days
+    manage.py sz_tracks --days 120
+
+Days the scraper has nothing for (its source was down) are skipped. The file is checked in: re-run it
+after a timetable change (December, or when SŽ moves trains), then commit it.
+"""
+import json
+from datetime import date, timedelta
+
+import requests
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
+
+from prestop_api import tracks
+from prestop_api.upstream import USER_AGENT
+
+
+class Command(BaseCommand):
+    help = "Build data/sz_tracks.json (each train's usual track per station) from the SŽ track scraper's history."
+
+    def add_arguments(self, parser):
+        parser.add_argument('--days', type=int, default=60)
+        parser.add_argument('--url', default='', help='the scraper\'s train_data endpoint (default PRESTOP_SZ_TRACKS_URL)')
+
+    def handle(self, *args, days=60, url='', **options):
+        url = url or getattr(settings, 'PRESTOP_SZ_TRACKS_URL', '')
+        if not url:
+            raise CommandError('No track scraper URL (PRESTOP_SZ_TRACKS_URL).')
+        rows, used = [], []
+        for back in range(days, 0, -1):
+            day = (date.today() - timedelta(days=back)).isoformat()
+            try:
+                resp = requests.get(url, params={'date': day}, timeout=60, headers={'User-Agent': USER_AGENT})
+                resp.raise_for_status()
+                found = [r for r in resp.json().get('trains') or [] if r.get('platform')]
+            except (requests.RequestException, ValueError, AttributeError) as e:
+                self.stderr.write(f'{day}: {e}')
+                continue
+            if found:
+                rows += [{**r, 'date': day} for r in found]
+                used.append(day)
+        if not used:
+            raise CommandError('The scraper had no tracks for any of those days; the file is left as it was.')
+        usual = tracks.usual_tracks(rows)
+        pairs = sum(len(v) for v in usual.values())
+        tracks.USUAL.write_text(json.dumps({'from': used[0], 'to': used[-1], 'days': len(used), 'trains': usual},
+                                           ensure_ascii=False, indent=0, sort_keys=True), encoding='utf-8')
+        self.stdout.write(f'{len(used)} days ({used[0]} – {used[-1]}): {len(usual)} trains, {pairs} train/station tracks.')

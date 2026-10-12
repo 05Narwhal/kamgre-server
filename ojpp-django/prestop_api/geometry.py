@@ -34,10 +34,11 @@ def simplify(coords: list, limit: int = MAX_POINTS) -> list:
             a, b = stack.pop()
             (ax, ay), (bx, by) = pts[a], pts[b]
             dx, dy = bx - ax, by - ay
-            norm = math.hypot(dx, dy) or 1e-9
+            norm = math.hypot(dx, dy)
             best, index = 0.0, -1
             for i in range(a + 1, b):
-                d = abs(dy * (pts[i][0] - ax) - dx * (pts[i][1] - ay)) / norm
+                # A loop (Marprom G3) ends where it starts: no line between the ends, so the distance to the end.
+                d = abs(dy * (pts[i][0] - ax) - dx * (pts[i][1] - ay)) / norm if norm > 1e-6 else math.hypot(pts[i][0] - ax, pts[i][1] - ay)
                 if d > best:
                     best, index = d, i
             if best > tolerance and index > 0:

@@ -7,24 +7,29 @@ each. Stops become one station (the head keeps its id, gains the others as `memb
 board lists every member's departures, its marker sits at the members' centroid) when their
 normalised names match (see `normalize`) and:
 
-- they come from *different* feeds and lie within MERGE_METERS: each stop joins its nearest
-  namesake in every other feed, so the two sides of a road (each with its own city-feed twin)
-  don't chain into one stop;
-- they come from the same feed and are exact duplicates (DUPLICATE_METERS), or STATION_BAYS or
-  more namesakes lie within MERGE_METERS of one another — the bays of a bus station (Kozina has
-  three). A same-feed *pair* stays apart: opposite sides of a road are different stops for the
-  direction you travel;
-- the override table says so (`merge_into`, see stopfix.py), which also may pin the marker.
+- they come from *different* feeds, lie within NEAR_METERS and vehicles at both travel the same
+  way (`directions`, from the timetable's patterns): opposite sides of a road are different stops
+  for the direction you travel, so they never merge, and a group holds at most one stop per feed,
+  so the two sides can't chain into one through a city-feed twin. Where a direction is unknown,
+  only stops within SAME_SPOT_METERS merge;
+- one of them is a railway station and they lie within MERGE_METERS: the station and the bus
+  stops named after it are one place, whichever way you leave it;
+- they come from the same feed and are exact duplicates (DUPLICATE_METERS);
+- the override table says so (`merge_into`, see stopfix.py), which also may pin the marker (the
+  three bays of Kozina's bus station).
 """
 import math
 import re
-from typing import Optional
+from typing import Iterable, Optional
 
 from .mapping import fold
 
 MERGE_METERS = 150
+NEAR_METERS = 75
+SAME_SPOT_METERS = 25
 DUPLICATE_METERS = 3
-STATION_BAYS = 3
+# Directions of travel at most ~60° apart (cosine) count as the same way.
+SAME_WAY = 0.5
 # Words that name the kind of stop rather than the place: "Koper AP" is "Koper".
 STOP_WORDS = re.compile(r'\b(avtobusna postaja|avtobusno postajalisce|zelezniska postaja|avt\.? ?post\.?|zel\.? ?post\.?|zel\.? ?p\.|ap|zp)(?=\W|$)')
 _CELL = (MERGE_METERS / 110_574, MERGE_METERS / 77_000)  # degrees; 77 km per degree of longitude is Slovenia's minimum
@@ -44,6 +49,29 @@ def meters(a: dict, b: dict) -> float:
     return math.hypot((a['longitude'] - b['longitude']) * kx, (a['latitude'] - b['latitude']) * 110_574)
 
 
+def directions(sequences: Iterable[list[str]], positions: dict[str, tuple[float, float]]) -> dict[str, list[tuple[float, float]]]:
+    """Stop id -> unit vectors of the ways vehicles travel through it: from the previous stop to the
+    next in each pattern's run of stops. `positions`: stop id -> (lat, lon)."""
+    out: dict[str, set] = {}
+    for run in sequences:
+        for i, sid in enumerate(run):
+            a, b = positions.get(run[max(0, i - 1)]), positions.get(run[min(len(run) - 1, i + 1)])
+            if not a or not b or a == b:
+                continue
+            dx, dy = (b[1] - a[1]) * math.cos(math.radians(a[0])), b[0] - a[0]
+            n = math.hypot(dx, dy)
+            if n:
+                out.setdefault(sid, set()).add((round(dx / n, 2), round(dy / n, 2)))
+    return {k: sorted(v) for k, v in out.items()}
+
+
+def same_way(a: Optional[list], b: Optional[list]) -> Optional[bool]:
+    """Whether vehicles leave two stops in the same direction (None when either is unknown)."""
+    if not a or not b:
+        return None
+    return max(x1 * x2 + y1 * y2 for x1, y1 in a for x2, y2 in b) >= SAME_WAY
+
+
 def _feed(stop: dict) -> str:
     return stop['id'].split(':', 1)[0]
 
@@ -58,13 +86,16 @@ def _cell(stop: dict) -> tuple[int, int]:
 
 
 def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
-          pinned: Optional[dict[str, tuple[float, float]]] = None) -> tuple[list[dict], dict[str, list[str]]]:
+          pinned: Optional[dict[str, tuple[float, float]]] = None,
+          ways: Optional[dict[str, list]] = None) -> tuple[list[dict], dict[str, list[str]]]:
     """Merged stop list (input order kept, members dropped) and member id -> group ids (head first).
 
     `forced`: stop id -> stop id to join regardless of name and distance. `pinned`: stop id -> the
-    marker position of whatever station that stop ends up in."""
-    forced, pinned = forced or {}, pinned or {}
+    marker position of whatever station that stop ends up in. `ways`: stop id -> its directions of
+    travel (see `directions`)."""
+    forced, pinned, ways = forced or {}, pinned or {}, ways or {}
     parent = list(range(len(stops)))
+    groups: dict[int, list[int]] = {i: [i] for i in range(len(stops))}
 
     def root(i):
         while parent[i] != i:
@@ -73,53 +104,57 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         return i
 
     def join(i, j):
-        parent[root(i)] = root(j)
+        a, b = root(i), root(j)
+        if a != b:
+            parent[a] = b
+            groups[b] += groups.pop(a)
+
+    def may_join(i, j) -> bool:
+        """Different feeds: the two groups share no feed, and every pair across them travels the same way."""
+        a, b = groups[root(i)], groups[root(j)]
+        if a is b or {_feed(stops[k]) for k in a} & {_feed(stops[k]) for k in b}:
+            return False
+        return all(same_way(ways.get(stops[x]['id']), ways.get(stops[y]['id'])) is not False for x in a for y in b)
 
     keys = [normalize(s['name']) for s in stops]
+    stations = ['rail' in s['modes'] for s in stops]
     cells: dict[tuple[int, int], list[int]] = {}
     for i, s in enumerate(stops):
         cells.setdefault(_cell(s), []).append(i)
+    pairs = []
     for i, a in enumerate(stops):
         cy, cx = _cell(a)
-        nearest: dict[str, tuple[float, int]] = {}
-        bays = []
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 for j in cells.get((cy + dy, cx + dx), ()):
-                    if j == i or keys[i] != keys[j]:
-                        continue
-                    b = stops[j]
-                    d = meters(a, b)
-                    if d > MERGE_METERS:
-                        continue
-                    if _feed(a) == _feed(b):
-                        if d <= DUPLICATE_METERS:
-                            join(i, j)
-                        bays.append(j)
-                    elif d < nearest.get(_feed(b), (MERGE_METERS + 1, -1))[0]:
-                        nearest[_feed(b)] = (d, j)
-        for _, j in nearest.values():
+                    if j > i and keys[i] == keys[j] and (d := meters(a, stops[j])) <= MERGE_METERS:
+                        pairs.append((d, i, j))
+    # Closest pairs first: a stop joins its nearest fitting namesake before a farther one can.
+    for d, i, j in sorted(pairs):
+        a, b = stops[i], stops[j]
+        if stations[i] or stations[j]:
             join(i, j)
-        if len(bays) + 1 >= STATION_BAYS:
-            for j in bays:
+        elif _feed(a) == _feed(b):
+            if d <= DUPLICATE_METERS:
+                join(i, j)
+        elif d <= NEAR_METERS and may_join(i, j):
+            way = same_way(ways.get(a['id']), ways.get(b['id']))
+            if way or (way is None and d <= SAME_SPOT_METERS):
                 join(i, j)
     at = {s['id']: i for i, s in enumerate(stops)}
     for member, target in forced.items():
         if member in at and target in at:
             join(at[member], at[target])
 
-    groups: dict[int, list[int]] = {}
-    for i in range(len(stops)):
-        groups.setdefault(root(i), []).append(i)
     heads: dict[int, dict] = {}
     index: dict[str, list[str]] = {}
-    for members in groups.values():
-        if len(members) == 1:
-            sid = stops[members[0]]['id']
+    for group in groups.values():
+        if len(group) == 1:
+            sid = stops[group[0]]['id']
             if sid in pinned:
-                heads[members[0]] = {**stops[members[0]], 'latitude': pinned[sid][0], 'longitude': pinned[sid][1]}
+                heads[group[0]] = {**stops[group[0]], 'latitude': pinned[sid][0], 'longitude': pinned[sid][1]}
             continue
-        order = sorted(members, key=lambda i: _head_rank(stops[i]))
+        order = sorted(group, key=lambda i: _head_rank(stops[i]))
         ordered = [stops[i] for i in order]
         head = ordered[0]
         ids = [s['id'] for s in ordered]

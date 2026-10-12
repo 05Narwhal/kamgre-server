@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import closures, mapping, platforms, roads, stopfix
+from . import closures, mapping, platforms, roads, stopfix, supplement, tracks
 from .geometry import MAX_POINTS, SHAPE_POINTS, cumulative, simplify, stop_distances, trim_spurs  # noqa: F401
 from .upstream import UpstreamError, otp
 
@@ -24,6 +24,10 @@ STATIC_TTL = 6 * 3600
 TIMES_TTL = 15
 LINE_TTL = 15 * 60
 PARTIAL_TTL = 30
+# A trip from a bus station whose bay the board has not announced yet is rebuilt this often (s), so it
+# moves to its own bay once the board shows it (platforms.learn polls every 3 min, ~50 min ahead).
+BAY_PENDING_TTL = 180
+BAY_HORIZON = 60 * 60
 ROAD_WAIT = 4.0
 CHUNK = 40
 
@@ -97,9 +101,12 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
     stops = _corrected([s['stop'] for s in stoptimes], replacement)
     mode = mapping.mode_of(route.get('mode'))
     bay = None
+    departure = _first_departure(t)
     if mode == 'bus':  # leaving a big bus station: from its bay (platforms.py)
-        stops, bay = platforms.place(stops, _first_departure(t), stops[-1].get('name') or t.get('tripHeadsign') or '')
-    raw = mapping.decode_polyline((t.get('tripGeometry') or {}).get('points') or '')
+        stops, bay = platforms.place(stops, departure, stops[-1].get('name') or t.get('tripHeadsign') or '')
+    origin = platforms.origin_area(bay['station'] if bay else stops[0].get('gtfsId') or '') if mode == 'bus' else None
+    destination = platforms.origin_area(stops[-1].get('gtfsId') or '') if mode == 'bus' else None
+    raw = t.get('shapeCoordinates') or mapping.decode_polyline((t.get('tripGeometry') or {}).get('points') or '')
     geometry, complete = road_shape(raw, stops, mode, deadline, replacement, from_bay=bool(bay))
     distances = stop_distances(geometry, stops)
     length = cumulative(geometry)[-1] if len(geometry) > 1 else 0.0
@@ -111,9 +118,30 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
         'patternId': (t.get('pattern') or {}).get('code') or t['gtfsId'],
         'length': round(length, 1), 'geometry': geometry,
         'stops': [{'stopId': s['gtfsId'], 'name': s.get('name') or s['gtfsId'], 'latitude': round(s['lat'], 6), 'longitude': round(s['lon'], 6),
-                   'distance': d, 'position': st['stopPosition']} for s, d, st in zip(stops, distances, stoptimes)],
+                   'distance': d, 'position': st['stopPosition'], **({'platform': s['bay'], 'platformUsual': s['bayUsual']} if s.get('bay') else {})}
+                  for s, d, st in zip(stops, distances, stoptimes)],
         'complete': complete, 'replacement': replacement,
+        # Where a bus waits before it leaves and parks after it arrives (a bus station's ground), and
+        # whether its bay is still to be announced.
+        **({'originArea': origin} if origin else {}),
+        **({'destinationArea': destination} if destination else {}),
+        'bayPending': bool(origin) and (not bay or bay['usual']) and departure is not None,
+        'departure': departure,
     }
+
+
+def _static_ttl(static: dict) -> Optional[float]:
+    """How long a built trip is kept: shorter while its shape is still being routed or its bay not announced."""
+    ttl = None if static['complete'] else PARTIAL_TTL
+    if _awaits_bay(static):
+        ttl = min(ttl or BAY_PENDING_TTL, BAY_PENDING_TTL)
+    return ttl
+
+
+def _awaits_bay(static: dict, now: Optional[float] = None) -> bool:
+    """A trip from a bus station whose bay the board will announce soon (it is due within BAY_HORIZON)."""
+    departure = static.get('departure')
+    return bool(static.get('bayPending')) and departure is not None and 0 < departure - (now or time.time()) < BAY_HORIZON
 
 
 
@@ -157,6 +185,12 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
         ids = [t for t in ids if t not in synthetic]
         if not ids:
             return out
+    own = [t for t in ids if supplement.owns(t)]
+    if own:  # feeds OTP has wrong, from the operator's timetable (supplement.py)
+        out.update(_load_own(own, day, deadline))
+        ids = [t for t in ids if t not in own]
+        if not ids:
+            return out
     for candidate in (day, day - timedelta(days=1)):
         wanted = [t for t in ids if t not in out]
         cached = {t: (_static.get(t), _times.get((t, candidate))) for t in wanted}
@@ -179,12 +213,33 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
                     static = _build_static(t, deadline)
                     if static:
                         # Shapes still being routed are rebuilt soon with the roads.
-                        _static.put(trip_id, static, None if static['complete'] else PARTIAL_TTL)
+                        _static.put(trip_id, static, _static_ttl(static))
                 times = t.get('stoptimesForDate') or []
                 if static and times:
                     _times.put((trip_id, candidate), times)
                     out[trip_id] = {'static': static, 'times': times, 'serviceDate': candidate}
         if all(t in out for t in ids) or day != service_day():
+            break
+    return out
+
+
+def _load_own(ids: list[str], day: date, deadline: float) -> dict[str, dict]:
+    """load_trips for trips of a supplementary feed, with the realtime feed's delays."""
+    from . import sources
+    updates = sources.trip_updates.get().value if sources._safe(sources.trip_updates) else {}
+    out = {}
+    for trip_id in ids:
+        for candidate in (day, day - timedelta(days=1)):
+            t = supplement.otp_trip(trip_id, candidate, updates.get(trip_id))
+            if not t:
+                continue
+            static = _static.get(trip_id)
+            if not static:
+                static = _build_static(t, deadline)
+                if not static:
+                    break
+                _static.put(trip_id, static, _static_ttl(static))
+            out[trip_id] = {'static': static, 'times': t['stoptimesForDate'], 'serviceDate': candidate}
             break
     return out
 
@@ -210,13 +265,21 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True) ->
             'effectiveDeparture': mapping.iso(day + st['realtimeDeparture']) if live and not canceled else None,
             'canceled': canceled,
             'typicalSeconds': typical.get(f'{stop["stopId"]}>{nxt}') if nxt else None,
+            **({'platform': stop['platform'], 'platformUsual': stop['platformUsual']} if stop.get('platform') else {}),
         })
+        if static['mode'] == 'rail' and 'platform' not in stops[-1]:
+            # The train's track at each station (tracks.py).
+            track, usual = tracks.tracks.track(static['routeName'], stop['stopId'], day + st['scheduledDeparture'])
+            if track:
+                stops[-1].update(platform=track, platformUsual=usual)
     return {
         **{k: static[k] for k in ('id', 'routeId', 'routeName', 'operatorId', 'mode', 'color', 'destination', 'directionId', 'patternId', 'length')},
         'serviceDate': entry['serviceDate'].isoformat(), 'realtime': realtime,
-        # The shape is still being routed (see roads.py); fetch the trip again shortly.
-        'provisional': not static.get('complete', True),
+        # The shape is still being routed (see roads.py), or the bay it leaves from is about to be
+        # announced (platforms.py): fetch the trip again shortly.
+        'provisional': not static.get('complete', True) or _awaits_bay(static),
         'geometry': static['geometry'] if geometry else [], 'stops': stops,
+        **{k: static[k] for k in ('originArea', 'destinationArea') if static.get(k)},
         **({'replacement': True} if static.get('replacement') else {}),
     }
 
@@ -232,7 +295,8 @@ def load_line(route_id: str, day: Optional[date] = None) -> Optional[dict]:
     hit = _lines.get(key)
     if hit is not None:
         return hit
-    route = otp().query(LINE_Q, {'id': route_id, 'date': _yyyymmdd(day)}).get('route')
+    route = supplement.otp_route(route_id, day) if supplement.owns(route_id) else None
+    route = route or otp().query(LINE_Q, {'id': route_id, 'date': _yyyymmdd(day)}).get('route')
     if not route:
         return None
     line, complete = build_line(route, day, time.monotonic() + ROAD_WAIT)
@@ -259,7 +323,7 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
     replacement = mapping.is_replacement(route)
     for p in route.get('patterns') or []:
         stops = _corrected(p.get('stops') or [], replacement)
-        raw = mapping.decode_polyline((p.get('patternGeometry') or {}).get('points') or '')
+        raw = p.get('shapeCoordinates') or mapping.decode_polyline((p.get('patternGeometry') or {}).get('points') or '')
         geometry, done = road_shape(raw, stops, mapping.mode_of(route.get('mode')), deadline, replacement)
         complete = complete and done
         distances = stop_distances(geometry, stops)

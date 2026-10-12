@@ -122,6 +122,8 @@ The app is built by Vercel from the private GitHub repository on every push to `
 
 Web app: commit and `git push`; Vercel deploys it. Backend: commit, then the same command as the first deploy. Only changed files are copied. Python packages are reinstalled only when `Pipfile.lock` changes, then migrations run and services restart.
 
+The delay statistics (line reliability, typical travel times) live only in this database and build up from months of observations, so every deploy keeps them: `server/keep-stats.sh` copies all rows to `/var/backups/prestop-stats/` before the migrations (copies of the last five deploys are kept) and counts them again afterwards. If any went missing, it puts them back and stops the deploy with a message. Deploys never recreate the database; only `prestop-restore` replaces it, and only after you type `restore`.
+
 ```powershell
 powershell -File backend/deploy/oracle/push.ps1
 ```
@@ -188,6 +190,7 @@ sudo systemctl start prestop-backup && journalctl -u prestop-backup -n 5
 | `config.local.example` | Server address, SSH key, domain, tunnel token |
 | `server/bootstrap.sh` | One-time machine setup (run by update.sh on the first deploy) |
 | `server/update.sh` | Applies each deploy on the server |
+| `server/keep-stats.sh` | Keeps the delay statistics through each deploy (copy before migrations, put back what went missing) |
 | `server/{manage,status,backup,restore,watchdog,egress-guard}.sh` | `prestop-manage`, `prestop-status`, backups, restore, health watchdog, outbound-data cap |
 | `oci/guardrails.sh`, `oci/audit.sh` | Quotas + budget alert on the Oracle account; read-only check that nothing is billable |
 | `oci/launch-retry.sh`, `oci/lib.sh` | Create the A1 instance when capacity frees up; shared settings (the free limits) |

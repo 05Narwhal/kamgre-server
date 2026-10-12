@@ -76,6 +76,24 @@ else
   echo "VAPID keys present"
 fi
 
+step "Settings"
+# Insane mode is on in production since 2026-10-12. Turned on once here; switch it off again with
+# PRESTOP_INSANE_MODE=false in /etc/prestop/prestop.env (later deploys leave it as it is).
+if [ ! -f "$STATE/.insane-mode-on" ]; then
+  if grep -q '^PRESTOP_INSANE_MODE=' /etc/prestop/prestop.env; then
+    sed -i 's/^PRESTOP_INSANE_MODE=.*/PRESTOP_INSANE_MODE=true/' /etc/prestop/prestop.env
+  else
+    echo 'PRESTOP_INSANE_MODE=true' >> /etc/prestop/prestop.env
+  fi
+  touch "$STATE/.insane-mode-on"
+  echo "Insane mode on"
+fi
+
+step "Statistics copy"
+# Reliability and typical travel times are months of observed delays: a copy before anything touches
+# the database, and a check after (missing rows are put back and the deploy stops). keep-stats.sh
+bash "$DEPLOY/server/keep-stats.sh" save
+
 step "Database migrations and static files"
 prestop-manage migrate --noinput
 prestop-manage collectstatic --noinput -v 0
@@ -85,6 +103,9 @@ if [ ! -f "$STATE/.gtfs-imported" ]; then
   prestop-manage import_gtfs
   touch "$STATE/.gtfs-imported"
 fi
+
+step "Statistics check"
+bash "$DEPLOY/server/keep-stats.sh" check
 
 step "Services"
 systemctl enable -q prestop-web prestop-collector prestop-push prestop-ingest prestop-floor caddy redis-server postgresql

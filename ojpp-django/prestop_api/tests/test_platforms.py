@@ -54,6 +54,40 @@ class MatchingTests(SimpleTestCase):
             self.assertEqual(platforms.departure_platform(AP, AT_13, 'Tolmin', []), '27')
 
 
+class UsualBayTests(SimpleTestCase):
+    """Departures the board has not shown yet: the bay their destination usually leaves from."""
+    def seen(self, *rows):
+        return [SimpleNamespace(key=f'{AP}|{hhmm}|{dest.lower()}', destination=dest, platform=bay, updated=timezone.now()) for hhmm, dest, bay in rows]
+
+    def test_the_bay_a_destination_mostly_uses(self):
+        seen = self.seen(('07:00', 'Bled', '8'), ('09:00', 'Bled', '8'), ('13:00', 'Bled', '26'), ('13:00', 'Koper', '12'))
+        self.assertEqual(platforms.usual_platform(AP, AT_13, 'Bled AP', seen), '8')
+        self.assertIsNone(platforms.usual_platform(AP, AT_13, 'Maribor', seen))
+
+    def test_a_destinations_own_departures_count_before_namesakes(self):
+        seen = self.seen(('07:00', 'Bled', '8'), ('08:00', 'Bled', '8'), ('09:00', 'Bled', '26'), ('10:00', 'Bled shuttle', '30'), ('11:00', 'Bled shuttle', '30'))
+        self.assertEqual(platforms.usual_platform(AP, AT_13, 'Bled', seen), '8')
+        self.assertEqual(platforms.usual_platform(AP, AT_13, 'Bled shuttle', seen), '30')
+
+    def test_no_usual_bay_when_it_varies(self):
+        seen = self.seen(('07:00', 'Nova Gorica', '11'), ('09:00', 'Nova Gorica', '12'), ('11:00', 'Nova Gorica', '13'))
+        self.assertIsNone(platforms.usual_platform(AP, AT_13, 'Nova Gorica', seen))
+
+    def test_of_equally_used_bays_the_one_seen_nearest_that_time(self):
+        seen = self.seen(('07:00', 'Kranj', '5'), ('12:40', 'Kranj', '8'))
+        self.assertEqual(platforms.usual_platform(AP, AT_13, 'Kranj', seen), '8')
+
+    def test_the_departures_own_bay_wins_and_a_usual_one_is_marked(self):
+        seen = self.seen(('13:00', 'Bled', '26'), ('07:00', 'Bled', '8'), ('09:00', 'Bled', '8'))
+        with mock.patch.object(platforms, 'overrides', return_value=[]):
+            self.assertEqual(platforms.platform_for(AP, AT_13, 'Bled', seen), ('26', False))
+            self.assertEqual(platforms.platform_for(AP, AT_13 + 3600, 'Bled', seen), ('8', True))
+            self.assertEqual(platforms.platform_for(AP, AT_13, 'Maribor', seen), (None, False))
+
+    def test_a_station_has_ground_a_plain_stop_has_none(self):
+        self.assertEqual(platforms.origin_area(AP)['radius'], 130)
+        self.assertIsNone(platforms.origin_area('IJPP:other'))
+
 class PlaceTests(SimpleTestCase):
     def setUp(self):
         patcher = mock.patch.object(platforms, 'bays', side_effect=lambda station: BAYS if station == AP else {})
@@ -66,7 +100,14 @@ class PlaceTests(SimpleTestCase):
             placed, bay = platforms.place(stops, AT_13, 'Tolmin')
         self.assertEqual((placed[0]['lat'], placed[0]['lon'], placed[0]['bay']), (46.0580472, 14.5145895, '13'))
         self.assertEqual(bay['ref'], '13')
+        self.assertFalse(placed[0]['bayUsual'])
         self.assertEqual(stops[0]['lat'], 46.057944)  # a copy
+
+    def test_a_departure_not_announced_yet_stands_in_its_destinations_usual_bay(self):
+        stops = [{'gtfsId': AP, 'name': 'Ljubljana AP', 'lat': 46.057944, 'lon': 14.514695}, {'gtfsId': 'x', 'name': 'Koper', 'lat': 45.5, 'lon': 13.7}]
+        with mock.patch.object(platforms, 'platform_for', return_value=('27-29', True)):
+            placed, bay = platforms.place(stops, AT_13, 'Koper')
+        self.assertEqual((placed[0]['bay'], placed[0]['bayUsual'], bay['station']), ('27', True, AP))
 
     def test_an_unknown_departure_or_another_station_stays_put(self):
         stops = [{'gtfsId': AP, 'name': 'Ljubljana AP', 'lat': 46.0, 'lon': 14.0}]

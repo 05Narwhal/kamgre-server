@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from . import geometry, journey_legs, leg_alerts, mapping, platforms, roads, stopfix
+from . import geometry, journey_legs, leg_alerts, mapping, platforms, roads, stopfix, tracks
 from . import geometry as geometry_lib
 from . import operators as companies
 
@@ -429,6 +429,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
     by_id = {a['id']: a for a in alerts}
     journeys = []
     deadline = time.monotonic() + ROAD_WAIT
+    seen_bays: dict = {}  # station -> its PlatformSeen rows, read once per request
     for edge in (data.get('planConnection') or {}).get('edges') or []:
         node = edge['node']
         raw = node.get('legs') or []
@@ -485,11 +486,20 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 del legs[-1]['stopCount']
             platform = (l['from'].get('stop') or {}).get('platformCode')
             board = (l['from'].get('stop') or {}).get('gtfsId')
+            usual = False
             if transit and not platform and board in platforms.STATIONS:
-                # Bus station bays, as the station's board announced them (platforms.learn).
-                platform = platforms.departure_platform(board, _ts(l['start']['scheduledTime']), _headsign(l) or '')
+                # Bus station bays, as the station's board announced them (platforms.learn), else the
+                # bay the destination usually leaves from (marked as such).
+                if board not in seen_bays:
+                    seen_bays[board] = platforms.station_seen(board)
+                platform, usual = platforms.platform_for(board, _ts(l['start']['scheduledTime']), _headsign(l) or '', seen_bays[board])
+            elif transit and not platform and legs[-1]['mode'] == 'rail':
+                # The train's track at the station it is boarded (tracks.py).
+                platform, usual = tracks.tracks.track(legs[-1]['routeName'], board or '', _ts(l['start']['scheduledTime']))
             if platform:
                 legs[-1]['platform'] = platform
+                if usual:
+                    legs[-1]['platformUsual'] = True
             meta.append({'transit': transit, 'interline': bool(l.get('interlineWithPreviousLeg')), 'duration': l.get('duration') or 0,
                          'realtime': bool(start_est), 'platform': platform})
         if plan_for:

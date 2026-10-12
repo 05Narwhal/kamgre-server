@@ -36,11 +36,12 @@ def boot():
 
 
 def caches():
-    from . import scheduled, sources
+    from . import scheduled, sources, supplement
     tomorrow = scheduled.service_day() + timedelta(days=1)
     # Live vehicles too: after ~30 s without a request their next read rebuilds them (and maybe the timetable).
     # Tomorrow's trains: the date people look up most after today (a 9 s load otherwise).
-    return [scheduled.timetable, scheduled.shapes, sources.stops, sources.routes, sources.alerts_raw, sources.vehicles,
+    # The operator GTFS that replaces OTP's broken Kranj timetable (supplement.py) before the indexes built on it.
+    return [scheduled.timetable, scheduled.shapes, supplement.gtfs, sources.stops, sources.routes, sources.alerts_raw, sources.vehicles,
             scheduled.day_timetable(tomorrow)]
 
 
