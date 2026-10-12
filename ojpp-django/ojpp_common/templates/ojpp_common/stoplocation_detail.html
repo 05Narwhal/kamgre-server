@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+    {% include "partials/maplibre.html" %}
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_stoplocation_change' object_id=object.pk %}" class="button is-warning" style="float:right">Edit</a>
+    <h2 class="is-size-2">{{ operator.name }}</h2>
+    <hr>
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ object.id }}</td>
+                </tr>
+                <tr>
+                    <th>Name</th>
+                    <td>{{ object.name|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ object.ijpp_id|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Parent stop</th>
+                    <td><a href="{{ object.stop.get_absolute_url }}">{{ object.stop }}</a></td>
+                </tr>
+            </table></section>
+        <section class="column">
+            <div class="gallery">
+                {% if object.photo %}
+                    <img src="{{ object.photo.url }}" alt="Fotografija postaje">
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <div class="tabs is-medium">
+        <ul>
+            <li class="is-active" data-target="routes"><a>Routes</a></li>
+            <li class="" data-target="trips"><a>Trips</a></li>
+        </ul>
+    </div>
+    <section class="tab-content is-active" id="routes">
+        <table class="table is-fullwidth" id="table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Group</th>
+                <th>Name</th>
+                <th>Operator</th>
+            </tr>
+            </thead>
+            {% for route in routes.all %}
+                <tr>
+                    <td><a href="{{ route.get_absolute_url }}">{{ route.id }}</a></td>
+                    <td><span class="tag" style="background-color:{{ route.route_group.color }}">{{ route.route_group.number }}</span><a href="{{ route.route_group.get_absolute_url }}">{{ route.route_group.name }}</a></td>
+                    <td>{{ route.name }}</td>
+                    <td><a href="{{ route.operator.get_absolute_url }}">{{ route.operator.name }}</a></td>
+                </tr>
+            {% endfor %}
+        </table>
+    </section>
+    <section class="tab-content" id="trips">
+        <table class="table is-fullwidth" id="table2">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Arrival</th>
+                <th>Departure</th>
+            </tr>
+            </thead>
+            {% for st in stoptimes %}
+                <tr>
+                    <td><a href="{{ st.trip.get_absolute_url }}">{{ st.trip.id }}</a></td>
+                    <td>{{ st.trip.name }}</td>
+                    <td>{{ st.time_arrival|default_if_none:"" }}</td>
+                    <td>{{ st.time_departure|default_if_none:"" }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <style>
+    .gallery {
+        max-width: 500px;
+    }
+    .gallery img:first-child {
+        display: block;
+        width: 100%;
+    }
+    .gallery img {
+        width: 25%;
+    }
+    #map {
+        height: 600px;
+        max-height: 90vh;
+    }
+    </style>
+    <script>
+        var table = $('#table').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+        var table2 = $('#table2').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+    </script>
+{% endblock %}

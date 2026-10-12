@@ -1,0 +1,20 @@
+[Unit]
+Description=Prestop delay collector (statistics, polls trip updates every 60 s)
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target postgresql.service redis-server.service
+
+[Service]
+User=prestop
+Group=prestop
+EnvironmentFile=/etc/prestop/prestop.env
+WorkingDirectory=/opt/prestop/app
+ExecStart=/opt/prestop/venv/bin/python manage.py collect_delays
+Restart=always
+RestartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

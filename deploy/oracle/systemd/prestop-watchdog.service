@@ -1,0 +1,8 @@
+[Unit]
+Description=Prestop health watchdog (restarts the API after repeated failed health checks)
+
+[Service]
+Type=oneshot
+RuntimeDirectory=prestop-watchdog
+RuntimeDirectoryPreserve=yes
+ExecStart=/opt/prestop/deploy/server/watchdog.sh

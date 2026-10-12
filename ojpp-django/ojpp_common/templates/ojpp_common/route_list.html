@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load ojpp_common %}
+{% block title %}Routes{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+
+{% block main %}
+    <h2 class="is-size-2">Route list</h2>
+
+    <table class="table is-fullwidth" id="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Prva postaja</th>
+                <th>Zadnja postaja</th>
+                <th>Naziv linije</th>
+                <th>Naziv operatorja</th>
+            </tr>
+        </thead>
+
+        {% for route in object_list %}
+            <tr>
+                <td>{% ojpp_link route route.id %}</td>
+                <!--<td><a href="{{ route.get_absolute_url }}">{{ route.id }}</a></td>-->
+                <td><a href="{{ route.first_stop.get_absolute_url }}">{{ route.first_stop.name }}</a></td>
+                <td><a href="{{ route.last_stop.get_absolute_url }}">{{ route.last_stop.name }}</a></td>
+                <td><a href="{{ route.get_absolute_url }}">{{ route.name }}</a></td>
+                <td><a href="{{ route.operator.get_absolute_url }}">{{ route.operator.name }}</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+    <script>
+        var table = $('#table').DataTable({
+            paging: true,
+            pageLength: 100,
+            fixedHeader: {
+                header: true
+            },
+        });
+    </script>
+    <style>
+    #table img {
+        max-height: 1rem;
+    }
+    #table tr td:first-child {
+        width: 10%;
+    }
+    </style>
+{% endblock %}

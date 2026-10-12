@@ -1,0 +1,9 @@
+[submodule "slo_scrap"]
+	path = slo_scrap
+	url = git@gitlab.com:franga2000/slo_scrap.git
+[submodule "NeTEx"]
+	path = NeTEx
+	url = https://github.com/NeTEx-CEN/NeTEx.git
+[submodule "SIRI"]
+	path = SIRI
+	url = https://github.com/SIRI-CEN/SIRI.git

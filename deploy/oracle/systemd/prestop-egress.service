@@ -1,0 +1,7 @@
+[Unit]
+Description=Prestop egress guard (stops public traffic before Oracle's 10 TB/month free outbound data runs out)
+After=vnstat.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/prestop/deploy/server/egress-guard.sh

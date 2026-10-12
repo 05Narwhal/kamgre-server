@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}{{ route.name }}{% endblock %}
+{% block css %}
+    {{ block.super }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@^3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@^2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@^1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-crosshair@1.2.0"></script>
+{% endblock css %}
+{% block main %}
+
+    <section class="section is-main-section">
+        <div class="tile is-ancestor">
+            <div class="tile is-parent">
+                <div class="card tile is-child">
+                    <div class="card-content">
+                        <div class="level is-mobile">
+                            <div class="level-item">
+                                <div class="is-widget-label"><h3 class="subtitle is-spaced">
+                                    Vozila
+                                </h3>
+                                    <h1 class="title">
+                                        {{ counts.vehicles }}
+                                    </h1>
+                                </div>
+                            </div>
+                            <div class="level-item has-widget-icon">
+                                <div class="is-widget-icon"><span class="icon has-text-primary is-large"><i class="mdi mdi-account-multiple mdi-48px"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tile is-parent">
+                <div class="card tile is-child">
+                    <div class="card-content">
+                        <div class="level is-mobile">
+                            <div class="level-item">
+                                <div class="is-widget-label"><h3 class="subtitle is-spaced">
+                                    Routes
+                                </h3>
+                                    <h1 class="title">
+                                        {{ counts.routes }}
+                                    </h1>
+                                </div>
+                            </div>
+                            <div class="level-item has-widget-icon">
+                                <div class="is-widget-icon"><span class="icon has-text-info is-large"><i class="mdi mdi-cart-outline mdi-48px"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tile is-parent">
+                <div class="card tile is-child">
+                    <div class="card-content">
+                        <div class="level is-mobile">
+                            <div class="level-item">
+                                <div class="is-widget-label"><h3 class="subtitle is-spaced">
+                                    Stops
+                                </h3>
+                                    <h1 class="title">
+                                        {{ counts.stop_locations }}
+                                    </h1>
+                                </div>
+                            </div>
+                            <div class="level-item has-widget-icon">
+                                <div class="is-widget-icon"><span class="icon has-text-success is-large"><i class="mdi mdi-finance mdi-48px"></i></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon"><i class="mdi mdi-finance"></i></span>
+                    Performance
+                </p>
+                <a href="#" class="card-header-icon">
+                    <span class="icon"><i class="mdi mdi-reload"></i></span>
+                </a>
+            </header>
+            <div class="card-content">
+                <div class="chart-area">
+
+                    <canvas id="chart2"></canvas>
+
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <span class="icon"><i class="mdi mdi-finance"></i></span>
+                    Performance
+                </p>
+                <a href="#" class="card-header-icon">
+                    <span class="icon"><i class="mdi mdi-reload"></i></span>
+                </a>
+            </header>
+            <div class="card-content">
+
+                <canvas id="chart3"></canvas>
+
+            </div>
+        </div>
+    </section>
+
+
+    <style>
+
+    </style>
+
+    <script>
+
+
+        var chart2 = new Chart(document.getElementById("chart2").getContext("2d"), {
+            type: "line",
+            options: {
+                plugins: {
+                    crosshair: {
+                        sync: {
+                            enabled: false
+                        },
+                    },
+                    tooltip: {
+                        animation: false,
+                        mode: "interpolate",
+                        intersect: false,
+                        callbacks: {
+                            title: function (a, d) {
+                                return a[0].element.x.toFixed(2);
+                            },
+                            label: function (d) {
+                                return (
+                                    d.chart.data.datasets[d.datasetIndex].label + ": " + d.element.y.toFixed(2)
+                                );
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: "time",
+                        time: {
+                            unit: "hour",
+                            // Luxon format string
+                            tooltipFormat: "DD T",
+                            displayFormats: {
+                                hour: "d.M. h'h'"
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: "Hour",
+                        },
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: "value",
+                        },
+                        ticks: {
+                            stepSize: 1
+                        }
+                    },
+                },
+            },
+            data: {
+                datasets: [
+                    {
+                        "backgroundColor": "red",
+                        "borderColor": "red",
+                        "showLine": true,
+                        "fill": false,
+                        "pointRadius": 4,
+                        "label": "Vehicles",
+                        "data": [
+                            {% for point in vehicle_locations %}
+                                {
+                                    "x": new Date({{ point.hour|date:"Y, m-1, d, H, m" }}),
+                                    "y": {{ point.c }}
+                                },
+                            {% endfor %}
+                        ],
+                        "lineTension": 0,
+                        "interpolate": false
+                    }
+                ]
+            }
+        });
+
+    </script>
+{% endblock %}

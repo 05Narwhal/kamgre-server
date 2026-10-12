@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ trip.name }}{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/maplibre.html" %}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_trip_change' object_id=trip.pk %}" class="button is-warning" style="float:right">Edit</a>
+    <h2 class="is-size-2">{% if not trip.active %}<span class="tag is-danger is-light is-size-4 has-text-weight-bold">DELETED</span>{% endif %} {{ trip.name }}</h2>
+    <hr>
+
+
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ trip.id }}</td>
+                </tr>
+                <tr>
+                    <th>Name</th>
+                    <td>{{ trip.name|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Route</th>
+                    <td><a href="{{ trip.route.get_absolute_url }}">{{ trip.route|default:"" }}</a></td>
+                </tr>
+                <tr>
+                    <th>Schedule</th>
+                    <td><a href="{{ trip.schedule.get_absolute_url }}">{{ trip.schedule|default:"" }}</a></td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ trip.ijpp_id|default:"" }}</td>
+                </tr>
+            </table>
+        </section>
+
+       <section class="column">
+            <table class="table is-fullwidth">
+                <thead>
+                <tr>
+                    <th>TripInst</th>
+                    <th>Vehicle</th>
+                    <th>Time created</th>
+                </tr>
+                </thead>
+                {% for instance in tripinstances %}
+                    <tr>
+                        <td><a href="{{ instance.get_absolute_url }}">#{{ instance.id }}</a></td>
+                        <td><a href="{{ instance.vehicle.get_absolute_url }}">{{ instance.vehicle }}</a></td>
+                        <td>{{ instance.created }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
+
+        </section>
+
+    </div>
+
+    <table class="table is-fullwidth" id="table">
+        <thead>
+        <tr>
+            <th>#</th>
+            <th>Stop name</th>
+            <th>Arrival</th>
+            <th>Departure</th>
+        </tr>
+        </thead>
+        {% for stoptime in stoptimes %}
+            <tr>
+                <td>{{ stoptime.sequence_num }}</td>
+                <td><a href="{{ stoptime.stop_location.get_absolute_url }}">{{ stoptime.stop_location.stop }}</a></td>
+                <td>{{ stoptime.time_arrival|default_if_none:"-" }}</td>
+                <td>{{ stoptime.time_departure|default_if_none:"-" }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <section>
+        <div id="map"></div>
+    </section>
+
+
+
+    <style>
+    #map {
+        height: 600px;
+        max-height: 90vh;
+    }
+    </style>
+    <script>
+        let map = new maplibregl.Map(mapOptions({}));
+        let geojson = {
+            type: 'FeatureCollection',
+            features: [
+                {% for st in stoptimes %}
+                    {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'Point',
+                            'coordinates': [ {{ st.stop_location.location.x }}, {{ st.stop_location.location.y }} ]
+                        },
+                        'properties': {
+                            'name': '{{ st.stop_location.stop }}',
+                            'seq': '{{ st.sequence_num }}',
+                        }
+                    },
+                {% endfor %}
+            ]
+        };
+        map.on('load', async function () {
+            map.addSource('stops', {
+                type: 'geojson',
+                data: geojson,
+            })
+            map.addLayer({
+                id: 'stops',
+                type: 'circle',
+                source: 'stops',
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#000',
+                }
+            });
+            map.addLayer({
+                id: 'stops_num',
+                type: 'symbol',
+                source: 'stops',
+                layout: {
+                    'text-field': ['get', 'seq'],
+                    'text-anchor': 'center',
+                    'text-size': 14,
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                },
+                paint: {
+                    'text-color': '#fff',
+                    'text-halo-color': '#000',
+                }
+            });
+            zoomToGeoJSON(map, geojson);
+        });
+    </script>
+{% endblock %}

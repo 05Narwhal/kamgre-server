@@ -1,0 +1,8 @@
+.tab-content:not(.is-active) {
+    display: none;
+}
+
+a.deleted {
+    font-style: italic;
+    opacity: .7;
+}

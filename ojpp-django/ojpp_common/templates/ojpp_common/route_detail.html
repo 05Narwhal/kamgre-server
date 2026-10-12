@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load ojpp_common %}
+{% block title %}{{ route.name }}{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+    {% include "partials/maplibre.html" %}
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_route_change' object_id=route.pk %}" class="button is-warning" style="float:right">Edit</a>
+    <h2 class="is-size-2">{% if not route.active %}<span class="tag is-danger is-light">DELETED</span>{% endif %}{{ route.name }}</h2>
+    <hr>
+
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ route.id }}</td>
+                </tr>
+                <tr>
+                    <th>Operator</th>
+                    <td><a href="{{ route.operator.get_absolute_url }}">{{ route.operator }}</a></td>
+                </tr>
+                <tr>
+                    <th>Name</th>
+                    <td>{{ route.name|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ route.ijpp_id|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Marprom ID</th>
+                    <td>{{ route.marprom_id|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>NVR name</th>
+                    <td>{{ route.nvr_name|default:"" }}</td>
+            </table>
+        </section>
+
+    </div>
+
+    <div class="tabs is-medium">
+        <ul>
+            <li class="is-active" data-target="trips"><a>Trips</a></li>
+        </ul>
+    </div>
+
+    <section class="tab-content is-active" id="trips">
+        <table class="table is-fullwidth" id="table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>IJPP ID</th>
+                <th>Departure</th>
+                <th>Seq.</th>
+            </tr>
+            </thead>
+            {% for trip in route.trips.all %}
+                <tr>
+                    <td>{% ojpp_link trip trip.id %}</td>
+                    <td>{{ trip.ijpp_id|default:"" }}</td>
+                    <td>{{ trip.stoptimes.first.time_departure }}</td>
+                    <td>{{ trip.seq_number }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    </section>
+
+    <section>
+        <div id="map"></div>
+    </section>
+
+    <style>
+    #map {
+        height: 600px;
+        max-height: 90vh;
+    }
+    </style>
+
+    <script>
+        var table = $('#table').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+        var table2 = $('#table2').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+        // make bulma tabs work
+        $('.tabs li').click(function () {
+            $('.tabs li').removeClass('is-active');
+            $(this).addClass('is-active');
+            $('.tab-content.is-active').removeClass('is-active');
+            $('#' + $(this).data('target')).addClass('is-active');
+        });
+    </script>
+    <script>
+        let map = new maplibregl.Map(mapOptions({}));
+        map.on('load', async function () {
+            map.addSource('route', {
+                type: 'geojson',
+                    data: {{ line|safe }},
+            });
+            map.addLayer({
+                id: 'line',
+                type: 'line',
+                source: 'route',
+            });
+            map.addLayer({
+                id: 'stops',
+                type: 'circle',
+                source: 'route',
+            });
+            map.addLayer({
+                id: 'stops',
+                type: 'symbol',
+                source: 'route',
+                layout: {
+                    'text-field': 'seq',
+                    'text-color': 'white',
+                    'text-anchor': 'center',
+                },
+            });
+        });
+    </script>
+{% endblock %}

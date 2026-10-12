@@ -1,0 +1,8 @@
+{"last_updated": 1791619200, "ttl": 60, "version": "2.3", "data": {"de": {"feeds": [
+  {"name": "station_status", "url": "https://v2.example/de/station_status.json"}
+]}, "en": {"feeds": [
+  {"name": "system_information", "url": "https://v2.example/system_information.json"},
+  {"name": "vehicle_types", "url": "https://v2.example/vehicle_types.json"},
+  {"name": "station_information", "url": "https://v2.example/station_information.json"},
+  {"name": "station_status", "url": "https://v2.example/station_status.json"}
+]}}}

@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>oJPP zemljevid</title>
+    {% include "partials/maplibre.html" %}
+    <link rel="stylesheet" href="https://unpkg.com/sidebarjs@10.0.0/lib/sidebarjs.min.css">
+    <script src="https://unpkg.com/sidebarjs@10.0.0/lib/umd/sidebarjs.min.js"></script>
+    <script defer data-domain="ojpp.si" src="https://analitika.derp.si/js/script.js"></script>
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+            font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+        }
+
+        #main {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #map {
+            flex: 1;
+        }
+
+        .notification.is-danger {
+          background-color: #f14668;
+          color: #fff;
+        }
+
+        .notification {
+          background-color: #f5f5f5;
+          border-radius: 4px;
+          position: relative;
+          padding: 1.25rem 2.5rem 1.25rem 1.5rem;
+        }
+
+        .sidebar-table {
+            text-align: left;
+        }
+
+        .sidebar-table th {
+            border-bottom: 1px solid #ddd;
+        }
+
+        .no-padding {
+            padding: 0;
+        }
+
+        .no-margin {
+            margin: 0;
+        }
+
+        .sidebar-photo {
+            width: 100%;
+            height: auto;
+        }
+
+        .bean {
+            cursor: pointer;
+        }
+
+        .bean:hover, .bean:focus, .bean:visited {
+            color: #0c3e85;
+            text-decoration: underline;
+        }
+
+        .bean-ijpp {
+            background-color: #0837791c;
+            padding: 0.1rem;
+            border-radius: 0.2rem;
+        }
+
+        .passed {
+            font-size: smaller;
+            color: #999;
+            text-decoration: line-through;
+        }
+
+        .detail-row {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            width: 100%;
+            /* fit inside parent */
+            box-sizing: border-box;
+
+        }
+
+        /* banded rows */
+        .detail-row:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .detail-stop-name {
+            margin: .2rem;
+            font-weight: bold;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            vertical-align: center;
+        }
+
+        .detail-route-name {
+            margin: .2rem;
+        }
+
+        .detail-stop-time {
+            margin: .2rem;
+            text-align: right;
+        }
+
+        /* get element which has sidebarjs-container in tag */
+        [sidebarjs-container] {
+            overflow-y: auto;
+            overflow-x: hidden;
+            width: 300px;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            background: white;
+        }
+
+        /* hide scrollbar */
+        [sidebarjs-container]::-webkit-scrollbar {
+            display: none;
+        }
+
+        a {
+            color: #083779;
+            text-decoration: none;
+        }
+
+        a:hover, a:focus, a:visited {
+            color: #0c3e85;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div id="sidebar" sidebarjs></div>
+<div id="main">
+    {% include 'banner.html' %}
+    <div id='map'></div>
+</div>
+<script>
+    let map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://tiles.derp.si/maps/streets-v2/style.json',
+        center: [14.505, 46.051],
+        zoom: 8,
+        minZoom: 6,
+        renderWorldCopies: false,
+        hash: true,
+
+    });
+
+    let REFRESH_RATE = 5 * 1000;
+
+    fetch('/api/operators/details/').then(r => r.json()).then(r => {
+        window.operators = {}
+        r.forEach(o => {
+            window.operators[o.id] = o
+        })
+    })
+
+    map.on('load', async function () {
+        map.addSource('stops', {
+            type: 'geojson',
+            data: '/api/stop_locations',
+        })
+        map.addLayer({
+            id: 'stops',
+            source: 'stops',
+            type: 'symbol',
+            layout: {
+                "icon-size": 1,
+                "text-size": [
+					"step",
+					["zoom"],
+					0,
+					15, // min zoom
+					14, // text size
+				],
+                "icon-image": "bus_stop",
+                "text-field": "{name}",
+                "text-anchor": "top",
+                "text-offset": [
+                    0,
+                    0.8
+                ],
+                "text-padding": 2,
+                "text-max-width": 8,
+                "icon-allow-overlap": false
+            },
+            paint: {
+                "text-color": '#4898FF',
+                "icon-opacity": 1,
+                "text-opacity": 1,
+                "text-halo-blur": 0.5,
+                "text-halo-color": '#ffffff',
+                "text-halo-width": 1
+            }
+        });
+        map.addSource('locations', {
+            type: 'geojson',
+            data: await getLocations(),
+        });
+
+        map.addSource('trip-polyline', {
+            type: 'geojson',
+            data: {
+                type: 'LineString',
+                coordinates: [],
+            }
+        });
+        map.addLayer({
+            id: 'locations',
+            type: 'symbol',
+            source: 'locations',
+            layout: {
+                'icon-image': ['concat', ['get', 'operator_id'], '-bg'],
+                'icon-allow-overlap': true,
+                'text-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-size': 0.7,
+                'symbol-sort-key': ['get', 'id'],
+                'icon-rotate': ['get', 'direction'],
+                'icon-rotation-alignment': 'map',
+            },
+            paint: {
+                'icon-opacity': ['get', 'opacity'],
+            },
+        });
+        map.addLayer({
+            id: 'locations_logos',
+            type: 'symbol',
+            source: 'locations',
+            layout: {
+                'icon-image': ['get', 'operator_id'],
+                'icon-allow-overlap': true,
+                'text-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-size': 0.7,
+                'symbol-sort-key': ['*', ['get', 'id'], 2],
+            },
+            paint: {
+                'icon-opacity': ['get', 'opacity'],
+            },
+        });
+        map.addLayer({
+            id: 'trip-polyline-layer',
+            type: 'line',
+            source: 'trip-polyline',
+            layout: {
+                'line-join': 'round',
+                'line-cap': 'round'
+            },
+            paint: {
+                'line-color': '#2eff00',
+                'line-width': 4,
+                'line-opacity': 0.5
+            }
+        });
+
+        // To find shit to filter:
+        // map.getStyle().layers.forEach(e => map.on("click", e.id, ev => console.log(ev.features)))
+
+        if (map.getLayer("Other POI"))
+            map.setFilter("Other POI", [
+                "all",
+                ["==", "$type", "Point"],
+                ["!=", "class", "bus"],
+                ["!=", "class", "rail"],
+                ["!=", "class", "railway"],
+            ])
+
+        if (map.getLayer("Station"))
+            map.setLayoutProperty("Station", "visibility", "none")
+        /*
+                map.addLayer({
+                    id: 'locations',
+                    type: 'symbol',
+                    source: 'locations',
+                    layout: {
+                        'icon-image': ['get', 'image_id'],
+                        'icon-allow-overlap': true,
+                        'text-allow-overlap': true,
+                        'icon-size': ['match',
+                            ['get', 'type'],
+                            ['literal', 'bg'], .7,
+                            .22,
+                        ],
+                        'icon-rotate': ['match',
+                            ['get', 'type'],
+                            ['literal', 'bg'], 0,
+                            ['get', 'direction'],
+                        ],
+                        'icon-rotation-alignment': 'map',
+                    },
+                    paint: {
+                    },
+                });
+                */
+
+        setInterval(updateLocations, REFRESH_RATE)
+    })
+    ;
+
+    let SIDEBAR = new SidebarJS.SidebarElement({
+        element: document.querySelector('#map'),
+        position: 'left',
+        style: 'push',
+        backdrop: false,
+        sidebar: {
+            width: 300,
+            align: 'left',
+            content: '<div id="sidebar-content" class="sidebar"></div>',
+        },
+        onclose: () => {
+            // clear sidebar
+            document.querySelector('#sidebar-content').innerHTML = '';
+        }
+    });
+
+
+    async function createStopSidebar(properties) {
+        SIDEBAR.open();
+        let sidebar = document.querySelector('[sidebarjs-container]');
+        let arrivals_list = ""
+        try {
+            let arrivals = await fetch('/api/stop_locations/' + properties.id + '/arrivals').then(r => r.json());
+            arrivals_list = "<tr><td>";
+            for (let time of arrivals) {
+                let iso_date = time.time_departure || time.time_arrival;
+                let passed = false;
+                if (iso_date) {
+                    let date = new Date(new Date().toISOString().split('T')[0] + 'T' + iso_date);
+                    passed = date < new Date();
+                }
+                arrivals_list += `
+                <div class="detail-row ${passed ? 'passed' : ''}" id="stop-${time.trip_id}">
+                    <div class="detail-route-name"><a href="/trips/${time.trip_id}" target="_blank">${time.route_name}</a>
+                    <br><small>${time.operator.name}</small> ${time.vehicle ? `<small onclick="createVehicleSidebarPass(${time.vehicle.id}, ${time.trip_id})" class="bean bean-${time.operator.name ? 'ijpp' : ''}">📡 ${time.vehicle.plate ? time.vehicle.plate : time.vehicle.id}
+                    ${time.vehicle.model ? time.vehicle.model.low_floor ? "♿" : "" : ""}</small>` : ""}</div>
+                    <div class="detail-stop-time"> ${time.time_arrival != null ? time.time_arrival.substring(0, 5) : '-'}
+                    <br>${time.time_departure != null && time.time_departure != '00:00' ? time.time_departure.substring(0, 5) : '-'}</div>
+                </div>`;
+            }
+            arrivals_list += "</td></tr>";
+        } catch (e) {
+            console.error(e);
+            arrivals_list = "";
+        }
+        sidebar.innerHTML = `
+            <img src="${properties.photo ? properties.photo : 'https://mestnipromet.cyou/tracker/img/avtobusi/nima.jpg'}" class="sidebar-photo" style="object-fit: cover;"/>
+            <h1 class="no-padding no-margin"><a href="/stop_locations/${properties.id}" target="_blank">${properties.name}</a></h1>
+            <table class="sidebar-table">
+                <tr>
+                    <th>${VOCABULARY.arrivals_to_stop}</th>
+                </tr>
+                ${arrivals_list.length > 0 ? arrivals_list : `
+                    <tr>
+                        <td>${VOCABULARY.no_arrivals}</td>
+                    </tr>
+                `}
+            </table>
+        `;
+    }
+
+    for (let layer of ['locations', 'stops']) {
+
+        map.on('mouseenter', layer, function () {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', layer, function () {
+            map.getCanvas().style.cursor = '';
+        });
+
+        map.on('click', layer, async function (e) {
+            console.debug(e, e.features)
+            if (!e.features[0].properties.vehicle_id) {
+                createStopSidebar(e.features[0].properties);
+            } else {
+                createVehicleSidebar(e.features[0].properties)
+            }
+        });
+
+
+        function createVehicleSidebarPass(vehicle_id, trip_id) {
+            createVehicleSidebar({vehicle_id: vehicle_id, trip_id: trip_id})
+        }
+
+        async function createVehicleSidebar(properties) {
+            let data = await fetch(`/api/vehicles/${properties.vehicle_id}/details/`).then(r => r.json());
+            SIDEBAR.open();
+            let sidebar = document.querySelector('[sidebarjs-container]');
+            sidebar.innerHTML = `
+            <img src="${data.photos ? data.photos[0] : 'https://mestnipromet.cyou/tracker/img/avtobusi/nima.jpg'}" class="sidebar-photo" style="object-fit: cover;"/>
+            <h1 class="no-padding no-margin"><a href="/vehicles/${data.id}" target="_blank">${data.id}</a></h1>
+            <table class="sidebar-table">
+                <tr>
+                    <th>${VOCABULARY.operator}</th>
+                </tr>
+                <tr>
+                    <td><a href="/operators/${data.operator.id}" target="_blank">${data.operator.name}</a></td>
+                </tr>
+                <tr>
+                    <th>${VOCABULARY.model}</th>
+                </tr>
+                <tr>
+                    <td>${data.model ? data.model : VOCABULARY.unknown}</td>
+                </tr>
+                ${
+                data.plate ?
+                    `<tr>
+                            <th>${VOCABULARY.plate}</th>
+                        </tr>
+                        <tr>
+                            <td>${data.plate}</td>
+                        </tr>` : ''
+            }
+                ${
+                data.operator_vehicle_id ?
+                    `<tr>
+                            <th>${VOCABULARY.operator_vehicle_id}</th>
+                        </tr>
+                        <tr>
+                            <td>${data.operator_vehicle_id}</td>
+                        </tr>` : ''
+            }
+                ${
+                data.ijpp_id ?
+                    `<tr>
+                            <th>${VOCABULARY.ijpp_id}</th>
+                        </tr>
+                        <tr>
+                            <td>${data.ijpp_id}</td>
+                        </tr>` : ''
+            }
+
+
+            </table>
+            <hr>
+
+            `;
+            if (properties.trip_id) {
+                let trip = await fetch(`/api/trips/${properties.trip_id}/details/`).then(r => r.json());
+                if (!trip.detail) {
+                    let details = document.createElement('div');
+                    // first row is route name (first and last stop_times.stop.name)
+                    let firstStop = trip.stop_times[0].stop;
+                    let lastStop = trip.stop_times[trip.stop_times.length - 1].stop;
+                    let routeName = `${data.type == 'BUS' ? '🚍' : '🚆'} ${firstStop.name} - ${lastStop.name}`;
+                    details.innerHTML = `
+                        <a href="/trips/${properties.trip_id}" target="_blank"><p class="no-padding no-margin">${routeName}</p></a>
+                    `;
+                    // iterate over stop_times
+                    for (let time of trip.stop_times) {
+                        let iso_date = time.time_departure || time.time_arrival;
+                        let passed = false;
+                        if (iso_date) {
+                            let date = new Date(new Date().toISOString().split('T')[0] + 'T' + iso_date);
+                            passed = date < new Date();
+                        }
+                        details.innerHTML += `
+                        <div class="detail-row bean ${passed ? 'passed' : ''}" id="stop-${time.stop.id}" onclick="createStopSidebar({id: ${time.stop.id}})">
+                            <div class="detail-stop-name">${time.stop.name}</div>
+                            <div class="detail-stop-time">${time.time_arrival != null ? time.time_arrival : '-'}<br>${time.time_departure != null && time.time_departure != '00:00' ? time.time_departure : '-'}</div>
+                        </div>
+                        `
+                    }
+
+                    sidebar.innerHTML += `
+                        <table class="sidebar-table" >
+                            <tr>
+                                <th>${VOCABULARY.trip_details}</th>
+                            </tr>
+                        </table>
+                        ${details.outerHTML}
+                    `
+                } else {
+                    sidebar.innerHTML += `
+                        <table class="sidebar-table">
+                            <tr>
+                                <th>${VOCABULARY.trip_details}</th>
+                            </tr>
+                            <tr>
+                                <td>${VOCABULARY.unknown}</td>
+                            </tr>
+                        </table>
+                    `
+                }
+                try {
+                    let geometry = await fetch(`/api/trips/${properties.trip_id}/geometry/`).then(r => r.json());
+                    console.log(geometry)
+                    // add geometry to map
+                    map.getSource('trip-polyline').setData({
+                        type: 'Feature',
+                        geometry: geometry
+                    });
+                } catch (e) {
+                    console.error(e);
+                    map.getSource('trip-polyline').setData({
+                        type: 'Feature',
+                        geometry: []
+                    });
+                }
+            }
+        }
+
+        var VOCABULARY = {
+            'operator': 'Operater',
+            'operator_id': 'Operator ID',
+            'model': 'Model',
+            'unknown': 'Neznano',
+            'plate': 'Registrska tablica',
+            'operator_vehicle_id': 'Interna številka vozila',
+            'ijpp_id': 'Identifikator vozila v IJPP',
+            'more_details': 'Več podrobnosti',
+            'trip_details': 'Podrobnosti o vožnji',
+            'route': 'Proga',
+            'arrivals_to_stop': 'Prihodi na postajo',
+            'no_arrivals': 'Ni prihodov',
+        }
+
+    }
+
+    let LOADED = [];
+    map.on('styleimagemissing', function (e) {
+        if (LOADED.includes(e.id)) return;
+        LOADED.push(e.id);
+
+        let operator_id = parseInt(e.id.split('-')[0]);
+        let color = 'red';
+        if (window.operators[operator_id]) {
+            color = window.operators[operator_id].color;
+        }
+
+
+        if (e.id.indexOf('bg') > -1) {
+            let data = generate_bg_marker(color);
+            map.addImage(e.id, {width: 64, height: 64, data: data});
+        } else {
+            if (window.operators[operator_id]) {
+                let b64 = window.operators[operator_id].logo_base64;
+                if (b64) {
+                    let img = new Image();
+                    img.src = 'data:image/png;base64,' + b64;
+                    img.onload = ev => {
+                        createImageBitmap(img).then((imgData) => {
+                            data = generate_fg_marker(color, imgData);
+                            map.addImage(e.id, {width: 64, height: 64, data: data});
+                        })
+                    }
+                } else {
+                    data = generate_fg_marker(color, null);
+                    map.addImage(e.id, {width: 64, height: 64, data: data});
+
+                }
+
+
+            }
+        }
+
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    map.addControl(new maplibregl.GeolocateControl({
+        positionOptions: {
+            enableHighAccuracy: true
+        },
+        trackUserLocation: true
+    }), 'top-right');
+
+    let canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    let ctx = canvas.getContext('2d');
+    let arrow_size = 20;
+    let radius = (canvas.height - arrow_size) / 2;
+    let center = canvas.height / 2;
+
+    function generate_bg_marker(color) {
+        ctx.clearRect(0, 0, 64, 64);
+        ctx.fillStyle = color;
+
+
+        // Arrow (triangle)
+        ctx.beginPath();
+        ctx.moveTo(center, 0);
+        ctx.lineTo(center - 20, arrow_size + 2);
+        ctx.lineTo(center + 20, arrow_size + 2);
+        ctx.closePath();
+        ctx.fill();
+
+
+        let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        return data.data;
+    }
+
+
+    function generate_fg_marker(color, image) {
+        ctx.clearRect(0, 0, 64, 64);
+        ctx.fillStyle = color;
+
+        // Outer circle
+        ctx.beginPath();
+        ctx.arc(center, center, radius, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Inner circle (fill)
+        ctx.beginPath();
+        ctx.arc(center, center, radius - 3, 0, 2 * Math.PI);
+        ctx.fillStyle = 'black';
+        ctx.fill();
+
+        if (image) {
+            let size = radius * 1.5;
+            // Image
+            ctx.drawImage(image, center - size / 2, center - size / 2, size, size);
+        }
+
+        let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        return data.data;
+    }
+
+    async function getLocations() {
+        let res = await fetch('/api/vehicle_locations');
+        return await res.json();
+    }
+
+    async function updateLocations() {
+        let geojson = await getLocations();
+
+        /*
+        let features = geojson.features;
+        geojson.features = [];
+
+        for (let original of features) {
+            original.properties.image_id = original.properties.operator_id;
+
+            let background = JSON.parse(JSON.stringify(original));
+            background.properties.id = background.properties.id + '-bg';
+            background.properties.type = 'bg';
+            background.properties.image_id = 'bg';
+
+            geojson.features.push(original);
+            geojson.features.push(background);
+
+        }
+         */
+        map.getSource('locations').setData(geojson);
+    }
+
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{"last_updated": "2026-10-10T08:00:00+02:00", "ttl": 60, "version": "3.0", "data": {"feeds": [
+  {"name": "system_information", "url": "https://v3.example/system_information.json"},
+  {"name": "vehicle_types", "url": "https://v3.example/vehicle_types.json"},
+  {"name": "station_information", "url": "https://v3.example/station_information.json"},
+  {"name": "station_status", "url": "https://v3.example/station_status.json"}
+]}}

@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+    {% include "partials/maplibre.html" %}
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_vehicle_change' object_id=vehicle.pk %}" class="button is-warning" style="float:right">Edit</a>
+    <h2 class="is-size-2">{{ operator.name }}</h2>
+    <hr>
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ vehicle.id }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ vehicle.ijpp_id|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Operator</th>
+                    <td><a href="{{ vehicle.operator.get_absolute_url }}">{{ vehicle.operator.name }}</a></td>
+                </tr>
+                <tr>
+                    <th>Operator vehicle ID</th>
+                    <td>{{ vehicle.operator_vehicle_id|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Vehicle type</th>
+                    <td>{{ vehicle.type }}</td>
+                </tr>
+                <tr>
+                    <th>License plate</th>
+                    <td>{{ vehicle.plate|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Model</th>
+                    <td>{% if vehicle.model_id != None %}<a href="{{ vehicle.model.get_absolute_url }}">{{ vehicle.model.name }}</a>{% endif %}</td>
+                </tr>
+                <tr>
+                    <th>VIN</th>
+                    <td>{% if vehicle.vin %}<a href="https://avtolog.si/search/{{ vehicle.vin }}" target="_blank">{{ vehicle.vin }}</a>{% endif %}</td>
+                </tr>
+            </table>
+        </section>
+
+       <section class="column">
+        <table class="table is-fullwidth">
+            <thead>
+            <tr>
+                <th>TripInst</th>
+                <th>Vehicle</th>
+                <th>Time created</th>
+            </tr>
+            </thead>
+            {% for instance in tripinstances %}
+                <tr>
+                    <td><a href="{{ instance.get_absolute_url }}">#{{ instance.id }}</a></td>
+                    <td><a href="{{ instance.vehicle.get_absolute_url }}">{{ instance.vehicle }}</a></td>
+                    <td>{{ instance.created }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+
+    </section>
+        <section class="column">
+            <div class="gallery">
+                {% for photo in vehicle.photos.objects.all %}
+                <img src="{{ photo.image.url }}" alt="Photo {{ photo.id }}">
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+    <section>
+        <input type="date" id="date" value="{% now 'Y-m-d' %}" onchange="updateLocations()"> Count: <span id="location_count">?</span>
+        <div id="map"></div>
+    </section>
+    <style>
+    .gallery {
+        max-width: 500px;
+    }
+    .gallery img:first-child {
+        display: block;
+        width: 100%;
+    }
+    .gallery img {
+        width: 25%;
+    }
+    #map {
+        height: 600px;
+        max-height: 90vh;
+    }
+    </style>
+    <script>
+        let map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://tiles.derp.si/maps/streets/style.json',
+            center: [14.505, 46.051],
+            zoom: 7.5,
+            minZoom: 6,
+            renderWorldCopies: false,
+        });
+        map.on('load', async function () {
+            map.addLayer({
+                id: 'locations',
+                type: 'circle',
+                source: {
+                    type: 'geojson',
+                    data: await getLocations(),
+                }
+            });
+        });
+        async function getLocations() {
+            let date = document.getElementById('date').value;
+            let res = await fetch('/api/vehicles/{{ vehicle.id }}/locations_geojson?date=' + date);
+            let gj = await res.json();
+            document.getElementById('location_count').innerText = gj.features.length;
+            return gj;
+        }
+        async function updateLocations() {
+            let geojson = await getLocations();
+            map.getSource('locations').setData(geojson);
+        }
+    </script>
+{% endblock %}

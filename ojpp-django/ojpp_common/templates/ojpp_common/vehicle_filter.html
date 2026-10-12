@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+{% block main %}
+    <h2 class="is-size-2">Seznam vozil</h2>
+    <form action="">
+        {{ filter.form }}
+        <button type="submit">Filter</button>
+    </form>
+
+    <table class="table is-fullwidth" id="table">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Operator</th>
+            <th>IJPP ID</th>
+            <th>Interna št.</th>
+            <th>Tip vozila</th>
+            <th>Registracija</th>
+            <th>Model</th>
+        </tr>
+        </thead>
+        {% for vehicle in object_list %}
+            <tr>
+                <td><a href="{{ vehicle.get_absolute_url }}">{{ vehicle.id }}</a></td>
+                <td><a href="{{ vehicle.operator.get_absolute_url }}">{{ vehicle.operator.name }}</a></td>
+                <td>{{ vehicle.ijpp_id|default:"" }}</td>
+                <td>{{ vehicle.operator_vehicle_id|default:"" }}</td>
+                <td>{{ vehicle.type }}</td>
+                <td>{{ vehicle.plate|default:"" }}</td>
+                <td><a href="{{ vehicle.model.get_absolute_url }}">{{ vehicle.model.name }}</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+    <script>
+        var table = $('#table').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+    </script>
+{% endblock %}

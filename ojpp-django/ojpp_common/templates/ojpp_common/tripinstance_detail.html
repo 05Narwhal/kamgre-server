@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ trip.name }}{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/maplibre.html" %}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_tripinstance_change' object_id=tripinstance.pk %}" class="button is-warning"
+       style="float:right">Edit</a>
+    <h2 class="is-size-2">{{ trip.name }}</h2>
+    <hr>
+
+
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ trip.id }}</td>
+                </tr>
+                <tr>
+                    <th>Trip Name</th>
+                    <td><a href="{{ trip.get_absolute_url }}">{{ trip.name|default:"" }}</a></td>
+                </tr>
+                <tr>
+                    <th>Vehicle</th>
+                    <td><a href="{{ object.vehicle.get_absolute_url }}">{{ object.vehicle|default:"" }}</a></td>
+                </tr>
+                <tr>
+                    <th>First signal</th>
+                    <td>{{ object.created }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ trip.ijpp_id|default:"" }}</td>
+                </tr>
+            </table>
+        </section>
+
+    </div>
+
+    <table class="table is-fullwidth" id="table">
+        <thead>
+        <tr>
+            <th>#</th>
+            <th>Stop name</th>
+            <th>Arrival<br> (sched.)</th>
+            <th>Delay</th>
+            <th>Arrival<br> (real)</th>
+            <th>Departure</th>
+            <th>Departure (real)</th>
+            <th>Loc</th>
+        </tr>
+        </thead>
+        {% for row in rows %}
+            <tr>
+                <td>{{ row.stoptime.sequence_num }}</td>
+                <td>
+                    <a href="{{ stoptime_instance.stoptime.stop_location.get_absolute_url }}">{{ row.stoptime.stop_location.stop }}</a>
+                </td>
+                <td>{{ row.stoptime.time_arrival|default_if_none:"-" }}</td>
+                <td>{{ row.stoptime_instance.time_arrival_delay }}</td>
+                <td>{{ row.time_arrival_local.time|default_if_none:"-" }}</td>
+                <td>{{ row.stoptime.time_departure|default_if_none:"-" }}</td>
+                <td>{{ row.time_departure_local.time|default_if_none:"-" }}</td>
+                <td>{{ row.stoptime_instance.vehicle_location.id }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <section>
+        <div id="map"></div>
+    </section>
+    <style>
+        #map {
+            height: 600px;
+            max-height: 90vh;
+        }
+    </style>
+    <script>
+        let map = new maplibregl.Map(mapOptions({}));
+        let geojson = {
+            type: 'FeatureCollection',
+            features: [
+                {% for row in rows %}
+                    {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'Point',
+                            'coordinates': [{{ row.stoptime.stop_location.location.x }}, {{ row.stoptime.stop_location.location.y }}]
+                        },
+                        'properties': {
+                            'name': '{{ row.stoptime.stop_location.stop }}',
+                            'seq': '{{ row.stoptime.sequence_num }}',
+                        }
+                    },
+                {% endfor %}
+            ]
+        };
+        let geojson_stis = {
+            type: 'FeatureCollection',
+            features: [
+                {% for row in rows %}
+                    {% if row.stoptime_instance %}
+                    {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'Point',
+                            'coordinates': [{{ row.stoptime_instance.vehicle_location.location.x }}, {{ row.stoptime_instance.vehicle_location.location.y }}]
+                        },
+                    },
+                    {% endif %}
+                {% endfor %}
+            ]
+        };
+        map.on('load', async function () {
+
+            // Init sources
+            map.addSource('locations', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            })
+            map.addSource('stoptime_instances', {
+                type: 'geojson',
+                data: geojson_stis,
+            })
+            map.addSource('stops', {
+                type: 'geojson',
+                data: geojson,
+            })
+
+            // Init layers
+
+            map.addLayer({
+                id: 'locations',
+                type: 'circle',
+                source: 'locations',
+                paint: {
+                    'circle-color': '#666',
+                }
+            });
+
+            map.addLayer({
+                id: 'stoptime_instances',
+                type: 'circle',
+                source: 'stoptime_instances',
+                paint: {
+                    'circle-radius': 10,
+                    'circle-color': '#A00',
+                }
+            });
+            map.addLayer({
+                id: 'stops',
+                type: 'circle',
+                source: 'stops',
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#000',
+                }
+            });
+            map.addLayer({
+                id: 'stops_num',
+                type: 'symbol',
+                source: 'stops',
+                layout: {
+                    'text-field': ['get', 'seq'],
+                    'text-anchor': 'center',
+                    'text-size': 14,
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                },
+                paint: {
+                    'text-color': '#fff',
+                    'text-halo-color': '#000',
+                }
+            });
+
+
+            //zoomToGeoJSON(map, geojson);
+
+            // Load vehicle locations
+            await updateLocations();
+        });
+
+        async function getLocations() {
+            let res = await fetch('/api/vehicles/{{ object.vehicle.id }}/locations_geojson?date={{ object.created|date:"Y-m-d" }}');
+            let gj = await res.json();
+            return gj;
+        }
+
+        async function updateLocations() {
+            let geojson = await getLocations();
+            map.getSource('locations').setData(geojson);
+        }
+
+        // Colorize delays
+        document.querySelectorAll("#table tr > td:nth-child(4)").forEach(function (el) {
+            if (el.innerText === "0:00:00") {
+                el.classList.add("has-text-success");
+            } else if (el.innerText.charAt(0) === "-") {
+                el.classList.add("has-text-warning");
+            } else {
+                el.classList.add("has-text-danger");
+            }
+        });
+
+
+
+    </script>
+{% endblock %}

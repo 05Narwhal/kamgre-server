@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load ojpp_common %}
+
+{% block title %}Schedules{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+
+{% block main %}
+    <table class="table is-fullwidth" id="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>IJPP</th>
+                <th>Description</th>
+                <th>Used</th>
+            </tr>
+        </thead>
+
+        {% for schedule in object_list %}
+            <tr>
+                <td>{% ojpp_link schedule schedule.id %}</td>
+                <td>{{ schedule.name|default_if_none:"" }}</td>
+                <td>{{ schedule.ijpp_tag|default_if_none:"" }}</td>
+                <td>{{ schedule.description }}</td>
+                <td>{{ schedule.trips__count }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    <script>
+        var table = $('#table').DataTable({
+            paging: true,
+            pageLength: 100,
+            fixedHeader: {
+                header: true
+            },
+            order: [[4, 'desc']]
+        });
+    </script>
+    <style>
+    #table img {
+        max-height: 1rem;
+    }
+    #table tr td:first-child {
+        width: 10%;
+    }
+    </style>
+{% endblock %}

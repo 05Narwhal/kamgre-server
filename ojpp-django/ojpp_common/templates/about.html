@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    <script src="https://unpkg.com/js-year-calendar@latest/dist/js-year-calendar.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/js-year-calendar@latest/dist/js-year-calendar.min.css"/>
+{% endblock css %}
+{% block main %}
+
+    <section class="content mt-4">
+        <h2 class="has-text-centered">oJPP &ndash; odprti javni potniški promet</h2>
+
+        <h3>Cilji</h3>
+        <p>
+            Cilj iniciative je omogočiti prost programski dostop do podatkov JPP (tako posameznikom in neprofitnim razvijalcem, kot tudi podjetjem) ter sodelovati v razvoju odprto-kodnih rešitev za
+            dostop do podatkov JPP, kot tudi integraciji Slovenskih podatkov v obstoječe (npr. Transportr, Navita...).
+        </p>
+        <p>
+            Na grobo zajemajo:
+        </p>
+        <ul>
+            <li>Zbiranje ažurnih podatkov neposredno od ponudnikov JPP</li>
+            <li>Razvoj in gostovanje enotnega programskega vmesnika (API) za vse podatke JPP v Sloveniji, ki brezplačno in prosto na voljo vsem</li>
+            <li>Razvoj enotne aplikacije za brskanje voznih redov po celi Sloveniji (tako mestni kot obmestni promet)</li>
+            <li>Integracija podatkov v obstoječe odprto-kodne rešitve kot so OpenStreetMap, Transportr, OneBusAway...</li>
+        </ul>
+
+        <h3>Razlogi</h3>
+        <p>
+            Javni potniški promet nedvomno igra veliko vlogo v bitki proti podnebnim spremembam, kot tudi problemom odvisnosti od avtomobilov ter neenakosti dostopa. A če želimo, da ga uporabi čim več
+            ljudi, mora bit uporaba zanje čim bolj enostavna in optimalna. Trenutno stanje informiranja tako obstoječih, kot potencialnih uporabnikov JPP o linijah, voznih redih in drugih zanje
+            pomembnih podatkih pa je žal vse daleč od optimalnega. <br>
+            Vsak prevoznik ima svojo aplikacijo in nobena izmed njih ni pretirano dobra, neodvisne rešitve (ki so pogosto dosti boljše od "uradnih") pa težko pridejo do potrebnih podatkov za svoje
+            delovanje. Prevozniki aktivno sodelujejo z največjim igralcem na tržišču (Google Maps), drugim pa podatkov ne dajo, zato razvijalcem ostane edina možnost dostopa do podatkov skozi Googlovo
+            plačljivo (in zelo drago) storitev - to, pa se jim enostavno ne splača. Novih, boljših rešitev zato ne dobimo, hkrati pa s tem utrjujemo že tako močno pozicijo tehnološkega giganta kot
+            mešetarja s podatki.
+        </p>
+        <p>
+            Na bolj filozofski ravni pa Javni potniški promet prvotno služi svojim uporabnikom, zato imajo ti pravico dostopati do vseh podatkov (voznih redov, podatkov o prihodih, itd.) na takšen
+            način, kot jim najbolj ustreza. V Društvu smo veliki podporniki ideje, da bi <a href="https://publiccode.eu/" title="Public Money, Public Code! (FSFE)">programska oprema</a> ter podatki,
+            financirani iz javnih sredstev, morali biti državljanom popolnoma prosto dostopni za uporabo in predelavo - konec koncev so oni tisti, ki so zanje plačali.
+        </p>
+        <p>
+            Kot primere inovativne uporabe podatkov, da vas v koristnost projekta še bolj prepričamo, navajamo nekaj idej naših članov ter drugih ustvarjalcev po svetu:
+        </p>
+        <ul>
+            <li>Skupen pregled medkrajevnih voženj vlakov ter avtobusov na časovnici, da lahko izberemo najboljšo pot</li>
+            <li>Integracija voznega reda z osebnim koledarjem, da lažje najdemo pot ob pravem času</li>
+            <li>Prikaz odhodov na pametni uri takoj, ko se približamo postajališču (tudi, če postajališče nime RTPI zaslona)</li>
+            <li>Zaporedni načrtovalnik poti, ki turiste zapelje od kraja do kraja po znamenitostih, ki jih zanimajo, zvečer pa nazaj v hotel</li>
+            <li>"Pametno ogledalo" v stanovanju, ki prikazuje naslednje odhode z bližnjih avtobusnih postaj, da pravočasno odidemo od doma</li>
+        </ul>
+    </section>
+
+
+{% endblock %}

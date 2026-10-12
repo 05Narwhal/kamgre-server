@@ -1,0 +1,26 @@
+[Unit]
+Description=Prestop utilization floor (keeps CPU and memory above Oracle's idle threshold)
+After=prestop-web.service
+
+[Service]
+DynamicUser=yes
+Environment=FLOOR_CPU_TARGET=25 FLOOR_MEM_TARGET=25 FLOOR_INTERVAL=2
+Environment=FLOOR_STATUS_FILE=/run/prestop-floor/status.json
+EnvironmentFile=-/etc/prestop/floor.env
+RuntimeDirectory=prestop-floor
+RuntimeDirectoryMode=0755
+ExecStart=/usr/bin/python3 /opt/prestop/deploy/floor/prestop_floor.py
+# The controller runs at a low priority; its burner processes switch themselves to SCHED_IDLE.
+Nice=10
+# If memory ever gets tight, the kernel kills this first, and its ballast is freed at once.
+OOMScoreAdjust=1000
+MemoryMax=45%
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,61 @@
+version: '3.1'
+
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+  redis:
+    image: redis:7-alpine
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_URL=redis://redis
+      - STATIC_ROOT=/usr/src/app/data/static
+      - MEDIA_ROOT=/usr/src/app/data/media
+      - ALLOWED_HOSTS=*
+    volumes:
+      - django_media:/usr/src/app/data/media
+    ports:
+      - 8066:80
+    depends_on:
+      - postgres
+      - redis
+
+  updater:
+    build: .
+    command: python manage.py apscheduler
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - REDIS_URL=redis://redis
+      - STATIC_ROOT=/usr/src/app/data/static
+      - MEDIA_ROOT=/usr/src/app/data/media
+      - DATA_DIR=/semi_temp
+    volumes:
+      - django_media:/usr/src/app/data/media
+      - ojpp_tmp:/semi_temp
+    depends_on:
+      - postgres
+      - redis
+
+#  worker:
+#    build: .
+#    command: celery -A ojpp_core worker -l info -n main
+#    environment:
+#      - POSTGRES_PASSWORD=asd34fg7ecj45mn
+#    volumes:
+#      - django_media:/usr/src/app/data/media
+
+volumes:
+  postgres_data:
+  django_media:
+  ojpp_tmp:

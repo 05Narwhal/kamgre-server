@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Operators{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+
+{% block main %}
+    <div class="buttons has-addons">
+        <a href="?active=true" class="button{% if filter.form.active.value %} is-info is-selected{% endif %}">Aktivni</a>
+        <a href="?active=" class="button{% if not filter.form.active.value %} is-info is-selected{% endif %}">Vsi</a>
+    </div>
+    <table class="table is-fullwidth" id="table">
+        <thead>
+        <tr>
+            <th></th>
+            <th>Naziv operaterja</th>
+            <th>Št. vozil</th>
+            <th>Št. linij</th>
+        </tr>
+        </thead>
+
+        {% for operator in object_list %}
+            <tr>
+                <td><img src="{{ operator.get_logo }}" alt=""></td>
+                <td><a href="{{ operator.get_absolute_url }}">{{ operator.name }}</a></td>
+                <td>{{ operator.vehicles__count }}</td>
+                <td>{{ operator.routes__count }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    <script>
+        var table = $('#table').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+    </script>
+    <style>
+        #table img {
+            max-height: 1rem;
+        }
+
+        #table tr td:first-child {
+            width: 10%;
+        }
+    </style>
+{% endblock %}

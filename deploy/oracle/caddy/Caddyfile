@@ -1,0 +1,26 @@
+# Prestop API server. Reached only by cloudflared on this machine (public name api.<domain>);
+# Cloudflare terminates HTTPS, so Caddy serves plain HTTP on localhost. The web app itself is
+# hosted on Vercel. When the egress guard reports busy or stopped, the API answers new visitors
+# with a JSON 503 itself (prestop_api/traffic.py), with CORS headers so the app can show it.
+:80 {
+	bind 127.0.0.1 [::1]
+	encode zstd gzip
+
+	handle /api/v1/* {
+		reverse_proxy 127.0.0.1:8066 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	# Django static files (collectstatic). The upstream admin and OJPP pages are not public;
+	# reach them through an SSH tunnel to port 8066 (see README).
+	handle /static/* {
+		root * /var/lib/prestop
+		file_server
+	}
+
+	handle {
+		header Cache-Control "public, max-age=3600"
+		respond "Not found. KamGre is at https://kamgre.si" 404
+	}
+}

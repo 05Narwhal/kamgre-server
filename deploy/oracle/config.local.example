@@ -1,0 +1,13 @@
+# Copy to config.local (git-ignored via *.local) and fill in. Read by push.sh.
+
+# SSH login to the Oracle instance. Ubuntu images use the user "ubuntu"; the IP is on the instance page.
+SSH_TARGET=ubuntu@203.0.113.10
+# Private key saved when you created the instance, copied into WSL with chmod 600.
+SSH_KEY=~/.ssh/oracle_prestop
+
+# Your domain on Cloudflare (used on the first deploy).
+DOMAIN=example.si
+
+# Cloudflare Zero Trust > Networks > Tunnels > your tunnel: the long token after
+# "cloudflared service install". Used once to install the connector; leave empty until you have it.
+CLOUDFLARE_TUNNEL_TOKEN=

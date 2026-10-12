@@ -1,0 +1,9 @@
+{
+  "project": "https://gitlab.com/derp-si/ojpp-django",
+  "revision": "c8d9a45700159a73b2265296acae23c16abfa6fb",
+  "commitDate": "2026-02-07T23:55:49.000+01:00",
+  "archiveUrl": "https://gitlab.com/api/v4/projects/derp-si%2Fojpp-django/repository/archive.zip?sha=c8d9a45700159a73b2265296acae23c16abfa6fb",
+  "archiveSha256": "c8e716ca6353a4d56b3fc0d6113ba31dcf1f2890fc8be6d87d4299b4f082d73b",
+  "fileCount": 240,
+  "license": "AGPL-3.0 upstream notice preserved"
+}

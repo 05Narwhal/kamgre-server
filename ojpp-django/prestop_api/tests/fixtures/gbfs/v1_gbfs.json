@@ -1,0 +1,5 @@
+{"last_updated": 1791619200, "ttl": 60, "data": {"en": {"feeds": [
+  {"name": "system_information", "url": "https://v1.example/system_information.json"},
+  {"name": "station_information", "url": "https://v1.example/station_information.json"},
+  {"name": "station_status", "url": "https://v1.example/station_status.json"}
+]}}}

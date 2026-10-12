@@ -1,0 +1,70 @@
+"""Keeps the slow-to-build caches fresh while people use the app, so no request waits on a rebuild.
+
+The day's train timetable (two whole-day OTP queries, 3–11 s) expires every two minutes, and
+the stop and route indexes every hour. A request that finds one expired used to rebuild it
+while the person waited: a station board took 11 s instead of 0.3 s. A daemon thread, started
+by the first API request, refreshes each cache shortly before it expires, but only while a
+request arrived in the last `ACTIVE` seconds: an idle server leaves the public OTP alone.
+"""
+import logging
+import threading
+import time
+from datetime import timedelta
+
+logger = logging.getLogger(__name__)
+
+TICK = 20          # s between checks
+ACTIVE = 30 * 60   # s after the last request that the caches are kept warm
+
+_started = threading.Lock()
+_last_request = 0.0
+
+
+def touch():
+    """Called on every API request: notes the activity and starts the thread once per process."""
+    global _last_request
+    _last_request = time.time()
+    if _started.acquire(blocking=False):
+        threading.Thread(target=_run, daemon=True, name='prestop-warm').start()
+
+
+def boot():
+    """Starts warming as the server process starts (wsgi.py), if PRESTOP_WARM is on."""
+    from django.conf import settings
+    if getattr(settings, 'PRESTOP_WARM', False):
+        touch()
+
+
+def caches():
+    from . import scheduled, sources
+    tomorrow = scheduled.service_day() + timedelta(days=1)
+    # Live vehicles too: after ~30 s without a request their next read rebuilds them (and maybe the timetable).
+    # Tomorrow's trains: the date people look up most after today (a 9 s load otherwise).
+    return [scheduled.timetable, scheduled.shapes, sources.stops, sources.routes, sources.alerts_raw, sources.vehicles,
+            scheduled.day_timetable(tomorrow)]
+
+
+def plans():
+    """Today's and tomorrow's replacement plans, worked out ahead of the boards and journeys that need them."""
+    from . import scheduled
+    today = scheduled.service_day()
+    for day in (today, today + timedelta(days=1)):
+        scheduled.day_plan(day)
+
+
+def tick(now: float):
+    """One round: refresh what is about to expire, if the app is in use."""
+    if now - _last_request > ACTIVE:
+        return
+    for cache in caches():
+        cache.warm()
+    plans()
+
+
+def _run():
+    while True:
+        try:
+            tick(time.time())
+        except Exception as e:  # never let the warmer die
+            logger.warning('Cache warmer: %r', e)
+        time.sleep(TICK)

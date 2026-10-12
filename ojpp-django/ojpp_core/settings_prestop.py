@@ -1,0 +1,92 @@
+"""Prestop overlay on the upstream OJPP settings.
+
+Upstream `settings.py` is left untouched. This overlay lets the server start
+without NAP/IJPP credentials (only the public GTFS mirror and the public LPP
+proxy are used locally), reads a database port, and registers Prestop apps.
+"""
+import os
+import sys
+
+# Upstream splits IJPP_LOGIN on ':' and reads LPP_API_KEY at import time.
+# Feeds that need them stay unconfigured until real credentials are provided.
+os.environ.setdefault('IJPP_LOGIN', ':')
+os.environ.setdefault('LPP_API_KEY', '')
+
+from ojpp_core.settings import *  # noqa: E402,F401,F403
+from ojpp_core.settings import env, root, INSTALLED_APPS, DATABASES, CORS_ALLOWED_ORIGINS, MIDDLEWARE  # noqa: E402
+
+DATABASES['default']['PORT'] = env('POSTGRES_PORT', default='5432')
+
+INSTALLED_APPS = ['prestop_data', 'prestop_api', 'prestop_statistics', 'prestop_push', *INSTALLED_APPS]
+
+# Load shedding for /api/v1 so a public server stays inside its free outbound allowance
+# (prestop_api/traffic.py). Off locally; the production settings turn it on.
+MIDDLEWARE = [MIDDLEWARE[0], 'prestop_api.traffic.TrafficGuardMiddleware', *MIDDLEWARE[1:]]
+PRESTOP_TRAFFIC_GUARD = env.bool('PRESTOP_TRAFFIC_GUARD', default=False)
+# Header with the visitor's IP set by the trusted proxy (CF-Connecting-IP); empty uses REMOTE_ADDR.
+PRESTOP_CLIENT_IP_HEADER = env('PRESTOP_CLIENT_IP_HEADER', default='')
+# Directory where the egress guard writes `busy` / `stopped`; empty disables those checks.
+PRESTOP_TRAFFIC_STATE_DIR = env('PRESTOP_TRAFFIC_STATE_DIR', default='')
+PRESTOP_TRAFFIC_PER_MINUTE = env.int('PRESTOP_TRAFFIC_PER_MINUTE', default=300)
+PRESTOP_TRAFFIC_MAX_ACTIVE = env.int('PRESTOP_TRAFFIC_MAX_ACTIVE', default=3000)
+PRESTOP_TRAFFIC_HOURLY_MB = env.int('PRESTOP_TRAFFIC_HOURLY_MB', default=30000)
+
+ROOT_URLCONF = 'ojpp_core.urls_prestop'
+
+# Upstream's admin uses django-ckeditor, which warns on every command about the bundled
+# CKEditor 4. The editor only appears in OJPP's admin, not in the Prestop API.
+SILENCED_SYSTEM_CHECKS = ['ckeditor.W001']
+
+CORS_ALLOWED_ORIGINS = [
+    *CORS_ALLOWED_ORIGINS,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+
+# Public, credential-free GTFS mirror maintained by the OJPP authors.
+PRESTOP_GTFS_MIRROR = env('PRESTOP_GTFS_MIRROR', default='http://gtfs.derp.si/')
+PRESTOP_GTFS_DIR = env('PRESTOP_GTFS_DIR', default=str(root / 'data/gtfs'))
+
+# Upstream jobs run by `manage.py run_ingestion`. NAP/IJPP jobs need B2B credentials
+# and the generated NeTEx/SIRI bindings, so they are not enabled by default.
+PRESTOP_INGESTION_JOBS = env.list('PRESTOP_INGESTION_JOBS', default=[
+    'lpp_update_locations',
+    'prestop_refresh_gtfs',
+])
+
+# Live data for /api/v1 (prestop_api): the public OpenTripPlanner and combined
+# GTFS-Realtime feeds run by the OJPP authors, the same sources brezavta.si uses.
+PRESTOP_OTP_URLS = env.list('PRESTOP_OTP_URLS', default=[
+    'https://otp.ojpp-gateway.derp.si/otp/gtfs/v1',
+    'http://otp1.ojpp-gateway.derp.si/otp/gtfs/v1',
+    'http://otp2.ojpp-gateway.derp.si/otp/gtfs/v1',
+])
+PRESTOP_RT_VEHICLES_URL = env('PRESTOP_RT_VEHICLES_URL', default='https://rt.gtfs.ijpp.prometko.si/combined/rt/vl')
+PRESTOP_RT_TRIP_UPDATES_URL = env('PRESTOP_RT_TRIP_UPDATES_URL', default='https://rt.gtfs.ijpp.prometko.si/combined/rt/tu?type=json')
+PRESTOP_PELIAS_URL = env('PRESTOP_PELIAS_URL', default='http://pelias.ojpp.derp.si/v1')
+PRESTOP_PHOTON_URL = env('PRESTOP_PHOTON_URL', default='https://photon.komoot.io/api/')
+# SZ live train delays/positions (community feed used by derp-si/ijpp-rt); '' turns it off.
+PRESTOP_SZ_LIVE_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIVE_URL', default='https://api.modra.ninja/sz/lokacije')
+# SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py).
+PRESTOP_SZ_NOTICES_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_URL', default='https://api.modra.ninja/sz/ovire_raw?lang=sl')
+# Road routing (bus costing) for bus patterns without a usable shape; empty disables it.
+# Routed legs are stored in the database, so the public FOSSGIS server sees each once.
+# Tests never route (they would reach the public server from a background thread).
+PRESTOP_VALHALLA_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_VALHALLA_URL', default='https://valhalla1.openstreetmap.de/route')
+# Seconds between requests from the background workers (0 for a local router).
+PRESTOP_VALHALLA_GAP = env.float('PRESTOP_VALHALLA_GAP', default=0.35)
+# Map-match every bus shape onto the roads (roads.matched), so lines follow the streets exactly.
+PRESTOP_SHAPE_MATCH = env.bool('PRESTOP_SHAPE_MATCH', default=True)
+# AP Ljubljana's departure board (bay per departure, platforms.py); empty disables it.
+PRESTOP_AP_LJUBLJANA_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_AP_LJUBLJANA_URL', default='https://www.ap-ljubljana.si/api/upcoming')
+# Header set by a trusted reverse proxy (e.g. CF-IPCountry); empty disables IP-based language hints.
+PRESTOP_TRUSTED_COUNTRY_HEADER = env('PRESTOP_TRUSTED_COUNTRY_HEADER', default='')
+# Keep the timetable and stop indexes fresh while the app is in use (prestop_api/warm.py); never in tests.
+PRESTOP_WARM = False if 'test' in sys.argv[1:2] else env.bool('PRESTOP_WARM', default=True)
+# Insane mode: same-minute transfers, no transfer penalty and a brisk walking pace.
+PRESTOP_INSANE_MODE = env.bool('PRESTOP_INSANE_MODE', default=True)
+# Web Push (prestop_push): VAPID key pair from `vapid --gen` (see deploy/oracle/README.md).
+# Empty keys turn push off; only the public key is ever sent to clients.
+PRESTOP_VAPID_PUBLIC_KEY = env('PRESTOP_VAPID_PUBLIC_KEY', default='')
+PRESTOP_VAPID_PRIVATE_KEY = env('PRESTOP_VAPID_PRIVATE_KEY', default='')
+PRESTOP_VAPID_SUBJECT = env('PRESTOP_VAPID_SUBJECT', default='mailto:push@kamgre.si')

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    <script src="https://unpkg.com/js-year-calendar@latest/dist/js-year-calendar.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/js-year-calendar@latest/dist/js-year-calendar.min.css" />
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_schedule_change' object_id=object.pk %}" class="button is-warning" style="float:right">Edit</a>
+    <h2 class="is-size-2">{{ operator.name }}</h2>
+    <hr>
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ object.id }}</td>
+                </tr>
+                <tr>
+                    <th>Name</th>
+                    <td>{{ object.name|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP tag</th>
+                    <td>{{ object.ijpp_tag|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ object.ijpp_id|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Description</th>
+                    <td>{{ object.description|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>Used by</th>
+                    <td><a href="/trips?schedule={{ object.id }}">{{ object.trip_set.count }} trips</a></td>
+                </tr>
+            </table>
+        </section>
+    </div>
+
+    <section>
+        <div id="calendar-element"></div>
+    </section>
+
+    <section>
+        <h2 class="is-size-2">Structure</h2>
+
+        <p><strong>Default state: </strong>{{ object.default_state|yesno:'✅,❌' }}</p>
+
+        <div class="columns">
+            <div class="column">
+                <h3 class="is-size-3">Periods</h3>
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Set</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Mo</th>
+                        <th>Tu</th>
+                        <th>We</th>
+                        <th>Th</th>
+                        <th>Fr</th>
+                        <th>Sa</th>
+                        <th>Su</th>
+                        <th><abbr title="Public holidays">PH</abbr></th>
+                    </tr>
+                    </thead>
+                    {% for period in object.periods.all %}
+                        <tr>
+                            <td>{{ period.action|yesno:'✅,❌' }}</td>
+                            <td>{{ period.day_from|stringformat:'02d' }}. {{ period.month_from|stringformat:'02d' }}. {{ period.year_from|default:'____' }}</td>
+                            <td>{{ period.day_to|stringformat:'02d' }}. {{ period.month_to|stringformat:'02d' }}. {{ period.year_to|default:'____' }}</td>
+                            <td>{{ period.monday|yesno:'✅,❌' }}</td>
+                            <td>{{ period.tuesday|yesno:'✅,❌' }}</td>
+                            <td>{{ period.wednesday|yesno:'✅,❌' }}</td>
+                            <td>{{ period.thursday|yesno:'✅,❌' }}</td>
+                            <td>{{ period.friday|yesno:'✅,❌' }}</td>
+                            <td>{{ period.saturday|yesno:'✅,❌' }}</td>
+                            <td>{{ period.sunday|yesno:'✅,❌' }}</td>
+                            <td>{{ period.holidays|yesno:'✅,❌' }}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            <div class="column">
+                <h3 class="is-size-3">Exceptions</h3>
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Set</th>
+                        <th>Date</th>
+                    </tr>
+                    </thead>
+                    {% for exception in object.exceptions.all %}
+                        <tr>
+                            <td>{{ exception.action|yesno:'✅,❌' }}</td>
+                            <td>{{ exception.date|date:'d. m. Y' }}</td>
+                        </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <style>
+        .day {
+            background-color: hsl(0, 0%, 96%);
+        }
+
+        .calendar-header {
+            display: none;
+        }
+
+        .calendar table.month td.day .day-content {
+            border-radius: 0;
+        }
+    </style>
+    <script>
+        new Calendar('#calendar-element', {
+            style: 'background',
+            dataSource: [
+                {% for date in days_active %}
+                    {
+                        startDate: new Date({{ date.year }}, {{ date.month }} - 1, {{ date.day }}),
+                        endDate: new Date({{ date.year }}, {{ date.month }} - 1, {{ date.day }}),
+                        color: 'hsl(141, 71%, 48%)'
+                    },
+                {% endfor %}
+            ],
+            weekStart: 1
+        })
+    </script>
+{% endblock %}

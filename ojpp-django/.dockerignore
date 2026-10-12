@@ -1,0 +1,7 @@
+data/
+.git/
+.env
+Dockerfile
+docker-compose.yml
+.dockerignore
+local/

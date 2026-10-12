@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    <script src="https://unpkg.com/js-year-calendar@latest/dist/js-year-calendar.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/js-year-calendar@latest/dist/js-year-calendar.min.css"/>
+{% endblock css %}
+{% block main %}
+
+    <section class="content mt-4">
+        <h2 class="has-text-centered">Pravna obvestila</h2>
+
+        <h3>Blagovne znamke in avtorske pravice</h3>
+        <p>
+            Vse blagovne znamke in avtorsko zaščitene označbe (npr. logotipi), v uporabi na portalu, so uporabljene v informativne namene in ne predstavljajo kakršne koli povezave spletnega mesta ali projekta z njihovimi lastniki.
+        </p>
+        <p>
+            Podatki, objavljeni na portalu, so na voljo pod licenco CC BY 4.0, razen kjer je drugače navedeno.
+        </p>
+
+        <h3>Varstvo osebnih podatkov</h3>
+        <p>
+            Spletno mesto oJPP ter aplikacije, ki so del projekta, osebnih podatkov uporabnikov ne zbirajo ali obdelujejo. Zbirajo se izključno anonimizirani statistični podatki (npr. koliko krat na dan je neka stran obiskana, iz katere države so obiskovalci, ipd.).
+        </p>
+
+        <h3>Pogoji uporabe</h3>
+        <p>
+            Dostop do informacij na spletnem portalu in aplikacijah projekta oJPP je dovoljen vsem, strojno branje podatkov pa je dovoljeno le z uporabo temu namenjenih <a href="/api">programskih vmesnikov</a>. Web scraping je nezaželen - v primeru, da vam obstoječi programski vmesniki ne zadostujejo, nas kontaktirajte.
+        </p>
+
+        <h3>Izvorna koda</h3>
+        <p>
+            Izvorna koda spletnega portala in aplikacij projekta oJPP je dostopna na GitLabu: <a href="https://gitlab.com/derp-si">https://gitlab.com/derp-si</a>. Večina izvorne kode je objavljena pod licenco AGPL 3.0, razen kjer je drugače navedeno.
+        </p>
+
+
+    </section>
+
+{% endblock %}

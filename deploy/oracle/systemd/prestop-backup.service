@@ -1,0 +1,12 @@
+[Unit]
+Description=Prestop database backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=prestop
+Group=prestop
+EnvironmentFile=/etc/prestop/prestop.env
+ExecStart=/opt/prestop/deploy/server/backup.sh
+Nice=10
+IOSchedulingClass=idle

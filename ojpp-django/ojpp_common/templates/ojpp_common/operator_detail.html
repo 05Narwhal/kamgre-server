@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% load ojpp_common %}
+{% block title %}{{ operator.name }}{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_operator_change' object_id=operator.pk %}" class="button is-warning" style="float:right">Edit</a>
+    <h2 class="is-size-2">{% if operator.get_logo %}
+        <img alt="" src="{{ operator.get_logo}}" style="max-height: 1em">
+    {% endif %}{{ operator.name }}</h2>
+    <hr>
+
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ object.id }}</td>
+                </tr>
+                <tr>
+                    <th>Name</th>
+                    <td>{{ object.name|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ object.ijpp_id|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th><abbr title="Nacionalni vozni red">NVR ID</abbr></th>
+                    <td>{{ object.ijpp_šifra|default:"" }}</td>
+                </tr>
+            </table>
+        </section>
+    </div>
+
+    <div class="tabs is-medium">
+        <ul>
+            <li class="is-active" data-target="vehicles"><a>Vehicles</a></li>
+            <li data-target="routes"><a>Routes</a></li>
+        </ul>
+    </div>
+
+    <section class="tab-content is-active" id="vehicles">
+    <table class="table is-fullwidth" id="table">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>IJPP ID</th>
+            <th>Interna št.</th>
+            <th>Tip vozila</th>
+            <th>Registracija</th>
+            <th>Model</th>
+        </tr>
+        </thead>
+        {% for vehicle in operator.vehicles.all %}
+            <tr>
+                <td><a href="{{ vehicle.get_absolute_url }}">{{ vehicle.id }}</a></td>
+                <td>{{ vehicle.ijpp_id|default:"" }}</td>
+                <td>{{ vehicle.operator_vehicle_id|default:"" }}</td>
+                <td>{{ vehicle.type }}</td>
+                <td>{{ vehicle.plate|default:"" }}</td>
+                <td><a href="{{ vehicle.model.get_absolute_url }}">{{ vehicle.model.name }}</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+    </section>
+
+    <sections class="tab-content" id="routes">
+        <table class="table is-fullwidth" id="table2">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <!--<th>IJPP ID</th>-->
+            <th>Reg. št. VR</th>
+            <th>Ime linije</th>
+            <th>Ime route</th>
+            <th>Prva postaja</th>
+            <th>Zadnja postaja</th>
+            <th>Trips</th>
+        </tr>
+        </thead>
+        {% for route in routes %}
+            <tr>
+                <td>{% ojpp_link route route.id %}</td>
+                <!--<td>{{ route.ijpp_id|default:"" }}</td>-->
+                <td>{{ route.nvr_name|default:"" }}</td>
+                <td>{{ route.route_group.name|default:"?" }}</td>
+                <td>{{ route.name|default:"?" }}</td>
+                <td><a href="{{ route.first_stop.get_absolute_url }}">{{ route.first_stop }}</a></td>
+                <td><a href="{{ route.last_stop.get_absolute_url }}">{{ route.last_stop }}</a></td>
+                <td>{{ route.trip_count }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    </sections>
+
+    <script>
+        var table = $('#table').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+        var table2 = $('#table2').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+    </script>
+    <style>
+    .tab-content:not(.is-active) {
+        display: none;
+    }
+    </style>
+{% endblock %}

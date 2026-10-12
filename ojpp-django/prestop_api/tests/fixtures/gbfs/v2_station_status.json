@@ -1,0 +1,4 @@
+{"last_updated": 1791619200, "ttl": 60, "version": "2.3", "data": {"stations": [
+  {"station_id": "2001", "num_bikes_available": 5, "vehicle_types_available": [{"vehicle_type_id": "143", "count": 3}, {"vehicle_type_id": "196", "count": 2}], "num_docks_available": 7, "is_installed": true, "is_renting": true, "is_returning": true, "last_reported": 1791619150},
+  {"station_id": "2002", "num_bikes_available": 0, "vehicle_types_available": [], "num_docks_available": 10, "is_installed": true, "is_renting": true, "is_returning": true, "last_reported": 1791619000}
+]}}

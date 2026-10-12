@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+{% block main %}
+    <h2 class="is-size-2">Active trips (last 24h)</h2>
+
+    <table class="table is-fullwidth" id="table">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Operator</th>
+            <th>Trip</th>
+            <th>Last stop</th>
+        </tr>
+        </thead>
+        {% for tripinstance in object_list %}
+            <tr>
+                <td><a href="{{ tripinstance.get_absolute_url }}">{{ tripinstance.id }}</a></td>
+                <td><a href="{{ tripinstance.vehicle.operator.get_absolute_url }}">{{ tripinstance.vehicle.operator.name }}</a></td>
+                <td><a href="{{ tripinstance.trip.get_absolute_url }}">{{ tripinstance.trip.name }}</a></td>
+                <td>{{ tripinstance.last_stop_arrival }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    <script>
+        var table = $('#table').DataTable({
+            paging: false,
+            fixedHeader: {
+                header: true
+            },
+        });
+    </script>
+{% endblock %}

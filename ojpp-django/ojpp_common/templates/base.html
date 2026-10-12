@@ -1,0 +1,85 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>{% block title %}{% endblock %}</title>
+    {% block css %}
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+        <link rel="stylesheet" href="{% static 'main.css' %}">
+    {% endblock css %}
+    {% block js %}
+        <script defer data-domain="ojpp.si" src="https://analitika.derp.si/js/script.js"></script>
+        <script src="{% static 'main.js' %}"></script>
+    {% endblock %}
+</head>
+<body>
+{% block body %}
+    <header>
+        <nav class="navbar is-dark" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href="/">
+                    oJPP
+                </a>
+                <a role="button" class="navbar-burger" data-target="navMenu" aria-label="menu" aria-expanded="false">
+                  <span aria-hidden="true"></span>
+                  <span aria-hidden="true"></span>
+                  <span aria-hidden="true"></span>
+                </a>
+            </div>
+            <div id="navMenu" class="navbar-menu">
+                <div class="navbar-start">
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">
+                            Podatki
+                        </a>
+
+                        <div class="navbar-dropdown">
+                            <a class="navbar-item" href="/operators">
+                                Operaterji
+                            </a>
+                            <a class="navbar-item" href="/stop_locations">
+                                Postaje
+                            </a>
+                            <a class="navbar-item" href="/schedules">
+                                Urniki
+                            </a>
+                        </div>
+                    </div>
+                    <a class="navbar-item" href="/map" target="_blank">
+                        Zemljevid
+                    </a>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">
+                            Več
+                        </a>
+
+                        <div class="navbar-dropdown">
+                            <a class="navbar-item" href="/stats">
+                                Statistika
+                            </a>
+                            <a class="navbar-item" href="/about">
+                                O projektu
+                            </a>
+                            <a class="navbar-item" href="/legal">
+                                Pravna obvestila
+                            </a>
+                            <a class="navbar-item" href="mailto:ojpp@derp.si">
+                                Kontakt
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        {% include 'banner.html' %}
+    </header>
+    <main class="container">
+        {% block main %}
+        {% endblock main %}
+    </main>
+{% endblock body %}
+</body>
+</html>

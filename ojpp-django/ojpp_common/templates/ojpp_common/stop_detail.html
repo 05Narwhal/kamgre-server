@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+    {% include "partials/maplibre.html" %}
+{% endblock css %}
+{% block main %}
+    <a href="{% url 'admin:ojpp_common_stop_change' object_id=object.pk %}" class="button is-warning" style="float:right">Edit</a>
+    <h2 class="is-size-2">{{ object.name }}</h2>
+    <hr>
+    <div class="columns">
+        <section class="column">
+            <table class="table">
+                <tr>
+                    <th>ID</th>
+                    <td>{{ object.id }}</td>
+                </tr>
+                <tr>
+                    <th>Name</th>
+                    <td>{{ object.name|default:"" }}</td>
+                </tr>
+                <tr>
+                    <th>IJPP ID</th>
+                    <td>{{ object.ijpp_id|default:"" }}</td>
+                </tr>
+            </table></section>
+        <section class="column">
+            <div id="map" style="height:50vh"></div>
+        </section>
+    </div>
+
+<script>
+    let map = new maplibregl.Map(mapOptions({}));
+    map.on('load', async function () {
+        {% for stop_location in object.stoplocation_set.all %}
+            popup = new maplibregl.Popup({ offset: 25 }).setHTML('<a href="{{ stop_location.get_absolute_url }}">{{ stop_location.name }}</a>');
+            new maplibregl.Marker({
+                color: "#000",
+            }).setLngLat([ {{stop_location.location.x}}, {{stop_location.location.y}} ]).setPopup(popup).addTo(map);
+        {% endfor %}
+    });
+</script>
+{% endblock %}

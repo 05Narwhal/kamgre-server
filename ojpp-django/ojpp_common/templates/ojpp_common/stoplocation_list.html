@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Stops{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+    <script type="text/javascript" src="{% static 'ajax_datatable/js/utils.js' %}"></script>
+    <link href="{% static 'ajax_datatable/css/style.css' %}" rel="stylesheet" />
+{% endblock css %}
+
+{% block main %}
+    <div class="table-responsive">
+    <table id="datatable" width="100%" class="table table-striped table-bordered dataTables-log">
+    </table>
+</div>
+
+    <script>
+        AjaxDatatableViewUtils.initialize_table(
+            $('#datatable'),
+            "{% url 'stop_location_list_datatables' %}",
+            extra_option={
+                paging: true,
+                pageLength: 100,
+                fixedHeader: {
+                    header: true
+                },
+            },
+            extra_data={}
+        );
+
+    </script>
+    <style>
+    #table img {
+        max-height: 1rem;
+    }
+    #table tr td:first-child {
+        width: 10%;
+    }
+    </style>
+{% endblock %}

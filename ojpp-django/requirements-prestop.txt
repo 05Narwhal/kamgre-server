@@ -1,0 +1,6 @@
+# Prestop additions on top of the upstream Pipfile.lock (installed by deploy/oracle/server/update.sh with
+# the lock as constraints, so upstream versions never move). pywebpush 2.3 is the newest release that
+# accepts the locked cryptography 46.
+pywebpush==2.3.0
+py-vapid==1.9.4
+http-ece==1.2.1

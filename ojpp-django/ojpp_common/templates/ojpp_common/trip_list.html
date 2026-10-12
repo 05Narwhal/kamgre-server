@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load ojpp_common %}
+{% block title %}Trips{% endblock %}
+{% block css %}
+    {{ block.super }}
+    {% include "partials/datatables.html" %}
+{% endblock css %}
+
+{% block main %}
+    <table class="table is-fullwidth" id="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>ID linije</th>
+                <th>Prevoznik</th>
+                <th>Naziv potovanja</th>
+            </tr>
+        </thead>
+
+        {% for trip in object_list %}
+            <tr>
+                <td>{% ojpp_link trip trip.id %}</td>
+                <td>{% ojpp_link trip.route.operator %}</td>
+                <td><a href="{{ trip.route.get_absolute_url }}">{{ trip.route.id }}</a></td>
+                <td><a href="{{ trip.get_absolute_url }}">{{ trip.name }}</a></td>
+            </tr>
+        {% endfor %}
+    </table>
+    <script>
+        var table = $('#table').DataTable({
+            paging: true,
+            pageLength: 100,
+            fixedHeader: {
+                header: true
+            },
+        });
+    </script>
+    <style>
+        #table img {
+            max-height: 1rem;
+        }
+        #table tr td:first-child {
+            width: 10%;
+        }
+    </style>
+{% endblock %}
