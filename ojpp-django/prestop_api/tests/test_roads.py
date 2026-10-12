@@ -128,6 +128,17 @@ class MatchTests(SimpleTestCase):
         self.assertEqual(shape, self.STREET)
         self.assertTrue(complete)
 
+    @override_settings(PRESTOP_VALHALLA_URL='http://valhalla.test/route', PRESTOP_SHAPE_MATCH=True)
+    def test_a_shape_still_being_matched_is_not_complete(self):
+        stops = [{'lat': 46.05, 'lon': 14.50}, {'lat': 46.06, 'lon': 14.52}]
+        pending = mock.Mock(wait=mock.Mock(return_value=False))
+        with mock.patch.object(roads.legs, 'get_many', return_value={}), mock.patch.object(roads.matcher, 'request', return_value=pending),                 mock.patch.object(roads, 'checks', return_value={}):
+            shape, complete = roads.repair(self.FEED, stops, deadline=0)
+        self.assertEqual(shape, self.FEED)  # the feed's line meanwhile
+        self.assertFalse(complete)  # so it is rebuilt soon, not kept for the line cache's 15 min
+        with mock.patch.object(roads.legs, 'get_many', return_value={}), mock.patch.object(roads.matcher, 'request', return_value=None),                 mock.patch.object(roads, 'checks', return_value={}):
+            self.assertTrue(roads.repair(self.FEED, stops, deadline=0)[1])  # matching failed lately: the feed's line is final
+
     def test_keys_change_with_the_shape(self):
         self.assertNotEqual(roads.match_key(self.FEED), roads.match_key(self.FEED[:2]))
         self.assertLessEqual(len(roads.match_key(self.FEED)), 64)

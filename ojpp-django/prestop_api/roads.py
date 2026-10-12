@@ -22,12 +22,11 @@ import time
 from pathlib import Path
 from typing import Iterable, Optional
 
-import requests
 from django.conf import settings
 from django.db import close_old_connections
 
 from . import geometry, mapping
-from .upstream import USER_AGENT
+from .upstream import session
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +174,7 @@ def route_window(stops: list[dict]) -> Optional[list[list]]:
     None when there is no road route (a leg may then be empty), raises on transport errors."""
     body = {'locations': [{'lat': s['lat'], 'lon': s['lon'], 'type': 'break'} for s in stops],
             'costing': 'bus', 'directions_type': 'none'}
-    resp = requests.post(settings.PRESTOP_VALHALLA_URL, json=body, timeout=(5, 20), headers={'User-Agent': USER_AGENT})
+    resp = session().post(settings.PRESTOP_VALHALLA_URL, json=body, timeout=(5, 20))
     if resp.status_code == 400:  # no route between these points
         logger.info('No road route: %s', resp.text[:200])
         return None
@@ -269,7 +268,7 @@ def trace(coords: list) -> Optional[list]:
     url = settings.PRESTOP_VALHALLA_URL.rsplit('/', 1)[0] + '/trace_route'
     body = {'shape': [{'lat': y, 'lon': x} for x, y in coords], 'costing': 'bus', 'shape_match': 'map_snap',
             'directions_type': 'none', 'trace_options': {'search_radius': MATCH_NEAR, 'gps_accuracy': 12}}
-    resp = requests.post(url, json=body, timeout=(5, 60), headers={'User-Agent': USER_AGENT})
+    resp = session().post(url, json=body, timeout=(5, 60))
     if resp.status_code == 400:  # nothing to match it to
         logger.info('No map match: %s', resp.text[:200])
         return None
@@ -373,19 +372,22 @@ class _Matcher:
 matcher = _Matcher()
 
 
-def matched(coords: list, deadline: Optional[float] = None) -> Optional[list]:
-    """The feed shape map-matched onto the roads, or None (not matched yet, or no match). The first
-    call for a shape starts matching it in the background and waits for it until `deadline`."""
+def matched(coords: list, deadline: Optional[float] = None) -> tuple[Optional[list], bool]:
+    """(the feed shape map-matched onto the roads or None, whether it is still being matched). None:
+    no match, or not matched yet. The first call for a shape starts matching it in the background
+    and waits for it until `deadline`; a shape still matching then must not be kept as final."""
     if len(coords) < 2 or not settings.PRESTOP_VALHALLA_URL or not getattr(settings, 'PRESTOP_SHAPE_MATCH', True):
-        return None
+        return None, False
     key = match_key(coords)
     found = legs.get_many([key])
     if key not in found:
         event = matcher.request(key, coords)
-        if event is None or not event.wait(max(0.0, (deadline or 0) - time.monotonic())):
-            return None
+        if event is None:  # failed a short while ago: the feed's own line for now
+            return None, False
+        if not event.wait(max(0.0, (deadline or 0) - time.monotonic())):
+            return None, True
         found = legs.get_many([key])
-    return found.get(key) or None
+    return found.get(key) or None, False
 
 
 def repair(coords: list, stops: list[dict], deadline: Optional[float] = None, road_only: bool = False, reroute: Iterable[int] = ()) -> tuple[list, bool]:
@@ -397,23 +399,23 @@ def repair(coords: list, stops: list[dict], deadline: Optional[float] = None, ro
     leg is routed, and a leg still being routed is a straight line between its stops. Otherwise the
     feed's shape is first map-matched onto the roads (`matched`), in the background like the legs.
     `reroute`: segments routed whatever the shape says (a bus leaving a bay drives out of it)."""
-    on_roads = None
+    on_roads, matching = None, False
     if road_only:
         coords = [[s['lon'], s['lat']] for s in stops]
     elif not shapeless(coords, stops):
         # The feed's line snapped onto the streets (sparse feed shapes cut corners through buildings);
         # what is still wrong after that (a stop far off it) is routed below. The offline road checks
         # describe the feed's own line, so they don't apply to a matched one.
-        on_roads = matched(coords, deadline)
+        on_roads, matching = matched(coords, deadline)
         coords = on_roads or coords
     if len(stops) < 2:
-        return coords, True
+        return coords, not matching
     bad = bad_segments(coords, stops, {} if on_roads else None)
     for i in reroute:
         if 0 <= i < len(bad):
             bad[i] = True
     if not any(bad):
-        return coords, True
+        return coords, not matching
     keys = [leg_key(stops[i], stops[i + 1]) for i, is_bad in enumerate(bad) if is_bad]
     found = legs.get_many(keys)
     missing = set(keys) - set(found)
@@ -434,4 +436,4 @@ def repair(coords: list, stops: list[dict], deadline: Optional[float] = None, ro
                 break
         found = legs.get_many(keys)
         missing = set(keys) - set(found)
-    return splice(coords, stops, bad, found), not missing or not settings.PRESTOP_VALHALLA_URL
+    return splice(coords, stops, bad, found), (not missing or not settings.PRESTOP_VALHALLA_URL) and not matching

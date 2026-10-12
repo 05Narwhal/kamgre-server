@@ -29,6 +29,9 @@ PARTIAL_TTL = 30
 BAY_PENDING_TTL = 180
 BAY_HORIZON = 60 * 60
 ROAD_WAIT = 4.0
+# The line screen waits less: it shows the feed's shape at once and refetches a provisional line
+# every 15 s, so its first view isn't held up by a shape the public router is still matching.
+LINE_ROAD_WAIT = 1.0
 CHUNK = 40
 
 STATIC_FIELDS = ('gtfsId directionId tripHeadsign route { gtfsId shortName longName mode color agency { gtfsId } } '
@@ -299,7 +302,7 @@ def load_line(route_id: str, day: Optional[date] = None) -> Optional[dict]:
     route = route or otp().query(LINE_Q, {'id': route_id, 'date': _yyyymmdd(day)}).get('route')
     if not route:
         return None
-    line, complete = build_line(route, day, time.monotonic() + ROAD_WAIT)
+    line, complete = build_line(route, day, time.monotonic() + LINE_ROAD_WAIT)
     _lines.put(key, line, None if complete else PARTIAL_TTL)
     return line
 

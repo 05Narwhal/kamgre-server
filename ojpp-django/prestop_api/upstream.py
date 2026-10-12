@@ -28,6 +28,20 @@ class UpstreamError(Exception):
     """An upstream service failed, timed out or returned something unusable."""
 
 
+_local = threading.local()
+
+
+def session() -> requests.Session:
+    """This thread's HTTP session: connections to each upstream are kept open and reused, so a
+    request doesn't pay a new TCP + TLS handshake (~0.1 s, more from the server) every time.
+    One per thread because a Session isn't safe to share between threads."""
+    s = getattr(_local, 'session', None)
+    if s is None:
+        s = _local.session = requests.Session()
+        s.headers['User-Agent'] = USER_AGENT
+    return s
+
+
 def _read_json(resp: requests.Response, limit: int) -> Any:
     size, chunks = 0, []
     for chunk in resp.iter_content(256 * 1024):
@@ -43,7 +57,7 @@ def _read_json(resp: requests.Response, limit: int) -> Any:
 
 def get_json(url: str, params: Optional[dict] = None, limit: int = 32 * 1024 * 1024, timeout=TIMEOUT) -> Any:
     try:
-        with requests.get(url, params=params, timeout=timeout, stream=True, headers={'User-Agent': USER_AGENT, 'Accept': 'application/json'}) as resp:
+        with session().get(url, params=params, timeout=timeout, stream=True, headers={'Accept': 'application/json'}) as resp:
             if resp.status_code != 200:
                 raise UpstreamError(f'{url} returned HTTP {resp.status_code}')
             return _read_json(resp, limit)
@@ -65,8 +79,8 @@ class Otp:
         last: Optional[Exception] = None
         for url in candidates:
             try:
-                with requests.post(url, json={'query': query, 'variables': variables or {}}, timeout=timeout, stream=True,
-                                   headers={'User-Agent': USER_AGENT, 'Content-Type': 'application/json'}) as resp:
+                with session().post(url, json={'query': query, 'variables': variables or {}}, timeout=timeout, stream=True,
+                                    headers={'Content-Type': 'application/json'}) as resp:
                     if resp.status_code != 200:
                         raise UpstreamError(f'OTP {url} returned HTTP {resp.status_code}')
                     body = _read_json(resp, limit)

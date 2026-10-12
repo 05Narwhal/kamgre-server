@@ -142,9 +142,12 @@ powershell -File backend/deploy/oracle/push.ps1
 
 ## Day to day
 
+From Windows, `yarn server:top` (optionally `yarn server:top 5` for every 5 s) opens the live view in your own terminal over SSH, using `config.local`. It sends the local `server/top.sh`, so it works before the next deploy.
+
 ```sh
 ssh -i ~/.ssh/oracle_prestop ubuntu@<ip>
 sudo prestop-status                          # services, floor, health, last backup, disk
+sudo prestop-top                             # live view: per-service CPU/memory, network, API latency (q quits)
 journalctl -u prestop-web -f                 # API log (also prestop-collector, prestop-push, prestop-ingest, prestop-floor)
 sudo prestop-manage <command>                # any manage.py command, e.g. createsuperuser, import_gtfs
 sudo systemctl start prestop-backup          # back up now

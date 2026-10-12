@@ -45,6 +45,7 @@ if ! cmp -s "$DEPLOY/postgres/prestop.conf" /etc/postgresql/18/main/conf.d/prest
 fi
 ln -sf "$DEPLOY/server/manage.sh" /usr/local/bin/prestop-manage
 ln -sf "$DEPLOY/server/status.sh" /usr/local/bin/prestop-status
+ln -sf "$DEPLOY/server/top.sh" /usr/local/bin/prestop-top
 ln -sf "$DEPLOY/server/restore.sh" /usr/local/bin/prestop-restore
 systemctl daemon-reload
 
