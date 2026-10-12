@@ -26,7 +26,7 @@ echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudf
   > /etc/apt/sources.list.d/cloudflared.list
 apt-get update -q
 apt-get install -yq postgresql-18 postgresql-18-postgis-3 redis-server caddy cloudflared rclone \
-  python3 python3-venv python3-dev build-essential libpq-dev gdal-bin unattended-upgrades vnstat
+  python3 python3-venv python3-dev build-essential libpq-dev gdal-bin unattended-upgrades vnstat fail2ban
 
 step "Swap (2 GB safety margin)"
 if ! swapon --show | grep -q /swapfile; then
@@ -45,11 +45,34 @@ Unattended-Upgrade::Automatic-Reboot "true";
 Unattended-Upgrade::Automatic-Reboot-Time "03:30";
 EOF
 
+step "SSH: keys only, no root login; fail2ban bans repeated failures"
+# SSH is the only port open to the internet (the API arrives through the Cloudflare tunnel).
+cat > /etc/ssh/sshd_config.d/10-prestop.conf <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+MaxAuthTries 3
+LoginGraceTime 30
+EOF
+sshd -t
+# Ubuntu 24.04 starts sshd per connection (ssh.socket), which reads the new config anyway.
+systemctl reload ssh 2>/dev/null || true
+cat > /etc/fail2ban/jail.d/prestop.conf <<'EOF'
+[sshd]
+enabled = true
+backend = systemd
+maxretry = 5
+findtime = 10m
+bantime = 1h
+bantime.increment = true
+EOF
+systemctl enable -q fail2ban && systemctl restart fail2ban
+
 step "User and directories"
 id prestop >/dev/null 2>&1 || useradd --system --home-dir /var/lib/prestop --shell /usr/sbin/nologin prestop
 install -d -o prestop -g prestop -m 0750 /var/lib/prestop /var/lib/prestop/static /var/lib/prestop/media /var/lib/prestop/gtfs /var/lib/prestop/tmp /var/backups/prestop
 chmod 0755 /var/lib/prestop /var/lib/prestop/static   # Caddy serves /static
-install -d -m 0755 /opt/prestop /srv/prestop/www
+install -d -m 0755 /opt/prestop
 install -d -o root -g prestop -m 0750 /etc/prestop
 
 step "Configuration: $ENV_FILE"
