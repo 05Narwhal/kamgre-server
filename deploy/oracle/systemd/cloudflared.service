@@ -1,0 +1,19 @@
+# Cloudflare Tunnel: carries api.<domain> from Cloudflare to Caddy on localhost:80.
+# Our own unit instead of `cloudflared service install`, whose output changes between releases
+# (2026.10 points at a token file it does not write). update.sh writes the token, root-only,
+# from CLOUDFLARE_TUNNEL_TOKEN in config.local.
+[Unit]
+Description=Cloudflare Tunnel
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/cloudflared/token
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel run --token-file /etc/cloudflared/token
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

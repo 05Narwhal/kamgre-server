@@ -19,9 +19,15 @@ fi
 chmod 0755 "$DEPLOY"/server/*.sh "$DEPLOY"/floor/prestop_floor.py
 if [ ! -f /etc/prestop/.bootstrapped ]; then
   bash "$DEPLOY/server/bootstrap.sh"
-elif [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ] && ! systemctl is-enabled -q cloudflared 2>/dev/null; then
-  cloudflared service install "$CLOUDFLARE_TUNNEL_TOKEN"
 fi
+
+# Tunnel token for systemd/cloudflared.service: root-only file, refreshed on every deploy.
+if [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
+  install -d -m 0700 /etc/cloudflared
+  (umask 077; printf '%s
+' "$CLOUDFLARE_TUNNEL_TOKEN" > /etc/cloudflared/token)
+fi
+unset CLOUDFLARE_TUNNEL_TOKEN
 
 # Servers bootstrapped before the egress guard existed.
 command -v vnstat >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -yq vnstat
@@ -85,6 +91,12 @@ systemctl restart prestop-web prestop-collector prestop-push prestop-ingest
 systemctl restart prestop-floor
 # Keep public traffic off while the egress guard has tripped this month.
 [ -f "$STATE/egress-tripped" ] || systemctl restart caddy
+if [ -s /etc/cloudflared/token ]; then
+  systemctl enable -q cloudflared
+  [ -f "$STATE/egress-tripped" ] || systemctl restart cloudflared
+else
+  echo "No tunnel token yet: set CLOUDFLARE_TUNNEL_TOKEN in config.local and deploy again."
+fi
 # Refresh the traffic stage (busy/stopped) for the API and Caddy right away.
 systemctl start prestop-egress.service || true
 

@@ -3,7 +3,7 @@
 # Run by update.sh on the first deploy; safe to re-run. Needs root.
 #
 #   PRESTOP_DOMAIN       your domain, e.g. kamgre.si (required on the first run)
-#   CLOUDFLARE_TUNNEL_TOKEN  optional: installs the Cloudflare Tunnel connector
+#   CLOUDFLARE_TUNNEL_TOKEN  optional: update.sh writes it for systemd/cloudflared.service
 set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "bootstrap.sh needs root (sudo)" >&2; exit 1; }
 
@@ -107,15 +107,6 @@ systemctl restart redis-server
 step "Python environment"
 [ -x /opt/prestop/venv/bin/python ] || python3 -m venv /opt/prestop/venv
 /opt/prestop/venv/bin/pip install -q --upgrade pip wheel pipenv gunicorn
-
-step "Cloudflare Tunnel"
-if systemctl list-unit-files cloudflared.service >/dev/null 2>&1 && systemctl is-enabled -q cloudflared 2>/dev/null; then
-  echo "cloudflared service already installed"
-elif [ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]; then
-  cloudflared service install "$CLOUDFLARE_TUNNEL_TOKEN"
-else
-  echo "no CLOUDFLARE_TUNNEL_TOKEN yet: add it to config.local and deploy again (see README)"
-fi
 
 step "Oracle Cloud Agent (reports the CPU/memory metrics Oracle judges idleness by)"
 if snap list oracle-cloud-agent >/dev/null 2>&1; then echo "installed"; else echo "warning: oracle-cloud-agent snap not found; check Instance > Oracle Cloud Agent in the console"; fi
