@@ -95,7 +95,9 @@ systemctl restart prestop-floor
 [ -f "$STATE/egress-tripped" ] || systemctl restart caddy
 if [ -s /etc/cloudflared/token ]; then
   systemctl enable -q cloudflared
-  [ -f "$STATE/egress-tripped" ] || systemctl restart cloudflared
+  # A tunnel problem (wrong token, deleted tunnel) must not stop the rest of the deploy.
+  [ -f "$STATE/egress-tripped" ] || systemctl restart cloudflared ||
+    echo "Tunnel did not connect: journalctl -u cloudflared -n 20 (\"Tunnel not found\" = token of a deleted tunnel)"
 else
   echo "No tunnel token yet: set CLOUDFLARE_TUNNEL_TOKEN in config.local and deploy again."
 fi
