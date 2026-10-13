@@ -33,6 +33,10 @@ ROAD_WAIT = 4.0
 # every 15 s, so its first view isn't held up by a shape the public router is still matching.
 LINE_ROAD_WAIT = 1.0
 CHUNK = 40
+# Within this long after midnight a trip's run of the previous day is looked up too (load_trips) ...
+OVERNIGHT = 6 * 3600
+# ... and wins over today's while its last arrival is at most this long ago.
+OVERNIGHT_GRACE = 15 * 60
 
 STATIC_FIELDS = ('gtfsId directionId tripHeadsign route { gtfsId shortName longName mode color agency { gtfsId } } '
                  'pattern { code } tripGeometry { points } stoptimes { stopPosition stop { gtfsId name lat lon } }')
@@ -175,10 +179,27 @@ def _query_trips(ids: list[str], day: date, with_static: set[str]) -> dict[str, 
     return {trip_id: data.get(f't{i}') for i, trip_id in enumerate(ids) if data.get(f't{i}')}
 
 
+def _still_running(times: list[dict], now: float) -> bool:
+    """A run (OTP's stoptimesForDate) whose last arrival, live when known, is at most OVERNIGHT_GRACE ago."""
+    ends = [s['serviceDay'] + (s['realtimeArrival'] if s.get('realtime') and s.get('realtimeArrival') is not None else s['scheduledArrival'])
+            for s in times if s.get('serviceDay') is not None and s.get('scheduledArrival') is not None]
+    return bool(ends) and max(ends) + OVERNIGHT_GRACE >= now
+
+
+def _after_midnight(day: date, now: float) -> bool:
+    """`day` is today and it began less than OVERNIGHT ago."""
+    local = datetime.fromtimestamp(now, LJUBLJANA)
+    return local.date() == day and now - supplement.day_start(day) < OVERNIGHT
+
+
 def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
     """tripId -> {static, times, serviceDate}. Trips not running on `day` (today by default)
-    are looked up on the previous day too, for runs that continue past midnight."""
-    day = day or service_day()
+    are looked up on the previous day too, for runs that continue past midnight. Just after
+    midnight a trip that runs every day has two runs, last night's (still on the road) and
+    tonight's: last night's wins until it has arrived, so its times and delays are not a day off."""
+    now = time.time()
+    day = day or datetime.fromtimestamp(now, LJUBLJANA).date()
+    overnight = _after_midnight(day, now)
     deadline = time.monotonic() + ROAD_WAIT
     out: dict[str, dict] = {}
     synthetic = [t for t in ids if closures.is_synthetic(t)]
@@ -190,24 +211,27 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
             return out
     own = [t for t in ids if supplement.owns(t)]
     if own:  # feeds OTP has wrong, from the operator's timetable (supplement.py)
-        out.update(_load_own(own, day, deadline))
+        out.update(_load_own(own, day, deadline, now))
         ids = [t for t in ids if t not in own]
         if not ids:
             return out
     for candidate in (day, day - timedelta(days=1)):
-        wanted = [t for t in ids if t not in out]
+        # The previous day is asked for trips that do not run today and, just after midnight, for all of them.
+        earlier = candidate != day
+        wanted = [t for t in ids if t not in out or (earlier and overnight)]
+        runs: dict[str, dict] = {}
         cached = {t: (_static.get(t), _times.get((t, candidate))) for t in wanted}
         for t, (static, times) in cached.items():
             if static and times:
-                out[t] = {'static': static, 'times': times, 'serviceDate': candidate}
-        missing = [t for t in wanted if t not in out]
+                runs[t] = {'static': static, 'times': times, 'serviceDate': candidate}
+        missing = [t for t in wanted if t not in runs]
         for i in range(0, len(missing), CHUNK):
             chunk = missing[i:i + CHUNK]
             try:
                 found = _query_trips(chunk, candidate, {t for t in chunk if not _static.get(t)})
             except UpstreamError as e:
                 logger.warning('Trip query failed: %r', e)
-                if not out:
+                if not out and not runs:
                     raise
                 continue
             for trip_id, t in found.items():
@@ -220,30 +244,35 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
                 times = t.get('stoptimesForDate') or []
                 if static and times:
                     _times.put((trip_id, candidate), times)
-                    out[trip_id] = {'static': static, 'times': times, 'serviceDate': candidate}
-        if all(t in out for t in ids) or day != service_day():
+                    runs[trip_id] = {'static': static, 'times': times, 'serviceDate': candidate}
+        for trip_id, run in runs.items():
+            if trip_id not in out or _still_running(run['times'], now):
+                out[trip_id] = run
+        if not overnight and (all(t in out for t in ids) or day != datetime.fromtimestamp(now, LJUBLJANA).date()):
             break
     return out
 
 
-def _load_own(ids: list[str], day: date, deadline: float) -> dict[str, dict]:
+def _load_own(ids: list[str], day: date, deadline: float, now: float) -> dict[str, dict]:
     """load_trips for trips of a supplementary feed, with the realtime feed's delays."""
     from . import sources
     updates = sources.trip_updates.get().value if sources._safe(sources.trip_updates) else {}
+    overnight = _after_midnight(day, now)
     out = {}
     for trip_id in ids:
-        for candidate in (day, day - timedelta(days=1)):
-            t = supplement.otp_trip(trip_id, candidate, updates.get(trip_id))
-            if not t:
-                continue
-            static = _static.get(trip_id)
+        runs = [(c, t) for c in (day, day - timedelta(days=1)) if (t := supplement.otp_trip(trip_id, c, updates.get(trip_id)))]
+        if not runs:
+            continue
+        # Last night's run wins while still on the road (see load_trips).
+        last = runs[-1]
+        candidate, t = last if overnight and last[0] != day and _still_running(last[1]['stoptimesForDate'], now) else runs[0]
+        static = _static.get(trip_id)
+        if not static:
+            static = _build_static(t, deadline)
             if not static:
-                static = _build_static(t, deadline)
-                if not static:
-                    break
-                _static.put(trip_id, static, _static_ttl(static))
-            out[trip_id] = {'static': static, 'times': t['stoptimesForDate'], 'serviceDate': candidate}
-            break
+                continue
+            _static.put(trip_id, static, _static_ttl(static))
+        out[trip_id] = {'static': static, 'times': t['stoptimesForDate'], 'serviceDate': candidate}
     return out
 
 

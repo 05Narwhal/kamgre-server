@@ -81,6 +81,40 @@ class TripTests(SimpleTestCase):
         self.assertEqual(query.call_args_list[0].args[2], {'LPP:t1'})
         self.assertEqual(query.call_args_list[1].args[2], set())
 
+    def overnight(self, at: str):
+        """A daily trip 23:30 - 24:10 (00:10 the next morning), loaded at `at` on 14 October; live on both days."""
+        from datetime import datetime
+
+        from prestop_api import supplement
+
+        def run(day):
+            t = otp_trip(day=supplement.day_start(day))
+            for i, s in enumerate(t['stoptimesForDate']):
+                s.update(scheduledArrival=84600 + i * 1200, scheduledDeparture=84600 + i * 1200,
+                         realtimeArrival=84660 + i * 1200, realtimeDeparture=84660 + i * 1200)
+            return t
+        now = datetime.fromisoformat(f'2026-10-14T{at}+02:00').timestamp()
+        query = mock.Mock(side_effect=lambda ids, day, static: {'LPP:t1': run(day)})
+        with mock.patch.object(trips, '_query_trips', query), mock.patch.object(trips.time, 'time', return_value=now):
+            found = trips.load_trips(['LPP:t1'])
+        return found['LPP:t1'], query
+
+    def test_just_after_midnight_last_nights_run_wins_while_still_on_the_road(self):
+        entry, _ = self.overnight('00:05')
+        self.assertEqual(entry['serviceDate'], date(2026, 10, 13))
+        trip = trips.build_trip(entry, {})
+        # 00:11 this morning (one minute late), not 00:10 tomorrow: its delay is a minute, not a day early.
+        self.assertEqual(trip['stops'][-1]['effectiveArrival'], '2026-10-13T22:11:00Z')
+        self.assertEqual(trip['stops'][-1]['scheduledArrival'], '2026-10-13T22:10:00Z')
+
+    def test_once_last_nights_run_has_arrived_tonights_is_shown(self):
+        entry, _ = self.overnight('01:00')
+        self.assertEqual(entry['serviceDate'], date(2026, 10, 14))
+
+    def test_in_the_day_the_previous_day_is_not_asked(self):
+        entry, query = self.overnight('12:00')
+        self.assertEqual((entry['serviceDate'], query.call_count), (date(2026, 10, 14), 1))
+
     def test_vehicle_carries_motion_hints(self):
         entity = {'vehicle': {'trip': {'tripId': 'LPP:t1'}, 'position': {'latitude': 46.05, 'longitude': 14.5, 'bearing': 90, 'speed': 7.2},
                               'timestamp': '1791540000', 'stopId': 'LPP:s1', 'currentStatus': 'STOPPED_AT', 'vehicle': {'id': 'LPP:v1', 'label': 'LJ 1'}}}
