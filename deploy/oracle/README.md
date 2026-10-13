@@ -144,6 +144,8 @@ powershell -File backend/deploy/oracle/push.ps1
 
 From Windows, `yarn server:top` (optionally `yarn server:top 5` for every 5 s) opens the live view in your own terminal over SSH, using `config.local`. It sends the local `server/top.sh`, so it works before the next deploy.
 
+`yarn server:ssh` opens a shell on the server in your own terminal (`exit` or Ctrl+D leaves), for admin commands such as `sudo prestop-manage leg_detours --legs --delete` or `sudo prestop-status`.
+
 ```sh
 ssh -i ~/.ssh/oracle_prestop ubuntu@<ip>
 sudo prestop-status                          # services, floor, health, last backup, disk
