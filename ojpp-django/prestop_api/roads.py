@@ -43,6 +43,11 @@ RETRY_AFTER = 600     # s before a failed request is tried again
 DETOUR = (4, 1000)    # a routed leg longer than 4x the straight line and 1 km more is a router loop
 STATION_OFF_SHAPE = 12  # m: a bus station stop further than this from the shape: the line drives past the station
 STATION_DRIVEWAY = 80   # m: at most this far from the street, a trip starting or ending at a bus station reaches its stop
+# m: a line that comes back within 30 m of where it was 300 m before drives a loop. IJPP's shapes into Ljubljana AP from the
+# west drive past it on Masarykova, turn and come back (378-564 m) before jumping to the stop; a bus does not.
+LOOP = (300, 30)
+DETOUR_FLAG = (2.5, 500)  # a stop-to-stop stretch longer than 2.5x the straight line and 500 m more is reported
+TURN_ROUND = 150          # m: a routed leg looping within this of its ends turned round at a stop
 # A bus station's stop ("Maribor AP", "Avtobusna postaja Ljubljana"): buses drive into its yard to stop there.
 BUS_STATION = re.compile(r'(^|\W)(ap|avtobusna postaja|avt\.? ?post\.?)(\W|$)')
 
@@ -96,7 +101,26 @@ def bad_segments(coords: list, stops: list[dict], checked: Optional[dict] = None
     for i, ((a, off_a), (b, off_b)) in enumerate(zip(proj, proj[1:])):
         inner = sum(1 for d in cum if a + END_SLACK < d < b - END_SLACK)
         off_road = checked.get(leg_key(stops[i], stops[i + 1]), 0) > OFF_ROAD if checked else False
-        out.append(off_a > OFF_SHAPE or off_b > OFF_SHAPE or (inner == 0 and b - a > STRAIGHT) or off_road)
+        looped = b - a > LOOP[0] and geometry.loop(geometry.slice_between(coords, cum, a, b), *LOOP) is not None
+        out.append(off_a > OFF_SHAPE or off_b > OFF_SHAPE or (inner == 0 and b - a > STRAIGHT) or off_road or looped)
+    return out
+
+
+def detours(coords: list, stops: list[dict]) -> list[dict]:
+    """Stop-to-stop stretches of a drawn line that a bus does not drive: much longer than the straight path between
+    the stops (DETOUR_FLAG) or looping back on themselves (LOOP). Empty for a sound line."""
+    if len(coords) < 2 or len(stops) < 2:
+        return []
+    cum = geometry.cumulative(coords)
+    along = [a for a, _ in geometry.project_stops(coords, stops)]
+    out = []
+    for i, (a, b) in enumerate(zip(along, along[1:])):
+        length = b - a
+        straight = geometry.distance([stops[i]['lon'], stops[i]['lat']], [stops[i + 1]['lon'], stops[i + 1]['lat']])
+        looped = geometry.loop(geometry.slice_between(coords, cum, a, b), *LOOP) if length > LOOP[0] else None
+        if looped or length > max(DETOUR_FLAG[0] * straight, straight + DETOUR_FLAG[1]):
+            out.append({'segment': i, 'from': stops[i].get('name'), 'to': stops[i + 1].get('name'), 'length': round(length),
+                        'straight': round(straight), 'loop': round(looped[0]) if looped else None})
     return out
 
 
@@ -148,11 +172,16 @@ def to_station_ends(coords: list, stops: list[dict]) -> list:
 
 
 def plausible(leg: list, a: dict, b: dict) -> bool:
-    """False for a leg that loops far away, e.g. when the router snaps a stop to the far side of
-    a divided road and drives kilometres to turn around."""
+    """False for a leg that loops far away or turns round, e.g. when the router snaps a stop to the far side of
+    a divided road and drives on to turn around."""
     crow = geometry.distance([a['lon'], a['lat']], [b['lon'], b['lat']])
     length = geometry.cumulative(leg)[-1]
-    return length <= max(DETOUR[0] * crow, crow + DETOUR[1])
+    if length > max(DETOUR[0] * crow, crow + DETOUR[1]):
+        return False
+    # A loop out of its first stop or into its last: the router put the stop on the far side of a divided road and drove
+    # on to turn round (1 km at Ljubljana Hajdrihova). Switchbacks on a mountain road loop in between and are fine.
+    looped = geometry.loop(leg, *LOOP)
+    return not looped or TURN_ROUND < looped[2] and looped[3] < length - TURN_ROUND
 
 
 def splice(coords: list, stops: list[dict], bad: list[bool], legs: dict[str, list]) -> list:

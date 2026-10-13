@@ -287,6 +287,29 @@ def point_at(coords: list, cum: list[float], d: float) -> list:
     return [coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t, coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t]
 
 
+def loop(coords: list, length: float = 300, gap: float = 30) -> Optional[tuple[float, list, float, float]]:
+    """The longest stretch after which a line comes back within `gap` metres of a point it passed at least `length`
+    metres before, as (metres, that point, distance along the line where the stretch starts, where it ends); None when
+    it never does (a U-turn, a drive around a block; also a mountain road's switchbacks). Points are bucketed on a `gap`
+    grid, so long lines stay cheap."""
+    if len(coords) < 3:
+        return None
+    coords = densify(coords, gap / 2)  # a sparse line's corners can lie far from the points it passes again
+    pts, cum = _local(coords, coords[0][1]), cumulative(coords)
+    cells: dict[tuple[int, int], list[int]] = {}
+    best = None
+    for j, (x, y) in enumerate(pts):
+        cx, cy = int(x // gap), int(y // gap)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for i in cells.get((cx + dx, cy + dy), ()):
+                    run = cum[j] - cum[i]
+                    if run >= length and (best is None or run > best[0]) and math.hypot(x - pts[i][0], y - pts[i][1]) <= gap:
+                        best = (run, coords[i], cum[i], cum[j])
+        cells.setdefault((cx, cy), []).append(j)
+    return best
+
+
 def bearing_at(coords: list, cum: list[float], d: float) -> float:
     """Travel direction in degrees clockwise from north, over a short look-ahead."""
     ahead = min(cum[-1], d + 40)

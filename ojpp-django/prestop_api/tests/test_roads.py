@@ -246,3 +246,44 @@ class ScheduledTrainTests(SimpleTestCase):
         self.assertAlmostEqual(train['longitude'], 14.525, places=3)
         self.assertAlmostEqual(train['bearing'], 90, delta=1)
         self.assertIsNone(train['delaySeconds'])
+
+
+# Ljubljana Tivolska -> Ljubljana AP as IJPP draws it (trip IJPP:466576, line 47): east along Masarykova, a turn,
+# back west 340 m, then a jump to the station. Simplified onto the test street.
+U_TURN = [[14.50, 46.05], [14.505, 46.05], [14.510, 46.05], [14.510, 46.0502], [14.506, 46.0502], [14.512, 46.05]]
+# A mountain road: 600 m on, then switchbacks 22 m apart, then on again.
+SWITCHBACKS = [[14.50, 46.05], [14.508, 46.05], [14.508, 46.0502], [14.504, 46.0502], [14.504, 46.0504], [14.508, 46.0504],
+               [14.508, 46.0506], [14.512, 46.0506]]
+
+
+@override_settings(PRESTOP_VALHALLA_URL='')
+class LoopTests(SimpleTestCase):
+    """No fake loops (A5): a line that comes back on itself between two stops is a way the bus does not drive."""
+    A, B = {'lat': 46.05, 'lon': 14.50, 'name': 'Ljubljana Tivolska'}, {'lat': 46.05, 'lon': 14.512, 'name': 'Ljubljana AP'}
+
+    def test_loops_are_found(self):
+        self.assertIsNotNone(geometry.loop(U_TURN))
+        self.assertIsNone(geometry.loop(ROAD))
+        self.assertIsNone(geometry.loop(U_TURN[:3]))
+
+    def test_a_looping_feed_stretch_is_routed_and_the_loop_is_gone(self):
+        self.assertEqual(roads.bad_segments(U_TURN, [self.A, self.B], {}), [True])
+        self.assertEqual(len(roads.detours(U_TURN, [self.A, self.B])), 1)
+        routed = {roads.leg_key(self.A, self.B): leg(self.A, self.B, bulge=0.0002)}
+        with mock.patch.object(roads.legs, 'get_many', side_effect=lambda keys: {k: routed[k] for k in keys}), \
+                mock.patch.object(roads, 'matched', return_value=(None, False)):
+            out, _ = roads.repair(U_TURN, [self.A, self.B])
+        self.assertEqual(roads.detours(out, [self.A, self.B]), [])
+
+    def test_a_routed_leg_turning_round_at_a_stop_is_refused_but_switchbacks_are_not(self):
+        turn = [[14.50, 46.05], [14.497, 46.05], [14.497, 46.0502], [14.50, 46.0502], [14.506, 46.0502], [14.512, 46.05]]
+        self.assertFalse(roads.plausible(turn, self.A, self.B))
+        self.assertIsNotNone(geometry.loop(SWITCHBACKS))
+        self.assertTrue(roads.plausible(SWITCHBACKS, self.A, {'lat': 46.0506, 'lon': 14.512}))
+        self.assertTrue(roads.plausible(leg(self.A, self.B), self.A, self.B))
+
+    def test_a_long_detour_between_two_stops_is_reported(self):
+        detour = [[14.50, 46.05], [14.50, 46.06], [14.512, 46.06], [14.512, 46.05]]  # 2.2 km for 0.9 km
+        [d] = roads.detours(detour, [self.A, self.B])
+        self.assertEqual((d['segment'], d['loop']), (0, None))
+        self.assertEqual(roads.detours(ROAD, STOPS), [])
