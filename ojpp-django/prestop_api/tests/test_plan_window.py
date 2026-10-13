@@ -73,6 +73,36 @@ class DayWindowTests(SimpleTestCase):
         journeys.plan(request(insane=False, pageCursor='next'), otp)
         self.assertEqual(len(otp.asked), 1)
 
+    def test_nothing_within_the_usual_limits_asks_with_wider_ones(self):
+        """Kropa → Ljubljana after the last bus: only a brisk walk to the train at Otoče gets there."""
+        normal = FakeOtp()
+        wider = FakeOtp(ride('20:22:00', '21:56:00', 'IJPP:train'))
+        query = lambda q, v: (wider if v['preferences'].get('street') else normal)(q, v)
+        req = request(insane=False, slack=180, dateTime='2026-10-09T20:00:00+02:00')
+        data = journeys.plan(req, query)
+        self.assertEqual(trips(data), ['IJPP:train'])
+        self.assertTrue(data['wider'])
+        self.assertEqual(wider.asked[0]['preferences']['transit']['transfer']['slack'], 'PT0S')
+        self.assertEqual(wider.asked[0]['preferences']['street']['walk']['speed'], journeys.INSANE_WALK_SPEED)
+        self.assertEqual(journeys.page_info(data)['next'], 'wider:next')
+        # Its later page keeps the wider limits.
+        later = journeys.plan(request(insane=False, slack=180, pageCursor='wider:next'), query)
+        self.assertTrue(later['wider'])
+        self.assertEqual(wider.asked[-1]['after'], 'next')
+        # A one-minute change found that way is still rated against the rider's 3 min buffer.
+        tight = {'wider': True, 'planConnection': {'edges': [{'node': {'walkTime': 0, 'legs': [
+            ride('20:22:00', '20:40:00', 'IJPP:t1'), ride('20:41:00', '21:56:00', 'IJPP:t2', frm='IJPP:b', to='IJPP:c')]}}]}}
+        [j] = journeys.build_journeys(tight, req, [])
+        self.assertEqual(j['transfers'][0]['status'], 'tight')
+
+    def test_found_within_the_usual_limits_or_insane_is_not_widened(self):
+        otp = FakeOtp(ride('20:22:00', '21:56:00', 'IJPP:bus'))
+        self.assertNotIn('wider', journeys.plan(request(insane=False, dateTime='2026-10-09T20:00:00+02:00'), otp))
+        self.assertTrue(all('street' not in v['preferences'] for v in otp.asked))
+        empty = FakeOtp()
+        self.assertNotIn('wider', journeys.plan(request(dateTime='2026-10-09T20:00:00+02:00'), empty))
+        self.assertTrue(all(v['preferences'].get('street') for v in empty.asked))  # Insane asked once, as itself
+
     def test_the_window_never_passes_otp_s_limit_or_the_day(self):
         at = lambda when, mode='departAt': journeys.day_window(request(insane=False, dateTime=when, timeMode=mode))
         self.assertEqual(at('2026-10-09T01:00:00+02:00'), journeys.MAX_SEARCH_WINDOW)  # the night runs into the coming day

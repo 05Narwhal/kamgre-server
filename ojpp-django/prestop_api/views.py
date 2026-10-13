@@ -387,8 +387,9 @@ def journeys(request):
         if 'OUTSIDE_SERVICE_PERIOD' in codes:
             raise ApiError(422, 'OUTSIDE_SERVICE_PERIOD', 'No timetable is published for that date yet.')
     status = 'live' if any(j['freshness'] == 'live' for j in result) else 'scheduled'
+    # `wider`: nothing within the usual limits, so these were found as Insane mode would search (journeys.plan).
     return envelope(result, status, used=['otp:timetables', 'gtfs-rt:trip-updates'], source_updated=mapping.iso(time.time()),
-                    extra={'page': page})
+                    extra={'page': page, **({'wider': True} if data.get('wider') and result else {})})
 
 
 @require_GET

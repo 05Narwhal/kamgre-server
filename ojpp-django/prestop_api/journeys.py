@@ -147,8 +147,8 @@ def otp_variables(req: dict) -> dict:
             visit['coordinate'] = {'latitude': v['latitude'], 'longitude': v['longitude']}
         via.append({'visit': visit})
     stamp = req['dateTime'].isoformat()
-    insane = req.get('riskMode') == 'insane'
-    transfer = {'slack': f'PT{max(0, req["minTransferSeconds"])}S'}
+    insane = req.get('riskMode') == 'insane' or req.get('wider')
+    transfer = {'slack': f'PT{0 if insane else max(0, req["minTransferSeconds"])}S'}
     preferences: dict = {'transit': {'transfer': transfer}}
     if insane:
         transfer.update(cost=0, maximumTransfers=INSANE_MAX_TRANSFERS[0], maximumAdditionalTransfers=INSANE_MAX_TRANSFERS[1])
@@ -230,7 +230,25 @@ def _same_place(a: dict, b: dict) -> bool:
     return geometry.distance([a['longitude'], a['latitude']], [b['longitude'], b['latitude']]) <= ROUND_TRIP_METERS
 
 
+WIDER_CURSOR = 'wider:'  # a page of connections found with wider limits: its earlier and later pages keep them
+
+
 def plan(req: dict, query) -> dict:
+    """OTP's planConnection for the request (see _plan). Nothing within the usual limits that day: ask again as Insane
+    mode would (brisk walking, so a station further away is in reach, any number of transfers, no transfer slack) and
+    mark the answer `wider`; its transfers are still rated against the rider's buffer (build_journeys). Kropa →
+    Ljubljana after the last bus (17:29) is then a walk to the train at Otoče instead of nothing."""
+    cursor = req.get('pageCursor') or ''
+    if cursor.startswith(WIDER_CURSOR):
+        return {**_plan({**req, 'pageCursor': cursor[len(WIDER_CURSOR):], 'wider': True}, query), 'wider': True}
+    data = _plan(req, query)
+    if _edges(data) or req.get('riskMode') == 'insane' or cursor:
+        return data
+    wider = _plan({**req, 'wider': True}, query)
+    return {**wider, 'wider': True} if _edges(wider) else data
+
+
+def _plan(req: dict, query) -> dict:
     """OTP's planConnection for the request. Repeated places are fine: a round trip (back to where it starts, through stops
     on the way) is planned in two parts, since OTP sees a trip to its own start and plans nothing
     ("trivial distance"): to the last stop, then back; each connection there gets the first return
@@ -292,8 +310,9 @@ def plan(req: dict, query) -> dict:
 def page_info(data: dict) -> dict:
     """Cursors for the connections before and after these (null when OTP has none)."""
     info = (data.get('planConnection') or {}).get('pageInfo') or {}
-    return {'previous': info.get('startCursor') if info.get('hasPreviousPage') else None,
-            'next': info.get('endCursor') if info.get('hasNextPage') else None}
+    mark = WIDER_CURSOR if data.get('wider') else ''
+    return {'previous': mark + info['startCursor'] if info.get('hasPreviousPage') and info.get('startCursor') else None,
+            'next': mark + info['endCursor'] if info.get('hasNextPage') and info.get('endCursor') else None}
 
 
 def _ts(value: str) -> float:

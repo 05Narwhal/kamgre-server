@@ -5,6 +5,7 @@ from prestop_api import journeys
 from prestop_api.tests.test_insane import ride
 
 HOME = {'name': 'Home', 'latitude': 46.05, 'longitude': 14.5, 'kind': 'address'}
+FOUND = ride('10:00:00', '10:30:00', 'IJPP:found')  # an empty answer would be asked again with wider limits
 SCHOOL = {'name': 'School', 'latitude': 46.24, 'longitude': 14.35, 'kind': 'address'}
 
 
@@ -39,12 +40,12 @@ class RoundTripTests(SimpleTestCase):
 
     def test_a_trip_elsewhere_is_one_request(self):
         asked = []
-        journeys.plan(request(destination={**SCHOOL, 'name': 'Kranj', 'latitude': 46.3}), lambda q, v: asked.append(v) or answer())
+        journeys.plan(request(destination={**SCHOOL, 'name': 'Kranj', 'latitude': 46.3}), lambda q, v: asked.append(v) or answer(FOUND))
         self.assertEqual(len(asked), 1)
 
     def test_without_stops_on_the_way_nothing_changes(self):
         asked = []
-        journeys.plan(request(via=[]), lambda q, v: asked.append(v) or answer())
+        journeys.plan(request(via=[]), lambda q, v: asked.append(v) or answer(FOUND))
         self.assertEqual(len(asked), 1)
 
     def test_a_stop_repeating_the_place_before_it_is_left_out(self):
