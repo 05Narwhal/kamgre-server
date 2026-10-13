@@ -175,6 +175,7 @@ class ScheduledSyntheticTests(SimpleTestCase):
         road = [[14.5, 46.05], [14.5, 46.11], [14.44, 46.11], [14.44, 46.2], [14.35, 46.2]]
         with mock.patch.object(scheduled, 'timetable', _Value([t])), mock.patch.object(scheduled, 'shapes', _Value({'p-a': rail_shape})), \
                 mock.patch.object(scheduled, '_derive', return_value=derived), \
+                mock.patch.object(scheduled, 'service_day', return_value=datetime.fromtimestamp(DAY, LOCAL).date()), \
                 mock.patch.object(scheduled.roads, 'repair', return_value=(road, True)) as repair:
             scheduled._road_shapes.clear()
             shown = scheduled.vehicles(now=T0 + 300, live={})
