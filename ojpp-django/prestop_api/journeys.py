@@ -1,9 +1,11 @@
 """Journey planning through OTP `planConnection`, which applies realtime delays and
 cancellations, supports native via points and a minimum transfer slack."""
 import hashlib
+import re
 import time
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from . import geometry, journey_legs, leg_alerts, mapping, platforms, roads, stopfix, tracks
 from . import geometry as geometry_lib
@@ -22,14 +24,20 @@ INSANE_MAX_TRANSFERS = (29, 30)  # OTP's maximum: transfers, additional transfer
 MAX_TRANSFERS_LIMIT = 5  # the rider's "at most N transfers" filter goes up to this
 INSANE_MIN_SLACK = -60           # s
 RISKY_TRANSFER = 120             # s: an Insane transfer with less spare time than this is labelled tight
+# OTP picks its own search window (70 min for Kropa → Ljubljana); a sparse route's next connection can be hours later,
+# and the answer is then empty (NO_TRANSIT_CONNECTION_IN_SEARCH_WINDOW). A short answer is asked again with the window
+# stretched to the edge of the service day, which ends at 04:00 local as on boards (sources.SERVICE_DAY_ENDS_HOUR).
+SERVICE_DAY_ENDS_HOUR = 4
+MAX_SEARCH_WINDOW = 24 * 3600  # s: OTP refuses longer windows
+LOCAL = ZoneInfo('Europe/Ljubljana')
 
 PLAN_Q = '''query($origin: PlanLabeledLocationInput!, $destination: PlanLabeledLocationInput!, $via: [PlanViaLocationInput!],
   $dateTime: PlanDateTimeInput, $modes: PlanModesInput, $preferences: PlanPreferencesInput, $first: Int, $last: Int,
-  $before: String, $after: String) {
+  $before: String, $after: String, $searchWindow: Duration) {
   planConnection(origin: $origin, destination: $destination, via: $via, dateTime: $dateTime, modes: $modes, first: $first,
-    last: $last, before: $before, after: $after, preferences: $preferences) {
+    last: $last, before: $before, after: $after, preferences: $preferences, searchWindow: $searchWindow) {
     routingErrors { code description }
-    pageInfo { startCursor endCursor hasPreviousPage hasNextPage }
+    pageInfo { startCursor endCursor hasPreviousPage hasNextPage searchWindowUsed }
     edges { node { walkTime
       legs { mode realtimeState transitLeg interlineWithPreviousLeg duration
         start { scheduledTime estimated { time } } end { scheduledTime estimated { time } }
@@ -167,6 +175,49 @@ def otp_variables(req: dict) -> dict:
     return variables
 
 
+def _seconds(duration: Optional[str]) -> int:
+    """An ISO 8601 duration as OTP writes it (PT1H10M, PT86400S) in seconds; 0 when missing."""
+    m = re.fullmatch(r'P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?', duration or '')
+    if not m or not duration:
+        return 0
+    days, hours, minutes, seconds = m.groups()
+    return int(days or 0) * 86400 + int(hours or 0) * 3600 + int(minutes or 0) * 60 + round(float(seconds or 0))
+
+
+def day_window(req: dict) -> int:
+    """Seconds of the service day (04:00 to 04:00 local) left after the departure time, or gone before the arrival
+    time. In the small hours a departure runs on to the end of the day that is starting, an arrival back to the
+    start of the day that is ending."""
+    when = req['dateTime'].astimezone(LOCAL)
+    day_start = when.replace(hour=SERVICE_DAY_ENDS_HOUR, minute=0, second=0, microsecond=0)
+    if req['timeMode'] == 'departAt':
+        seconds = (day_start + timedelta(days=1)).timestamp() - when.timestamp()
+    else:
+        if when.hour < SERVICE_DAY_ENDS_HOUR:
+            day_start -= timedelta(days=1)
+        seconds = when.timestamp() - day_start.timestamp()
+    return int(min(max(seconds, 3600), MAX_SEARCH_WINDOW))
+
+
+def _edges(data: dict) -> list[dict]:
+    return [e for e in (data.get('planConnection') or {}).get('edges') or [] if e['node'].get('legs')]
+
+
+def search(req: dict, query) -> dict:
+    """OTP's connections for the request. Fewer than asked for, from a window shorter than the rest of the day: ask
+    again over the whole day, so every connection that day counts, the nearest to the time first (OTP keeps the
+    earliest departures, or the latest arrivals). A page of earlier or later connections keeps its cursor's window."""
+    variables = otp_variables(req)
+    data = query(PLAN_Q, variables)
+    if req.get('pageCursor'):
+        return data
+    used = _seconds(((data.get('planConnection') or {}).get('pageInfo') or {}).get('searchWindowUsed'))
+    window = day_window(req)
+    if used and window > used and len(_edges(data)) < variables['first']:
+        data = query(PLAN_Q, {**variables, 'searchWindow': f'PT{window}S'})
+    return data
+
+
 ROUND_TRIP_METERS = 300  # a destination this close to the start (with stops between) is a round trip
 ROUND_TRIP_RETURNS = 12  # return connections planned to pair with the outbound ones
 
@@ -195,12 +246,12 @@ def plan(req: dict, query) -> dict:
         via.pop()
     req = {**req, 'via': via}
     if not req['via'] or not _same_place(req['origin'], req['destination']):
-        return query(PLAN_Q, otp_variables(req))
+        return search(req, query)
     turn = req['via'][-1]
     out_req = {**req, 'destination': turn, 'via': req['via'][:-1]}
     back_req = {**req, 'origin': turn, 'via': []}
     slack = max(0, req['minTransferSeconds'])
-    edges = lambda data: [e for e in (data.get('planConnection') or {}).get('edges') or [] if e['node'].get('legs')]
+    edges = _edges
     start = lambda node: _when(node['legs'][0]['start'])
     end = lambda node: _when(node['legs'][-1]['end'])
 
@@ -208,7 +259,7 @@ def plan(req: dict, query) -> dict:
         return {'node': {**first, 'walkTime': (first.get('walkTime') or 0) + (second.get('walkTime') or 0), 'legs': first['legs'] + second['legs']}}
 
     if req['timeMode'] == 'arriveBy':
-        paged = query(PLAN_Q, otp_variables(back_req))
+        paged = search(back_req, query)
         backs = edges(paged)
         if not backs:
             return paged
@@ -222,7 +273,7 @@ def plan(req: dict, query) -> dict:
             if fits:
                 joined.append(join(max(fits, key=start), back['node']))
     else:
-        paged = query(PLAN_Q, otp_variables(out_req))
+        paged = search(out_req, query)
         outs = edges(paged)
         if not outs:
             return paged
