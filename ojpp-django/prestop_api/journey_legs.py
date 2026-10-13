@@ -116,8 +116,8 @@ def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor, road: Callabl
             continue
         for k, piece in enumerate(pieces):
             out.append(piece)
-            # One ride for the rider's transfers: SŽ holds the bus for the train and the train for the bus.
-            out_meta.append({**m, 'interline': m['interline'] if k == 0 else True,
+            # A held change: SŽ holds the bus for the train and the train for the bus (rated, not counted; build_journeys).
+            out_meta.append({**m, 'held': k > 0,
                              'duration': _ts(piece['effectiveArrival']) - _ts(piece['effectiveDeparture']),
                              'platform': m['platform'] if k == 0 else None})
     return out, out_meta

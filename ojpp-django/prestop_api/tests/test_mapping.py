@@ -158,7 +158,8 @@ class JourneyTests(SimpleTestCase):
         [j] = journeys.build_journeys(data, self.request(), merged)
         self.assertEqual(j['legs'][0]['alertIds'], ['alert:W'])
         self.assertEqual(j['transferCount'], 1)
-        self.assertEqual(j['transfers'][0], {'requiredSeconds': 120, 'safetySeconds': 180, 'availableSeconds': 240, 'platform': '2', 'meetsSafetyMargin': False, 'status': 'tight'})
+        self.assertEqual(j['transfers'][0], {'requiredSeconds': 120, 'safetySeconds': 180, 'availableSeconds': 240, 'platform': '2', 'meetsSafetyMargin': False, 'status': 'tight',
+                                             'legId': j['legs'][2]['id']})  # the leg boarded: the through-run after it is no change
         self.assertEqual((j['freshness'], j['notices'], j['legs'][0]['origin']['name'], j['legs'][-1]['destination']['name']), ('live', ['Replacement buses'], 'Home', 'Bled'))
         self.assertEqual((j['legs'][2]['delaySeconds'], j['legs'][0]['delaySeconds']), (0, None))
         self.assertEqual(j['legs'][0]['stopCount'], 2)

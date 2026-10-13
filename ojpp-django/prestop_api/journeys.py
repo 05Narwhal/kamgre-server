@@ -583,11 +583,16 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             if not m['transit']:
                 walking += m['duration']
                 continue
+            # Every change of vehicle is rated, tied to the leg it boards (`legId`): staying seated on a through-run
+            # (OTP's interline) is none. A change SŽ holds (train to its replacement bus and back) is rated comfortable
+            # and, as before, not counted: it is one ride.
             if previous is not None and not m['interline']:
                 available = _ts(leg['effectiveDeparture']) - _ts(previous['effectiveArrival'])
                 required, safety = round(walking), req['minTransferSeconds']
                 if leg['canceled'] or previous['canceled']:
                     status, meets = 'unknown', None
+                elif m.get('held'):
+                    status, meets = 'safe', True
                 elif req.get('riskMode') == 'insane':
                     # Within the rider's allowance (down to -1 min) is a bet, labelled tight when under 2 min spare.
                     meets = available >= required + safety
@@ -596,7 +601,8 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                     meets = available >= required + safety
                     status = 'missed' if available < required else ('safe' if meets else 'tight')
                 transfers.append({'requiredSeconds': required, 'safetySeconds': safety, 'availableSeconds': round(available),
-                                  'platform': m['platform'] or None, 'meetsSafetyMargin': meets, 'status': status})
+                                  'platform': m['platform'] or None, 'meetsSafetyMargin': meets, 'status': status, 'legId': leg['id'],
+                                  **({'held': True} if m.get('held') else {})})
             previous, walking = leg, 0.0
         notices = []
         for leg in legs:
@@ -610,7 +616,8 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             'id': f'otp:{key}', 'legs': legs, 'alerts': [mapping.public_alert(a) for a in in_journey],
             'scheduledDeparture': legs[0]['scheduledDeparture'], 'scheduledArrival': legs[-1]['scheduledArrival'],
             'effectiveDeparture': legs[0]['effectiveDeparture'], 'effectiveArrival': legs[-1]['effectiveArrival'],
-            'walkSeconds': max(0, round(node.get('walkTime') or 0)), 'transferCount': len(transfers), 'transfers': transfers,
+            'walkSeconds': max(0, round(node.get('walkTime') or 0)), 'transferCount': sum(1 for t in transfers if not t.get('held')),
+            'transfers': transfers,
             'notices': notices[:3], 'freshness': 'live' if any(m['realtime'] for m in meta) else 'scheduled',
         })
     return journeys

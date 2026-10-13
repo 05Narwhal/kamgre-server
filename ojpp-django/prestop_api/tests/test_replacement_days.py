@@ -135,8 +135,8 @@ class JourneyTests(SimpleTestCase):
         self.assertEqual(ride['effectiveDeparture'], otp_leg(self.t, 0, 3)['effectiveDeparture'])
         self.assertEqual(rest['effectiveArrival'], otp_leg(self.t, 0, 3)['effectiveArrival'])
         self.assertEqual(ride['alertIds'], ['alert:x'])
-        # One ride for the transfers: the train waits for the bus.
-        self.assertEqual([m['interline'] for m in meta], [False, True])
+        # A held change: the train waits for the bus (rated comfortable, not counted as a transfer).
+        self.assertEqual([(m['interline'], m.get('held')) for m in meta], [(False, False), (False, True)])
         walked, _ = journeys.replacement_walks(legs, meta)
         self.assertTrue(all('_boardAt' not in l and '_alightAt' not in l for l in walked))
 
