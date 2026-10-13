@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import queue
+import re
 import threading
 import time
 from pathlib import Path
@@ -40,6 +41,10 @@ MAX_LOCATIONS = 10    # per Valhalla request (the public server's limit)
 REQUEST_GAP = 0.35    # s between requests to the public server
 RETRY_AFTER = 600     # s before a failed request is tried again
 DETOUR = (4, 1000)    # a routed leg longer than 4x the straight line and 1 km more is a router loop
+STATION_OFF_SHAPE = 12  # m: a bus station stop further than this from the shape: the line drives past the station
+STATION_DRIVEWAY = 80   # m: at most this far from the street, a trip starting or ending at a bus station reaches its stop
+# A bus station's stop ("Maribor AP", "Avtobusna postaja Ljubljana"): buses drive into its yard to stop there.
+BUS_STATION = re.compile(r'(^|\W)(ap|avtobusna postaja|avt\.? ?post\.?)(\W|$)')
 
 _gate = threading.Lock()  # one Valhalla request at a time across the router and the matcher
 
@@ -101,6 +106,45 @@ def sparse_points(coords: list, cum: list[float], a: float, b: float, most: int 
     marks = [a, *(d for d in cum if a < d < b), b]
     gaps = sorted(((y - x, x) for x, y in zip(marks, marks[1:]) if y - x > SPARSE), reverse=True)[:most]
     return [geometry.point_at(coords, cum, x + length / 2) for length, x in gaps]
+
+
+def bus_station(stop: dict) -> bool:
+    """Whether a stop is a bus station's (a stop of the trip, or an OTP place with `stop.gtfsId`)."""
+    from .platforms import STATIONS
+    stop_id = stop.get('gtfsId') or (stop.get('stop') or {}).get('gtfsId')
+    return stop_id in STATIONS or bool(BUS_STATION.search(mapping.fold(stop.get('name') or '')))
+
+
+def into_stations(coords: list, stops: list[dict], bad: list[bool]) -> list[bool]:
+    """`bad` with the segments on both sides of a bus station's stop marked when the shape only passes by it on the
+    street (feed and map-matched shapes stay on the road beside Ljubljana, Maribor or Nova Gorica AP): routed, the
+    line drives into the yard to the stop, and a bus standing there is drawn in the station, not on the road."""
+    near = [k for k, s in enumerate(stops) if bus_station(s)]
+    if not near or len(coords) < 2:
+        return bad
+    proj = geometry.project_stops(coords, stops)
+    out = list(bad)
+    for k in near:
+        if proj[k][1] > STATION_OFF_SHAPE:
+            for i in (k - 1, k):
+                if 0 <= i < len(out):
+                    out[i] = True
+    return out
+
+
+def to_station_ends(coords: list, stops: list[dict]) -> list:
+    """The line from the street to its first and last stop when that is a bus station whose yard has no road the router
+    knows (Maribor, Nova Gorica, Murska Sobota AP lie 18-36 m from the nearest one): a bus waiting to leave or just
+    arrived stands at the station, not on the street beside it."""
+    if len(coords) < 2 or len(stops) < 2:
+        return coords
+    out = list(coords)
+    first, last = [stops[0]['lon'], stops[0]['lat']], [stops[-1]['lon'], stops[-1]['lat']]
+    if bus_station(stops[0]) and STATION_OFF_SHAPE < geometry.distance(out[0], first) <= STATION_DRIVEWAY:
+        out.insert(0, first)
+    if bus_station(stops[-1]) and STATION_OFF_SHAPE < geometry.distance(out[-1], last) <= STATION_DRIVEWAY:
+        out.append(last)
+    return out
 
 
 def plausible(leg: list, a: dict, b: dict) -> bool:
@@ -410,7 +454,12 @@ def repair(coords: list, stops: list[dict], deadline: Optional[float] = None, ro
         coords = on_roads or coords
     if len(stops) < 2:
         return coords, not matching
-    bad = bad_segments(coords, stops, {} if on_roads else None)
+    out, complete = _repair_legs(coords, stops, deadline, matching, on_roads, reroute)
+    return to_station_ends(out, stops), complete
+
+
+def _repair_legs(coords: list, stops: list[dict], deadline: Optional[float], matching: bool, on_roads, reroute: Iterable[int]) -> tuple[list, bool]:
+    bad = into_stations(coords, stops, bad_segments(coords, stops, {} if on_roads else None))
     for i in reroute:
         if 0 <= i < len(bad):
             bad[i] = True

@@ -79,6 +79,45 @@ class SpliceTests(SimpleTestCase):
         self.assertEqual(roads.repair(ROAD, STOPS), (ROAD, True))
 
 
+@override_settings(PRESTOP_VALHALLA_URL='')
+class BusStationTests(SimpleTestCase):
+    """The feed's line runs along the street beside a bus station (Ljubljana AP: 15-31 m off, Maribor AP 20 m, Nova Gorica AP
+    36 m); a bus stopping there must drive into the yard, or it is drawn standing on the road."""
+    STATION = {'lat': 46.05027, 'lon': 14.51, 'name': 'Maribor AP'}  # 30 m north of the street
+
+    def test_the_line_drives_into_the_station(self):
+        stops = [STOPS[0], self.STATION, STOPS[2]]
+        routed = {roads.leg_key(a, b): leg(a, b, bulge=0.0001) for a, b in zip(stops, stops[1:])}
+        asked = []
+        with mock.patch.object(roads.legs, 'get_many', side_effect=lambda keys: asked.extend(keys) or {k: routed[k] for k in keys}):
+            out, _ = roads.repair(ROAD, stops)
+        self.assertEqual(asked, list(routed))
+        station = [self.STATION['lon'], self.STATION['lat']]
+        self.assertLess(min(geometry.distance(p, station) for p in out), 1)
+
+    def test_an_ordinary_stop_beside_the_line_or_a_station_on_it_is_left_alone(self):
+        for middle in ({**self.STATION, 'name': 'Maribor Tabor'}, {**STOPS[1], 'name': 'Avtobusna postaja Ljubljana'}):
+            self.assertEqual(roads.repair(ROAD, [STOPS[0], middle, STOPS[2]]), (ROAD, True))
+
+    def test_a_trip_ending_at_a_station_the_router_cannot_enter_reaches_its_stop(self):
+        """Maribor AP: the nearest road the router knows is the street 20 m away; the line ends at the stop anyway."""
+        end = {'lat': 46.05018, 'lon': 14.52, 'name': 'Maribor AP'}  # 20 m north of the street's end
+        with mock.patch.object(roads.legs, 'get_many', return_value={}):  # no route into the yard
+            out, _ = roads.repair(ROAD, [STOPS[0], STOPS[1], end])
+        self.assertEqual(out[-1], [end['lon'], end['lat']])
+        self.assertEqual(out[:-1], ROAD)
+        far = {**end, 'lat': 46.0510}  # 110 m: not its driveway, the line stays as it is
+        with mock.patch.object(roads.legs, 'get_many', return_value={}):
+            out, _ = roads.repair(ROAD, [STOPS[0], STOPS[1], far])
+        self.assertNotEqual(out[-1], [far['lon'], far['lat']])
+
+    def test_bus_stations_by_name_or_bays(self):
+        self.assertTrue(roads.bus_station({'name': 'Nova Gorica AP'}))
+        self.assertTrue(roads.bus_station({'name': 'x', 'stop': {'gtfsId': 'IJPP:1126954'}}))
+        self.assertFalse(roads.bus_station({'name': 'Apače'}))
+        self.assertFalse(roads.bus_station({'name': 'Kranj Primskovo'}))
+
+
 class MatchTests(SimpleTestCase):
     """Feed shapes map-matched onto the roads (roads.match_shape / matched)."""
     # A sparse feed shape cutting the corner of an L-shaped street, and the street itself.
