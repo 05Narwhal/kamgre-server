@@ -345,13 +345,15 @@ def board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[d
     if all(b is None for b in boards):
         return None
     entries, seen = [], set()
+    names = stop_names()
     for entry in sorted((e for b in boards if b for e in b), key=lambda e: e['scheduledAt']):
         # The same trip can be listed by two feeds; keep the first (the head's feed).
         key = (entry['routeName'], entry['scheduledAt'], entry['destination'])
         if entry['id'] in seen or key in seen:
             continue
         seen.update({entry['id'], key})
-        entries.append(entry)
+        # Which of the merged stops it leaves from, by that stop's own name (stopgroups.py).
+        entries.append({**entry, 'stopName': names[entry['stopId']]} if entry.get('stopId') in names else entry)
     return _with_live_platforms(entries[:BOARD_MAX], stop_id, kind)
 
 
