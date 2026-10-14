@@ -61,6 +61,28 @@ class LoadTests(SimpleTestCase):
             self.assertIs(second.file('11248'), first.file('11248'))  # an unchanged file is not read again
             self.assertIs(sztimetables.load(now=1200), second)        # index unchanged: same timetables
 
+    def test_a_notice_can_link_several_timetables(self):
+        # 11248 links 12. - 18. 10. and a November timetable; index.json lists every file in "files", and each
+        # file lists every notice that links it.
+        work = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, work, True)
+        for f in FIXTURES.glob('*.json'):
+            shutil.copy(f, work / f.name)
+        november = {**fixture(LESCE), 'sha256': 'f' * 64, 'notices': ['11248', '11251'],
+                    'valid': {'from': '2026-10-24', 'to': '2026-11-01', 'dates': None}}
+        (work / f'{"f" * 64}.json').write_text(json.dumps(november), encoding='utf-8')
+        index = json.loads((work / 'index.json').read_text(encoding='utf-8'))
+        index['files'] = sorted(set(index['notices'].values()) | {'f' * 64})
+        (work / 'index.json').write_text(json.dumps(index), encoding='utf-8')
+        with self.settings(PRESTOP_SZ_TIMETABLES_DIR=str(work)):
+            tables = sztimetables.load(now=1000)
+        self.assertEqual(tables.file('11248')['sha256'], LESCE)  # the first one, as "notices" says
+        self.assertEqual([f['sha256'] for f in tables.files_for('11248')], [LESCE, 'f' * 64])
+        self.assertEqual(tables.file_on('11248', date(2026, 10, 14))['sha256'], LESCE)
+        self.assertEqual(tables.file_on('11248', date(2026, 10, 26))['sha256'], 'f' * 64)
+        self.assertEqual(tables.file_on('11251', date(2026, 10, 26))['sha256'], 'f' * 64)
+        self.assertIsNone(tables.file_on('11248', date(2026, 10, 20)))
+
     def test_a_broken_file_is_left_out(self):
         work = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, work, True)
@@ -135,3 +157,87 @@ class ColumnTests(SimpleTestCase):
         self.assertEqual(sztimetables.numbers(column(lesce, '318/2')), ['318'])
         # Ljubljana - Logatec prints the bus numbers: BUS 26729 is train 2672's.
         self.assertEqual(sztimetables.numbers(column(logatec, '26729'))[:2], ['26729', '2672'])
+
+
+def stop(id_, name, lat, lon, modes=('rail',)):
+    return {'id': id_, 'name': name, 'latitude': lat, 'longitude': lon, 'modes': list(modes)}
+
+
+# Feed stops around the Gorenjska line (positions as in the feed, rounded).
+RAIL = [stop('IJPP:lj', 'Ljubljana', 46.0585, 14.5103), stop('IJPP:siska', 'Ljubljana Šiška', 46.0697, 14.4996),
+        stop('IJPP:kranj', 'Kranj', 46.2393, 14.3497), stop('IJPP:lesce', 'Lesce-Bled', 46.3605, 14.1572),
+        stop('IJPP:zir', 'Žirovnica', 46.4044, 14.1366), stop('IJPP:sj', 'Slovenski Javornik', 46.4296, 14.0868),
+        stop('IJPP:jes', 'Jesenice', 46.4363, 14.0526), stop('IJPP:kocna', 'Kočna', 46.4219, 14.0845),
+        stop('IJPP:vintgar', 'Vintgar', 46.4105, 14.0995)]
+BUS = [stop('LPP:litostrojska', 'Litostrojska', 46.0771, 14.4889, ['bus']), stop('LPP:litostroj', 'Litostroj', 46.0806, 14.4840, ['bus']),
+       stop('IJPP:podkocna', 'Podkočna', 46.4224, 14.0829, ['bus']), stop('IJPP:gobavci', 'Gobavci', 46.2895, 14.2610, ['bus']),
+       stop('IJPP:far', 'Gobavci', 46.20, 14.10, ['bus'])]
+
+
+class StationTests(SimpleTestCase):
+    def stations(self, stops=RAIL + BUS, sz_rows=(), overrides=None):
+        return sztimetables.Stations(stops, sz_rows=list(sz_rows), replacement_overrides=overrides or {})
+
+    def test_printed_names_are_the_feeds_railway_stations(self):
+        lesce = fixture(LESCE)
+        calls, why = self.stations().resolve(lesce, column(lesce, '2400'))
+        self.assertIsNone(why)
+        self.assertEqual([c['stop']['gtfsId'] for c in calls], ['IJPP:lesce', 'IJPP:zir', 'IJPP:sj', 'IJPP:jes'])
+        self.assertEqual(calls[0]['stop']['name'], 'Lesce-Bled')
+        self.assertEqual((calls[0].get('arr'), calls[0]['dep'], calls[-1]['arr']), (None, '05:40', '05:57'))
+
+    def test_stations_abroad_are_left_out(self):
+        lesce = fixture(LESCE)
+        stations = self.stations(RAIL + [stop('IJPP:lit', 'Litostroj', 46.0768, 14.4886)])
+        calls, _ = stations.resolve(lesce, column(lesce, '318/1'))
+        # Ljubljana → Litostroj → Jesenice → Beljak: the bus ends at Jesenice, the last stop in Slovenia.
+        self.assertEqual([c['stop']['name'] for c in calls], ['Ljubljana', 'Litostroj', 'Jesenice'])
+        self.assertEqual((calls[-1]['arr'], calls[-1].get('dep')), ('08:32', None))
+        calls, _ = stations.resolve(lesce, column(lesce, '415'))  # Beljak → Jesenice → ...: starts at Jesenice
+        self.assertEqual((calls[0]['stop']['name'], calls[0].get('arr'), calls[0]['dep']), ('Jesenice', None, '07:00'))
+
+    def test_a_stop_that_is_no_railway_station(self):
+        data = {'title': 'x', 'stops': [{'station': 'LITOSTROJ', 'text': 'AP mestnega prometa Litostrojska (ob Litostrojski - NE obračališče)'}],
+                'tables': []}
+        col = {'calls': [{'station': 'LJUBLJANA', 'dep': '07:42'}, {'station': 'Litostroj', 'arr': '07:51', 'dep': '07:51'},
+                         {'station': 'JESENICE', 'arr': '08:32'}]}
+        # SŽ's own list of replacement stops first, at the feed stop beside it.
+        listed = [{'route': 'Ljubljana – Kranj – Jesenice', 'station': 'Litostroj', 'lat': 46.07681, 'lon': 14.488618,
+                   'label': 'Avtobusno postajališče mestnega prometa Litostrojska', 'source': 'place_pin'},
+                  {'route': 'Ljubljana – Kranj – Jesenice', 'station': 'Jesenice', 'lat': 46.4364, 'lon': 14.0550, 'label': '', 'source': 'place_pin'}]
+        calls, why = self.stations(sz_rows=listed).resolve(data, col)
+        self.assertIsNone(why)
+        self.assertEqual(calls[1]['stop']['gtfsId'], 'LPP:litostrojska')
+        self.assertEqual((calls[1]['stop']['lat'], calls[1]['stop']['replacementLabel']),
+                         (46.07681, 'Avtobusno postajališče mestnega prometa Litostrojska'))
+        # Else the bus stop the timetable's stop list names ("Litostrojska", not the "Litostroj" turning loop).
+        calls, why = self.stations().resolve(data, col)
+        self.assertEqual(calls[1]['stop']['gtfsId'], 'LPP:litostrojska')
+        self.assertEqual(calls[1]['stop']['replacementLabel'], 'AP mestnega prometa Litostrojska (ob Litostrojski - NE obračališče)')
+        # Else a bus stop of that name near the line.
+        calls, why = self.stations().resolve({**data, 'stops': []}, col)
+        self.assertEqual(calls[1]['stop']['gtfsId'], 'LPP:litostroj')
+
+    def test_a_hand_checked_replacement_stop_comes_first(self):
+        data = {'title': 'x', 'stops': [], 'tables': []}
+        col = {'calls': [{'station': 'KRANJ', 'dep': '05:38'}, {'station': 'Gobavci', 'arr': '05:54', 'dep': '05:54'},
+                         {'station': 'LESCE BLED', 'arr': '06:12'}]}
+        checked = {'IJPP:gobavci': [{'lat': 46.2899, 'lon': 14.2615, 'label': 'Gobavci, ob cesti'}]}
+        calls, _ = self.stations(overrides=checked).resolve(data, col)
+        self.assertEqual((calls[1]['stop']['gtfsId'], calls[1]['stop']['lat'], calls[1]['stop']['replacementLabel']),
+                         ('IJPP:gobavci', 46.2899, 'Gobavci, ob cesti'))
+        calls, _ = self.stations().resolve(data, col)  # the namesake 12 km away is not it
+        self.assertEqual(calls[1]['stop']['gtfsId'], 'IJPP:gobavci')
+
+    def test_an_unknown_stop_makes_the_column_unusable(self):
+        data = {'title': 'x', 'stops': [], 'tables': []}
+        col = {'calls': [{'station': 'KRANJ', 'dep': '05:38'}, {'station': 'Nikjer', 'arr': '05:54', 'dep': '05:54'},
+                         {'station': 'LESCE BLED', 'arr': '06:12'}]}
+        calls, why = self.stations().resolve(data, col)
+        self.assertIsNone(calls)
+        self.assertIn('Nikjer', why)
+
+    def test_vintgar_and_kocna_are_stations(self):
+        vintgar = fixture(VINTGAR)
+        calls, why = self.stations().resolve(vintgar, column(vintgar, '4292'))
+        self.assertEqual([c['stop']['gtfsId'] for c in calls], ['IJPP:vintgar', 'IJPP:kocna', 'IJPP:jes'])
