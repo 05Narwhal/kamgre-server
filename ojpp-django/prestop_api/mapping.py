@@ -307,7 +307,7 @@ def _pick(translations: list[dict], language: str) -> tuple[Optional[str], bool]
 REPLACEMENT_WORDS = re.compile(r'nadomest|avtobusni prevoz|replacement bus|rail replacement')
 # Contract 6 kinds, first match wins: a moved stop and a detour usually also mention the closed road behind them.
 KIND_WORDS = [
-    ('stop-moved', re.compile(r'(prestavljen|premaknjen|zacasn\w* postajalisc|nadomestn\w* postajalisc|ukinjen\w* postajalisc|'
+    ('stop-moved', re.compile(r'(prestavljen|premaknjen|(prestavitev|ukinitev)\w* postajalisc|zacasn\w* postajalisc|nadomestn\w* postajalisc|ukinjen\w* postajalisc|'
                               r'postajalisc\w* (je |bo )?(prestavljen|ukinjen|zaprt)|stop (moved|relocated|closed))')),
     ('detour', re.compile(r'obvoz|preusmer|spremenjen\w* (potek|tras)|detour|diversion|divert')),
     ('delay', re.compile(r'zamud|zamik|delay')),

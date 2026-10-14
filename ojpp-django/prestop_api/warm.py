@@ -41,8 +41,9 @@ def caches():
     # Live vehicles too: after ~30 s without a request their next read rebuilds them (and maybe the timetable).
     # Tomorrow's trains: the date people look up most after today (a 9 s load otherwise).
     # The operator GTFS that replaces OTP's broken Kranj timetable (supplement.py) before the indexes built on it.
+    from . import operator_notices
     return [scheduled.timetable, scheduled.shapes, supplement.gtfs, sources.stops, sources.routes, sources.alerts_raw, sources.vehicles,
-            scheduled.day_timetable(tomorrow)]
+            scheduled.day_timetable(tomorrow), operator_notices.arriva]
 
 
 def plans():

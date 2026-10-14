@@ -279,6 +279,8 @@ def alerts(language: str) -> list[dict]:
     from . import closures, detected
     # SŽ's replacement notices OTP doesn't carry yet, where we have their timetables (closures.sz_notice_alerts).
     out = closures.notice_alerts(mapping.build_alerts(alerts_raw.get().value, language))
+    from . import operator_notices
+    out += operator_notices.alerts()  # notices on operators' own websites (Arriva)
     try:  # vehicles standing where they shouldn't (detected.py)
         known = routes.peek()
         out += detected.alerts(language, known.value if known else {}, stop_names())
