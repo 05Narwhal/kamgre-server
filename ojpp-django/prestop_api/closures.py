@@ -478,9 +478,13 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
                 continue
             number = notice_id(a)
             data = tables.file_on(number, when)
+            if not data and any(f.get('status') in ('ok', 'unsure') for f in tables.files_for(number)):
+                # Its timetable runs no bus that day (it lists other days): every train runs.
+                out['decided'][(a['id'], day)] = {'all': True, 'yes': frozenset(), 'no': frozenset()}
+                continue
             if not data or data.get('status') not in ('ok', 'unsure'):
                 _warn_once(('notice', number, (data or {}).get('sha256')), 'SŽ notice %s: no usable replacement timetable (%s); its buses are guessed '
-                           'from the notice', number, (data or {}).get('status') or 'none linked')
+                           'from the notice', number, (data or {}).get('status') or 'none read')
                 continue
             used.setdefault(data.get('sha256') or str(id(data)), (data, []))[1].append(a)
         for sha in sorted(used):

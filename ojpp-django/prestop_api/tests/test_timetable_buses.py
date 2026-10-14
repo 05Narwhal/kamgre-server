@@ -275,6 +275,14 @@ class PrecedenceTests(SimpleTestCase):
         self.assertNotIn(by_name['BUS 26638'], plan['suppressed'])
         self.assertNotIn('BUS 26638', buses)
 
+    def test_a_notice_runs_no_buses_on_days_its_timetable_does_not_cover(self):
+        # 11198's timetable is valid 19. - 23. 10.; were its notice in effect on the 14th, it would guess nothing then.
+        early = {**alert('11198'), '_from': epoch('2026-10-12')}
+        plan = build('20261014', alerts=[a for a in ALERTS if closures.notice_id(a) not in ('11198', '11147')] + [early])
+        train = trip_id('20261014', 'LPV 2442')
+        self.assertFalse([b for b in plan['buses'] if b.get('trainTripId') == train])
+        self.assertTrue(closures.decides(plan['decided'][(early['id'], '20261014')], '2442'))
+
     def test_a_failed_or_missing_timetable_changes_nothing(self):
         failed = sztimetables.Timetables(TABLES.notices, {sha: {**f, 'status': 'failed'} for sha, f in TABLES.files.items()})
         for tables in (failed, None, sztimetables.Timetables({}, {})):

@@ -231,6 +231,25 @@ class StationTests(SimpleTestCase):
         calls, why = self.stations().resolve({**data, 'stops': []}, col)
         self.assertEqual(calls[1]['stop']['gtfsId'], 'LPP:litostroj')
 
+    def test_sz_lists_stops_off_the_railway_for_its_own_line(self):
+        # Divača - Koper: the bus serves Rodik, Prešnica and Črnotiče, kilometres off the railway, which only buses serve.
+        stops = [stop('IJPP:divaca', 'Divača', 45.6830, 13.9706), stop('IJPP:kozina', 'Hrpelje-Kozina', 45.6037, 13.9353),
+                 stop('IJPP:koper', 'Koper', 45.5476, 13.7470), stop('IJPP:1129439', 'Rodik', 45.628354, 13.976047, ['bus']),
+                 stop('IJPP:1123008', 'Prešnica', 45.570471, 13.941199, ['bus']), stop('IJPP:1123013', 'Črnotiče', 45.551934, 13.891554, ['bus'])]
+        line = 'Divača – Koper'
+        listed = [{'route': line, 'station': n, 'lat': lat, 'lon': lon, 'label': f'AP {n}', 'source': 'place_pin'}
+                  for n, lat, lon in (('Divača', 45.683, 13.9706), ('Rodik', 45.628354, 13.976047), ('Prešnica', 45.571247, 13.938932),
+                                      ('Črnotiče', 45.552255, 13.891773), ('Koper', 45.5476, 13.747))]
+        listed.append({'route': 'Elsewhere', 'station': 'Rodik', 'lat': 46.5, 'lon': 15.0, 'label': 'not this one', 'source': 'place_pin'})
+        col = {'calls': [{'station': 'DIVAČA', 'dep': '05:00'}, {'station': 'Rodik', 'arr': '05:10', 'dep': '05:10'},
+                         {'station': 'Hrpelje Kozina', 'arr': '05:15', 'dep': '05:15'}, {'station': 'Prešnica', 'arr': '05:22', 'dep': '05:22'},
+                         {'station': 'Črnotiče', 'arr': '05:30', 'dep': '05:30'}, {'station': 'KOPER', 'arr': '05:55'}]}
+        calls, why = self.stations(stops, sz_rows=listed).resolve({'title': 'x', 'stops': [], 'tables': []}, col)
+        self.assertIsNone(why)
+        self.assertEqual([c['stop']['gtfsId'] for c in calls],
+                         ['IJPP:divaca', 'IJPP:1129439', 'IJPP:kozina', 'IJPP:1123008', 'IJPP:1123013', 'IJPP:koper'])
+        self.assertEqual(calls[1]['stop']['replacementLabel'], 'AP Rodik')
+
     def test_a_hand_checked_replacement_stop_comes_first(self):
         data = {'title': 'x', 'stops': [], 'tables': []}
         col = {'calls': [{'station': 'KRANJ', 'dep': '05:38'}, {'station': 'Gobavci', 'arr': '05:54', 'dep': '05:54'},

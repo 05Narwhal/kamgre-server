@@ -22,7 +22,7 @@ import threading
 import time
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from django.conf import settings
 
@@ -290,10 +290,11 @@ class Stations:
                 known = [[k['stop']['lon'], k['stop']['lat']] for k in calls if k.get('stop')]
                 c['stop'] = _as_stop(min(c['_found'], key=lambda s: min((geometry.distance(p, [s['longitude'], s['latitude']]) for p in known),
                                                                            default=0)))
+        names = [c.get('station') or '' for c in calls]
         for i, c in enumerate(calls):
             if not c.get('stop'):
                 line = [k['stop'] for k in calls[:i] if k.get('stop')][-1:] + [k['stop'] for k in calls[i + 1:] if k.get('stop')][:1]
-                c['stop'] = self.elsewhere(c.get('station') or '', data, line)
+                c['stop'] = self.elsewhere(c.get('station') or '', data, line, names)
                 if not c['stop']:
                     return None, f'stop {c.get("station")!r} not found'
         if len(calls) < 2:
@@ -306,8 +307,10 @@ class Stations:
         last.pop('dep', None)
         return out, None
 
-    def elsewhere(self, name: str, data: dict, line: list[dict]) -> Optional[dict]:
-        """A stop that is no railway station (see the class notes), or None."""
+    def elsewhere(self, name: str, data: dict, line: list[dict], context: Sequence[str] = ()) -> Optional[dict]:
+        """A stop that is no railway station (see the class notes), or None. `context`: the column's printed
+        station names: SŽ's list is trusted for a line that shares two of them, wherever the stop lies (the
+        bus leaves the railway for Rodik or Črnotiče)."""
         from .closures import names_match
         from .szstops import APPROXIMATE, same_station
         pts = [[s['lon'], s['lat']] for s in line]
@@ -318,15 +321,19 @@ class Stations:
             if len(pts) == 1:
                 return geometry.distance(pts[0], [lon, lat])
             return geometry.project_stops(pts, [{'lat': lat, 'lon': lon}])[0][1]
+
+        def shared(route: str) -> int:
+            on_line = [r['station'] for r in self.sz_rows if r['route'] == route]
+            return sum(1 for n in context if any(same_station(s, n) for s in on_line))
         named = [s for s in self.other if names_match(name, s['name'])]
         for s in named:
             for r in self.overrides.get(s['id']) or []:
                 if off(r['lat'], r['lon']) <= NEAR_LINE:
                     return _as_stop(s, lat=r['lat'], lon=r['lon'], replacementLabel=r.get('label') or '')
-        listed = sorted(((off(r['lat'], r['lon']), n, r) for n, r in enumerate(self.sz_rows) if same_station(r['station'], name)),
-                        key=lambda x: x[:2])
-        if listed and listed[0][0] <= NEAR_LINE:
-            r = listed[0][2]
+        listed = [r for r in self.sz_rows if same_station(r['station'], name)]
+        ranked = sorted(((-shared(r['route']), off(r['lat'], r['lon']), n, r) for n, r in enumerate(listed)), key=lambda x: x[:3])
+        if ranked and (-ranked[0][0] >= 2 or ranked[0][1] <= NEAR_LINE):
+            r = ranked[0][3]
             here = [r['lon'], r['lat']]
             beside = min(self.other, key=lambda s: geometry.distance(here, [s['longitude'], s['latitude']]), default=None)
             if beside and geometry.distance(here, [beside['longitude'], beside['latitude']]) <= BESIDE:
