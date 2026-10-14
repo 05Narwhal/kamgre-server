@@ -4,8 +4,9 @@ A watch is a reminder set in the app (journey or departure). At `notify_at` the 
 is pushed with the trip's current departure. From 30 minutes before that until the vehicle
 leaves the watched stop, the trip is checked on every tick and a change is pushed under the
 same tag, so it replaces the earlier notification: a cancellation (or its reversal) always,
-a delay change of at least 2 minutes at most once every 3 minutes. The first look at a trip
-only records where it stands; the user already saw that in the app.
+a delay change of at least 2 minutes at most once every 3 minutes (10 for a journey). The first look at a trip
+only records where it stands; the user already saw that in the app. A journey's later rides, changes and the
+disruptions on its way are watched too once its reminder went out (journey.py), at most one message per 10 minutes.
 """
 import logging
 from datetime import datetime, timedelta
@@ -16,7 +17,7 @@ from django.utils import timezone
 
 from prestop_api.upstream import UpstreamError
 
-from . import sender
+from . import journey, sender
 from .models import PushSubscription, Watch
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ LOCAL = ZoneInfo('Europe/Ljubljana')
 LOOKAHEAD = timedelta(minutes=30)
 MIN_CHANGE = 120
 MIN_GAP = timedelta(minutes=3)
+JOURNEY_GAP = timedelta(minutes=10)  # a journey gets at most one message this often (cancellations still go at once)
 REMINDER_GRACE = timedelta(minutes=10)
 MAX_FAILURES = 30
 TEXT = {
@@ -42,6 +44,15 @@ def load_trips(ids: list[str]) -> dict[str, dict]:
         logger.warning('Trips for push watches unavailable: %r', e)
         return {}
     return {i: trips.build_trip(found[i], {}, geometry=False) for i in ids if i in found}
+
+
+def load_alerts(language: str) -> list[dict]:
+    from prestop_api import sources
+    try:
+        return sources.alerts(language)
+    except UpstreamError as e:
+        logger.warning('Alerts for push watches unavailable: %r', e)
+        return []
 
 
 def _parse(value: Optional[str]) -> Optional[datetime]:
@@ -84,7 +95,7 @@ def _change(watch: Watch, state: dict, now: datetime) -> Optional[bool]:
         return True
     if state['delay'] is None or abs(state['delay'] - (watch.last_delay or 0)) < MIN_CHANGE:
         return None
-    if watch.last_sent and now - watch.last_sent < MIN_GAP:
+    if watch.last_sent and now - watch.last_sent < (JOURNEY_GAP if watch.kind == 'journey' else MIN_GAP):
         return None
     return False
 
@@ -96,6 +107,7 @@ def tick(now: Optional[datetime] = None) -> int:
     watches = list(Watch.objects.select_related('subscription').filter(notify_at__lte=now + LOOKAHEAD).order_by('notify_at'))
     ids = list(dict.fromkeys(i for w in watches for i in w.trip_ids))
     trips = load_trips(ids) if ids else {}
+    alerts = None  # loaded when a journey needs them
     sent, gone = 0, set()
     for watch in watches:
         sub = watch.subscription
@@ -117,6 +129,21 @@ def tick(now: Optional[datetime] = None) -> int:
                 renotify = _change(watch, state, now)
                 if renotify is not None:
                     payload, urgent = _payload(watch, summary(state, language, now), 'update', renotify), renotify
+        told = None
+        canceled = bool(state) and state['status'] != (watch.last_status or 'ok')
+        if watch.kind == 'journey' and watch.sent_reminder and trips and not canceled and (not payload or payload['kind'] == 'update'):
+            # Later rides, changes and disruptions on the way (journey.py); worse news than a plain delay update
+            # replaces it (a cancellation never).
+            if alerts is None:
+                alerts = load_alerts(language)
+            current = journey.state(watch, trips, alerts, now.timestamp())
+            if not watch.journey_state.get('seen'):
+                watch.journey_state = journey.baseline(current)
+            elif payload or not watch.last_sent or now - watch.last_sent >= JOURNEY_GAP:
+                found = journey.news(watch.journey_state, current, language)
+                if found and (not payload or found[1]):
+                    body, urgent, told = found
+                    payload = _payload(watch, body, 'update', urgent)
         if payload:
             result = sender.send(sub, payload, urgent=urgent)
             if result == 'gone':
@@ -137,6 +164,8 @@ def tick(now: Optional[datetime] = None) -> int:
                 watch.last_sent = now
                 if payload['kind'] == 'reminder':
                     watch.sent_reminder = True
+                if told:
+                    watch.journey_state = journey.told(watch.journey_state, told)
                 if state:
                     watch.last_status = state['status']
                     if state['delay'] is not None:

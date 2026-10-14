@@ -123,7 +123,7 @@ def watches(request):
         'trip_ids': trip_ids, 'stop_id': stop_id, 'scheduled_at': scheduled_at,
         'expires_at': max(t for t in (ends_at, scheduled_at, notify_at) if t) + KEEP_AFTER,
         # A changed reminder starts over.
-        'sent_reminder': False, 'last_delay': None, 'last_status': '', 'last_sent': None,
+        'sent_reminder': False, 'last_delay': None, 'last_status': '', 'last_sent': None, 'journey_state': {},
     })
     return JsonResponse({'id': client_id}, status=201)
 

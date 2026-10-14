@@ -34,6 +34,8 @@ class Watch(models.Model):
     last_status = models.CharField(max_length=10, blank=True, default='')
     last_sent = models.DateTimeField(null=True, blank=True)
     sent_reminder = models.BooleanField(default=False)
+    # A journey's rides as the rider last heard of them (journey.py): delays, spare time at changes, alerts.
+    journey_state = models.JSONField(default=dict, blank=True)
     expires_at = models.DateTimeField()
 
     class Meta:
