@@ -121,6 +121,27 @@ class FacadeTests(TestCase):
     def test_health_reports_database_readiness(self):
         response = self.client.get('/api/v1/health')
         self.assertEqual((response.status_code, response.json()['database']), (200, 'ready'))
+        self.assertIsNone(response.json()['maintenance'])
+
+    def test_health_reports_the_maintenance_flag(self):
+        import json
+        import tempfile
+        from datetime import datetime, timedelta, timezone
+        with tempfile.TemporaryDirectory() as tmp:
+            flag = f'{tmp}/maintenance.json'
+            with override_settings(PRESTOP_MAINTENANCE_FILE=flag):
+                self.assertIsNone(self.client.get('/api/v1/health').json()['maintenance'])  # no file
+                until = (datetime.now(timezone.utc) + timedelta(minutes=3)).replace(microsecond=0)
+                message = {'sl': 'Strežnik se posodablja.', 'en': 'The server is updating.'}
+                with open(flag, 'w', encoding='utf-8') as f:
+                    json.dump({'message': message, 'until': until.isoformat()}, f)
+                self.assertEqual(self.client.get('/api/v1/health').json()['maintenance'], {'message': message, 'until': until.isoformat()})
+                with open(flag, 'w', encoding='utf-8') as f:  # left behind by a failed deploy long ago
+                    json.dump({'message': message, 'until': (until - timedelta(hours=1)).isoformat()}, f)
+                self.assertIsNone(self.client.get('/api/v1/health').json()['maintenance'])
+                with open(flag, 'w', encoding='utf-8') as f:
+                    f.write('{broken')
+                self.assertIsNone(self.client.get('/api/v1/health').json()['maintenance'])
 
     def test_pasted_coordinates_and_links_become_places(self):
         body = self.client.get('/api/v1/places', {'q': '46.0585, 14.5129'}).json()

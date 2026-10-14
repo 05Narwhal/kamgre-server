@@ -43,6 +43,15 @@ copy --exclude='/config.local' --exclude='__pycache__/' "$HERE/" "$SSH_TARGET:/o
 printf 'PRESTOP_DOMAIN=%q\nCLOUDFLARE_TUNNEL_TOKEN=%q\n' "${DOMAIN:-}" "${CLOUDFLARE_TUNNEL_TOKEN:-}" |
   remote 'sudo sh -c "umask 077; cat > /etc/prestop/deploy.vars"'
 
+# Contract 1 (maintenance): /health announces the update about a minute before the restart, so open
+# apps can tell people; the flag goes again once update.sh has seen the API healthy (or the deploy failed).
+if remote 'sudo test -f /var/lib/prestop/.gtfs-imported'; then
+  echo "==> Announcing maintenance (60 s before the restart)"
+  remote 'sudo bash /opt/prestop/deploy/server/maintenance.sh on 240'
+  trap "remote 'sudo bash /opt/prestop/deploy/server/maintenance.sh off' || true" EXIT
+  sleep 60
+fi
+
 echo "==> Applying on the server"
 remote 'sudo bash /opt/prestop/deploy/server/update.sh'
 echo

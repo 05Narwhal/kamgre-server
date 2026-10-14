@@ -33,6 +33,8 @@ CSRF_COOKIE_SECURE = True
 PRESTOP_TRAFFIC_GUARD = True
 PRESTOP_CLIENT_IP_HEADER = 'CF-Connecting-IP'
 PRESTOP_TRAFFIC_STATE_DIR = '/var/lib/prestop/traffic'
+# Written by server/maintenance.sh (push.sh calls it around the restart).
+PRESTOP_MAINTENANCE_FILE = '/var/lib/prestop/maintenance.json'
 # SŽ replacement timetables read from the notices' PDFs (prestop-szpdf.timer writes, the API reads).
 PRESTOP_SZ_TIMETABLES_DIR = '/var/lib/prestop/sz-timetables'
 

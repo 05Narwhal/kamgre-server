@@ -182,8 +182,30 @@ def health(request):
             cur.execute('SELECT 1')
     except Exception:
         database = 'unavailable'
-    body = {'api': 'ready', 'database': database, 'sources': all_sources(), 'collector': _collector_source() if database == 'ready' else None}
+    body = {'api': 'ready', 'database': database, 'sources': all_sources(), 'collector': _collector_source() if database == 'ready' else None,
+            'maintenance': _maintenance()}
     return JsonResponse(body, status=200 if database == 'ready' else 503)
+
+
+MAINTENANCE_GRACE = 600
+
+
+def _maintenance():
+    """The deploy's maintenance notice, or None. A flag left behind by a failed deploy stops
+    counting ten minutes after its `until`, so the app never shows it for good."""
+    path = settings.PRESTOP_MAINTENANCE_FILE
+    if not path:
+        return None
+    try:
+        with open(path, encoding='utf-8') as f:
+            flag = json.load(f)
+        until = datetime.fromisoformat(flag['until'])
+        message = {'sl': str(flag['message']['sl']), 'en': str(flag['message']['en'])}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if until.tzinfo is None or until.timestamp() + MAINTENANCE_GRACE < time.time():
+        return None
+    return {'message': message, 'until': until.isoformat()}
 
 
 @require_GET

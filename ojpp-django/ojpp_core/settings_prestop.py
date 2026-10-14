@@ -30,6 +30,9 @@ PRESTOP_TRAFFIC_STATE_DIR = env('PRESTOP_TRAFFIC_STATE_DIR', default='')
 PRESTOP_TRAFFIC_PER_MINUTE = env.int('PRESTOP_TRAFFIC_PER_MINUTE', default=300)
 PRESTOP_TRAFFIC_MAX_ACTIVE = env.int('PRESTOP_TRAFFIC_MAX_ACTIVE', default=3000)
 PRESTOP_TRAFFIC_HOURLY_MB = env.int('PRESTOP_TRAFFIC_HOURLY_MB', default=30000)
+# JSON file `{message: {sl, en}, until}` that push.sh writes shortly before a deploy restarts the API;
+# /health reports it as `maintenance` so the app can say the server is updating. Empty disables it.
+PRESTOP_MAINTENANCE_FILE = env('PRESTOP_MAINTENANCE_FILE', default='')
 
 ROOT_URLCONF = 'ojpp_core.urls_prestop'
 
