@@ -106,4 +106,47 @@ class ReliabilityTests(TestCase):
         result = route_reliability('IJPP:r1', date(2026, 10, 9))
         self.assertEqual(result['tripCount'], 3)
         self.assertAlmostEqual(result['onTimeShare'], 2 / 3, places=3)
-        self.assertEqual(result['byHour'], [{'hour': 8, 'meanSignedDelaySeconds': 180.0, 'tripCount': 3}])
+        self.assertEqual(result['byHour'], [{'hour': 8, 'meanSignedDelaySeconds': 180.0, 'tripCount': 3, 'medianDelaySeconds': 90.0}])
+
+    def test_by_departure_day_and_hour(self):
+        """Contract 5: a late 07:10 and an on-time 15:00 departure over twelve days (Saturdays are another kind of day)."""
+        from datetime import datetime, timedelta, timezone
+        from prestop_statistics import aggregation
+        today = date(2026, 10, 9)  # a Friday
+        seen = datetime(2026, 10, 9, 5, 15, tzinfo=timezone.utc)
+        n = 0
+        for back in range(12):
+            day = today - timedelta(days=back)
+            if day.weekday() == 6:
+                continue
+            for trip, delays in (('IJPP:t710', [200 + 20 * back, 300]), ('IJPP:t1500', [0, 60])):
+                n += 1
+                TripDelay.objects.create(service_date=day, trip_id=trip, route_id='IJPP:r1', operator_id='IJPP:1123', direction='0',
+                                         stop_delays={str(i): d for i, d in enumerate(delays)}, first_seen=seen, last_seen=seen)
+        aggregation._starts.clear()
+        otp = mock.Mock()
+        otp.query.side_effect = lambda q: {f't{i}': {'departureStoptime': {'scheduledDeparture': {'IJPP:t710': 7 * 3600 + 600, 'IJPP:t1500': 15 * 3600}[t]}}
+                                           for i, t in enumerate(['IJPP:t710', 'IJPP:t1500'] if q.index('t710') < q.index('t1500') else ['IJPP:t1500', 'IJPP:t710'])}
+        with mock.patch('prestop_api.upstream.otp', return_value=otp):
+            result = aggregation.route_reliability('IJPP:r1', today)
+            usual = aggregation.usual_delays('IJPP:r1', today)
+        early = result['byDeparture'][0]
+        # Ten workdays in the window (the two Saturdays are another kind of day).
+        self.assertEqual((early['start'], early['samples']), ('07:10', 10))
+        self.assertEqual(early['medianDelaySeconds'], fmean_of([250 + 10 * b for b in (0, 1, 2, 3, 4, 7, 8, 9, 10, 11)]))
+        self.assertEqual(result['byDeparture'][1]['onTimeShare'], 1.0)
+        self.assertEqual(set(usual), {'07:10', '15:00'})
+        self.assertEqual([h['hour'] for h in result['byHour']], [7, 15])
+        self.assertEqual(len(result['byDay']), 30)
+        self.assertEqual(result['byDay'][-1], {'date': '2026-10-09', 'samples': 2, 'medianDelaySeconds': 140.0, 'onTimeShare': 0.5})
+        self.assertEqual(result['byDay'][-6]['samples'], 0)  # Sunday 2026-10-04: nothing observed
+        self.assertIsNone(result['byDay'][-6]['medianDelaySeconds'])
+        self.assertEqual(aggregation.day_kind(date(2026, 11, 1)), 'sunday')  # a holiday on a Sunday
+        self.assertEqual(aggregation.day_kind(date(2026, 12, 25)), 'sunday')  # Christmas, a Friday
+        self.assertEqual(aggregation.day_kind(date(2026, 10, 10)), 'saturday')
+
+
+def fmean_of(values):
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    return float(ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2)
