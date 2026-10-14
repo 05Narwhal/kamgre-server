@@ -1,0 +1,540 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-04-07",
+  "to": "2026-12-12",
+  "dates": null
+ },
+ "footnotes": {
+  "9": {
+   "text": "Ne vozi ob sobotah, nedeljah in praznikih - dela prostih dneh v RS",
+   "rule": "workdays"
+  },
+  "3": {
+   "text": "Vozi ob sobotah, nedeljah in praznikih",
+   "rule": "weekends_holidays"
+  },
+  "2": {
+   "text": "Ne vozi ob sobotah, nedeljah in praznikih",
+   "rule": "workdays"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "DIVAČA",
+   "text": "postanki na zunanji strani železniške postaje"
+  },
+  {
+   "station": "HRPELJE KOZINA",
+   "text": "postanki na zunanji strani železniške postaje"
+  },
+  {
+   "station": "HRASTOVLJE",
+   "text": "postanki na zunanji strani železniške postaje"
+  },
+  {
+   "station": "RODIK",
+   "text": "AP v krožišču"
+  },
+  {
+   "station": "PREŠNICA",
+   "text": "Pri cerkvi v naselju Prešnica"
+  },
+  {
+   "station": "ČRNOTIČE",
+   "text": "AP Črnotiče (pri cerkvi)"
+  },
+  {
+   "station": "KOPER",
+   "text": "postanki na platoju ob tirih"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "DIVAČA - KOPER",
+   "source": "text",
+   "stations": [
+    "DIVAČA",
+    "Rodik",
+    "Hrpelje Kozina",
+    "Prešnica",
+    "Črnotiče",
+    "Hrastovlje",
+    "KOPER"
+   ],
+   "columns": [
+    {
+     "label": "44201",
+     "train": "44201",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "9"
+     ],
+     "calls": [
+      {
+       "station": "DIVAČA",
+       "dep": "06:16"
+      },
+      {
+       "station": "Rodik",
+       "arr": "06:27",
+       "dep": "06:27"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "06:35",
+       "dep": "06:35"
+      },
+      {
+       "station": "KOPER",
+       "arr": "06:55"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "44202",
+     "train": "44202",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "9"
+     ],
+     "calls": [
+      {
+       "station": "Hrpelje Kozina",
+       "dep": "06:35"
+      },
+      {
+       "station": "Prešnica",
+       "arr": "06:42",
+       "dep": "06:42"
+      },
+      {
+       "station": "Črnotiče",
+       "arr": "06:56",
+       "dep": "06:56"
+      },
+      {
+       "station": "KOPER",
+       "arr": "07:16"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "44203",
+     "train": "44203",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "9"
+     ],
+     "calls": [
+      {
+       "station": "Hrpelje Kozina",
+       "dep": "06:35"
+      },
+      {
+       "station": "Hrastovlje",
+       "arr": "06:57",
+       "dep": "06:57"
+      },
+      {
+       "station": "KOPER",
+       "arr": "07:17"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "27501",
+     "train": "27501",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "DIVAČA",
+       "dep": "07:35"
+      },
+      {
+       "station": "Rodik",
+       "arr": "07:46",
+       "dep": "07:46"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "07:54",
+       "dep": "07:54"
+      },
+      {
+       "station": "KOPER",
+       "arr": "08:14"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "27521",
+     "train": "27521",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "DIVAČA",
+       "dep": "17:22"
+      },
+      {
+       "station": "Rodik",
+       "arr": "17:33",
+       "dep": "17:33"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "17:41",
+       "dep": "17:41"
+      },
+      {
+       "station": "KOPER",
+       "arr": "18:01"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "27523",
+     "train": "27523",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Hrpelje Kozina",
+       "dep": "17:41"
+      },
+      {
+       "station": "Hrastovlje",
+       "arr": "18:03",
+       "dep": "18:03"
+      },
+      {
+       "station": "KOPER",
+       "arr": "18:23"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "KOPER - DIVAČA",
+   "source": "text",
+   "stations": [
+    "KOPER",
+    "Hrastovlje",
+    "Črnotiče",
+    "Prešnica",
+    "Hrpelje Kozina",
+    "Rodik",
+    "DIVAČA"
+   ],
+   "columns": [
+    {
+     "label": "27511",
+     "train": "27511",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "09:59"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "10:19",
+       "dep": "10:19"
+      },
+      {
+       "station": "Rodik",
+       "arr": "10:27",
+       "dep": "10:27"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "10:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "27911",
+     "train": "27911",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "09:59"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "10:19",
+       "dep": "10:19"
+      },
+      {
+       "station": "Rodik",
+       "arr": "10:27",
+       "dep": "10:27"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "10:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "44211",
+     "train": "44211",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "9"
+     ],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "14:00"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "14:20",
+       "dep": "14:20"
+      },
+      {
+       "station": "Rodik",
+       "arr": "14:28",
+       "dep": "14:28"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "14:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "44212",
+     "train": "44212",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "9"
+     ],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "14:00"
+      },
+      {
+       "station": "Črnotiče",
+       "arr": "14:16",
+       "dep": "14:16"
+      },
+      {
+       "station": "Prešnica",
+       "arr": "14:30",
+       "dep": "14:30"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "14:37",
+       "dep": "14:37"
+      },
+      {
+       "station": "Rodik",
+       "arr": "14:45",
+       "dep": "14:45"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "14:56"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "44213",
+     "train": "44213",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "9"
+     ],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "14:00"
+      },
+      {
+       "station": "Hrastovlje",
+       "arr": "14:20",
+       "dep": "14:20"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "14:42",
+       "dep": "14:42"
+      },
+      {
+       "station": "Rodik",
+       "arr": "14:50",
+       "dep": "14:50"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "15:01"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "27533",
+     "train": "27533",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "19:31"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "19:51",
+       "dep": "19:51"
+      },
+      {
+       "station": "Rodik",
+       "arr": "19:59",
+       "dep": "19:59"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "20:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "27532",
+     "train": "27532",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "19:21"
+      },
+      {
+       "station": "Črnotiče",
+       "arr": "19:37",
+       "dep": "19:37"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "19:51",
+       "dep": "19:51"
+      },
+      {
+       "station": "Rodik",
+       "arr": "19:59",
+       "dep": "19:59"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "20:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "27531",
+     "train": "27531",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "19:09"
+      },
+      {
+       "station": "Hrastovlje",
+       "arr": "19:29",
+       "dep": "19:29"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "19:51",
+       "dep": "19:51"
+      },
+      {
+       "station": "Rodik",
+       "arr": "19:59",
+       "dep": "19:59"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "20:10"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

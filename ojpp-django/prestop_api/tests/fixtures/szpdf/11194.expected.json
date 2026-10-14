@@ -1,0 +1,661 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-15",
+  "to": "2026-10-16",
+  "dates": [
+   "2026-10-15",
+   "2026-10-16"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "GROSUPLJE",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "VIŠNJA GORA",
+   "text": "AP Višnja Gora (pod ŽP)"
+  },
+  {
+   "station": "ŽALNA",
+   "text": "ob ŽP"
+  },
+  {
+   "station": "MLAČEVO",
+   "text": "AP V. Mlačevo ŽP (smer Višnja Gora ob ŽP, smer Grosuplje nad ŽP)"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "VIŠNJA GORA - GROSUPLJE",
+   "source": "text",
+   "stations": [
+    "VIŠNJA GORA",
+    "Žalna",
+    "Mlačevo",
+    "GROSUPLJE"
+   ],
+   "columns": [
+    {
+     "label": "3232",
+     "train": "3232",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "08:06"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "08:16"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3232",
+     "train": "3232",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "08:06"
+      },
+      {
+       "station": "Žalna",
+       "arr": "08:14",
+       "dep": "08:14"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "08:16",
+       "dep": "08:16"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "08:21"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3210",
+     "train": "3210",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "08:59"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "09:09"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3210",
+     "train": "3210",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "08:59"
+      },
+      {
+       "station": "Žalna",
+       "arr": "09:07",
+       "dep": "09:07"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "09:09",
+       "dep": "09:09"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "09:14"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3220",
+     "train": "3220",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "10:23"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "10:33"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3220",
+     "train": "3220",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "10:23"
+      },
+      {
+       "station": "Žalna",
+       "arr": "10:31",
+       "dep": "10:31"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "10:33",
+       "dep": "10:33"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "10:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3212",
+     "train": "3212",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "12:00"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "12:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3212",
+     "train": "3212",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "12:00"
+      },
+      {
+       "station": "Žalna",
+       "arr": "12:08",
+       "dep": "12:08"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "12:10",
+       "dep": "12:10"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "12:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3296",
+     "train": "3296",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "13:23"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "13:33"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3296",
+     "train": "3296",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "13:23"
+      },
+      {
+       "station": "Žalna",
+       "arr": "13:31",
+       "dep": "13:31"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "13:33",
+       "dep": "13:33"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "13:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3234",
+     "train": "3234",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "14:25"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "14:35"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3234",
+     "train": "3234",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VIŠNJA GORA",
+       "dep": "14:25"
+      },
+      {
+       "station": "Žalna",
+       "arr": "14:33",
+       "dep": "14:33"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "14:35",
+       "dep": "14:35"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "14:40"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "GROSUPLJE - VIŠNJA GORA",
+   "source": "text",
+   "stations": [
+    "GROSUPLJE",
+    "Mlačevo",
+    "Žalna",
+    "VIŠNJA GORA"
+   ],
+   "columns": [
+    {
+     "label": "3235",
+     "train": "3235",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "09:51"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "10:01"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3235",
+     "train": "3235",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "09:51"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "09:56",
+       "dep": "09:56"
+      },
+      {
+       "station": "Žalna",
+       "arr": "09:58",
+       "dep": "09:58"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "10:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3209",
+     "train": "3209",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "11:29"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "11:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3209",
+     "train": "3209",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "11:29"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "11:34",
+       "dep": "11:34"
+      },
+      {
+       "station": "Žalna",
+       "arr": "11:36",
+       "dep": "11:36"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "11:44"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3211",
+     "train": "3211",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:13"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "12:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3211",
+     "train": "3211",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:13"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "12:18",
+       "dep": "12:18"
+      },
+      {
+       "station": "Žalna",
+       "arr": "12:20",
+       "dep": "12:20"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "12:28"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3297",
+     "train": "3297",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:35"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "12:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3297",
+     "train": "3297",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:35"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "12:40",
+       "dep": "12:40"
+      },
+      {
+       "station": "Žalna",
+       "arr": "12:42",
+       "dep": "12:42"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "12:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3213",
+     "train": "3213",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:53"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "13:03"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3213",
+     "train": "3213",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:53"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "12:58",
+       "dep": "12:58"
+      },
+      {
+       "station": "Žalna",
+       "arr": "13:00",
+       "dep": "13:00"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "13:08"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3215",
+     "train": "3215",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "13:57"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "14:07"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3215",
+     "train": "3215",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "13:57"
+      },
+      {
+       "station": "Mlačevo",
+       "arr": "14:02",
+       "dep": "14:02"
+      },
+      {
+       "station": "Žalna",
+       "arr": "14:04",
+       "dep": "14:04"
+      },
+      {
+       "station": "VIŠNJA GORA",
+       "arr": "14:12"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

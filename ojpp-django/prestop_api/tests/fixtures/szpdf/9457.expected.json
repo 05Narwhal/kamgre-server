@@ -1,0 +1,111 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2025-12-14",
+  "to": "2026-12-12",
+  "dates": null
+ },
+ "footnotes": {
+  "1": {
+   "text": "Prevoz se opravi preko preko mejnega prehoda Sočerga",
+   "rule": "info"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "DIVAČA",
+   "text": "postanki na zunanji strani železniške postaje"
+  },
+  {
+   "station": "HRPELJE KOZINA",
+   "text": "postanki na zunanji strani železniške postaje"
+  },
+  {
+   "station": "BUZET",
+   "text": "postanki na zunanji strani železniške postaje"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "DIVAČA - BUZET (HR)",
+   "source": "text",
+   "stations": [
+    "DIVAČA",
+    "Hrpelje Kozina",
+    "BUZET"
+   ],
+   "columns": [
+    {
+     "label": "77074",
+     "train": "77074",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "1"
+     ],
+     "calls": [
+      {
+       "station": "DIVAČA",
+       "dep": "15:20"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "15:34",
+       "dep": "15:34"
+      },
+      {
+       "station": "BUZET",
+       "arr": "16:13"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "BUZET (HR) - DIVAČA",
+   "source": "text",
+   "stations": [
+    "BUZET",
+    "Hrpelje Kozina",
+    "DIVAČA"
+   ],
+   "columns": [
+    {
+     "label": "77064",
+     "train": "77064",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "1"
+     ],
+     "calls": [
+      {
+       "station": "BUZET",
+       "dep": "17:00"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "17:40",
+       "dep": "17:40"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "17:53"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

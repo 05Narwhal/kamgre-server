@@ -1,0 +1,273 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-22",
+  "to": "2026-10-23",
+  "dates": [
+   "2026-10-22",
+   "2026-10-23"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "ŠMARTNO OB PAKI",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "VELENJE",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "PAŠKA VAS",
+   "text": "AP Paška vas"
+  },
+  {
+   "station": "FLORJAN",
+   "text": "AP Florjan pri Šoštanju"
+  },
+  {
+   "station": "ŠOŠTANJ",
+   "text": "avtobusna postaja Šoštanj"
+  },
+  {
+   "station": "VELENJE PESJE",
+   "text": "AP Velenje Pesje - ob ŽP"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "ŠMARTNO OB PAKI - VELENJE",
+   "source": "text",
+   "stations": [
+    "ŠMARTNO OB PAKI",
+    "Paška vas",
+    "Florjan",
+    "Šoštanj",
+    "Velenje Pesje",
+    "VELENJE"
+   ],
+   "columns": [
+    {
+     "label": "3528",
+     "train": "3528",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠMARTNO OB PAKI",
+       "dep": "09:18"
+      },
+      {
+       "station": "Paška vas",
+       "arr": "09:24",
+       "dep": "09:24"
+      },
+      {
+       "station": "Florjan",
+       "arr": "09:35",
+       "dep": "09:35"
+      },
+      {
+       "station": "Šoštanj",
+       "arr": "09:42",
+       "dep": "09:42"
+      },
+      {
+       "station": "Velenje Pesje",
+       "arr": "09:47",
+       "dep": "09:47"
+      },
+      {
+       "station": "VELENJE",
+       "arr": "09:52"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3506",
+     "train": "3506",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠMARTNO OB PAKI",
+       "dep": "11:05"
+      },
+      {
+       "station": "Paška vas",
+       "arr": "11:11",
+       "dep": "11:11"
+      },
+      {
+       "station": "Florjan",
+       "arr": "11:22",
+       "dep": "11:22"
+      },
+      {
+       "station": "Šoštanj",
+       "arr": "11:27",
+       "dep": "11:27"
+      },
+      {
+       "station": "Velenje Pesje",
+       "arr": "11:32",
+       "dep": "11:32"
+      },
+      {
+       "station": "VELENJE",
+       "arr": "11:37"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "VELENJE - ŠMARTNO OB PAKI",
+   "source": "text",
+   "stations": [
+    "VELENJE",
+    "Velenje Pesje",
+    "Šoštanj",
+    "Florjan",
+    "Paška vas",
+    "ŠMARTNO OB PAKI"
+   ],
+   "columns": [
+    {
+     "label": "3529",
+     "train": "3529",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VELENJE",
+       "dep": "09:30"
+      },
+      {
+       "station": "Velenje Pesje",
+       "arr": "09:35",
+       "dep": "09:35"
+      },
+      {
+       "station": "Šoštanj",
+       "arr": "09:40",
+       "dep": "09:40"
+      },
+      {
+       "station": "Florjan",
+       "arr": "09:45",
+       "dep": "09:45"
+      },
+      {
+       "station": "Paška vas",
+       "arr": "09:56",
+       "dep": "09:56"
+      },
+      {
+       "station": "ŠMARTNO OB PAKI",
+       "arr": "10:02"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3505",
+     "train": "3505",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VELENJE",
+       "dep": "10:27"
+      },
+      {
+       "station": "Velenje Pesje",
+       "arr": "10:32",
+       "dep": "10:32"
+      },
+      {
+       "station": "Šoštanj",
+       "arr": "10:37",
+       "dep": "10:37"
+      },
+      {
+       "station": "Florjan",
+       "arr": "10:42",
+       "dep": "10:42"
+      },
+      {
+       "station": "Paška vas",
+       "arr": "10:53",
+       "dep": "10:53"
+      },
+      {
+       "station": "ŠMARTNO OB PAKI",
+       "arr": "10:59"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3507",
+     "train": "3507",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VELENJE",
+       "dep": "11:34"
+      },
+      {
+       "station": "Velenje Pesje",
+       "arr": "11:39",
+       "dep": "11:39"
+      },
+      {
+       "station": "Šoštanj",
+       "arr": "11:44",
+       "dep": "11:44"
+      },
+      {
+       "station": "Florjan",
+       "arr": "11:49",
+       "dep": "11:49"
+      },
+      {
+       "station": "Paška vas",
+       "arr": "12:00",
+       "dep": "12:00"
+      },
+      {
+       "station": "ŠMARTNO OB PAKI",
+       "arr": "12:06"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

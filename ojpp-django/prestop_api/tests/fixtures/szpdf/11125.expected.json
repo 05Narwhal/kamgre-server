@@ -1,0 +1,187 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-05",
+  "to": "2026-10-14",
+  "dates": null
+ },
+ "footnotes": {
+  "2": {
+   "text": "Ne vozi ob sobotah, nedeljah in praznikih - dela prostih dneh v RS",
+   "rule": "workdays"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "ORMOŽ",
+   "text": "zunanja stran železniške postaje"
+  },
+  {
+   "station": "SREDIŠČE",
+   "text": "zunanja stran železniške postaje"
+  },
+  {
+   "station": "FRANKOVCI",
+   "text": "ob ŽP"
+  },
+  {
+   "station": "OBREŽ",
+   "text": "ob ŽP"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "ORMOŽ - SREDIŠČE",
+   "source": "text",
+   "stations": [
+    "ORMOŽ",
+    "Frankovci",
+    "Obrež",
+    "SREDIŠČE"
+   ],
+   "columns": [
+    {
+     "label": "7802",
+     "train": "7802",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "ORMOŽ",
+       "dep": "08:11"
+      },
+      {
+       "station": "Frankovci",
+       "arr": "08:24",
+       "dep": "08:24"
+      },
+      {
+       "station": "Obrež",
+       "arr": "08:36",
+       "dep": "08:36"
+      },
+      {
+       "station": "SREDIŠČE",
+       "arr": "08:46"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3840",
+     "train": "3840",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ORMOŽ",
+       "dep": "12:08"
+      },
+      {
+       "station": "Frankovci",
+       "arr": "12:21",
+       "dep": "12:21"
+      },
+      {
+       "station": "Obrež",
+       "arr": "12:33",
+       "dep": "12:33"
+      },
+      {
+       "station": "SREDIŠČE",
+       "arr": "12:43"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "SREDIŠČE - ORMOŽ",
+   "source": "text",
+   "stations": [
+    "SREDIŠČE",
+    "Obrež",
+    "Frankovci",
+    "ORMOŽ"
+   ],
+   "columns": [
+    {
+     "label": "7803",
+     "train": "7803",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "SREDIŠČE",
+       "dep": "09:49"
+      },
+      {
+       "station": "Obrež",
+       "arr": "09:59",
+       "dep": "09:59"
+      },
+      {
+       "station": "Frankovci",
+       "arr": "10:11",
+       "dep": "10:11"
+      },
+      {
+       "station": "ORMOŽ",
+       "arr": "10:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3841",
+     "train": "3841",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "SREDIŠČE",
+       "dep": "13:49"
+      },
+      {
+       "station": "Obrež",
+       "arr": "13:59",
+       "dep": "13:59"
+      },
+      {
+       "station": "Frankovci",
+       "arr": "14:11",
+       "dep": "14:11"
+      },
+      {
+       "station": "ORMOŽ",
+       "arr": "14:24"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

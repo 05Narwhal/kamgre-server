@@ -1,0 +1,248 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-09-26",
+  "to": "2026-10-25",
+  "dates": null
+ },
+ "footnotes": {
+  "2": {
+   "text": "Ne vozi ob sobotah, nedeljah in praznikih",
+   "rule": "workdays"
+  },
+  "3": {
+   "text": "Vozi ob sobotah, nedeljah in praznikih",
+   "rule": "weekends_holidays"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "LESCE BLED",
+   "text": "AP Lesce ŽP"
+  },
+  {
+   "station": "BLED JEZERO",
+   "text": "zunanja stran ŽP"
+  }
+ ],
+ "notes": [
+  "Zaradi zapore na progi LJUBLJANA - JESENICE in posledično zagotavljanja prestopnih zvez v smeri Nove Gorice in obratno, uvajamo povezovalno avtobusno linijo LESCE BLED - BLED JEZERO.",
+  "Due to the closure of the Ljubljana - Jesenice railway line and in order to ensure onward connections towards Nova Gorica and vice versa, a connecting bus service has been introduced between Lesce Bled and Bled Jezero.",
+  "Potniki iz Nove Gorice v smeri Ljubljane opravijo prestop na postaji BLED JEZERO / Passengers travelling from Nova Gorica towards Ljubljana can transfer at Bled Jezero station.",
+  "Potniki iz Ljubljane v smeri Nove Gorice opravijo prestop na postaji LESCE BLED / Passengers travelling from Ljubljana towards Nova Gorica can transfer at Bled Jezero station."
+ ],
+ "tables": [
+  {
+   "direction": "LESCE BLED - BLED JEZERO",
+   "source": "text",
+   "stations": [
+    "LESCE BLED",
+    "BLED JEZERO"
+   ],
+   "columns": [
+    {
+     "label": "4290",
+     "train": "4290",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "08:20"
+      },
+      {
+       "station": "BLED JEZERO",
+       "arr": "08:40"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "318/4211",
+     "train": "318",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "08:50"
+      },
+      {
+       "station": "BLED JEZERO",
+       "arr": "09:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "316/4205",
+     "train": "316",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "11:10"
+      },
+      {
+       "station": "BLED JEZERO",
+       "arr": "11:30"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2408/4213",
+     "train": "2408",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "14:30"
+      },
+      {
+       "station": "BLED JEZERO",
+       "arr": "14:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "312/601",
+     "train": "312",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "16:58"
+      },
+      {
+       "station": "BLED JEZERO",
+       "arr": "17:18"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "*2424/**2494 / 4219",
+     "train": "2424",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "19:22"
+      },
+      {
+       "station": "BLED JEZERO",
+       "arr": "19:42"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "BLED JEZERO - LESCE BLED",
+   "source": "text",
+   "stations": [
+    "BLED JEZERO",
+    "LESCE BLED"
+   ],
+   "columns": [
+    {
+     "label": "4200/2403",
+     "train": "4200",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "BLED JEZERO",
+       "dep": "05:08"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "05:28"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "600 / *2409/**2499",
+     "train": "600",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BLED JEZERO",
+       "dep": "07:15"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "07:35"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4214/2423",
+     "train": "4214",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BLED JEZERO",
+       "dep": "17:50"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "18:10"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

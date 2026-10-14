@@ -1,0 +1,204 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-12",
+  "to": "2026-10-16",
+  "dates": null
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "NOVA GORICA",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "ŠEMPETER PRI GORICI",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "PRVAČINA",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "VOLČJA DRAGA",
+   "text": "AP Volčja Draga"
+  },
+  {
+   "station": "OKROGLICA",
+   "text": "makadamski prostor ob cestišču v naselju Dombrava ob odcepu za žel. postajališče"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "NOVA GORICA - PRVAČINA",
+   "source": "text",
+   "stations": [
+    "NOVA GORICA",
+    "Šempeter pri Gorici",
+    "Volčja Draga",
+    "Okroglica",
+    "PRVAČINA"
+   ],
+   "columns": [
+    {
+     "label": "4209",
+     "train": "4209",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "NOVA GORICA",
+       "dep": "07:27"
+      },
+      {
+       "station": "Šempeter pri Gorici",
+       "arr": "07:35",
+       "dep": "07:35"
+      },
+      {
+       "station": "Volčja Draga",
+       "arr": "07:39",
+       "dep": "07:39"
+      },
+      {
+       "station": "Okroglica",
+       "arr": "07:41",
+       "dep": "07:41"
+      },
+      {
+       "station": "PRVAČINA",
+       "arr": "07:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4225",
+     "train": "4225",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "NOVA GORICA",
+       "dep": "08:49"
+      },
+      {
+       "station": "Šempeter pri Gorici",
+       "arr": "08:57",
+       "dep": "08:57"
+      },
+      {
+       "station": "Volčja Draga",
+       "arr": "09:01",
+       "dep": "09:01"
+      },
+      {
+       "station": "Okroglica",
+       "arr": "09:03",
+       "dep": "09:03"
+      },
+      {
+       "station": "PRVAČINA",
+       "arr": "09:07"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "PRVAČINA - NOVA GORICA",
+   "source": "text",
+   "stations": [
+    "PRVAČINA",
+    "Okroglica",
+    "Volčja Draga",
+    "Šempeter pri Gorici",
+    "NOVA GORICA"
+   ],
+   "columns": [
+    {
+     "label": "4254",
+     "train": "4254",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "PRVAČINA",
+       "dep": "07:49"
+      },
+      {
+       "station": "Okroglica",
+       "arr": "07:53",
+       "dep": "07:53"
+      },
+      {
+       "station": "Volčja Draga",
+       "arr": "07:55",
+       "dep": "07:55"
+      },
+      {
+       "station": "Šempeter pri Gorici",
+       "arr": "07:59",
+       "dep": "07:59"
+      },
+      {
+       "station": "NOVA GORICA",
+       "arr": "08:07"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4210",
+     "train": "4210",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "PRVAČINA",
+       "dep": "10:50"
+      },
+      {
+       "station": "Okroglica",
+       "arr": "10:54",
+       "dep": "10:54"
+      },
+      {
+       "station": "Volčja Draga",
+       "arr": "10:56",
+       "dep": "10:56"
+      },
+      {
+       "station": "Šempeter pri Gorici",
+       "arr": "11:00",
+       "dep": "11:00"
+      },
+      {
+       "station": "NOVA GORICA",
+       "arr": "11:08"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

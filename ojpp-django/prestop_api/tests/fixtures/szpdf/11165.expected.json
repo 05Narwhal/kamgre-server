@@ -1,0 +1,194 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-18",
+  "to": "2026-10-18",
+  "dates": [
+   "2026-10-18"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "MURSKA SOBOTA",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "LIPOVCI",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "LJUTOMER",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "IVANJKOVCI",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "LJUTOMER MESTO",
+   "text": "AP Ljutomer (ob ŽP)"
+  },
+  {
+   "station": "MEKOTNJAK",
+   "text": "pri gostilni Tramšak"
+  },
+  {
+   "station": "VERŽEJ",
+   "text": "odcep za železniško postajališče"
+  },
+  {
+   "station": "GRLAVA",
+   "text": "avtobusno postajališče Krištanci - ob železniškem postajališču"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "IVANJKOVCI - LJUTOMER / MURSKA SOBOTA",
+   "source": "text",
+   "stations": [
+    "IVANJKOVCI",
+    "Mekotnjak",
+    "Ljutomer mesto",
+    "LJUTOMER",
+    "Grlava",
+    "Veržej",
+    "Lipovci",
+    "MURSKA SOBOTA"
+   ],
+   "columns": [
+    {
+     "label": "640",
+     "train": "640",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "IVANJKOVCI",
+       "dep": "10:30"
+      },
+      {
+       "station": "Ljutomer mesto",
+       "arr": "10:44",
+       "dep": "10:44"
+      },
+      {
+       "station": "Lipovci",
+       "arr": "11:04",
+       "dep": "11:04"
+      },
+      {
+       "station": "MURSKA SOBOTA",
+       "arr": "11:13"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "LJUTOMER / MURSKA SOBOTA - IVANJKOVCI",
+   "source": "text",
+   "stations": [
+    "MURSKA SOBOTA",
+    "Lipovci",
+    "Veržej",
+    "Grlava",
+    "LJUTOMER",
+    "Ljutomer mesto",
+    "Mekotnjak",
+    "IVANJKOVCI"
+   ],
+   "columns": [
+    {
+     "label": "2501",
+     "train": "2501",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUTOMER",
+       "dep": "10:01"
+      },
+      {
+       "station": "Ljutomer mesto",
+       "arr": "10:05",
+       "dep": "10:05"
+      },
+      {
+       "station": "Mekotnjak",
+       "arr": "10:12",
+       "dep": "10:12"
+      },
+      {
+       "station": "IVANJKOVCI",
+       "arr": "10:18"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2519",
+     "train": "2519",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "MURSKA SOBOTA",
+       "dep": "12:32"
+      },
+      {
+       "station": "Lipovci",
+       "arr": "12:41",
+       "dep": "12:41"
+      },
+      {
+       "station": "Veržej",
+       "arr": "12:50",
+       "dep": "12:50"
+      },
+      {
+       "station": "Grlava",
+       "arr": "12:57",
+       "dep": "12:57"
+      },
+      {
+       "station": "LJUTOMER",
+       "arr": "13:04",
+       "dep": "13:04"
+      },
+      {
+       "station": "Ljutomer mesto",
+       "arr": "13:08",
+       "dep": "13:08"
+      },
+      {
+       "station": "Mekotnjak",
+       "arr": "13:15",
+       "dep": "13:15"
+      },
+      {
+       "station": "IVANJKOVCI",
+       "arr": "13:21"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

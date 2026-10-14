@@ -1,0 +1,389 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-20",
+  "to": "2026-10-20",
+  "dates": [
+   "2026-10-20"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "ŠKOFLJICA",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "GROSUPLJE",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "ŠMARJE SAP",
+   "text": "AP ŠMARJE SAP ŽP"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "ŠKOFLJICA - GROSUPLJE",
+   "source": "text",
+   "stations": [
+    "ŠKOFLJICA",
+    "Šmarje - Sap",
+    "GROSUPLJE"
+   ],
+   "columns": [
+    {
+     "label": "4505",
+     "train": "4505",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠKOFLJICA",
+       "dep": "08:02"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "08:08",
+       "dep": "08:08"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "08:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3235",
+     "train": "3235",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠKOFLJICA",
+       "dep": "09:42"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "09:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3209",
+     "train": "3209",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠKOFLJICA",
+       "dep": "11:19"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "11:25",
+       "dep": "11:25"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "11:30"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3211",
+     "train": "3211",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠKOFLJICA",
+       "dep": "11:59"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "12:07"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3297",
+     "train": "3297",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠKOFLJICA",
+       "dep": "12:23"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "12:29",
+       "dep": "12:29"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "12:34"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3213",
+     "train": "3213",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠKOFLJICA",
+       "dep": "12:43"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "12:49",
+       "dep": "12:49"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "12:54"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3215",
+     "train": "3215",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ŠKOFLJICA",
+       "dep": "13:46"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "13:52",
+       "dep": "13:52"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "13:59"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "GROSUPLJE - ŠKOFLJICA",
+   "source": "text",
+   "stations": [
+    "GROSUPLJE",
+    "Šmarje - Sap",
+    "ŠKOFLJICA"
+   ],
+   "columns": [
+    {
+     "label": "4504",
+     "train": "4504",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "07:27"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "07:32",
+       "dep": "07:32"
+      },
+      {
+       "station": "ŠKOFLJICA",
+       "arr": "07:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3206",
+     "train": "3206",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "07:49"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "07:54",
+       "dep": "07:54"
+      },
+      {
+       "station": "ŠKOFLJICA",
+       "arr": "08:00"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3232",
+     "train": "3232",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "08:18"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "08:23",
+       "dep": "08:23"
+      },
+      {
+       "station": "ŠKOFLJICA",
+       "arr": "08:29"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3210",
+     "train": "3210",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "09:12"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "09:17",
+       "dep": "09:17"
+      },
+      {
+       "station": "ŠKOFLJICA",
+       "arr": "09:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3220",
+     "train": "3220",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "10:36"
+      },
+      {
+       "station": "ŠKOFLJICA",
+       "arr": "10:44"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3212",
+     "train": "3212",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:13"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "12:18",
+       "dep": "12:18"
+      },
+      {
+       "station": "ŠKOFLJICA",
+       "arr": "12:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3296",
+     "train": "3296",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "13:35"
+      },
+      {
+       "station": "Šmarje - Sap",
+       "arr": "13:40",
+       "dep": "13:40"
+      },
+      {
+       "station": "ŠKOFLJICA",
+       "arr": "13:46"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

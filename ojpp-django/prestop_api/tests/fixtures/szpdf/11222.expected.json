@@ -1,0 +1,536 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-24",
+  "to": "2026-10-25",
+  "dates": [
+   "2026-10-24",
+   "2026-10-25"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "LJUBLJANA",
+   "text": "Nova Avtobusna postaja LJUBLJANA (peroni 37, 38 in 39)"
+  },
+  {
+   "station": "LITOSTROJ",
+   "text": "na AP mestnega prometa Litostrojska(ob Litostrojski - NE obračališče)"
+  },
+  {
+   "station": "LJUBLJANA STEGNE",
+   "text": "na AP mestnega prometa Tehnounion"
+  },
+  {
+   "station": "LJUBLJANA VIŽMARJE",
+   "text": "postanek pred postajo"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "LJUBLJANA - LJUBLJANA VIžMARJE",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA",
+    "Litostroj",
+    "Ljubljana Stegne",
+    "LJUBLJANA VIŽMARJE"
+   ],
+   "columns": [
+    {
+     "label": "4290",
+     "train": "4290",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "06:52"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:01",
+       "dep": "07:01"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "07:09"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "316",
+     "train": "316",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "09:35"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "09:44",
+       "dep": "09:44"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "09:47",
+       "dep": "09:47"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "09:53"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2408",
+     "train": "2408",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "12:56"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "13:05",
+       "dep": "13:05"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "13:08",
+       "dep": "13:08"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "13:14"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "314",
+     "train": "314",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "13:30"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "13:39",
+       "dep": "13:39"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "13:42",
+       "dep": "13:42"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "13:48"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2414",
+     "train": "2414",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "14:48"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "14:57",
+       "dep": "14:57"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:00",
+       "dep": "15:00"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "15:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2416",
+     "train": "2416",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:20"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "15:29",
+       "dep": "15:29"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:32",
+       "dep": "15:32"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "15:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "312",
+     "train": "312",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:32"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "15:41",
+       "dep": "15:41"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:44",
+       "dep": "15:44"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "15:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "310",
+     "train": "310",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "17:27"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:36",
+       "dep": "17:36"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "17:39",
+       "dep": "17:39"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "17:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2494",
+     "train": "2494",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "17:48"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:57",
+       "dep": "17:57"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "18:00",
+       "dep": "18:00"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "18:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "18",
+     "train": "18",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "19:29"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "19:38",
+       "dep": "19:38"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "19:41",
+       "dep": "19:41"
+      },
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "arr": "19:47"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "LJUBLJANA VIžMARJE - LJUBLJANA",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA VIŽMARJE",
+    "Ljubljana Stegne",
+    "Litostroj",
+    "LJUBLJANA"
+   ],
+   "columns": [
+    {
+     "label": "2403",
+     "train": "2403",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "dep": "06:33"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "06:39",
+       "dep": "06:39"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "06:42",
+       "dep": "06:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "06:51"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2499",
+     "train": "2499",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "dep": "08:40"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "08:46",
+       "dep": "08:46"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "08:49",
+       "dep": "08:49"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "08:58"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "313",
+     "train": "313",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "dep": "12:33"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "12:39",
+       "dep": "12:39"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "12:42",
+       "dep": "12:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "12:51"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2497",
+     "train": "2497",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "dep": "15:33"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:39",
+       "dep": "15:39"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "15:42",
+       "dep": "15:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "15:51"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2419",
+     "train": "2419",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "dep": "17:05"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "17:11",
+       "dep": "17:11"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:14",
+       "dep": "17:14"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "17:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2423",
+     "train": "2423",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA VIŽMARJE",
+       "dep": "19:15"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "19:21",
+       "dep": "19:21"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "19:24",
+       "dep": "19:24"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "19:33"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,5127 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-19",
+  "to": "2026-10-23",
+  "dates": null
+ },
+ "footnotes": {
+  "2": {
+   "text": "Ne vozi ob sobotah, nedeljah in praznikih",
+   "rule": "workdays"
+  },
+  "3": {
+   "text": "Vozi ob sobotah, nedeljah in praznikih",
+   "rule": "weekends_holidays"
+  },
+  "6": {
+   "text": "Ne vozi ob sobotah",
+   "rule": "not_saturday"
+  },
+  "98": {
+   "text": "dne 19. 10. se nadomestni prevoz NE opravlja; VOZI VLAK!",
+   "rule": "train_runs_on",
+   "dates": [
+    "2026-10-19"
+   ]
+  },
+  "*": {
+   "text": "Vozi le ob delovnikih",
+   "rule": "workdays"
+  }
+ },
+ "stationNotes": [
+  {
+   "station": "PODNART",
+   "text": "Za postajo PODNART je organiziran prevoz med ŽP in postankom nadomestnega prevoza - z ŽP odpelje 5 minut pred objavljenim voznim redom",
+   "minutesEarlier": 5
+  },
+  {
+   "station": "OTOČE",
+   "text": "Za postajališče OTOČE je organiziran prevoz med ŽP in postankom nadomestnega prevoza - z ŽP odpelje 5 minut pred objavljenim voznim redom",
+   "minutesEarlier": 5
+  },
+  {
+   "station": "GLOBOKO",
+   "text": "Za postajališče GLOBOKO je organiziran prevoz med ŽP in postankom nadomestnega prevoza - z ŽP odpelje 5 minut pred objavljenim voznim redom",
+   "minutesEarlier": 5
+  }
+ ],
+ "stops": [
+  {
+   "station": "LJUBLJANA",
+   "text": "Nova Avtobusna postaja LJUBLJANA (peroni 37, 38 in 39)"
+  },
+  {
+   "station": "LITOSTROJ",
+   "text": "AP mestnega prometa Litostrojska (ob Litostrojski - NE obračališče)"
+  },
+  {
+   "station": "LJUBLJANA STEGNE",
+   "text": "na AP mestnega prometa Tehnounion,"
+  },
+  {
+   "station": "LJUBLJANA VIŽMARJE",
+   "text": "postanek pred postajo."
+  },
+  {
+   "station": "MEDNO",
+   "text": "na AP primestnega prometa ob gostilni Cirman,"
+  },
+  {
+   "station": "MEDVODE",
+   "text": "na AP Medvoška AP"
+  },
+  {
+   "station": "RETEČE",
+   "text": "na AP primestnega prometa Reteče,"
+  },
+  {
+   "station": "ŠKOFJA LOKA",
+   "text": "postanek pred postajo."
+  },
+  {
+   "station": "KRANJ",
+   "text": "postanek pred postajo"
+  },
+  {
+   "station": "PODNART",
+   "text": "na avtobusnem postajališču Gobavci"
+  },
+  {
+   "station": "OTOČE",
+   "text": "na AP Posavec"
+  },
+  {
+   "station": "GLOBOKO",
+   "text": "na AP Podvin pri Radovljici"
+  },
+  {
+   "station": "RADOVLJICA",
+   "text": "na avtobusni postaji Radovljica"
+  },
+  {
+   "station": "LESCE BLED",
+   "text": "na AP Lesce ŽP"
+  },
+  {
+   "station": "ŽIROVNICA",
+   "text": "AP Žirovnica OPC"
+  },
+  {
+   "station": "SLOVENSKI JAVORNIK",
+   "text": "na AP Slovenski Javornik TURIST"
+  },
+  {
+   "station": "JESENICE",
+   "text": "pred poslopjem železniške postaje."
+  },
+  {
+   "station": "BELJAK",
+   "text": "zunanja stran ŽP"
+  }
+ ],
+ "notes": [
+  "Dodatne linije / Additional bus line"
+ ],
+ "tables": [
+  {
+   "direction": "LJUBLJANA - JESENICE - BELJAK / VILLACH",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA",
+    "Ljubljana Šiška",
+    "Litostroj",
+    "Ljubljana Stegne",
+    "Ljubljana Vižmarje",
+    "Medno",
+    "Medvode",
+    "Reteče",
+    "Škofja Loka",
+    "KRANJ",
+    "Podnart",
+    "Otoče",
+    "Globoko",
+    "Radovljica",
+    "Lesce Bled",
+    "Žirovnica",
+    "Slovenski Javornik",
+    "JESENICE",
+    "BELJAK"
+   ],
+   "columns": [
+    {
+     "label": "2400",
+     "train": "2400",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "04:40"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "04:49",
+       "dep": "04:49"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "04:52",
+       "dep": "04:52"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "04:58",
+       "dep": "04:58"
+      },
+      {
+       "station": "Medvode",
+       "arr": "05:11",
+       "dep": "05:11"
+      },
+      {
+       "station": "Reteče",
+       "arr": "05:17",
+       "dep": "05:17"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "05:23",
+       "dep": "05:23"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "05:38",
+       "dep": "05:38"
+      },
+      {
+       "station": "Podnart",
+       "arr": "05:54",
+       "dep": "05:54"
+      },
+      {
+       "station": "Otoče",
+       "arr": "05:59",
+       "dep": "05:59"
+      },
+      {
+       "station": "Globoko",
+       "arr": "06:04",
+       "dep": "06:04"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "06:08",
+       "dep": "06:08"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "06:12",
+       "dep": "06:12"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "06:19",
+       "dep": "06:19"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "06:26",
+       "dep": "06:26"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "06:31"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "38/1",
+     "train": "38",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "05:42"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "06:32",
+       "dep": "06:35"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "07:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "38/2",
+     "train": "38",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "05:42"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "06:22",
+       "dep": "06:22"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "06:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "38/3",
+     "train": "38",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "05:47"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "06:12",
+       "dep": "06:12"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "06:32"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2402",
+     "train": "2402",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "Škofja Loka",
+       "dep": "06:31"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "06:46",
+       "dep": "06:46"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "07:07",
+       "dep": "07:07"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "07:11",
+       "dep": "07:11"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "07:31"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2402",
+     "train": "2402",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "06:03"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "06:12",
+       "dep": "06:12"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "06:15",
+       "dep": "06:15"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "06:21",
+       "dep": "06:21"
+      },
+      {
+       "station": "Medno",
+       "arr": "06:30",
+       "dep": "06:30"
+      },
+      {
+       "station": "Medvode",
+       "arr": "06:35",
+       "dep": "06:35"
+      },
+      {
+       "station": "Reteče",
+       "arr": "06:41",
+       "dep": "06:41"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "06:47",
+       "dep": "06:47"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "07:02",
+       "dep": "07:02"
+      },
+      {
+       "station": "Podnart",
+       "arr": "07:18",
+       "dep": "07:18"
+      },
+      {
+       "station": "Otoče",
+       "arr": "07:23",
+       "dep": "07:23"
+      },
+      {
+       "station": "Globoko",
+       "arr": "07:28",
+       "dep": "07:28"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "07:32",
+       "dep": "07:32"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "07:36",
+       "dep": "07:36"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "07:43",
+       "dep": "07:43"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "07:48",
+       "dep": "07:48"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "07:53"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4290",
+     "train": "4290",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "06:52"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:01",
+       "dep": "07:01"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "07:06",
+       "dep": "07:06"
+      },
+      {
+       "station": "Medvode",
+       "arr": "07:19",
+       "dep": "07:19"
+      },
+      {
+       "station": "Reteče",
+       "arr": "07:25",
+       "dep": "07:25"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "07:31",
+       "dep": "07:31"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "07:46",
+       "dep": "07:46"
+      },
+      {
+       "station": "Podnart",
+       "arr": "08:02",
+       "dep": "08:02"
+      },
+      {
+       "station": "Otoče",
+       "arr": "08:07",
+       "dep": "08:07"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "08:14",
+       "dep": "08:14"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "08:18",
+       "dep": "08:18"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "08:25",
+       "dep": "08:25"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "08:30",
+       "dep": "08:30"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "08:35"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "318/1",
+     "train": "318",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "07:42"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:51",
+       "dep": "07:51"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "08:32",
+       "dep": "08:35"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "09:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "318/2",
+     "train": "318",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "07:42"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:51",
+       "dep": "07:51"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "08:22",
+       "dep": "08:22"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "08:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "318/3",
+     "train": "318",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "07:47"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "08:12",
+       "dep": "08:12"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "08:32"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2404",
+     "train": "2404",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "08:24"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "08:33",
+       "dep": "08:33"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "08:36",
+       "dep": "08:36"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "08:42",
+       "dep": "08:42"
+      },
+      {
+       "station": "Medvode",
+       "arr": "08:55",
+       "dep": "08:55"
+      },
+      {
+       "station": "Reteče",
+       "arr": "09:01",
+       "dep": "09:01"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "09:07",
+       "dep": "09:07"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "09:22",
+       "dep": "09:22"
+      },
+      {
+       "station": "Podnart",
+       "arr": "09:38",
+       "dep": "09:38"
+      },
+      {
+       "station": "Otoče",
+       "arr": "09:43",
+       "dep": "09:43"
+      },
+      {
+       "station": "Globoko",
+       "arr": "09:48",
+       "dep": "09:48"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "09:52",
+       "dep": "09:52"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "09:56",
+       "dep": "09:56"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "10:03",
+       "dep": "10:03"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "10:08",
+       "dep": "10:08"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "10:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2442",
+     "train": "2442",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "Ljubljana Šiška",
+       "dep": "08:54"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "08:59",
+       "dep": "08:59"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "09:02",
+       "dep": "09:02"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "09:08",
+       "dep": "09:08"
+      },
+      {
+       "station": "Medvode",
+       "arr": "09:21",
+       "dep": "09:21"
+      },
+      {
+       "station": "Reteče",
+       "arr": "09:27",
+       "dep": "09:27"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "09:33",
+       "dep": "09:33"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "09:48"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "316",
+     "train": "316",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "09:35"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "09:44",
+       "dep": "09:44"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "09:47",
+       "dep": "09:47"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "09:53",
+       "dep": "09:53"
+      },
+      {
+       "station": "Medno",
+       "arr": "10:02",
+       "dep": "10:02"
+      },
+      {
+       "station": "Medvode",
+       "arr": "10:07",
+       "dep": "10:07"
+      },
+      {
+       "station": "Reteče",
+       "arr": "10:13",
+       "dep": "10:13"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "10:19",
+       "dep": "10:19"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "10:34",
+       "dep": "10:34"
+      },
+      {
+       "station": "Podnart",
+       "arr": "10:50",
+       "dep": "10:50"
+      },
+      {
+       "station": "Otoče",
+       "arr": "10:55",
+       "dep": "10:55"
+      },
+      {
+       "station": "Globoko",
+       "arr": "11:00",
+       "dep": "11:00"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "11:04",
+       "dep": "11:04"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "11:08",
+       "dep": "11:08"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "11:15",
+       "dep": "11:15"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "11:20",
+       "dep": "11:20"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "11:25",
+       "dep": "11:28"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "12:18"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2444",
+     "train": "2444",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "Ljubljana Šiška",
+       "dep": "10:29"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "10:34",
+       "dep": "10:34"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "10:37",
+       "dep": "10:37"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "10:43",
+       "dep": "10:43"
+      },
+      {
+       "station": "Medvode",
+       "arr": "10:56",
+       "dep": "10:56"
+      },
+      {
+       "station": "Reteče",
+       "arr": "11:02",
+       "dep": "11:02"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "11:08",
+       "dep": "11:08"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "11:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "214/1",
+     "train": "214",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "11:08"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "11:58",
+       "dep": "12:00"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "12:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "214/2",
+     "train": "214",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "11:08"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "11:48",
+       "dep": "11:48"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "12:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "214/3",
+     "train": "214",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "11:05"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "11:38",
+       "dep": "11:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "11:58"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2448",
+     "train": "2448",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "Ljubljana Šiška",
+       "dep": "12:30"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "12:35",
+       "dep": "12:35"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "12:38",
+       "dep": "12:38"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "12:44",
+       "dep": "12:44"
+      },
+      {
+       "station": "Medno",
+       "arr": "12:53",
+       "dep": "12:53"
+      },
+      {
+       "station": "Medvode",
+       "arr": "12:58",
+       "dep": "12:58"
+      },
+      {
+       "station": "Reteče",
+       "arr": "13:04",
+       "dep": "13:04"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "13:10",
+       "dep": "13:10"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "13:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2408",
+     "train": "2408",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "12:56"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "13:05",
+       "dep": "13:05"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "13:08",
+       "dep": "13:08"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "13:14",
+       "dep": "13:14"
+      },
+      {
+       "station": "Medvode",
+       "arr": "13:27",
+       "dep": "13:27"
+      },
+      {
+       "station": "Reteče",
+       "arr": "13:33",
+       "dep": "13:33"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "13:39",
+       "dep": "13:39"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "13:54",
+       "dep": "13:54"
+      },
+      {
+       "station": "Podnart",
+       "arr": "14:10",
+       "dep": "14:10"
+      },
+      {
+       "station": "Otoče",
+       "arr": "14:15",
+       "dep": "14:15"
+      },
+      {
+       "station": "Globoko",
+       "arr": "14:20",
+       "dep": "14:20"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "14:24",
+       "dep": "14:24"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "14:28",
+       "dep": "14:28"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "14:35",
+       "dep": "14:35"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "14:40",
+       "dep": "14:40"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "14:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "314",
+     "train": "314",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "13:30"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "13:39",
+       "dep": "13:39"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "13:42",
+       "dep": "13:42"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "13:48",
+       "dep": "13:48"
+      },
+      {
+       "station": "Medno",
+       "arr": "13:57",
+       "dep": "13:57"
+      },
+      {
+       "station": "Medvode",
+       "arr": "14:02",
+       "dep": "14:02"
+      },
+      {
+       "station": "Reteče",
+       "arr": "14:08",
+       "dep": "14:08"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "14:14",
+       "dep": "14:14"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "14:29",
+       "dep": "14:29"
+      },
+      {
+       "station": "Podnart",
+       "arr": "14:45",
+       "dep": "14:45"
+      },
+      {
+       "station": "Otoče",
+       "arr": "14:50",
+       "dep": "14:50"
+      },
+      {
+       "station": "Globoko",
+       "arr": "14:55",
+       "dep": "14:55"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "14:59",
+       "dep": "14:59"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "15:03",
+       "dep": "15:03"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "15:10",
+       "dep": "15:10"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "15:15",
+       "dep": "15:15"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "15:20",
+       "dep": "15:23"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "16:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "314",
+     "train": "314",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "13:30"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "14:04",
+       "dep": "14:04"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "14:19",
+       "dep": "14:19"
+      },
+      {
+       "station": "Podnart",
+       "arr": "14:35",
+       "dep": "14:35"
+      },
+      {
+       "station": "Otoče",
+       "arr": "14:40",
+       "dep": "14:40"
+      },
+      {
+       "station": "Globoko",
+       "arr": "14:45",
+       "dep": "14:45"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "14:49",
+       "dep": "14:49"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "14:53",
+       "dep": "14:53"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "15:00",
+       "dep": "15:00"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "15:05",
+       "dep": "15:05"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "15:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2412",
+     "train": "2412",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "14:28"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "14:37",
+       "dep": "14:37"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "14:40",
+       "dep": "14:40"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "14:46",
+       "dep": "14:46"
+      },
+      {
+       "station": "Medno",
+       "arr": "14:55",
+       "dep": "14:55"
+      },
+      {
+       "station": "Medvode",
+       "arr": "15:00",
+       "dep": "15:00"
+      },
+      {
+       "station": "Reteče",
+       "arr": "15:06",
+       "dep": "15:06"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "15:12",
+       "dep": "15:12"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:27",
+       "dep": "15:27"
+      },
+      {
+       "station": "Podnart",
+       "arr": "15:43",
+       "dep": "15:43"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "15:50",
+       "dep": "15:50"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "15:54",
+       "dep": "15:54"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "16:01",
+       "dep": "16:01"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:06",
+       "dep": "16:06"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2412",
+     "train": "2412",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "14:28"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "15:02",
+       "dep": "15:02"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:17",
+       "dep": "15:17"
+      },
+      {
+       "station": "Podnart",
+       "arr": "15:33",
+       "dep": "15:33"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "15:40",
+       "dep": "15:40"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "15:44",
+       "dep": "15:44"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "15:51",
+       "dep": "15:51"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "15:56",
+       "dep": "15:56"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:01"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2414",
+     "train": "2414",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "14:48"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "14:57",
+       "dep": "14:57"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:00",
+       "dep": "15:00"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "15:06",
+       "dep": "15:06"
+      },
+      {
+       "station": "Medno",
+       "arr": "15:15",
+       "dep": "15:15"
+      },
+      {
+       "station": "Medvode",
+       "arr": "15:20",
+       "dep": "15:20"
+      },
+      {
+       "station": "Reteče",
+       "arr": "15:26",
+       "dep": "15:26"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "15:32",
+       "dep": "15:32"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:47",
+       "dep": "15:47"
+      },
+      {
+       "station": "Podnart",
+       "arr": "16:03",
+       "dep": "16:03"
+      },
+      {
+       "station": "Otoče",
+       "arr": "16:08",
+       "dep": "16:08"
+      },
+      {
+       "station": "Globoko",
+       "arr": "16:13",
+       "dep": "16:13"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "16:17",
+       "dep": "16:17"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "16:21",
+       "dep": "16:21"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "16:28",
+       "dep": "16:28"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:33",
+       "dep": "16:33"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2414",
+     "train": "2414",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "14:48"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "15:22",
+       "dep": "15:22"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:37",
+       "dep": "15:37"
+      },
+      {
+       "station": "Podnart",
+       "arr": "15:53",
+       "dep": "15:53"
+      },
+      {
+       "station": "Otoče",
+       "arr": "15:58",
+       "dep": "15:58"
+      },
+      {
+       "station": "Globoko",
+       "arr": "16:03",
+       "dep": "16:03"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "16:07",
+       "dep": "16:07"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "16:11",
+       "dep": "16:11"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "16:18",
+       "dep": "16:18"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:23",
+       "dep": "16:23"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:28"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2416",
+     "train": "2416",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:20"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "15:29",
+       "dep": "15:29"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:32",
+       "dep": "15:32"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "15:38",
+       "dep": "15:38"
+      },
+      {
+       "station": "Medno",
+       "arr": "15:47",
+       "dep": "15:47"
+      },
+      {
+       "station": "Medvode",
+       "arr": "15:52",
+       "dep": "15:52"
+      },
+      {
+       "station": "Reteče",
+       "arr": "15:58",
+       "dep": "15:58"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "16:04",
+       "dep": "16:04"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "16:19",
+       "dep": "16:19"
+      },
+      {
+       "station": "Podnart",
+       "arr": "16:34",
+       "dep": "16:34"
+      },
+      {
+       "station": "Otoče",
+       "arr": "16:39",
+       "dep": "16:39"
+      },
+      {
+       "station": "Globoko",
+       "arr": "16:44",
+       "dep": "16:44"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "16:48",
+       "dep": "16:48"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "16:52",
+       "dep": "16:52"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "16:59",
+       "dep": "16:59"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "17:04",
+       "dep": "17:04"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:09"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2416",
+     "train": "2416",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:20"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "15:54",
+       "dep": "15:54"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "16:09",
+       "dep": "16:09"
+      },
+      {
+       "station": "Podnart",
+       "arr": "16:24",
+       "dep": "16:24"
+      },
+      {
+       "station": "Otoče",
+       "arr": "16:29",
+       "dep": "16:29"
+      },
+      {
+       "station": "Globoko",
+       "arr": "16:34",
+       "dep": "16:34"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "16:38",
+       "dep": "16:38"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "16:42",
+       "dep": "16:42"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "16:49",
+       "dep": "16:49"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:54",
+       "dep": "16:54"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:59"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "312",
+     "train": "312",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:32"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "15:41",
+       "dep": "15:41"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:44",
+       "dep": "15:44"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "15:50",
+       "dep": "15:50"
+      },
+      {
+       "station": "Medno",
+       "arr": "15:59",
+       "dep": "15:59"
+      },
+      {
+       "station": "Medvode",
+       "arr": "16:04",
+       "dep": "16:04"
+      },
+      {
+       "station": "Reteče",
+       "arr": "16:10",
+       "dep": "16:10"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "16:16",
+       "dep": "16:16"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "16:31",
+       "dep": "16:31"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "16:56",
+       "dep": "16:56"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:16",
+       "dep": "17:19"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "18:09"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2418",
+     "train": "2418",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "Ljubljana Šiška",
+       "dep": "15:56"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "16:01",
+       "dep": "16:01"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "16:04",
+       "dep": "16:04"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "16:10",
+       "dep": "16:10"
+      },
+      {
+       "station": "Medno",
+       "arr": "16:19",
+       "dep": "16:19"
+      },
+      {
+       "station": "Medvode",
+       "arr": "16:24",
+       "dep": "16:24"
+      },
+      {
+       "station": "Reteče",
+       "arr": "16:30",
+       "dep": "16:30"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "16:36",
+       "dep": "16:36"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "16:51",
+       "dep": "16:51"
+      },
+      {
+       "station": "Podnart",
+       "arr": "17:07",
+       "dep": "17:07"
+      },
+      {
+       "station": "Otoče",
+       "arr": "17:12",
+       "dep": "17:12"
+      },
+      {
+       "station": "Globoko",
+       "arr": "17:17",
+       "dep": "17:17"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "17:21",
+       "dep": "17:21"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "17:25",
+       "dep": "17:25"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "17:32",
+       "dep": "17:32"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "17:37",
+       "dep": "17:37"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:42"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2420",
+     "train": "2420",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "16:21"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "16:30",
+       "dep": "16:30"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "16:33",
+       "dep": "16:33"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "16:39",
+       "dep": "16:39"
+      },
+      {
+       "station": "Medno",
+       "arr": "16:48",
+       "dep": "16:48"
+      },
+      {
+       "station": "Medvode",
+       "arr": "16:53",
+       "dep": "16:53"
+      },
+      {
+       "station": "Reteče",
+       "arr": "16:59",
+       "dep": "16:59"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "17:05",
+       "dep": "17:05"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "17:20",
+       "dep": "17:20"
+      },
+      {
+       "station": "Podnart",
+       "arr": "17:36",
+       "dep": "17:36"
+      },
+      {
+       "station": "Otoče",
+       "arr": "17:41",
+       "dep": "17:41"
+      },
+      {
+       "station": "Globoko",
+       "arr": "17:46",
+       "dep": "17:46"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "17:50",
+       "dep": "17:50"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "17:54",
+       "dep": "17:54"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "18:01",
+       "dep": "18:01"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "18:06",
+       "dep": "18:06"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "18:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "310",
+     "train": "310",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "17:27"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:36",
+       "dep": "17:36"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "17:39",
+       "dep": "17:39"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "17:45",
+       "dep": "17:45"
+      },
+      {
+       "station": "Medno",
+       "arr": "17:54",
+       "dep": "17:54"
+      },
+      {
+       "station": "Medvode",
+       "arr": "17:59",
+       "dep": "17:59"
+      },
+      {
+       "station": "Reteče",
+       "arr": "18:05",
+       "dep": "18:05"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "18:11",
+       "dep": "18:11"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "18:26",
+       "dep": "18:26"
+      },
+      {
+       "station": "Podnart",
+       "arr": "18:42",
+       "dep": "18:42"
+      },
+      {
+       "station": "Otoče",
+       "arr": "18:47",
+       "dep": "18:47"
+      },
+      {
+       "station": "Globoko",
+       "arr": "18:52",
+       "dep": "18:52"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "18:56",
+       "dep": "18:56"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "19:00",
+       "dep": "19:00"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "19:07",
+       "dep": "19:07"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:12",
+       "dep": "19:12"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:17",
+       "dep": "19:20"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "20:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2494",
+     "train": "2494",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "17:48"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:57",
+       "dep": "17:57"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "18:00",
+       "dep": "18:00"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "18:06",
+       "dep": "18:06"
+      },
+      {
+       "station": "Medno",
+       "arr": "18:15",
+       "dep": "18:15"
+      },
+      {
+       "station": "Medvode",
+       "arr": "18:20",
+       "dep": "18:20"
+      },
+      {
+       "station": "Reteče",
+       "arr": "18:26",
+       "dep": "18:26"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "18:32",
+       "dep": "18:32"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "18:47",
+       "dep": "18:47"
+      },
+      {
+       "station": "Podnart",
+       "arr": "19:03",
+       "dep": "19:03"
+      },
+      {
+       "station": "Otoče",
+       "arr": "19:08",
+       "dep": "19:08"
+      },
+      {
+       "station": "Globoko",
+       "arr": "19:13",
+       "dep": "19:13"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "19:17",
+       "dep": "19:17"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "19:21",
+       "dep": "19:21"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "19:28",
+       "dep": "19:28"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:33",
+       "dep": "19:33"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:38"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2424",
+     "train": "2424",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "Ljubljana Šiška",
+       "dep": "17:51"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:56",
+       "dep": "17:56"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "17:59",
+       "dep": "17:59"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "18:05",
+       "dep": "18:05"
+      },
+      {
+       "station": "Medno",
+       "arr": "18:14",
+       "dep": "18:14"
+      },
+      {
+       "station": "Medvode",
+       "arr": "18:19",
+       "dep": "18:19"
+      },
+      {
+       "station": "Reteče",
+       "arr": "18:25",
+       "dep": "18:25"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "18:31",
+       "dep": "18:31"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "18:46",
+       "dep": "18:46"
+      },
+      {
+       "station": "Podnart",
+       "arr": "19:02",
+       "dep": "19:02"
+      },
+      {
+       "station": "Otoče",
+       "arr": "19:07",
+       "dep": "19:07"
+      },
+      {
+       "station": "Globoko",
+       "arr": "19:12",
+       "dep": "19:12"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "19:16",
+       "dep": "19:16"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "19:20",
+       "dep": "19:20"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "19:27",
+       "dep": "19:27"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:32",
+       "dep": "19:32"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:37"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2426",
+     "train": "2426",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "6"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "18:44"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "18:53",
+       "dep": "18:53"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "18:56",
+       "dep": "18:56"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "19:02",
+       "dep": "19:02"
+      },
+      {
+       "station": "Medvode",
+       "arr": "19:15",
+       "dep": "19:15"
+      },
+      {
+       "station": "Reteče",
+       "arr": "19:21",
+       "dep": "19:21"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "19:27",
+       "dep": "19:27"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "19:42",
+       "dep": "19:42"
+      },
+      {
+       "station": "Podnart",
+       "arr": "19:58",
+       "dep": "19:58"
+      },
+      {
+       "station": "Otoče",
+       "arr": "20:03",
+       "dep": "20:03"
+      },
+      {
+       "station": "Globoko",
+       "arr": "20:08",
+       "dep": "20:08"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "20:12",
+       "dep": "20:12"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "20:16",
+       "dep": "20:16"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "20:23",
+       "dep": "20:23"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "20:28",
+       "dep": "20:28"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "20:33"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "18",
+     "train": "18",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "19:29"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "19:38",
+       "dep": "19:38"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "19:41",
+       "dep": "19:41"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "19:47",
+       "dep": "19:47"
+      },
+      {
+       "station": "Medno",
+       "arr": "19:56",
+       "dep": "19:56"
+      },
+      {
+       "station": "Medvode",
+       "arr": "20:01",
+       "dep": "20:01"
+      },
+      {
+       "station": "Reteče",
+       "arr": "20:07",
+       "dep": "20:07"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "20:13",
+       "dep": "20:13"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "20:28",
+       "dep": "20:28"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "20:53",
+       "dep": "20:53"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "21:13",
+       "dep": "21:16"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "22:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2428",
+     "train": "2428",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "20:27"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "20:36",
+       "dep": "20:36"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "20:39",
+       "dep": "20:39"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "20:45",
+       "dep": "20:45"
+      },
+      {
+       "station": "Medno",
+       "arr": "20:54",
+       "dep": "20:54"
+      },
+      {
+       "station": "Medvode",
+       "arr": "20:59",
+       "dep": "20:59"
+      },
+      {
+       "station": "Reteče",
+       "arr": "21:05",
+       "dep": "21:05"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "21:11",
+       "dep": "21:11"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "21:26",
+       "dep": "21:26"
+      },
+      {
+       "station": "Podnart",
+       "arr": "21:42",
+       "dep": "21:42"
+      },
+      {
+       "station": "Otoče",
+       "arr": "21:47",
+       "dep": "21:47"
+      },
+      {
+       "station": "Globoko",
+       "arr": "21:52",
+       "dep": "21:52"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "21:56",
+       "dep": "21:56"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "22:00",
+       "dep": "22:00"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "22:07",
+       "dep": "22:07"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "22:12",
+       "dep": "22:12"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "22:17"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "414",
+     "train": "414",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "22:10"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "22:50",
+       "dep": "22:50"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "23:15",
+       "dep": "23:15"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "23:35",
+       "dep": "23:38"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "24:28"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2430",
+     "train": "2430",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "22:19"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "22:28",
+       "dep": "22:28"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "22:31",
+       "dep": "22:31"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "22:37",
+       "dep": "22:37"
+      },
+      {
+       "station": "Medno",
+       "arr": "22:46",
+       "dep": "22:46"
+      },
+      {
+       "station": "Medvode",
+       "arr": "22:51",
+       "dep": "22:51"
+      },
+      {
+       "station": "Reteče",
+       "arr": "22:57",
+       "dep": "22:57"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "23:03",
+       "dep": "23:03"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "23:18",
+       "dep": "23:18"
+      },
+      {
+       "station": "Podnart",
+       "arr": "23:34",
+       "dep": "23:34"
+      },
+      {
+       "station": "Otoče",
+       "arr": "23:39",
+       "dep": "23:39"
+      },
+      {
+       "station": "Globoko",
+       "arr": "23:44",
+       "dep": "23:44"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "23:48",
+       "dep": "23:48"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "23:52",
+       "dep": "23:52"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "23:59",
+       "dep": "23:59"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "24:04",
+       "dep": "24:04"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "24:09"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "BELJAK / VILLACH - JESENICE - LJUBLJANA",
+   "source": "text",
+   "stations": [
+    "BELJAK",
+    "JESENICE",
+    "Slovenski Javornik",
+    "Žirovnica",
+    "Lesce Bled",
+    "Radovljica",
+    "Globoko",
+    "Otoče",
+    "Podnart",
+    "KRANJ",
+    "Škofja Loka",
+    "Reteče",
+    "Medvode",
+    "Medno",
+    "Ljubljana Vižmarje",
+    "Ljubljana Stegne",
+    "Litostroj",
+    "Ljubljana Šiška",
+    "LJUBLJANA"
+   ],
+   "columns": [
+    {
+     "label": "2401",
+     "train": "2401",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "04:24"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "04:29",
+       "dep": "04:29"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "04:34",
+       "dep": "04:34"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "04:41",
+       "dep": "04:41"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "04:45",
+       "dep": "04:45"
+      },
+      {
+       "station": "Globoko",
+       "arr": "04:49",
+       "dep": "04:49"
+      },
+      {
+       "station": "Otoče",
+       "arr": "04:54",
+       "dep": "04:54"
+      },
+      {
+       "station": "Podnart",
+       "arr": "04:59",
+       "dep": "04:59"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "05:15",
+       "dep": "05:15"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "05:31",
+       "dep": "05:31"
+      },
+      {
+       "station": "Reteče",
+       "arr": "05:37",
+       "dep": "05:37"
+      },
+      {
+       "station": "Medvode",
+       "arr": "05:43",
+       "dep": "05:43"
+      },
+      {
+       "station": "Medno",
+       "arr": "05:48",
+       "dep": "05:48"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "05:57",
+       "dep": "05:57"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "06:03",
+       "dep": "06:03"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "06:06",
+       "dep": "06:06"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "06:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2441",
+     "train": "2441",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "04:55"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "05:00",
+       "dep": "05:00"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "05:05",
+       "dep": "05:05"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "05:12",
+       "dep": "05:12"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "05:16",
+       "dep": "05:16"
+      },
+      {
+       "station": "Globoko",
+       "arr": "05:20",
+       "dep": "05:20"
+      },
+      {
+       "station": "Otoče",
+       "arr": "05:25",
+       "dep": "05:25"
+      },
+      {
+       "station": "Podnart",
+       "arr": "05:30",
+       "dep": "05:30"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "05:46",
+       "dep": "05:46"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "06:02",
+       "dep": "06:02"
+      },
+      {
+       "station": "Reteče",
+       "arr": "06:08",
+       "dep": "06:08"
+      },
+      {
+       "station": "Medvode",
+       "arr": "06:14",
+       "dep": "06:14"
+      },
+      {
+       "station": "Medno",
+       "arr": "06:19",
+       "dep": "06:19"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "06:28",
+       "dep": "06:28"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "06:34",
+       "dep": "06:34"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "06:37",
+       "dep": "06:37"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "06:46"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2403",
+     "train": "2403",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": "*",
+     "additional": true,
+     "footnotes": [
+      "98",
+      "*"
+     ],
+     "calls": [
+      {
+       "station": "Škofja Loka",
+       "dep": "06:13"
+      },
+      {
+       "station": "Medvode",
+       "arr": "06:24",
+       "dep": "06:24"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "06:49"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2403",
+     "train": "2403",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "05:27"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "05:32",
+       "dep": "05:32"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "05:37",
+       "dep": "05:37"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "05:44",
+       "dep": "05:44"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "05:48",
+       "dep": "05:48"
+      },
+      {
+       "station": "Globoko",
+       "arr": "05:52",
+       "dep": "05:52"
+      },
+      {
+       "station": "Otoče",
+       "arr": "05:57",
+       "dep": "05:57"
+      },
+      {
+       "station": "Podnart",
+       "arr": "06:02",
+       "dep": "06:02"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "06:18",
+       "dep": "06:18"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "06:34",
+       "dep": "06:34"
+      },
+      {
+       "station": "Reteče",
+       "arr": "06:40",
+       "dep": "06:40"
+      },
+      {
+       "station": "Medvode",
+       "arr": "06:46",
+       "dep": "06:46"
+      },
+      {
+       "station": "Medno",
+       "arr": "06:51",
+       "dep": "06:51"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "07:00",
+       "dep": "07:00"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "07:06",
+       "dep": "07:06"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:09",
+       "dep": "07:09"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "07:18"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2443",
+     "train": "2443",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "06:21"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "06:37",
+       "dep": "06:37"
+      },
+      {
+       "station": "Reteče",
+       "arr": "06:43",
+       "dep": "06:43"
+      },
+      {
+       "station": "Medvode",
+       "arr": "06:49",
+       "dep": "06:49"
+      },
+      {
+       "station": "Medno",
+       "arr": "06:54",
+       "dep": "06:54"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "07:03",
+       "dep": "07:03"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "07:09",
+       "dep": "07:09"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:12",
+       "dep": "07:12"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "07:21"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2405",
+     "train": "2405",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": true,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "Škofja Loka",
+       "dep": "07:01"
+      },
+      {
+       "station": "Medvode",
+       "arr": "07:12",
+       "dep": "07:12"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "07:37"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2405",
+     "train": "2405",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "05:54"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "05:59",
+       "dep": "05:59"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "06:04",
+       "dep": "06:04"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "06:11",
+       "dep": "06:11"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "06:15",
+       "dep": "06:15"
+      },
+      {
+       "station": "Globoko",
+       "arr": "06:19",
+       "dep": "06:19"
+      },
+      {
+       "station": "Otoče",
+       "arr": "06:24",
+       "dep": "06:24"
+      },
+      {
+       "station": "Podnart",
+       "arr": "06:29",
+       "dep": "06:29"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "06:45",
+       "dep": "06:45"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "07:01",
+       "dep": "07:01"
+      },
+      {
+       "station": "Reteče",
+       "arr": "07:07",
+       "dep": "07:07"
+      },
+      {
+       "station": "Medvode",
+       "arr": "07:13",
+       "dep": "07:13"
+      },
+      {
+       "station": "Medno",
+       "arr": "07:18",
+       "dep": "07:18"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "07:27",
+       "dep": "07:27"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "07:33",
+       "dep": "07:33"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:36",
+       "dep": "07:36"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "07:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2407",
+     "train": "2407",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "06:15"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "06:20",
+       "dep": "06:20"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "06:25",
+       "dep": "06:25"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "06:32",
+       "dep": "06:32"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "06:36",
+       "dep": "06:36"
+      },
+      {
+       "station": "Globoko",
+       "arr": "06:40",
+       "dep": "06:40"
+      },
+      {
+       "station": "Otoče",
+       "arr": "06:45",
+       "dep": "06:45"
+      },
+      {
+       "station": "Podnart",
+       "arr": "06:50",
+       "dep": "06:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "07:06",
+       "dep": "07:06"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "07:22",
+       "dep": "07:22"
+      },
+      {
+       "station": "Reteče",
+       "arr": "07:28",
+       "dep": "07:28"
+      },
+      {
+       "station": "Medvode",
+       "arr": "07:34",
+       "dep": "07:34"
+      },
+      {
+       "station": "Medno",
+       "arr": "07:39",
+       "dep": "07:39"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "07:48",
+       "dep": "07:48"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "07:54",
+       "dep": "07:54"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:57",
+       "dep": "07:57"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "08:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "415",
+     "train": "415",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "06:06"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "06:56",
+       "dep": "07:00"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "07:20",
+       "dep": "07:20"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "07:45",
+       "dep": "07:45"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "08:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2499",
+     "train": "2499",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "07:33"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "07:38",
+       "dep": "07:38"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "07:43",
+       "dep": "07:43"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "07:50",
+       "dep": "07:50"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "07:54",
+       "dep": "07:54"
+      },
+      {
+       "station": "Globoko",
+       "arr": "07:58",
+       "dep": "07:58"
+      },
+      {
+       "station": "Otoče",
+       "arr": "08:03",
+       "dep": "08:03"
+      },
+      {
+       "station": "Podnart",
+       "arr": "08:08",
+       "dep": "08:08"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "08:24",
+       "dep": "08:24"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "08:40",
+       "dep": "08:40"
+      },
+      {
+       "station": "Reteče",
+       "arr": "08:46",
+       "dep": "08:46"
+      },
+      {
+       "station": "Medvode",
+       "arr": "08:52",
+       "dep": "08:52"
+      },
+      {
+       "station": "Medno",
+       "arr": "08:57",
+       "dep": "08:57"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "09:06",
+       "dep": "09:06"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "09:12",
+       "dep": "09:12"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "09:15",
+       "dep": "09:15"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "09:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2409",
+     "train": "2409",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "98",
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "07:36"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "07:41",
+       "dep": "07:41"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "07:46",
+       "dep": "07:46"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "07:53",
+       "dep": "07:53"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "07:57",
+       "dep": "07:57"
+      },
+      {
+       "station": "Globoko",
+       "arr": "08:01",
+       "dep": "08:01"
+      },
+      {
+       "station": "Otoče",
+       "arr": "08:06",
+       "dep": "08:06"
+      },
+      {
+       "station": "Podnart",
+       "arr": "08:11",
+       "dep": "08:11"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "08:27",
+       "dep": "08:27"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "08:43",
+       "dep": "08:43"
+      },
+      {
+       "station": "Reteče",
+       "arr": "08:49",
+       "dep": "08:49"
+      },
+      {
+       "station": "Medvode",
+       "arr": "08:55",
+       "dep": "08:55"
+      },
+      {
+       "station": "Medno",
+       "arr": "09:00",
+       "dep": "09:00"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "09:09",
+       "dep": "09:09"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "09:15",
+       "dep": "09:15"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "09:18",
+       "dep": "09:18"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "09:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2453",
+     "train": "2453",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "09:34"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "09:50",
+       "dep": "09:50"
+      },
+      {
+       "station": "Reteče",
+       "arr": "09:56",
+       "dep": "09:56"
+      },
+      {
+       "station": "Medvode",
+       "arr": "10:02",
+       "dep": "10:02"
+      },
+      {
+       "station": "Medno",
+       "arr": "10:07",
+       "dep": "10:07"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "10:16",
+       "dep": "10:16"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "10:22",
+       "dep": "10:22"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "10:25",
+       "dep": "10:25"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "10:30"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "311/1",
+     "train": "311",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "08:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:28",
+       "dep": "09:30"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "10:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "311/2",
+     "train": "311",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "08:57"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "09:17",
+       "dep": "09:17"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "09:42",
+       "dep": "09:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "10:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "311/3",
+     "train": "311",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "08:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:28",
+       "dep": "09:30"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "09:50",
+       "dep": "09:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "10:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2411",
+     "train": "2411",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "09:48"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "09:53",
+       "dep": "09:53"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "09:58",
+       "dep": "09:58"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "10:05",
+       "dep": "10:05"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "10:09",
+       "dep": "10:09"
+      },
+      {
+       "station": "Globoko",
+       "arr": "10:13",
+       "dep": "10:13"
+      },
+      {
+       "station": "Otoče",
+       "arr": "10:18",
+       "dep": "10:18"
+      },
+      {
+       "station": "Podnart",
+       "arr": "10:23",
+       "dep": "10:23"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "10:39",
+       "dep": "10:39"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "10:55",
+       "dep": "10:55"
+      },
+      {
+       "station": "Reteče",
+       "arr": "11:01",
+       "dep": "11:01"
+      },
+      {
+       "station": "Medvode",
+       "arr": "11:07",
+       "dep": "11:07"
+      },
+      {
+       "station": "Medno",
+       "arr": "11:12",
+       "dep": "11:12"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "11:21",
+       "dep": "11:21"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "11:27",
+       "dep": "11:27"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "11:30",
+       "dep": "11:30"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "11:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2449",
+     "train": "2449",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "11:16"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "11:32",
+       "dep": "11:32"
+      },
+      {
+       "station": "Reteče",
+       "arr": "11:38",
+       "dep": "11:38"
+      },
+      {
+       "station": "Medvode",
+       "arr": "11:44",
+       "dep": "11:44"
+      },
+      {
+       "station": "Medno",
+       "arr": "11:49",
+       "dep": "11:49"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "11:58",
+       "dep": "11:58"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "12:04",
+       "dep": "12:04"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "12:07",
+       "dep": "12:07"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "12:12"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "313",
+     "train": "313",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "10:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "11:28",
+       "dep": "11:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "11:35",
+       "dep": "11:35"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "11:40",
+       "dep": "11:40"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "11:47",
+       "dep": "11:47"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "11:51",
+       "dep": "11:51"
+      },
+      {
+       "station": "Globoko",
+       "arr": "11:55",
+       "dep": "11:55"
+      },
+      {
+       "station": "Otoče",
+       "arr": "12:00",
+       "dep": "12:00"
+      },
+      {
+       "station": "Podnart",
+       "arr": "12:05",
+       "dep": "12:05"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "12:21",
+       "dep": "12:21"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "12:37",
+       "dep": "12:37"
+      },
+      {
+       "station": "Reteče",
+       "arr": "12:43",
+       "dep": "12:43"
+      },
+      {
+       "station": "Medvode",
+       "arr": "12:49",
+       "dep": "12:49"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "13:02",
+       "dep": "13:02"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "13:08",
+       "dep": "13:08"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "13:11",
+       "dep": "13:11"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "13:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2415",
+     "train": "2415",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "12:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "12:35",
+       "dep": "12:35"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "12:40",
+       "dep": "12:40"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "12:47",
+       "dep": "12:47"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "12:51",
+       "dep": "12:51"
+      },
+      {
+       "station": "Globoko",
+       "arr": "12:55",
+       "dep": "12:55"
+      },
+      {
+       "station": "Otoče",
+       "arr": "13:00",
+       "dep": "13:00"
+      },
+      {
+       "station": "Podnart",
+       "arr": "13:05",
+       "dep": "13:05"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "13:21",
+       "dep": "13:21"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "13:37",
+       "dep": "13:37"
+      },
+      {
+       "station": "Reteče",
+       "arr": "13:43",
+       "dep": "13:43"
+      },
+      {
+       "station": "Medvode",
+       "arr": "13:49",
+       "dep": "13:49"
+      },
+      {
+       "station": "Medno",
+       "arr": "13:54",
+       "dep": "13:54"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "14:03",
+       "dep": "14:03"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "14:09",
+       "dep": "14:09"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "14:12",
+       "dep": "14:12"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "14:21"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "315/1",
+     "train": "315",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "12:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "13:28",
+       "dep": "13:30"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "14:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "315/2",
+     "train": "315",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "12:57"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "13:17",
+       "dep": "13:17"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "13:42",
+       "dep": "13:42"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "13:58",
+       "dep": "13:58"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "14:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "315/3",
+     "train": "315",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "12:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "13:28",
+       "dep": "13:30"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "13:50",
+       "dep": "13:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "14:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2417",
+     "train": "2417",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "14:23"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "14:28",
+       "dep": "14:28"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "14:39",
+       "dep": "14:39"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "14:43",
+       "dep": "14:43"
+      },
+      {
+       "station": "Globoko",
+       "arr": "14:47",
+       "dep": "14:47"
+      },
+      {
+       "station": "Otoče",
+       "arr": "14:52",
+       "dep": "14:52"
+      },
+      {
+       "station": "Podnart",
+       "arr": "14:57",
+       "dep": "14:57"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:13",
+       "dep": "15:13"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "15:28",
+       "dep": "15:28"
+      },
+      {
+       "station": "Reteče",
+       "arr": "15:34",
+       "dep": "15:34"
+      },
+      {
+       "station": "Medvode",
+       "arr": "15:40",
+       "dep": "15:40"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "15:53",
+       "dep": "15:53"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:59",
+       "dep": "15:59"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "16:02",
+       "dep": "16:02"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "16:07"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2497",
+     "train": "2497",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "14:23"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "14:28",
+       "dep": "14:28"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "14:39",
+       "dep": "14:39"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "14:43",
+       "dep": "14:43"
+      },
+      {
+       "station": "Globoko",
+       "arr": "14:47",
+       "dep": "14:47"
+      },
+      {
+       "station": "Otoče",
+       "arr": "14:52",
+       "dep": "14:52"
+      },
+      {
+       "station": "Podnart",
+       "arr": "14:57",
+       "dep": "14:57"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:13",
+       "dep": "15:13"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "15:28",
+       "dep": "15:28"
+      },
+      {
+       "station": "Reteče",
+       "arr": "15:34",
+       "dep": "15:34"
+      },
+      {
+       "station": "Medvode",
+       "arr": "15:40",
+       "dep": "15:40"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "15:53",
+       "dep": "15:53"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "15:59",
+       "dep": "15:59"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "16:02",
+       "dep": "16:02"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "16:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "115/1",
+     "train": "115",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "14:45"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "15:35",
+       "dep": "15:37"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "16:27"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "115/2",
+     "train": "115",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "15:04"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "15:24",
+       "dep": "15:24"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:49",
+       "dep": "15:49"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "16:27"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "115/3",
+     "train": "115",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "14:45"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "15:35",
+       "dep": "15:37"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "15:57",
+       "dep": "15:57"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "16:22"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2419",
+     "train": "2419",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "15:41"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "15:46",
+       "dep": "15:46"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "15:51",
+       "dep": "15:51"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "15:58",
+       "dep": "15:58"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "16:02",
+       "dep": "16:02"
+      },
+      {
+       "station": "Globoko",
+       "arr": "16:06",
+       "dep": "16:06"
+      },
+      {
+       "station": "Otoče",
+       "arr": "16:11",
+       "dep": "16:11"
+      },
+      {
+       "station": "Podnart",
+       "arr": "16:16",
+       "dep": "16:16"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "16:32",
+       "dep": "16:32"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "16:47",
+       "dep": "16:47"
+      },
+      {
+       "station": "Reteče",
+       "arr": "16:53",
+       "dep": "16:53"
+      },
+      {
+       "station": "Medvode",
+       "arr": "16:59",
+       "dep": "16:59"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "17:12",
+       "dep": "17:12"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "17:18",
+       "dep": "17:18"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:21",
+       "dep": "17:21"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "17:30"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2421",
+     "train": "2421",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "16:13"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:18",
+       "dep": "16:18"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "16:29",
+       "dep": "16:29"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "16:33",
+       "dep": "16:33"
+      },
+      {
+       "station": "Globoko",
+       "arr": "16:37",
+       "dep": "16:37"
+      },
+      {
+       "station": "Otoče",
+       "arr": "16:42",
+       "dep": "16:42"
+      },
+      {
+       "station": "Podnart",
+       "arr": "16:47",
+       "dep": "16:47"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "17:03",
+       "dep": "17:03"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "17:18",
+       "dep": "17:18"
+      },
+      {
+       "station": "Reteče",
+       "arr": "17:24",
+       "dep": "17:24"
+      },
+      {
+       "station": "Medvode",
+       "arr": "17:30",
+       "dep": "17:30"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "17:43",
+       "dep": "17:43"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "17:49",
+       "dep": "17:49"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "17:52",
+       "dep": "17:52"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "17:57"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "317/1",
+     "train": "317",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "16:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:28",
+       "dep": "17:30"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "18:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "317/2",
+     "train": "317",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "16:57"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "17:17",
+       "dep": "17:17"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "17:42",
+       "dep": "17:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "18:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "317/3",
+     "train": "317",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "16:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:28",
+       "dep": "17:30"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "17:50",
+       "dep": "17:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "18:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2423",
+     "train": "2423",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "18:07"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "18:12",
+       "dep": "18:12"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "18:17",
+       "dep": "18:17"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "18:24",
+       "dep": "18:24"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "18:28",
+       "dep": "18:28"
+      },
+      {
+       "station": "Globoko",
+       "arr": "18:32",
+       "dep": "18:32"
+      },
+      {
+       "station": "Otoče",
+       "arr": "18:37",
+       "dep": "18:37"
+      },
+      {
+       "station": "Podnart",
+       "arr": "18:42",
+       "dep": "18:42"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "18:58",
+       "dep": "18:58"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "19:13",
+       "dep": "19:13"
+      },
+      {
+       "station": "Reteče",
+       "arr": "19:19",
+       "dep": "19:19"
+      },
+      {
+       "station": "Medvode",
+       "arr": "19:25",
+       "dep": "19:25"
+      },
+      {
+       "station": "Medno",
+       "arr": "19:30",
+       "dep": "19:30"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "19:39",
+       "dep": "19:39"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "19:45",
+       "dep": "19:45"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "19:48",
+       "dep": "19:48"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "19:57"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "319",
+     "train": "319",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "18:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:28",
+       "dep": "19:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:35",
+       "dep": "19:35"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "19:40",
+       "dep": "19:40"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "19:47",
+       "dep": "19:47"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "19:51",
+       "dep": "19:51"
+      },
+      {
+       "station": "Globoko",
+       "arr": "19:55",
+       "dep": "19:55"
+      },
+      {
+       "station": "Otoče",
+       "arr": "20:00",
+       "dep": "20:00"
+      },
+      {
+       "station": "Podnart",
+       "arr": "20:05",
+       "dep": "20:05"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "20:21",
+       "dep": "20:21"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "20:36",
+       "dep": "20:36"
+      },
+      {
+       "station": "Reteče",
+       "arr": "20:42",
+       "dep": "20:42"
+      },
+      {
+       "station": "Medvode",
+       "arr": "20:48",
+       "dep": "20:48"
+      },
+      {
+       "station": "Medno",
+       "arr": "20:53",
+       "dep": "20:53"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "21:02",
+       "dep": "21:02"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "21:08",
+       "dep": "21:08"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "21:11",
+       "dep": "21:11"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "21:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4291",
+     "train": "4291",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "19:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:35",
+       "dep": "19:35"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "19:45",
+       "dep": "19:45"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "19:49",
+       "dep": "19:49"
+      },
+      {
+       "station": "Globoko",
+       "arr": "19:53",
+       "dep": "19:53"
+      },
+      {
+       "station": "Otoče",
+       "arr": "19:58",
+       "dep": "19:58"
+      },
+      {
+       "station": "Podnart",
+       "arr": "20:03",
+       "dep": "20:03"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "20:19",
+       "dep": "20:19"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "20:34",
+       "dep": "20:34"
+      },
+      {
+       "station": "Reteče",
+       "arr": "20:40",
+       "dep": "20:40"
+      },
+      {
+       "station": "Medvode",
+       "arr": "20:46",
+       "dep": "20:46"
+      },
+      {
+       "station": "Medno",
+       "arr": "20:51",
+       "dep": "20:51"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "21:00",
+       "dep": "21:00"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "21:06",
+       "dep": "21:06"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "21:09",
+       "dep": "21:09"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "21:18"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2427",
+     "train": "2427",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "20:44"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "20:49",
+       "dep": "20:49"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "20:54",
+       "dep": "20:54"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "21:01",
+       "dep": "21:01"
+      },
+      {
+       "station": "Radovljica",
+       "arr": "21:05",
+       "dep": "21:05"
+      },
+      {
+       "station": "Globoko",
+       "arr": "21:09",
+       "dep": "21:09"
+      },
+      {
+       "station": "Otoče",
+       "arr": "21:14",
+       "dep": "21:14"
+      },
+      {
+       "station": "Podnart",
+       "arr": "21:19",
+       "dep": "21:19"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "21:25",
+       "dep": "21:25"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "21:40",
+       "dep": "21:40"
+      },
+      {
+       "station": "Reteče",
+       "arr": "21:46",
+       "dep": "21:46"
+      },
+      {
+       "station": "Medvode",
+       "arr": "21:52",
+       "dep": "21:52"
+      },
+      {
+       "station": "Ljubljana Vižmarje",
+       "arr": "22:05",
+       "dep": "22:05"
+      },
+      {
+       "station": "Ljubljana Stegne",
+       "arr": "22:11",
+       "dep": "22:11"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "22:14",
+       "dep": "22:14"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "22:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "19",
+     "train": "19",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "20:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "21:28",
+       "dep": "21:30"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "21:50",
+       "dep": "21:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "22:15",
+       "dep": "22:15"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "22:48"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "39",
+     "train": "39",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "21:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "22:28",
+       "dep": "22:30"
+      },
+      {
+       "station": "Lesce Bled",
+       "arr": "22:50",
+       "dep": "22:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "23:15",
+       "dep": "23:15"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "23:48"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

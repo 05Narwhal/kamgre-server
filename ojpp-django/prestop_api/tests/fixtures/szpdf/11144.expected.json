@@ -1,0 +1,790 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-10",
+  "to": "2026-10-25",
+  "dates": [
+   "2026-10-10",
+   "2026-10-11",
+   "2026-10-17",
+   "2026-10-24",
+   "2026-10-25"
+  ]
+ },
+ "footnotes": {
+  "6": {
+   "text": "Ne vozi ob sobotah",
+   "rule": "not_saturday"
+  },
+  "7": {
+   "text": "Vozi ob nedeljah",
+   "rule": "sundays"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "LJUBLJANA",
+   "text": "Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39)"
+  },
+  {
+   "station": "LJUBLJANA TIVOLI",
+   "text": "AP Tobačna"
+  },
+  {
+   "station": "LJUBLJANA DOLGI MOST",
+   "text": "AP Dolgi most"
+  },
+  {
+   "station": "BREZOVICA",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "PRESERJE",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "BOROVNICA",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "NOTRANJE GORICE",
+   "text": "AP Notranje Gorice Šola (nad ŽP)"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "LJUBLJANA - BOROVNICA",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA",
+    "Ljubljana Tivoli",
+    "Ljubljana Dolgi most",
+    "Brezovica",
+    "Notranje Gorice",
+    "Preserje",
+    "BOROVNICA"
+   ],
+   "columns": [
+    {
+     "label": "2674",
+     "train": "2674",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "07:40"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "07:47",
+       "dep": "07:47"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "07:53",
+       "dep": "07:53"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "08:03",
+       "dep": "08:03"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "08:07",
+       "dep": "08:07"
+      },
+      {
+       "station": "Preserje",
+       "arr": "08:17",
+       "dep": "08:17"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "08:26"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "481",
+     "train": "481",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "08:17"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "08:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "503",
+     "train": "503",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "09:10"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "09:40"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2606",
+     "train": "2606",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "13:20"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "13:27",
+       "dep": "13:27"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "13:33",
+       "dep": "13:33"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "13:43",
+       "dep": "13:43"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "13:47",
+       "dep": "13:47"
+      },
+      {
+       "station": "Preserje",
+       "arr": "13:57",
+       "dep": "13:57"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "14:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2678",
+     "train": "2678",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "14:32"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "14:39",
+       "dep": "14:39"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "14:45",
+       "dep": "14:45"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "14:55",
+       "dep": "14:55"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "14:59",
+       "dep": "14:59"
+      },
+      {
+       "station": "Preserje",
+       "arr": "15:09",
+       "dep": "15:09"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "15:18"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2752",
+     "train": "2752",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:20"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "15:27",
+       "dep": "15:27"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "15:33",
+       "dep": "15:33"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "15:43",
+       "dep": "15:43"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "15:47",
+       "dep": "15:47"
+      },
+      {
+       "station": "Preserje",
+       "arr": "15:57",
+       "dep": "15:57"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "16:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "210",
+     "train": "210",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:38"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "15:45",
+       "dep": "15:45"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "15:51",
+       "dep": "15:51"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "16:01",
+       "dep": "16:01"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "16:05",
+       "dep": "16:05"
+      },
+      {
+       "station": "Preserje",
+       "arr": "16:15",
+       "dep": "16:15"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "16:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2680",
+     "train": "2680",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "6"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "16:17"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "16:24",
+       "dep": "16:24"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "16:30",
+       "dep": "16:30"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "16:40",
+       "dep": "16:40"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "16:44",
+       "dep": "16:44"
+      },
+      {
+       "station": "Preserje",
+       "arr": "16:54",
+       "dep": "16:54"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "17:03"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "509",
+     "train": "509",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "17:50"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "17:57",
+       "dep": "17:57"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "18:03",
+       "dep": "18:03"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "18:13",
+       "dep": "18:13"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "18:17",
+       "dep": "18:17"
+      },
+      {
+       "station": "Preserje",
+       "arr": "18:27",
+       "dep": "18:27"
+      },
+      {
+       "station": "BOROVNICA",
+       "arr": "18:36"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "BOROVNICA - LJUBLJANA",
+   "source": "text",
+   "stations": [
+    "BOROVNICA",
+    "Preserje",
+    "Notranje Gorice",
+    "Brezovica",
+    "Ljubljana Dolgi most",
+    "Ljubljana Tivoli",
+    "LJUBLJANA"
+   ],
+   "columns": [
+    {
+     "label": "2633",
+     "train": "2633",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "07:03"
+      },
+      {
+       "station": "Preserje",
+       "arr": "07:12",
+       "dep": "07:12"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "07:22",
+       "dep": "07:22"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "07:26",
+       "dep": "07:26"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "07:36",
+       "dep": "07:36"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "07:42",
+       "dep": "07:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "07:49"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "508",
+     "train": "508",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "07:40"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "08:04",
+       "dep": "08:04"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "08:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2671",
+     "train": "2671",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "08:59"
+      },
+      {
+       "station": "Preserje",
+       "arr": "09:08",
+       "dep": "09:08"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "09:18",
+       "dep": "09:18"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "09:22",
+       "dep": "09:22"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "09:32",
+       "dep": "09:32"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "09:38",
+       "dep": "09:38"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "09:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "1825",
+     "train": "1825",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "11:40"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "12:04",
+       "dep": "12:04"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "12:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2791",
+     "train": "2791",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "12:11"
+      },
+      {
+       "station": "Preserje",
+       "arr": "12:20",
+       "dep": "12:20"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "12:30",
+       "dep": "12:30"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "12:34",
+       "dep": "12:34"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "12:44",
+       "dep": "12:44"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "12:50",
+       "dep": "12:50"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "12:57"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "211",
+     "train": "211",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "14:15"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "14:39",
+       "dep": "14:39"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "14:46"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2675",
+     "train": "2675",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "15:03"
+      },
+      {
+       "station": "Preserje",
+       "arr": "15:12",
+       "dep": "15:12"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "15:22",
+       "dep": "15:22"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "15:26",
+       "dep": "15:26"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "15:36",
+       "dep": "15:36"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "15:42",
+       "dep": "15:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "15:49"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "502",
+     "train": "502",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "17:20"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "17:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "1475",
+     "train": "1475",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "7"
+     ],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "17:44"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "18:14"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2697",
+     "train": "2697",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOROVNICA",
+       "dep": "19:33"
+      },
+      {
+       "station": "Preserje",
+       "arr": "19:42",
+       "dep": "19:42"
+      },
+      {
+       "station": "Notranje Gorice",
+       "arr": "19:52",
+       "dep": "19:52"
+      },
+      {
+       "station": "Brezovica",
+       "arr": "19:56",
+       "dep": "19:56"
+      },
+      {
+       "station": "Ljubljana Dolgi most",
+       "arr": "20:06",
+       "dep": "20:06"
+      },
+      {
+       "station": "Ljubljana Tivoli",
+       "arr": "20:12",
+       "dep": "20:12"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "20:19"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

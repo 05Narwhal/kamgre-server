@@ -1,0 +1,257 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2025-12-14",
+  "to": "2026-12-12",
+  "dates": null
+ },
+ "footnotes": {
+  "2": {
+   "text": "ne vozi ob sobotah, nedeljah in praznikih - dela prostih dneh v RS",
+   "rule": "workdays"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "CELJE",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "LJUBLJANA",
+   "text": "Avtobusna postaja Ljubljana (peroni 37, 38 in 39) ob železniški postaji Ljubljana."
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "LJUBLJANA - CELJE",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA",
+    "CELJE"
+   ],
+   "columns": [
+    {
+     "label": "51206",
+     "train": "51206",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "05:35"
+      },
+      {
+       "station": "CELJE",
+       "arr": "06:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "60606",
+     "train": "60606",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "06:55"
+      },
+      {
+       "station": "CELJE",
+       "arr": "08:05"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "14006",
+     "train": "14006",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "08:05"
+      },
+      {
+       "station": "CELJE",
+       "arr": "09:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "36006",
+     "train": "36006",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "12:20"
+      },
+      {
+       "station": "CELJE",
+       "arr": "13:30"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "61206",
+     "train": "61206",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "13:45"
+      },
+      {
+       "station": "CELJE",
+       "arr": "14:55"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "52606",
+     "train": "52606",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "19:50"
+      },
+      {
+       "station": "CELJE",
+       "arr": "21:00"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "CELJE - LJUBLJANA",
+   "source": "text",
+   "stations": [
+    "CELJE",
+    "LJUBLJANA"
+   ],
+   "columns": [
+    {
+     "label": "31006",
+     "train": "31006",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "CELJE",
+       "dep": "08:43"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "09:53"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "17006",
+     "train": "17006",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "CELJE",
+       "dep": "11:35"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "12:42"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "61706",
+     "train": "61706",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "CELJE",
+       "dep": "17:39"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "18:49"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "52306",
+     "train": "52306",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "CELJE",
+       "dep": "21:05"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "22:15"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

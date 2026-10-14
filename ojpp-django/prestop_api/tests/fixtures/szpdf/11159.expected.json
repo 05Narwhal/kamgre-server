@@ -1,0 +1,395 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-14",
+  "to": "2026-10-14",
+  "dates": [
+   "2026-10-14"
+  ]
+ },
+ "footnotes": {
+  "*": {
+   "text": "Vlak št. 3237 vozi do postajališča Novo mesto Šmihel. Potniki v smeri Uršna sela prestopijo na postaji Novo mesto Kandija!",
+   "rule": "info"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "NOVO MESTO",
+   "text": "zunanja stran železniške postaje"
+  },
+  {
+   "station": "NOVO MESTO KANDIJA",
+   "text": "zunanja stran železniške postaje"
+  },
+  {
+   "station": "URŠNA SELA",
+   "text": "zunanja stran železniške postaje"
+  },
+  {
+   "station": "NOVO MESTO CENTER",
+   "text": "smer ŽP Novo mesto na AP Ljubljanska cesta Občina"
+  },
+  {
+   "station": "NOVO MESTO CENTER",
+   "text": "smer ŽP Uršna sela na AP Šmihelski most"
+  },
+  {
+   "station": "NOVO MESTO ŠMIHEL",
+   "text": "AP ŠC (ob šolskem centru)"
+  },
+  {
+   "station": "BIRČNA VAS",
+   "text": "AP Birčna vas ŽP"
+  }
+ ],
+ "notes": [
+  "Train No. 3237 runs to the station Novo mesto Šmihel. Passengers heading towards Uršna sela change at the Novo mesto Kandija station!"
+ ],
+ "tables": [
+  {
+   "direction": "NOVO MESTO - URŠNA SELA",
+   "source": "text",
+   "stations": [
+    "NOVO MESTO",
+    "Novo mesto Center",
+    "Novo mesto Kandija",
+    "Novo mesto Šmihel",
+    "Birčna vas",
+    "URŠNA SELA"
+   ],
+   "columns": [
+    {
+     "label": "3237",
+     "train": "3237",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "*"
+     ],
+     "calls": [
+      {
+       "station": "Novo mesto Kandija",
+       "dep": "07:12"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "07:14",
+       "dep": "07:14"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "07:21",
+       "dep": "07:21"
+      },
+      {
+       "station": "URŠNA SELA",
+       "arr": "07:31"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3205",
+     "train": "3205",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "NOVO MESTO",
+       "dep": "08:48"
+      },
+      {
+       "station": "Novo mesto Center",
+       "arr": "08:50",
+       "dep": "08:50"
+      },
+      {
+       "station": "Novo mesto Kandija",
+       "arr": "08:52",
+       "dep": "08:52"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "08:54",
+       "dep": "08:54"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "09:01",
+       "dep": "09:01"
+      },
+      {
+       "station": "URŠNA SELA",
+       "arr": "09:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3235",
+     "train": "3235",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "NOVO MESTO",
+       "dep": "11:05"
+      },
+      {
+       "station": "Novo mesto Center",
+       "arr": "11:07",
+       "dep": "11:07"
+      },
+      {
+       "station": "Novo mesto Kandija",
+       "arr": "11:09",
+       "dep": "11:09"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "11:11",
+       "dep": "11:11"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "11:18",
+       "dep": "11:18"
+      },
+      {
+       "station": "URŠNA SELA",
+       "arr": "11:28"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3209",
+     "train": "3209",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "NOVO MESTO",
+       "dep": "12:43"
+      },
+      {
+       "station": "Novo mesto Center",
+       "arr": "12:45",
+       "dep": "12:45"
+      },
+      {
+       "station": "Novo mesto Kandija",
+       "arr": "12:47",
+       "dep": "12:47"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "12:49",
+       "dep": "12:49"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "12:56",
+       "dep": "12:56"
+      },
+      {
+       "station": "URŠNA SELA",
+       "arr": "13:06"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "URŠNA SELA - NOVO MESTO",
+   "source": "text",
+   "stations": [
+    "URŠNA SELA",
+    "Birčna vas",
+    "Novo mesto Šmihel",
+    "Novo mesto Kandija",
+    "Novo mesto Center",
+    "NOVO MESTO"
+   ],
+   "columns": [
+    {
+     "label": "3210",
+     "train": "3210",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "URŠNA SELA",
+       "dep": "07:30"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "07:40",
+       "dep": "07:40"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "07:47",
+       "dep": "07:47"
+      },
+      {
+       "station": "Novo mesto Kandija",
+       "arr": "07:49",
+       "dep": "07:49"
+      },
+      {
+       "station": "Novo mesto Center",
+       "arr": "07:51",
+       "dep": "07:51"
+      },
+      {
+       "station": "NOVO MESTO",
+       "arr": "07:53"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3220",
+     "train": "3220",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "URŠNA SELA",
+       "dep": "09:08"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "09:18",
+       "dep": "09:18"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "09:25",
+       "dep": "09:25"
+      },
+      {
+       "station": "Novo mesto Kandija",
+       "arr": "09:27",
+       "dep": "09:27"
+      },
+      {
+       "station": "Novo mesto Center",
+       "arr": "09:29",
+       "dep": "09:29"
+      },
+      {
+       "station": "NOVO MESTO",
+       "arr": "09:31"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3212",
+     "train": "3212",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "URŠNA SELA",
+       "dep": "10:48"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "10:58",
+       "dep": "10:58"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "11:05",
+       "dep": "11:05"
+      },
+      {
+       "station": "Novo mesto Kandija",
+       "arr": "11:07",
+       "dep": "11:07"
+      },
+      {
+       "station": "Novo mesto Center",
+       "arr": "11:09",
+       "dep": "11:09"
+      },
+      {
+       "station": "NOVO MESTO",
+       "arr": "11:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3234",
+     "train": "3234",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "URŠNA SELA",
+       "dep": "13:05"
+      },
+      {
+       "station": "Birčna vas",
+       "arr": "13:15",
+       "dep": "13:15"
+      },
+      {
+       "station": "Novo mesto Šmihel",
+       "arr": "13:22",
+       "dep": "13:22"
+      },
+      {
+       "station": "Novo mesto Kandija",
+       "arr": "13:24",
+       "dep": "13:24"
+      },
+      {
+       "station": "Novo mesto Center",
+       "arr": "13:26",
+       "dep": "13:26"
+      },
+      {
+       "station": "NOVO MESTO",
+       "arr": "13:28"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

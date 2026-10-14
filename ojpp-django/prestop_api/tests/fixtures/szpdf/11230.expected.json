@@ -1,0 +1,629 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-26",
+  "to": "2026-10-30",
+  "dates": null
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "JESENICE",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "PODHOM",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "BLED JEZERO",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "BOHINJSKA BELA",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "BOHINJSKA BISTRICA",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "KOČNA",
+   "text": "AP Podkočna"
+  },
+  {
+   "station": "VINTGAR",
+   "text": "AP Blejska Dobrava Trgovina"
+  },
+  {
+   "station": "NOMENJ",
+   "text": "AP Nomenj"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "JESENICE - VINTGAR",
+   "source": "text",
+   "stations": [
+    "JESENICE",
+    "Kočna",
+    "VINTGAR"
+   ],
+   "columns": [
+    {
+     "label": "4201",
+     "train": "4201",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "04:05"
+      },
+      {
+       "station": "Kočna",
+       "arr": "04:11",
+       "dep": "04:11"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "04:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4203",
+     "train": "4203",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "06:07"
+      },
+      {
+       "station": "Kočna",
+       "arr": "06:13",
+       "dep": "06:13"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "06:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4213",
+     "train": "4213",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "14:28"
+      },
+      {
+       "station": "Kočna",
+       "arr": "14:34",
+       "dep": "14:34"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "14:36"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "601",
+     "train": "601",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "16:51"
+      },
+      {
+       "station": "Kočna",
+       "arr": "16:57",
+       "dep": "16:57"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "16:59"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4219",
+     "train": "4219",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "19:22"
+      },
+      {
+       "station": "Kočna",
+       "arr": "19:28",
+       "dep": "19:28"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "19:30"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "VINTGAR - JESENICE",
+   "source": "text",
+   "stations": [
+    "VINTGAR",
+    "Kočna",
+    "JESENICE"
+   ],
+   "columns": [
+    {
+     "label": "4200",
+     "train": "4200",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "05:16"
+      },
+      {
+       "station": "Kočna",
+       "arr": "05:18",
+       "dep": "05:18"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "05:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "600",
+     "train": "600",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "07:20"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "07:26"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4296",
+     "train": "4296",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "16:38"
+      },
+      {
+       "station": "Kočna",
+       "arr": "16:40",
+       "dep": "16:40"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:46"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4214",
+     "train": "4214",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "17:58"
+      },
+      {
+       "station": "Kočna",
+       "arr": "18:00",
+       "dep": "18:00"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "18:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4220",
+     "train": "4220",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "21:56"
+      },
+      {
+       "station": "Kočna",
+       "arr": "21:58",
+       "dep": "21:58"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "22:04"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "JESENICE - BOHINJSKA BISTRICA",
+   "source": "text",
+   "stations": [
+    "JESENICE",
+    "Kočna",
+    "Vintgar",
+    "Podhom",
+    "Bled Jezero",
+    "Bohinjska Bela",
+    "Nomenj",
+    "BOHINJSKA BISTRICA"
+   ],
+   "columns": [
+    {
+     "label": "4211",
+     "train": "4211",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "08:52"
+      },
+      {
+       "station": "Kočna",
+       "arr": "08:58",
+       "dep": "08:58"
+      },
+      {
+       "station": "Vintgar",
+       "arr": "09:00",
+       "dep": "09:00"
+      },
+      {
+       "station": "Bled Jezero",
+       "arr": "09:21",
+       "dep": "09:21"
+      },
+      {
+       "station": "Bohinjska Bela",
+       "arr": "09:32",
+       "dep": "09:32"
+      },
+      {
+       "station": "Nomenj",
+       "arr": "09:43",
+       "dep": "09:43"
+      },
+      {
+       "station": "BOHINJSKA BISTRICA",
+       "arr": "09:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4211",
+     "train": "4211",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Vintgar",
+       "dep": "09:00"
+      },
+      {
+       "station": "Podhom",
+       "arr": "09:16",
+       "dep": "09:16"
+      },
+      {
+       "station": "Bled Jezero",
+       "arr": "09:21"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4205",
+     "train": "4205",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "11:18"
+      },
+      {
+       "station": "Kočna",
+       "arr": "11:24",
+       "dep": "11:24"
+      },
+      {
+       "station": "Vintgar",
+       "arr": "11:26",
+       "dep": "11:26"
+      },
+      {
+       "station": "Bled Jezero",
+       "arr": "11:47",
+       "dep": "11:47"
+      },
+      {
+       "station": "Bohinjska Bela",
+       "arr": "11:58",
+       "dep": "11:58"
+      },
+      {
+       "station": "Nomenj",
+       "arr": "12:09",
+       "dep": "12:09"
+      },
+      {
+       "station": "BOHINJSKA BISTRICA",
+       "arr": "12:16"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4205",
+     "train": "4205",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Vintgar",
+       "dep": "11:26"
+      },
+      {
+       "station": "Podhom",
+       "arr": "11:42",
+       "dep": "11:42"
+      },
+      {
+       "station": "Bled Jezero",
+       "arr": "11:47"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "BOHINJSKA BISTRICA - JESENICE",
+   "source": "text",
+   "stations": [
+    "BOHINJSKA BISTRICA",
+    "Nomenj",
+    "Bohinjska Bela",
+    "Bled Jezero",
+    "Podhom",
+    "Vintgar",
+    "Kočna",
+    "JESENICE"
+   ],
+   "columns": [
+    {
+     "label": "4208",
+     "train": "4208",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOHINJSKA BISTRICA",
+       "dep": "08:54"
+      },
+      {
+       "station": "Nomenj",
+       "arr": "09:01",
+       "dep": "09:01"
+      },
+      {
+       "station": "Bohinjska Bela",
+       "arr": "09:12",
+       "dep": "09:12"
+      },
+      {
+       "station": "Bled Jezero",
+       "arr": "09:23",
+       "dep": "09:23"
+      },
+      {
+       "station": "Vintgar",
+       "arr": "09:44",
+       "dep": "09:44"
+      },
+      {
+       "station": "Kočna",
+       "arr": "09:46",
+       "dep": "09:46"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:52"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4208",
+     "train": "4208",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Bled Jezero",
+       "dep": "09:23"
+      },
+      {
+       "station": "Podhom",
+       "arr": "09:28",
+       "dep": "09:28"
+      },
+      {
+       "station": "Vintgar",
+       "arr": "09:44"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4210",
+     "train": "4210",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BOHINJSKA BISTRICA",
+       "dep": "12:55"
+      },
+      {
+       "station": "Nomenj",
+       "arr": "13:02",
+       "dep": "13:02"
+      },
+      {
+       "station": "Bohinjska Bela",
+       "arr": "13:13",
+       "dep": "13:13"
+      },
+      {
+       "station": "Bled Jezero",
+       "arr": "13:24",
+       "dep": "13:24"
+      },
+      {
+       "station": "Vintgar",
+       "arr": "13:45",
+       "dep": "13:45"
+      },
+      {
+       "station": "Kočna",
+       "arr": "13:47",
+       "dep": "13:47"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "13:53"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4210",
+     "train": "4210",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Bled Jezero",
+       "dep": "13:24"
+      },
+      {
+       "station": "Podhom",
+       "arr": "13:29",
+       "dep": "13:29"
+      },
+      {
+       "station": "Vintgar",
+       "arr": "13:45"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

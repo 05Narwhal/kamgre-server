@@ -1,0 +1,171 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-17",
+  "to": "2026-10-25",
+  "dates": [
+   "2026-10-17",
+   "2026-10-18",
+   "2026-10-24",
+   "2026-10-25"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "SEŽANA",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "OPČINE",
+   "text": "Zunanja stran ŽP"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "SEŽANA - OPČINE / VILLA OPICINA (I)",
+   "source": "text",
+   "stations": [
+    "SEŽANA",
+    "Opčine"
+   ],
+   "columns": [
+    {
+     "label": "1824",
+     "train": "1824",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "SEŽANA",
+       "dep": "07:41"
+      },
+      {
+       "station": "Opčine",
+       "arr": "07:52"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "1804",
+     "train": "1804",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "SEŽANA",
+       "dep": "19:28"
+      },
+      {
+       "station": "Opčine",
+       "arr": "19:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "1896",
+     "train": "1896",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "SEŽANA",
+       "dep": "20:43"
+      },
+      {
+       "station": "Opčine",
+       "arr": "20:54"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "OPČINE / VILLA OPICINA (I) - SEŽANA",
+   "source": "text",
+   "stations": [
+    "Opčine",
+    "SEŽANA"
+   ],
+   "columns": [
+    {
+     "label": "1825",
+     "train": "1825",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Opčine",
+       "dep": "09:46"
+      },
+      {
+       "station": "SEŽANA",
+       "arr": "09:57"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "1897",
+     "train": "1897",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Opčine",
+       "dep": "19:45"
+      },
+      {
+       "station": "SEŽANA",
+       "arr": "19:56"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "1803",
+     "train": "1803",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Opčine",
+       "dep": "21:28"
+      },
+      {
+       "station": "SEŽANA",
+       "arr": "21:39"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

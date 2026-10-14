@@ -1,0 +1,268 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-17",
+  "to": "2026-10-17",
+  "dates": [
+   "2026-10-17"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "LJUBLJANA",
+   "text": "Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39)"
+  },
+  {
+   "station": "LJUBLJANA ŠIŠKA",
+   "text": "ob železniški postaji Ljubljana Šiška"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "LUBLJANA - LJUBLJANA ŠIŠKA",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA",
+    "Ljubljana Šiška"
+   ],
+   "columns": [
+    {
+     "label": "3148",
+     "train": "3148",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "07:27"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "07:35"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3146",
+     "train": "3146",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "09:15"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "09:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3156",
+     "train": "3156",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "11:15"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "11:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3152",
+     "train": "3152",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "13:15"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "13:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3150",
+     "train": "3150",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "15:15"
+      },
+      {
+       "station": "Ljubljana Šiška",
+       "arr": "15:23"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "LJUBLJANA ŠIŠKA - LJUBLJANA",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA ŠIŠKA",
+    "Ljubljana"
+   ],
+   "columns": [
+    {
+     "label": "3161",
+     "train": "3161",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA ŠIŠKA",
+       "dep": "06:32"
+      },
+      {
+       "station": "Ljubljana",
+       "arr": "06:42"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3145",
+     "train": "3145",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA ŠIŠKA",
+       "dep": "09:00"
+      },
+      {
+       "station": "Ljubljana",
+       "arr": "09:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3149",
+     "train": "3149",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA ŠIŠKA",
+       "dep": "11:00"
+      },
+      {
+       "station": "Ljubljana",
+       "arr": "11:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3151",
+     "train": "3151",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA ŠIŠKA",
+       "dep": "13:00"
+      },
+      {
+       "station": "Ljubljana",
+       "arr": "13:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3153",
+     "train": "3153",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA ŠIŠKA",
+       "dep": "15:00"
+      },
+      {
+       "station": "Ljubljana",
+       "arr": "15:10"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "3155",
+     "train": "3155",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA ŠIŠKA",
+       "dep": "17:00"
+      },
+      {
+       "station": "Ljubljana",
+       "arr": "17:10"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

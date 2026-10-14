@@ -1,0 +1,173 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-17",
+  "to": "2026-10-17",
+  "dates": [
+   "2026-10-17"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "ORMOŽ",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "IVANJKOVCI",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "LJUTOMER",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "PUŠENCI",
+   "text": "ob ŽP"
+  },
+  {
+   "station": "PAVLOVCI",
+   "text": "AP Pavlovci - ob ŽP"
+  },
+  {
+   "station": "MEKOTNJAK",
+   "text": "pri gostilni Tramšak - ob ŽP"
+  },
+  {
+   "station": "LJUTOMER MESTO",
+   "text": "AP Ljutomer - ob ŽP"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "ORMOŽ - IVANJKOVCI / LJUTOMER",
+   "source": "text",
+   "stations": [
+    "ORMOŽ",
+    "Pušenci",
+    "Pavlovci",
+    "IVANJKOVCI",
+    "Mekotnjak",
+    "Ljutomer mesto",
+    "LJUTOMER"
+   ],
+   "columns": [
+    {
+     "label": "640",
+     "train": "640",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "ORMOŽ",
+       "dep": "10:23"
+      },
+      {
+       "station": "IVANJKOVCI",
+       "arr": "10:34"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "IVANJKOVCI / LJUTOMER - ORMOŽ",
+   "source": "text",
+   "stations": [
+    "LJUTOMER",
+    "Ljutomer mesto",
+    "Mekotnjak",
+    "IVANJKOVCI",
+    "Pavlovci",
+    "Pušenci",
+    "ORMOŽ"
+   ],
+   "columns": [
+    {
+     "label": "2501",
+     "train": "2501",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "IVANJKOVCI",
+       "dep": "10:12"
+      },
+      {
+       "station": "Pavlovci",
+       "arr": "10:16",
+       "dep": "10:16"
+      },
+      {
+       "station": "Pušenci",
+       "arr": "10:20",
+       "dep": "10:20"
+      },
+      {
+       "station": "ORMOŽ",
+       "arr": "10:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2519",
+     "train": "2519",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUTOMER",
+       "dep": "12:49"
+      },
+      {
+       "station": "Ljutomer mesto",
+       "arr": "12:53",
+       "dep": "12:53"
+      },
+      {
+       "station": "Mekotnjak",
+       "arr": "13:00",
+       "dep": "13:00"
+      },
+      {
+       "station": "IVANJKOVCI",
+       "arr": "13:04",
+       "dep": "13:04"
+      },
+      {
+       "station": "Pavlovci",
+       "arr": "13:08",
+       "dep": "13:08"
+      },
+      {
+       "station": "Pušenci",
+       "arr": "13:12",
+       "dep": "13:12"
+      },
+      {
+       "station": "ORMOŽ",
+       "arr": "13:17"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

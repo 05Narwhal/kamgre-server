@@ -1,0 +1,107 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-05",
+  "to": "2026-10-20",
+  "dates": [
+   "2026-10-05",
+   "2026-10-06",
+   "2026-10-19",
+   "2026-10-20"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "DIVAČA",
+   "text": "postanki na zunanji strani železniške postaje"
+  },
+  {
+   "station": "HRPELJE KOZINA",
+   "text": "postanki na zunanji strani železniške postaje"
+  },
+  {
+   "station": "KOPER",
+   "text": "postanki na platoju ob tirih"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "DIVAČA - KOPER",
+   "source": "text",
+   "stations": [
+    "DIVAČA",
+    "Hrpelje Kozina",
+    "KOPER"
+   ],
+   "columns": [
+    {
+     "label": "503",
+     "train": "503",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "DIVAČA",
+       "dep": "11:03"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "11:18",
+       "dep": "11:18"
+      },
+      {
+       "station": "KOPER",
+       "arr": "11:43"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "KOPER - DIVAČA",
+   "source": "text",
+   "stations": [
+    "KOPER",
+    "Hrpelje Kozina",
+    "DIVAČA"
+   ],
+   "columns": [
+    {
+     "label": "502",
+     "train": "502",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOPER",
+       "dep": "15:05"
+      },
+      {
+       "station": "Hrpelje Kozina",
+       "arr": "15:30",
+       "dep": "15:30"
+      },
+      {
+       "station": "DIVAČA",
+       "arr": "15:45"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

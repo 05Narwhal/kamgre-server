@@ -1,0 +1,1976 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-12",
+  "to": "2026-10-18",
+  "dates": null
+ },
+ "footnotes": {
+  "2": {
+   "text": "Ne vozi ob sobotah, nedeljah in praznikih.",
+   "rule": "workdays"
+  },
+  "3": {
+   "text": "Vozi ob sobotah, nedeljah in praznikih.",
+   "rule": "weekends_holidays"
+  },
+  "6": {
+   "text": "Ne vozi ob sobotah.",
+   "rule": "not_saturday"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "LJUBLJANA",
+   "text": "Nova Avtobusna postaja LJUBLJANA (peroni 37, 38 in 39)"
+  },
+  {
+   "station": "LITOSTROJ",
+   "text": "AP mestnega prometa Litostrojska (ob Litostrojski - NE obračališče)"
+  },
+  {
+   "station": "ŠKOFJA LOKA",
+   "text": "postanek pred postajo."
+  },
+  {
+   "station": "KRANJ",
+   "text": "postanek pred postajo"
+  },
+  {
+   "station": "LESCE BLED",
+   "text": "na AP Lesce ŽP"
+  },
+  {
+   "station": "ŽIROVNICA",
+   "text": "AP Žirovnica OPC"
+  },
+  {
+   "station": "SLOVENSKI JAVORNIK",
+   "text": "na AP Slovenski Javornik TURIST"
+  },
+  {
+   "station": "JESENICE",
+   "text": "pred poslopjem železniške postaje."
+  },
+  {
+   "station": "BELJAK",
+   "text": "zunanja stran ŽP"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "LJUBLJANA / LESCE BLED - JESENICE - BELJAK / VILLACH (A)",
+   "source": "text",
+   "stations": [
+    "LJUBLJANA",
+    "Litostroj",
+    "KRANJ",
+    "LESCE BLED",
+    "Žirovnica",
+    "Slovenski Javornik",
+    "JESENICE",
+    "BELJAK"
+   ],
+   "columns": [
+    {
+     "label": "2400",
+     "train": "2400",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "05:40"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "05:47",
+       "dep": "05:47"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "05:52",
+       "dep": "05:52"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "05:57"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "38/1",
+     "train": "38",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "05:42"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "06:32",
+       "dep": "06:35"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "07:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "38/2",
+     "train": "38",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "05:42"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "06:22",
+       "dep": "06:22"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "06:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "38/3",
+     "train": "38",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "05:47"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "06:12",
+       "dep": "06:12"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "06:32"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2402",
+     "train": "2402",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "07:05"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "07:12",
+       "dep": "07:12"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "07:17",
+       "dep": "07:17"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "07:22"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4290",
+     "train": "4290",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "07:50"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "07:57",
+       "dep": "07:57"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "08:02",
+       "dep": "08:02"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "08:07"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "318/1",
+     "train": "318",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "07:42"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:51",
+       "dep": "07:51"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "08:32",
+       "dep": "08:35"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "09:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "318/2",
+     "train": "318",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "07:42"
+      },
+      {
+       "station": "Litostroj",
+       "arr": "07:51",
+       "dep": "07:51"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "08:22",
+       "dep": "08:22"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "08:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "318/3",
+     "train": "318",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "07:47"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "08:12",
+       "dep": "08:12"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "08:32"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2404",
+     "train": "2404",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "09:22"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "09:29",
+       "dep": "09:29"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "09:34",
+       "dep": "09:34"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "316",
+     "train": "316",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "10:31"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "10:38",
+       "dep": "10:38"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "10:43",
+       "dep": "10:43"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "10:48",
+       "dep": "10:50"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "11:40"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "214/1",
+     "train": "214",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "11:08"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "11:58",
+       "dep": "12:00"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "12:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "214/2",
+     "train": "214",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "11:08"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "11:48",
+       "dep": "11:48"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "12:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "214/3",
+     "train": "214",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KRANJ",
+       "dep": "11:05"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "11:38",
+       "dep": "11:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "11:58"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2408",
+     "train": "2408",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "13:54"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "14:01",
+       "dep": "14:01"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "14:06",
+       "dep": "14:06"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "14:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "314",
+     "train": "314",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "14:27"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "14:34",
+       "dep": "14:34"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "14:39",
+       "dep": "14:39"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "14:44",
+       "dep": "14:47"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "15:37"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2412",
+     "train": "2412",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "15:23"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "15:30",
+       "dep": "15:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "15:35",
+       "dep": "15:35"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "15:40"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2414",
+     "train": "2414",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "15:54"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "16:01",
+       "dep": "16:01"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:06",
+       "dep": "16:06"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2416",
+     "train": "2416",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "16:22"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "16:29",
+       "dep": "16:29"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:34",
+       "dep": "16:34"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "312",
+     "train": "312",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "16:33"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:50",
+       "dep": "16:52"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "17:42"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2418",
+     "train": "2418",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "17:00"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "17:07",
+       "dep": "17:07"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "17:12",
+       "dep": "17:12"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:17"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2420",
+     "train": "2420",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "17:20"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "17:27",
+       "dep": "17:27"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "17:32",
+       "dep": "17:32"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:37"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "310",
+     "train": "310",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "18:24"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "18:31",
+       "dep": "18:31"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "18:36",
+       "dep": "18:36"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "18:41",
+       "dep": "18:47"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "19:37"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2494",
+     "train": "2494",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "18:52"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "18:59",
+       "dep": "18:59"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:04",
+       "dep": "19:04"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:09"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2424",
+     "train": "2424",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "18:52"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "18:59",
+       "dep": "18:59"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:04",
+       "dep": "19:04"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:09"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2426",
+     "train": "2426",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "6"
+     ],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "19:42"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "19:49",
+       "dep": "19:49"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:54",
+       "dep": "19:54"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:59"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "18",
+     "train": "18",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "20:25"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "20:42",
+       "dep": "20:47"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "21:37"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2428",
+     "train": "2428",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "21:29"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "22:06",
+       "dep": "22:06"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "22:11",
+       "dep": "22:11"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "22:16"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "414",
+     "train": "414",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LJUBLJANA",
+       "dep": "22:10"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "22:50",
+       "dep": "22:50"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "23:15",
+       "dep": "23:15"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "23:35",
+       "dep": "23:38"
+      },
+      {
+       "station": "BELJAK",
+       "arr": "24:28"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2430",
+     "train": "2430",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "LESCE BLED",
+       "dep": "23:18"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "23:25",
+       "dep": "23:25"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "23:30",
+       "dep": "23:30"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "23:35"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "BELJAK / VILLACH (A) - JESENICE - LESCE BLED / LJUBLJANA",
+   "source": "text",
+   "stations": [
+    "BELJAK",
+    "JESENICE",
+    "Slovenski Javornik",
+    "Žirovnica",
+    "LESCE BLED",
+    "KRANJ",
+    "Škofja Loka",
+    "LJUBLJANA"
+   ],
+   "columns": [
+    {
+     "label": "2401",
+     "train": "2401",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "04:24"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "04:29",
+       "dep": "04:29"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "04:34",
+       "dep": "04:34"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "04:41"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2441",
+     "train": "2441",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "04:55"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "05:00",
+       "dep": "05:00"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "05:05",
+       "dep": "05:05"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "05:12"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2403",
+     "train": "2403",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "05:27"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "05:32",
+       "dep": "05:32"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "05:37",
+       "dep": "05:37"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "05:44"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2405",
+     "train": "2405",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "05:54"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "05:59",
+       "dep": "05:59"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "06:04",
+       "dep": "06:04"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "06:11"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2407",
+     "train": "2407",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "06:15"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "06:20",
+       "dep": "06:20"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "06:25",
+       "dep": "06:25"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "06:32"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "415",
+     "train": "415",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "06:06"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "06:56",
+       "dep": "07:00"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "07:20",
+       "dep": "07:20"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "07:45",
+       "dep": "07:45"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "08:25"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2499",
+     "train": "2499",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "07:33"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "07:38",
+       "dep": "07:38"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "07:43",
+       "dep": "07:43"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "07:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2409",
+     "train": "2409",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "07:36"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "07:41",
+       "dep": "07:41"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "07:46",
+       "dep": "07:46"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "07:53"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "311/1",
+     "train": "311",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "08:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:28",
+       "dep": "09:30"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "10:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "311/2",
+     "train": "311",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "08:57"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "09:17",
+       "dep": "09:17"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "09:42",
+       "dep": "09:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "10:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "311/3",
+     "train": "311",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "08:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:28",
+       "dep": "09:30"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "09:50",
+       "dep": "09:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "10:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2411",
+     "train": "2411",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "09:48"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "09:53",
+       "dep": "09:53"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "09:58",
+       "dep": "09:58"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "10:05"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "313",
+     "train": "313",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "10:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "11:28",
+       "dep": "11:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "11:35",
+       "dep": "11:35"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "11:40",
+       "dep": "11:40"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "11:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2415",
+     "train": "2415",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "12:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "12:35",
+       "dep": "12:35"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "12:40",
+       "dep": "12:40"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "12:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "315/1",
+     "train": "315",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "12:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "13:28",
+       "dep": "13:30"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "14:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "315/2",
+     "train": "315",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "12:57"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "13:17",
+       "dep": "13:17"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "13:42",
+       "dep": "13:42"
+      },
+      {
+       "station": "Škofja Loka",
+       "arr": "13:58",
+       "dep": "13:58"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "14:23"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "315/3",
+     "train": "315",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "12:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "13:28",
+       "dep": "13:30"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "13:50",
+       "dep": "13:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "14:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2417",
+     "train": "2417",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "14:23"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "14:28",
+       "dep": "14:28"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "14:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2497",
+     "train": "2497",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "14:23"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "14:28",
+       "dep": "14:28"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "14:39"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "115/1",
+     "train": "115",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "14:45"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "15:35",
+       "dep": "15:37"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "16:27"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "115/2",
+     "train": "115",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "15:04"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "15:24",
+       "dep": "15:24"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "15:49",
+       "dep": "15:49"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "16:27"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "115/3",
+     "train": "115",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "14:45"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "15:35",
+       "dep": "15:37"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "15:57",
+       "dep": "15:57"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "16:22"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2419",
+     "train": "2419",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "15:41"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "15:46",
+       "dep": "15:46"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "15:51",
+       "dep": "15:51"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "15:58"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2421",
+     "train": "2421",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "16:13"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "16:18",
+       "dep": "16:18"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "16:29"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "317/1",
+     "train": "317",
+     "part": 1,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "16:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:28",
+       "dep": "17:30"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "18:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "317/2",
+     "train": "317",
+     "part": 2,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "16:57"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "17:17",
+       "dep": "17:17"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "17:42",
+       "dep": "17:42"
+      },
+      {
+       "station": "LJUBLJANA",
+       "arr": "18:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "317/3",
+     "train": "317",
+     "part": 3,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "16:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "17:28",
+       "dep": "17:30"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "17:50",
+       "dep": "17:50"
+      },
+      {
+       "station": "KRANJ",
+       "arr": "18:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2423",
+     "train": "2423",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "18:07"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "18:12",
+       "dep": "18:12"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "18:17",
+       "dep": "18:17"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "18:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "319",
+     "train": "319",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "18:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:28",
+       "dep": "19:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:35",
+       "dep": "19:35"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "19:40",
+       "dep": "19:40"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "19:47"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4291",
+     "train": "4291",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "19:30"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "19:35",
+       "dep": "19:35"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "19:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "2427",
+     "train": "2427",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "20:44"
+      },
+      {
+       "station": "Slovenski Javornik",
+       "arr": "20:49",
+       "dep": "20:49"
+      },
+      {
+       "station": "Žirovnica",
+       "arr": "20:54",
+       "dep": "20:54"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "21:01"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "19",
+     "train": "19",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "20:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "21:28",
+       "dep": "21:30"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "21:50"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "39",
+     "train": "39",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "BELJAK",
+       "dep": "21:38"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "22:28",
+       "dep": "22:30"
+      },
+      {
+       "station": "LESCE BLED",
+       "arr": "22:50"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}

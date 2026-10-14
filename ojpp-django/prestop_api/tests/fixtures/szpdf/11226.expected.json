@@ -1,0 +1,933 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-10-26",
+  "to": "2026-10-27",
+  "dates": [
+   "2026-10-26",
+   "2026-10-27"
+  ]
+ },
+ "footnotes": {},
+ "stationNotes": [
+  {
+   "station": "SPODNJA SLIVNICA",
+   "text": "Smer GROSUPLJE - SP. SLIVNICA: Vozilo 8+1 odpelje s p. Grosuplje z morebitnimi potniki za postajališče Sp. Slivnica V primeru da so s p. Sp. Slivnica potniki jih odpelje do končne postaje njihovega potovanja oziroma prestopijo na avtobus, ko ga ujame na poti. Smer SP. SLIVNICA - GROSUPLJE: Morebitne potnike iz smeri Kočevja po prihodu avtobusa na p. Grosuplje vozilo 8+1 odpelje po p. Sp. Slivnica",
+   "minutesEarlier": null
+  },
+  {
+   "station": "VELIKE LAŠČE",
+   "text": "za postajališče Velike Lašče je organiziran prevoz med ŽP in postankom nadomestnega prevoza ter obratno, z ŽP odpelje 5 minut pred objavljenim voznim redom",
+   "minutesEarlier": 5
+  }
+ ],
+ "stops": [
+  {
+   "station": "GROSUPLJE",
+   "text": "zunanja stran ŽP - AP Grosuplje"
+  },
+  {
+   "station": "DOBREPOLJE",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "KOČEVJE",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "ORTNEK",
+   "text": "zunanja stran ŽP"
+  },
+  {
+   "station": "RIBNICA",
+   "text": "AP Ribnica/Dol ob železnici"
+  },
+  {
+   "station": "SPODNJA SLIVNICA",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "ČUŠPERK",
+   "text": "AP Čušperk - makadamski prostor ob odcepu za ŽP"
+  },
+  {
+   "station": "VELIKE LAŠČE",
+   "text": "AP Velike Lašče - ob glavni cesti"
+  },
+  {
+   "station": "ŽLEBIČ",
+   "text": "AP Žlebič - ob glavni cesti"
+  },
+  {
+   "station": "STARA CERKEV",
+   "text": "AP Stara Cerkev - ob glavni cesti"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "GROSUPLJE - KOČEVJE",
+   "source": "text",
+   "stations": [
+    "GROSUPLJE",
+    "Spodnja Slivnica",
+    "Čušperk",
+    "Dobrepolje",
+    "Velike Lašče",
+    "Ortnek",
+    "Žlebič",
+    "Ribnica",
+    "Stara Cerkev",
+    "KOČEVJE"
+   ],
+   "columns": [
+    {
+     "label": "4505",
+     "train": "4505",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "08:10"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "08:20",
+       "dep": "08:20"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "08:32",
+       "dep": "08:32"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "08:40",
+       "dep": "08:40"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "08:48",
+       "dep": "08:48"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "08:53",
+       "dep": "08:53"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "08:59",
+       "dep": "08:59"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "09:14",
+       "dep": "09:14"
+      },
+      {
+       "station": "KOČEVJE",
+       "arr": "09:18"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4505",
+     "train": "4505",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "08:10"
+      },
+      {
+       "station": "Spodnja Slivnica",
+       "arr": "08:16"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4507",
+     "train": "4507",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "09:52"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "10:02",
+       "dep": "10:02"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "10:14",
+       "dep": "10:14"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "10:22",
+       "dep": "10:22"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "10:30",
+       "dep": "10:30"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "10:35",
+       "dep": "10:35"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "10:41",
+       "dep": "10:41"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "10:56",
+       "dep": "10:56"
+      },
+      {
+       "station": "KOČEVJE",
+       "arr": "11:00"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4507",
+     "train": "4507",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "09:52"
+      },
+      {
+       "station": "Spodnja Slivnica",
+       "arr": "09:58"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4509",
+     "train": "4509",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "10:37"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "10:47",
+       "dep": "10:47"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "10:59",
+       "dep": "10:59"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "11:07",
+       "dep": "11:07"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "11:15",
+       "dep": "11:15"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "11:20",
+       "dep": "11:20"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "11:26",
+       "dep": "11:26"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "11:41",
+       "dep": "11:41"
+      },
+      {
+       "station": "KOČEVJE",
+       "arr": "11:45"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4509",
+     "train": "4509",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "10:37"
+      },
+      {
+       "station": "Spodnja Slivnica",
+       "arr": "10:43"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4525",
+     "train": "4525",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:14"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "12:24",
+       "dep": "12:24"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "12:36",
+       "dep": "12:36"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "12:44",
+       "dep": "12:44"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "12:52",
+       "dep": "12:52"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "12:57",
+       "dep": "12:57"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "13:03",
+       "dep": "13:03"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "13:18",
+       "dep": "13:18"
+      },
+      {
+       "station": "KOČEVJE",
+       "arr": "13:22"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4525",
+     "train": "4525",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:14"
+      },
+      {
+       "station": "Spodnja Slivnica",
+       "arr": "12:20"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4527",
+     "train": "4527",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:55"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "13:05",
+       "dep": "13:05"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "13:17",
+       "dep": "13:17"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "13:25",
+       "dep": "13:25"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "13:33",
+       "dep": "13:33"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "13:38",
+       "dep": "13:38"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "13:44",
+       "dep": "13:44"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "13:59",
+       "dep": "13:59"
+      },
+      {
+       "station": "KOČEVJE",
+       "arr": "14:03"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4527",
+     "train": "4527",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "GROSUPLJE",
+       "dep": "12:55"
+      },
+      {
+       "station": "Spodnja Slivnica",
+       "arr": "13:01"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "KOČEVJE - GROSUPLJE",
+   "source": "text",
+   "stations": [
+    "KOČEVJE",
+    "Stara Cerkev",
+    "Ribnica",
+    "Žlebič",
+    "Ortnek",
+    "Velike Lašče",
+    "Dobrepolje",
+    "Čušperk",
+    "Spodnja Slivnica",
+    "GROSUPLJE"
+   ],
+   "columns": [
+    {
+     "label": "4506",
+     "train": "4506",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOČEVJE",
+       "dep": "07:58"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "08:02",
+       "dep": "08:02"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "08:17",
+       "dep": "08:17"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "08:23",
+       "dep": "08:23"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "08:28",
+       "dep": "08:28"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "08:36",
+       "dep": "08:36"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "08:44",
+       "dep": "08:44"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "08:56",
+       "dep": "08:56"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "09:07"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4506",
+     "train": "4506",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Spodnja Slivnica",
+       "dep": "09:01"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "09:07"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4508",
+     "train": "4508",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOČEVJE",
+       "dep": "09:32"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "09:36",
+       "dep": "09:36"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "09:51",
+       "dep": "09:51"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "09:57",
+       "dep": "09:57"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "10:02",
+       "dep": "10:02"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "10:10",
+       "dep": "10:10"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "10:18",
+       "dep": "10:18"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "10:30",
+       "dep": "10:30"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "10:40"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4508",
+     "train": "4508",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Spodnja Slivnica",
+       "dep": "10:34"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "10:40"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4510",
+     "train": "4510",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOČEVJE",
+       "dep": "11:07"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "11:11",
+       "dep": "11:11"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "11:26",
+       "dep": "11:26"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "11:32",
+       "dep": "11:32"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "11:37",
+       "dep": "11:37"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "11:45",
+       "dep": "11:45"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "11:53",
+       "dep": "11:53"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "12:05",
+       "dep": "12:05"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "12:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4510",
+     "train": "4510",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Spodnja Slivnica",
+       "dep": "12:09"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "12:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4512",
+     "train": "4512",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOČEVJE",
+       "dep": "11:56"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "12:00",
+       "dep": "12:00"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "12:15",
+       "dep": "12:15"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "12:21",
+       "dep": "12:21"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "12:26",
+       "dep": "12:26"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "12:34",
+       "dep": "12:34"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "12:42",
+       "dep": "12:42"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "12:54",
+       "dep": "12:54"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "13:04"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4512",
+     "train": "4512",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Spodnja Slivnica",
+       "dep": "12:58"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "13:04"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4514",
+     "train": "4514",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOČEVJE",
+       "dep": "13:24"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "13:28",
+       "dep": "13:28"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "13:43",
+       "dep": "13:43"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "13:49",
+       "dep": "13:49"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "13:54",
+       "dep": "13:54"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "14:02",
+       "dep": "14:02"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "14:10",
+       "dep": "14:10"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "14:22",
+       "dep": "14:22"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "14:32"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4514",
+     "train": "4514",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Spodnja Slivnica",
+       "dep": "14:26"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "14:32"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4516",
+     "train": "4516",
+     "part": null,
+     "vehicle": "BUS",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "KOČEVJE",
+       "dep": "14:08"
+      },
+      {
+       "station": "Stara Cerkev",
+       "arr": "14:12",
+       "dep": "14:12"
+      },
+      {
+       "station": "Ribnica",
+       "arr": "14:27",
+       "dep": "14:27"
+      },
+      {
+       "station": "Žlebič",
+       "arr": "14:33",
+       "dep": "14:33"
+      },
+      {
+       "station": "Ortnek",
+       "arr": "14:38",
+       "dep": "14:38"
+      },
+      {
+       "station": "Velike Lašče",
+       "arr": "14:46",
+       "dep": "14:46"
+      },
+      {
+       "station": "Dobrepolje",
+       "arr": "14:54",
+       "dep": "14:54"
+      },
+      {
+       "station": "Čušperk",
+       "arr": "15:06",
+       "dep": "15:06"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "15:16"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4516",
+     "train": "4516",
+     "part": null,
+     "vehicle": "8+1",
+     "mark": null,
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "Spodnja Slivnica",
+       "dep": "15:10"
+      },
+      {
+       "station": "GROSUPLJE",
+       "arr": "15:16"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}
