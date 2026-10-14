@@ -62,6 +62,8 @@ def tick(now: float):
     for cache in caches():
         cache.warm()
     plans()
+    from . import variants
+    variants.table()  # route groups (contract 4): rebuilt only when routes or patterns were reloaded
 
 
 def _run():

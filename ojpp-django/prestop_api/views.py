@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
-from . import geometry, mapping, maplinks, sources, trips, warm
+from . import geometry, mapping, maplinks, sources, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
@@ -441,13 +441,14 @@ def statistics_routes(request):
     since = date.today() - timedelta(days=30)
     measured = set(TripDelay.objects.filter(service_date__gte=since).values_list('route_id', flat=True).distinct())
     items = []
+    groups = variants.table()  # contract 4: groupId and via
     for r in sources.routes.get().value.values():
         origin, destination = mapping.route_ends(r)
         operator = companies.canonical(r.get('agencyId'), ids) or f'{r["gtfsId"].split(":")[0]}:unknown'
         item = {'id': r['gtfsId'], 'name': mapping.route_name(r) or r['gtfsId'], 'operatorId': operator,
                 'mode': mapping.mode_of(r.get('mode')), 'origin': origin, 'destination': destination,
-                'directions': mapping.route_directions(r), 'qualities': ['observed']}
-        if q and q not in mapping.fold(f'{item["name"]} {origin} {destination}'):
+                'directions': mapping.route_directions(r), 'qualities': ['observed'], **groups.get(r['gtfsId'], variants.of(r['gtfsId']))}
+        if q and q not in mapping.fold(f'{item["name"]} {origin} {destination} {item["via"] or ""}'):
             continue
         if not run_by(item['operatorId']) or (mode and item['mode'] != mode):
             continue
@@ -609,7 +610,9 @@ def line_detail(request, route_id):
     if not line:
         raise ApiError(404, 'LINE_NOT_FOUND', 'This line is not in the current timetable.')
     line = _with_final_delays(line)
-    return envelope({**line, 'patterns': _dense(line['patterns'])}, 'scheduled', used=['otp:timetables'])
+    # Contract 4: the line's group, what sets it apart, and the other variants of the group.
+    grouped = {**variants.of(line['id']), 'variants': variants.siblings(line['id'])}
+    return envelope({**line, **grouped, 'patterns': _dense(line['patterns'])}, 'scheduled', used=['otp:timetables'])
 
 
 def _with_final_delays(line: dict) -> dict:
