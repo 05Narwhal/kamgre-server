@@ -1,0 +1,517 @@
+{
+ "schema": 1,
+ "parser": 1,
+ "notices": [
+  "11056"
+ ],
+ "title": "Vozni red nadomestnega prevoza: Vintgar - Jesenice in obratno (23. 9. - 25. 10.).",
+ "url": "https://potniski.sz.si/wp-content/uploads/2026/09/NovKopija-datoteke-Jesenice-Vintgar-23.9.-25.10.-2026-NEPREKINJENA_.pdf",
+ "sha256": "ef10721ccea254cb5912634c9f58c680a3eb9f91c265e244988c6cba0445889a",
+ "fetched": "2026-10-14T10:30:00+02:00",
+ "status": "ok",
+ "problems": [],
+ "valid": {
+  "from": "2026-09-23",
+  "to": "2026-10-25",
+  "dates": null
+ },
+ "footnotes": {
+  "2": {
+   "text": "Ne vozi ob sobotah, nedeljah in praznikih / 2 - Does not run on Saturdays, Sundays, and public holidays.",
+   "rule": "workdays"
+  },
+  "3": {
+   "text": "Vozi ob sobotah, nedeljah in praznikih / 3 - Runs on Saturdays, Sundays, and public holidays.",
+   "rule": "weekends_holidays"
+  }
+ },
+ "stationNotes": [],
+ "stops": [
+  {
+   "station": "JESENICE",
+   "text": "Zunanja stran ŽP"
+  },
+  {
+   "station": "KOČNA",
+   "text": "AP Podkočna"
+  },
+  {
+   "station": "VINTGAR",
+   "text": "AP Blejska Dobrava Trgovina"
+  }
+ ],
+ "notes": [],
+ "tables": [
+  {
+   "direction": "JESENICE - VINTGAR",
+   "source": "text",
+   "stations": [
+    "JESENICE",
+    "Kočna",
+    "VINTGAR"
+   ],
+   "columns": [
+    {
+     "label": "4295",
+     "train": "4295",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "04:05"
+      },
+      {
+       "station": "Kočna",
+       "arr": "04:11",
+       "dep": "04:11"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "04:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4201",
+     "train": "4201",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "04:05"
+      },
+      {
+       "station": "Kočna",
+       "arr": "04:11",
+       "dep": "04:11"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "04:13"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4203",
+     "train": "4203",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "06:07"
+      },
+      {
+       "station": "Kočna",
+       "arr": "06:13",
+       "dep": "06:13"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "06:15"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4290",
+     "train": "4290",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "08:13"
+      },
+      {
+       "station": "Kočna",
+       "arr": "08:19",
+       "dep": "08:19"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "08:21"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4211",
+     "train": "4211",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "08:52"
+      },
+      {
+       "station": "Kočna",
+       "arr": "08:58",
+       "dep": "08:58"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "09:00"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4205",
+     "train": "4205",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "11:18"
+      },
+      {
+       "station": "Kočna",
+       "arr": "11:24",
+       "dep": "11:24"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "11:26"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4213",
+     "train": "4213",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "14:28"
+      },
+      {
+       "station": "Kočna",
+       "arr": "14:34",
+       "dep": "14:34"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "14:36"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "601",
+     "train": "601",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "16:51"
+      },
+      {
+       "station": "Kočna",
+       "arr": "16:57",
+       "dep": "16:57"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "16:59"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4219",
+     "train": "4219",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "JESENICE",
+       "dep": "19:22"
+      },
+      {
+       "station": "Kočna",
+       "arr": "19:28",
+       "dep": "19:28"
+      },
+      {
+       "station": "VINTGAR",
+       "arr": "19:30"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  },
+  {
+   "direction": "VINTGAR - JESENICE",
+   "source": "mixed",
+   "stations": [
+    "VINTGAR",
+    "Kočna",
+    "JESENICE"
+   ],
+   "columns": [
+    {
+     "label": "4200",
+     "train": "4200",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "05:16"
+      },
+      {
+       "station": "Kočna",
+       "arr": "05:18",
+       "dep": "05:18"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "05:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "600",
+     "train": "600",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "07:20"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "07:26"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4208",
+     "train": "4208",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "09:23"
+      },
+      {
+       "station": "Kočna",
+       "arr": "09:25",
+       "dep": "09:25"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:31"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4292",
+     "train": "4292",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "09:23"
+      },
+      {
+       "station": "Kočna",
+       "arr": "09:25",
+       "dep": "09:25"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "09:31"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4210",
+     "train": "4210",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "13:25"
+      },
+      {
+       "station": "Kočna",
+       "arr": "13:27",
+       "dep": "13:27"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "13:33"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4212",
+     "train": "4212",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "2"
+     ],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "16:38"
+      },
+      {
+       "station": "Kočna",
+       "arr": "16:40",
+       "dep": "16:40"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "16:46"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4214",
+     "train": "4214",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "17:58"
+      },
+      {
+       "station": "Kočna",
+       "arr": "18:00",
+       "dep": "18:00"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "18:06"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4291",
+     "train": "4291",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [
+      "3"
+     ],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "19:16"
+      },
+      {
+       "station": "Kočna",
+       "arr": "19:18",
+       "dep": "19:18"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "19:24"
+      }
+     ],
+     "problems": []
+    },
+    {
+     "label": "4220",
+     "train": "4220",
+     "part": null,
+     "vehicle": "BUS",
+     "additional": false,
+     "footnotes": [],
+     "calls": [
+      {
+       "station": "VINTGAR",
+       "dep": "21:56"
+      },
+      {
+       "station": "Kočna",
+       "arr": "21:58",
+       "dep": "21:58"
+      },
+      {
+       "station": "JESENICE",
+       "arr": "22:04"
+      }
+     ],
+     "problems": []
+    }
+   ]
+  }
+ ]
+}
