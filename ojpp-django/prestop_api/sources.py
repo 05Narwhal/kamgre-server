@@ -414,7 +414,9 @@ def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str 
 # ---------------------------------------------------------------- places
 
 def search_stations(q: str, limit: int) -> list[dict]:
-    """Stops grouped by name within ~400 m, best prefix matches first."""
+    """Stops grouped by name within stopgroups.MERGE_METERS (the poles of one stop on both sides of the road), best
+    prefix matches first. A railway station never takes a namesake bus stop here: those in range are one stop already
+    (stopgroups.merge), and one further off is another place (Radovljica's bus stop is 340 m from its station)."""
     needle = mapping.fold(q.strip())
     if not needle:
         return []
@@ -428,7 +430,7 @@ def search_stations(q: str, limit: int) -> list[dict]:
         clusters: list[list[dict]] = []
         for s in sorted(members, key=lambda s: ('rail' not in s['modes'], s['id'])):
             for c in clusters:
-                if abs(c[0]['latitude'] - s['latitude']) < 0.004 and abs(c[0]['longitude'] - s['longitude']) < 0.006:
+                if ('rail' in c[0]['modes']) == ('rail' in s['modes']) and all(stopgroups.meters(m, s) <= stopgroups.MERGE_METERS for m in c):
                     c.append(s)
                     break
             else:

@@ -130,3 +130,18 @@ class MemberNameTests(SimpleTestCase):
                 mock.patch.object(sources, '_with_live_platforms', side_effect=lambda entries, *a, **k: entries):
             items = sources.board('IJPP:1', 'departure', 0, 'sl')
         self.assertEqual({i['stopId']: i['stopName'] for i in items}, {'IJPP:1': 'Ljubljana Bavarski dvor', 'LPP:1': 'Bavarski dvor'})
+
+
+class SearchTests(SimpleTestCase):
+    """Search shows one result per place: namesakes far apart (Radovljica's bus stop, 340 m from its station) are two."""
+
+    def test_namesakes_beyond_the_merge_range_or_bus_and_rail_stay_apart(self):
+        listed = [stop('IJPP:1122815', 'Radovljica', 46.340415, 14.173759, modes=('rail',)),
+                  stop('IJPP:1129160', 'Radovljica', 46.343418, 14.17281),
+                  stop('IJPP:1', 'Kovor', 46.30, 14.30), stop('IJPP:2', 'Kovor', north_of(46.30, 30), 14.30),  # both sides of the road
+                  stop('IJPP:3', 'Kovor', north_of(46.30, 400), 14.30)]
+        with mock.patch.object(sources.stops, 'get', return_value=mock.Mock(value={'list': listed})):
+            found = sources.search_stations('Radovljica', 10)
+            self.assertEqual([(p['stopId'], p['modes']) for p in found], [('IJPP:1122815', ['rail']), ('IJPP:1129160', ['bus'])])
+            self.assertEqual(found[0]['latitude'], 46.340415)  # the station where it is, not between the two
+            self.assertEqual(sorted(p['stopId'] for p in sources.search_stations('Kovor', 10)), ['IJPP:1', 'IJPP:3'])
