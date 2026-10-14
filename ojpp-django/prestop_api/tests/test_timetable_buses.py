@@ -557,3 +557,24 @@ class JourneyTests(SimpleTestCase):
         legs, meta = self.rewrite([leg_on(self.trips['RG 318'], 'Ljubljana', 'Jesenice')], [META])
         walked, _ = journeys.replacement_walks(legs, meta)
         self.assertTrue(all('_boardAt' not in l and '_alightAt' not in l for l in walked))
+
+
+class LineAndTripTests(SimpleTestCase):
+    def test_the_line_of_a_trains_buses_has_each_bus_as_a_variant(self):
+        plan = plan_for('20261014')
+        route = closures.synthetic_line_id('IJPP:64427')  # RG 318
+        road = {'coords': [[14.5, 46.05], [14.1, 46.4]], 'cum': [0, 1], 'distances': [0, 1, 2, 3], 'complete': True}
+        with mock.patch.object(scheduled, 'day_plan', return_value=plan), mock.patch.object(scheduled, '_road_shape', return_value=road):
+            line = scheduled.synthetic_line(route, datetime(2026, 10, 14).date())
+        self.assertEqual((line['name'], line['replacesTrain'], line['replacement']), ('BUS 318', 'RG 318', True))
+        self.assertEqual(sorted((p['stops'][0]['name'], p['stops'][-1]['name']) for p in line['patterns']),
+                         [('Kranj', 'Jesenice'), ('Ljubljana', 'Jesenice'), ('Ljubljana', 'Lesce-Bled')])
+
+    def test_a_trip_page_tells_where_the_bus_leaves_earlier_than_published(self):
+        plan = MondayTests.next_day_plan()  # 20 October, notice 11198
+        bus = next(b for b in plan['synthetic'] if b['route']['shortName'] == 'BUS 316')
+        with mock.patch.object(scheduled, 'synthetic_bus', return_value=bus), mock.patch.object(scheduled, '_road_shape', return_value=None):
+            entry = scheduled.synthetic_entry(bus['id'])
+        podnart = next(s for s in entry['static']['stops'] if s['name'] == 'Podnart')
+        self.assertIn('5 minut pred objavljenim voznim redom', podnart['note'])
+        self.assertNotIn('note', next(s for s in entry['static']['stops'] if s['name'] == 'Kranj'))

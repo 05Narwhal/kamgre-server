@@ -261,7 +261,9 @@ def synthetic_entry(trip_id: str) -> Optional[dict]:
         'mode': 'bus', 'color': None, 'destination': bus['headsign'] or '', 'directionId': '0', 'patternId': bus['pattern'],
         'length': round(shape['cum'][-1], 1) if shape else 0.0, 'geometry': coords,
         'stops': [{'stopId': s['gtfsId'], 'name': s.get('name') or s['gtfsId'], 'latitude': round(s['lat'], 6), 'longitude': round(s['lon'], 6),
-                   'distance': d, 'position': i} for i, (s, d) in enumerate(zip(bus['stops'], distances))],
+                   'distance': d, 'position': i,
+                   # SŽ's note on the stop ("the shuttle from the station leaves 5 minutes before the published time")
+                   **({'note': s['note']} if s.get('note') else {})} for i, (s, d) in enumerate(zip(bus['stops'], distances))],
         'complete': bool(shape and shape['complete']),
         'replacement': True, 'synthetic': True,
     }
@@ -308,7 +310,8 @@ def synthetic_line(route_id: str, day: date) -> Optional[dict]:
     route = buses[0]['route']
     origin, destination = patterns[0]['stops'][0]['name'], patterns[0]['stops'][-1]['name']
     return {
-        'id': route_id, 'name': route['shortName'], 'longName': f'{origin} – {destination}',
+        # A replacement timetable's buses are named each ("BUS 318/2"); their line is the train's ("BUS 318").
+        'id': route_id, 'name': buses[0].get('lineName') or route['shortName'], 'longName': f'{origin} – {destination}',
         'operatorId': route['agency']['gtfsId'], 'operatorName': '', 'mode': 'bus', 'color': None,
         'origin': origin, 'destination': destination, 'serviceDate': day.isoformat(), 'patterns': patterns,
         'provisional': not complete, 'replacement': True, 'replacesTrain': buses[0].get('trainName') or None,
