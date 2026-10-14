@@ -1,0 +1,23 @@
+[Unit]
+Description=Prestop SŽ replacement timetables (reads new notice PDFs into /var/lib/prestop/sz-timetables)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=prestop
+Group=prestop
+EnvironmentFile=/etc/prestop/prestop.env
+WorkingDirectory=/opt/prestop/app
+ExecStart=/opt/prestop/venv/bin/python manage.py szpdf_sync
+# A short batch job next to the API on the free A1 VM: low priority, half a core at most, bounded memory
+# (a full re-parse of 24 PDFs peaks at about 160 MB and takes seconds).
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=50%
+MemoryMax=400M
+TimeoutStartSec=10min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true

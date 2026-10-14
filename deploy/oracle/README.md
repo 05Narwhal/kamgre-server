@@ -137,6 +137,7 @@ powershell -File backend/deploy/oracle/push.ps1
 | Idle reclamation | `prestop-floor` keeps CPU and memory at 25% (only needed while the account is free-only) |
 | Outbound data | API load shedding; `prestop-egress.timer` refuses new visitors at 6000 GB or ahead of pace and stops public traffic at 8000 GB/month, before Oracle bills above 10 TB |
 | Timetables | `prestop-ingest` refreshes GTFS nightly at 04:30 |
+| SŽ replacement timetables | `prestop-szpdf.timer` every 30 min (3 min after boot, and once after each deploy): `prestop-manage szpdf_sync` reads the PDFs SŽ's notices link into `/var/lib/prestop/sz-timetables` (one JSON per PDF plus `index.json`, which the API reads). A PDF is downloaded when its link is new (a link it has is re-checked once a day with a conditional request) and parsed when its checksum or the parser version is new, so most runs take a second or two. A one-shot service with `Nice=10`, `CPUQuota=50%`, `MemoryMax=400M`; a screenshot pasted over a table is read with `tesseract-ocr`, which `update.sh` installs. Files of notices gone for 7 days are deleted. `sudo prestop-manage szpdf_sync --report` shows one line per notice (status ok / unsure / failed / missing) |
 | Backups | `prestop-backup.timer` at 03:00: `pg_dump` to `/var/backups/prestop`, 7 days kept, optional off-server copy |
 | Security updates | unattended-upgrades, with a reboot at 03:30 when needed (services come back on their own) |
 

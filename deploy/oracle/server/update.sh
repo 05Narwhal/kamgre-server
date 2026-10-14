@@ -31,6 +31,9 @@ unset CLOUDFLARE_TUNNEL_TOKEN
 
 # Servers bootstrapped before the egress guard existed.
 command -v vnstat >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -yq vnstat
+# OCR for SŽ timetable PDFs with a screenshot pasted over the table (prestop-szpdf.timer); free software on this VM.
+command -v tesseract >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -yq tesseract-ocr
+install -d -o prestop -g prestop -m 0750 "$STATE/sz-timetables"
 
 step "Config files"
 install -m 0644 "$DEPLOY"/systemd/*.service "$DEPLOY"/systemd/*.timer /etc/systemd/system/
@@ -110,7 +113,7 @@ bash "$DEPLOY/server/keep-stats.sh" check
 
 step "Services"
 systemctl enable -q prestop-web prestop-collector prestop-push prestop-ingest prestop-floor caddy redis-server postgresql
-systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer
+systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer prestop-szpdf.timer
 systemctl restart prestop-web prestop-collector prestop-push prestop-ingest
 systemctl restart prestop-floor
 # Keep public traffic off while the egress guard has tripped this month.
@@ -125,6 +128,8 @@ else
 fi
 # Refresh the traffic stage (busy/stopped) for the API and Caddy right away.
 systemctl start prestop-egress.service || true
+# Read the SŽ timetables now rather than at the next timer run: a new parser version re-reads every cached PDF.
+systemctl start --no-block prestop-szpdf.service || true
 
 step "Health check"
 for i in $(seq 30); do
