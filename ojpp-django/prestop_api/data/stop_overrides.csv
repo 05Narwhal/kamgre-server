@@ -25,3 +25,4 @@ IJPP:1122988,stop,46.236701,15.255854,,,"Celje Lava rail stop: OSM halt node 939
 IJPP:1123032,stop,45.955230,13.635280,,,"Nova Gorica rail stop: OSM station node 13908278283 (checked 2026-10-11); feed had it 332 m off"
 IJPP:1123033,stop,45.975070,13.647963,,,"Solkan rail stop: OSM halt node 9907002126 (checked 2026-10-11); feed had it 303 m off"
 IJPP:1168304,stop,46.393829,16.203577,,,"Frankovci rail stop: OSM halt node 422472910 (checked 2026-10-11); feed had it 653 m off"
+LPP:567980fa-7783-411d-9c67-55b44d753880,stop,,,IJPP:1167340,Aleja,"LPP's name for Aleja's pole on line 1 (3 m from IJPP Aleja, same direction); not a stop of its own (2026-10-14)"

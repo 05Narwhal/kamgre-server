@@ -4,8 +4,8 @@ Feeds misplace stops: Koper's intercity station sat ~170 m south of the bus stat
 GPS-surveyed stops drift off the road. Two corrections apply, in this order of trust:
 
 1. `data/stop_overrides.csv` (hand-maintained, version-controlled) wins over everything.
-   Row types: `stop` moves one stop (and with `merge_into` joins it to another stop's
-   station), `station` pins the marker of the merged station the stop belongs to, and
+   Row types: `stop` moves one stop (with `merge_into` joins it to another stop's station, and
+   with `label` renames it: LPP calls Aleja's pole "Avtomontaža"), `station` pins the marker of the merged station the stop belongs to, and
    `replacement` adds the stop where SŽ's replacement buses leave from (next to the station,
    not at it) — see replacement.py.
 2. Automatic snapping: a stop more than SNAP_METERS from a road buses can use moves to the
@@ -46,9 +46,9 @@ def _float(value) -> Optional[float]:
 
 
 def read_overrides(path: Path = OVERRIDES) -> dict:
-    """{'stops': id -> (lat, lon), 'stations': id -> (lat, lon), 'merge': id -> target id,
+    """{'stops': id -> (lat, lon), 'stations': id -> (lat, lon), 'merge': id -> target id, 'names': id -> name,
     'replacement': station id -> [{'lat', 'lon', 'label'}]}. Bad rows are logged and skipped."""
-    out = {'stops': {}, 'stations': {}, 'merge': {}, 'replacement': {}}
+    out = {'stops': {}, 'stations': {}, 'merge': {}, 'names': {}, 'replacement': {}}
     if not path.exists():
         return out
     with open(path, newline='', encoding='utf-8') as handle:
@@ -68,6 +68,8 @@ def read_overrides(path: Path = OVERRIDES) -> dict:
             target = (row.get('merge_into') or '').strip()
             if target and target != stop_id:
                 out['merge'][stop_id] = target
+            if kind == 'stop' and (row.get('label') or '').strip():
+                out['names'][stop_id] = row['label'].strip()
     return out
 
 
@@ -99,9 +101,12 @@ def corrected(stop_id: str, lat: float, lon: float, overrides: dict, snaps: dict
 
 
 def correct(raw_stops: Iterable[dict], overrides: dict, snaps: dict) -> list[dict]:
-    """OTP stops with corrected `lat`/`lon` (copies; the feed's position kept as `feedLat`/`feedLon`)."""
+    """OTP stops with corrected `lat`/`lon` (copies; the feed's position kept as `feedLat`/`feedLon`) and names."""
     out = []
+    names = overrides.get('names') or {}
     for s in raw_stops:
+        if s.get('gtfsId') in names:
+            s = {**s, 'name': names[s['gtfsId']]}
         if s.get('lat') is None or s.get('lon') is None:
             out.append(s)
             continue
@@ -140,6 +145,11 @@ def position(stop_id: Optional[str], lat: float, lon: float) -> tuple[float, flo
         return lat, lon
     overrides, snaps = tables()
     return corrected(stop_id, lat, lon, overrides, snaps)
+
+
+def renamed(stop_id: Optional[str], name):
+    """A stop's name after the override table (trip and line views read names from OTP directly)."""
+    return (tables()[0].get('names') or {}).get(stop_id) or name if stop_id else name
 
 
 def replacement_stops(station_ids: Iterable[str]) -> list[dict]:

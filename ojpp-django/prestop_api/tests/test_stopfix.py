@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from django.test import SimpleTestCase
 
@@ -11,6 +12,7 @@ stop_id,type,lat,lon,merge_into,label,note
 IJPP:1121103,stop,45.538642,13.737744,,,OSM
 IJPP:1121103,station,45.538642,13.737744,,,OSM
 IJPP:1123012,stop,,,IJPP:1121103,,hub
+LPP:avtomontaza,stop,,,IJPP:1167340,Aleja,renamed
 SZ:42,replacement,46.05,14.51,,Bus stop in front of the station,notice
 X:bad,teleport,1,2,,,unknown type
 '''
@@ -33,8 +35,24 @@ class OverrideTests(SimpleTestCase):
     def test_rows_by_type(self):
         self.assertEqual(self.overrides['stops'], {'IJPP:1121103': (45.538642, 13.737744)})
         self.assertEqual(self.overrides['stations'], {'IJPP:1121103': (45.538642, 13.737744)})
-        self.assertEqual(self.overrides['merge'], {'IJPP:1123012': 'IJPP:1121103'})
+        self.assertEqual(self.overrides['merge'], {'IJPP:1123012': 'IJPP:1121103', 'LPP:avtomontaza': 'IJPP:1167340'})
+        self.assertEqual(self.overrides['names'], {'LPP:avtomontaza': 'Aleja'})
         self.assertEqual(self.overrides['replacement']['SZ:42'][0]['label'], 'Bus stop in front of the station')
+
+    def test_avtomontaza_is_folded_into_aleja(self):
+        # LPP's "Avtomontaža" is the pole of Aleja on line 1: one stop, called Aleja everywhere.
+        raw = [{**otp_stop('IJPP:1167340', 46.077094, 14.482374), 'name': 'Aleja'},
+               {**otp_stop('LPP:avtomontaza', 46.077312, 14.4824), 'name': 'Avtomontaža'}]
+        fixed = stopfix.correct(raw, self.overrides, {})
+        self.assertEqual([s['name'] for s in fixed], ['Aleja', 'Aleja'])
+        built = [stop(s['gtfsId'], s['name'], s['lat'], s['lon'], operators=(s['gtfsId'].split(':')[0] + ':x',)) for s in fixed]
+        merged, groups = stopgroups.merge(built, self.overrides['merge'])
+        self.assertEqual([(s['id'], s['name']) for s in merged], [('IJPP:1167340', 'Aleja')])
+        self.assertEqual(groups['LPP:avtomontaza'], ['IJPP:1167340', 'LPP:avtomontaza'])
+        with mock.patch.object(stopfix, 'tables', return_value=(self.overrides, {})):
+            self.assertEqual(stopfix.renamed('LPP:avtomontaza', 'Avtomontaža'), 'Aleja')
+            self.assertEqual(stopfix.renamed('IJPP:1', 'Kino Šiška'), 'Kino Šiška')
+            self.assertIsNone(stopfix.renamed(None, None))
 
     def test_override_beats_the_road_snap(self):
         snaps = {stopfix.snap_key('IJPP:1121103', 45.53824, 13.738235): [45.5, 13.7, 80.0]}

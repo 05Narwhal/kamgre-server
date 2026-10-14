@@ -121,10 +121,10 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
         'id': t['gtfsId'], 'routeId': route.get('gtfsId'), 'routeName': mapping.route_name(route) or '?',
         'operatorId': (route.get('agency') or {}).get('gtfsId') or f'{t["gtfsId"].split(":")[0]}:unknown',
         'mode': mapping.mode_of(route.get('mode')), 'color': f'#{route["color"]}' if route.get('color') else None,
-        'destination': stops[-1].get('name') or t.get('tripHeadsign') or '', 'directionId': mapping.direction_key(t.get('directionId')),
+        'destination': stopfix.renamed(stops[-1].get('gtfsId'), stops[-1].get('name')) or t.get('tripHeadsign') or '', 'directionId': mapping.direction_key(t.get('directionId')),
         'patternId': (t.get('pattern') or {}).get('code') or t['gtfsId'],
         'length': round(length, 1), 'geometry': geometry,
-        'stops': [{'stopId': s['gtfsId'], 'name': s.get('name') or s['gtfsId'], 'latitude': round(s['lat'], 6), 'longitude': round(s['lon'], 6),
+        'stops': [{'stopId': s['gtfsId'], 'name': stopfix.renamed(s['gtfsId'], s.get('name') or s['gtfsId']), 'latitude': round(s['lat'], 6), 'longitude': round(s['lon'], 6),
                    'distance': d, 'position': st['stopPosition'], **({'platform': s['bay'], 'platformUsual': s['bayUsual']} if s.get('bay') else {})}
                   for s, d, st in zip(stops, distances, stoptimes)],
         'complete': complete, 'replacement': replacement,
@@ -366,7 +366,7 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
             'departures': _departures(p.get('tripsForDate') or []),
             'length': round(cumulative(geometry)[-1], 1) if len(geometry) > 1 else 0.0,
             'geometry': geometry,
-            'stops': [{'stopId': s['gtfsId'], 'name': s.get('name') or s['gtfsId'], 'latitude': round(s['lat'], 6),
+            'stops': [{'stopId': s['gtfsId'], 'name': stopfix.renamed(s['gtfsId'], s.get('name') or s['gtfsId']), 'latitude': round(s['lat'], 6),
                        'longitude': round(s['lon'], 6), 'distance': d} for s, d in zip(stops, distances)],
         })
     # Busiest variants first; rare variants (depot runs, school trips) last.

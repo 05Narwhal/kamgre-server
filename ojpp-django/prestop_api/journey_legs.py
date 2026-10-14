@@ -13,7 +13,7 @@ why). The walks between a station and its replacement stop are added afterwards
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
-from . import closures, geometry, leg_alerts, mapping, sz
+from . import closures, geometry, leg_alerts, mapping, stopfix, sz
 from . import replacement as replaced_by
 
 PlanFor = Callable[[float], Optional[dict]]
@@ -43,7 +43,7 @@ def _index(stops: list[dict], place: dict, after: int = -1) -> Optional[int]:
 
 def _place(stop: dict) -> dict:
     """A station as a leg end."""
-    place = {'name': stop.get('name') or 'Station', 'latitude': stop['lat'], 'longitude': stop['lon'], 'kind': 'station'}
+    place = {'name': stopfix.renamed(stop.get('gtfsId'), stop.get('name') or 'Station'), 'latitude': stop['lat'], 'longitude': stop['lon'], 'kind': 'station'}
     if stop.get('gtfsId'):
         place['stopId'] = place['id'] = stop['gtfsId']
     return place

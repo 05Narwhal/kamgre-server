@@ -251,6 +251,7 @@ def is_replacement(route: dict) -> bool:
 
 
 def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict]) -> list[dict]:
+    from . import stopfix
     out = []
     for st in stoptimes:
         trip = st.get('trip') or {}
@@ -267,10 +268,8 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         realtime = bool(st.get('realtime'))
         canceled = st.get('realtimeState') == 'CANCELED'
         effective = day + (st['realtimeArrival'] if kind == 'arrival' else st['realtimeDeparture'])
-        if kind == 'arrival':
-            other_end = ((trip.get('departureStoptime') or {}).get('stop') or {}).get('name')
-        else:
-            other_end = ((trip.get('arrivalStoptime') or {}).get('stop') or {}).get('name')
+        end = ((trip.get('departureStoptime' if kind == 'arrival' else 'arrivalStoptime') or {}).get('stop') or {})
+        other_end = stopfix.renamed(end.get('gtfsId'), end.get('name'))
         route_id = route.get('gtfsId') or f'{stop_id.split(":")[0]}:unknown'
         trip_id = trip.get('gtfsId') or f'{route_id}-{scheduled}'
         out.append({
