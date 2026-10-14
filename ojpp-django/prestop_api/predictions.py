@@ -133,3 +133,51 @@ def transfer_shift(previous: dict, leg: dict) -> int:
     if leg.get('predictionBasis') == 'previous-trip':
         shift += max(0, leg.get('predictedDelaySeconds') or 0)
     return shift
+
+
+# ---------------------------------------------------------------- staying on the vehicle (contract 3)
+
+STAY_WALK = 60  # s: more walking than this between two legs is a change of vehicle
+
+
+def stays_on_vehicle(previous: dict, previous_meta: dict, leg: dict, meta: dict, walking: float) -> bool:
+    """The vehicle of `previous` goes on as `leg`: OTP's interline (stay-seated), the same block in the feed, or
+    the vehicle blocks.py learned (today's run of the leg's previous trip is `previous`, or it usually is)."""
+    if meta.get('interline'):
+        return True
+    if walking > STAY_WALK or meta.get('held') or leg.get('replacement') or previous.get('replacement'):
+        return False
+    from .sources import stop_group
+    end, begin = previous['destination'].get('stopId'), leg['origin'].get('stopId')
+    if not end or (end != begin and begin not in stop_group(end)):
+        return False
+    feed = lambda l: (l.get('tripId') or ':').split(':', 1)[0]
+    if previous_meta.get('blockId') and previous_meta['blockId'] == meta.get('blockId') and feed(previous) == feed(leg):
+        return True
+    if not settings.PRESTOP_PREDICTIONS or meta.get('tripStart') is None or not leg.get('routeId'):
+        return False
+    day = (datetime.fromtimestamp(_ts(leg['scheduledDeparture']), LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()
+    prev = previous_trip(leg['routeId'], meta['tripStart'], day)
+    if prev and prev.get('tripId'):
+        return prev['tripId'] == previous.get('tripId')
+    from prestop_statistics import blocks
+    learned = ((_background(('blocks', leg['routeId'], day), lambda: blocks.learn(leg['routeId'], day)) or {}).get(meta['tripStart']) or {}).get('previous')
+    return bool(learned) and learned['routeId'] == previous.get('routeId') and learned['start'] == previous_meta.get('tripStart')
+
+
+# Whether staying on needs a new ticket or a re-scan when the line changes, by operator:
+# - SŽ (IJPP:1161), train to train: a ticket is for a relation, not for one train, so a through train that
+#   changes its number needs none (SŽ's conditions of carriage: "vozovnica velja za relacijo").
+# - LPP: one fare covers changes within 90 minutes, but every boarding is validated (the Urbana card or the
+#   phone is held to the reader again): a re-scan (lpp.si, Urbana; rtvslo.si/slovenija/lpp-namesto-zetona-90-minut-voznje/97648).
+# - IJPP intercity buses (Arriva, Nomago, ...): single tickets are bought for one line's relation from the driver
+#   or online (gov.si 2026-09-18: enkratne vozovnice IJPP po novem tudi prek spleta); nothing says they carry
+#   over to another line, so a new ticket.
+# - Anyone else: unknown, so a new ticket.
+NO_NEW_TICKET = {'IJPP:1161'}
+
+
+def new_ticket(previous: dict, leg: dict) -> bool:
+    if previous.get('routeId') and previous.get('routeId') == leg.get('routeId'):
+        return False  # the same line goes on (a loop or a through-run under one name)
+    return not (previous.get('operatorId') == leg.get('operatorId') in NO_NEW_TICKET and previous['mode'] == leg['mode'] == 'rail')

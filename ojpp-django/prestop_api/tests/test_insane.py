@@ -151,3 +151,49 @@ class PredictedDelayTests(SimpleTestCase):
         self.assertEqual([(l['predictedDelaySeconds'], l['predictionBasis']) for l in j['legs'] if l['mode'] != 'walk'], [(None, None)] * 2)
         with override_settings(PRESTOP_PREDICTIONS=False):
             self.assertIsNone(self.journey(usual={'09:40': 240.0})['legs'][0]['predictionBasis'])
+
+
+@override_settings(PRESTOP_PREDICTIONS=True)
+class StayOnVehicleTests(SimpleTestCase):
+    """Contract 3: the bus goes on as another line and the rider stays on it."""
+
+    def build(self, block=(None, None), previous=None, learned=None, frm='IJPP:b', interline=False, operators=('IJPP:bus', 'IJPP:bus')):
+        first = leg('BUS', '10:00:00', '10:20:00', trip='IJPP:t1')
+        second = leg('BUS', '10:22:00', '10:50:00', trip='IJPP:t2', interline=interline)
+        first['to']['stop']['gtfsId'], second['from']['stop']['gtfsId'] = 'IJPP:b', frm
+        second['route'] = {**second['route'], 'gtfsId': 'IJPP:r2', 'shortName': '2', 'agency': {'gtfsId': operators[1]}}
+        first['route']['agency'] = {'gtfsId': operators[0]}
+        for raw, b, start in ((first, block[0], 9 * 3600 + 40 * 60), (second, block[1], 10 * 3600 + 22 * 60)):
+            raw['trip'].update(blockId=b, departureStoptime={'scheduledDeparture': start})
+        with mock.patch.object(predictions, 'previous_trip', return_value=previous), \
+                mock.patch.object(predictions, 'usual', return_value={}), \
+                mock.patch.object(predictions, '_background', return_value={10 * 3600 + 22 * 60: {'previous': learned}} if learned else {}), \
+                mock.patch('prestop_api.sources.stop_group', side_effect=lambda s: [s]):
+            [j] = journeys.build_journeys(plan([first, second]), request(slack=0), [])
+        return [l for l in j['legs'] if l['mode'] != 'walk'][1], j
+
+    def test_the_same_block_in_the_feed(self):
+        second, j = self.build(block=('B7', 'B7'))
+        self.assertEqual((second['staysOnVehicle'], second['newTicket']), (True, True))
+        self.assertEqual(j['transfers'][0]['status'], 'safe')
+
+    def test_the_vehicle_learned_from_the_feed(self):
+        second, _ = self.build(previous={'tripId': 'IJPP:t1', 'vehicleId': 'IJPP:v1', 'delaySeconds': None, 'slack': 120})
+        self.assertTrue(second['staysOnVehicle'])
+        second, _ = self.build(learned={'routeId': 'IJPP:r', 'start': 9 * 3600 + 40 * 60, 'end': 10 * 3600 + 20 * 60})
+        self.assertTrue(second['staysOnVehicle'])
+
+    def test_otp_interline_and_the_ticket_rule(self):
+        second, _ = self.build(interline=True, operators=('IJPP:1161', 'IJPP:1161'))
+        self.assertTrue(second['staysOnVehicle'])
+        self.assertTrue(second['newTicket'])  # an SŽ bus to bus: unknown, so a new ticket
+        self.assertFalse(predictions.new_ticket({'routeId': 'R1', 'operatorId': 'IJPP:1161', 'mode': 'rail'},
+                                                {'routeId': 'R2', 'operatorId': 'IJPP:1161', 'mode': 'rail'}))
+        self.assertFalse(predictions.new_ticket({'routeId': 'R1', 'operatorId': 'LPP:lpp', 'mode': 'bus'}, {'routeId': 'R1', 'operatorId': 'LPP:lpp', 'mode': 'bus'}))
+
+    def test_a_different_bus_or_another_stop_is_a_change(self):
+        for kwargs in ({}, {'block': ('B7', 'B8')}, {'block': ('B7', 'B7'), 'frm': 'IJPP:elsewhere'},
+                       {'previous': {'tripId': 'IJPP:other', 'vehicleId': 'IJPP:v2', 'delaySeconds': None, 'slack': 0}}):
+            second, _ = self.build(**kwargs)
+            self.assertNotIn('staysOnVehicle', second, kwargs)
+            self.assertNotIn('newTicket', second, kwargs)

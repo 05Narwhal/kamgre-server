@@ -570,8 +570,10 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 legs[-1]['platform'] = platform
                 if usual:
                     legs[-1]['platformUsual'] = True
+            trip = l.get('trip') or {}
             meta.append({'transit': transit, 'interline': bool(l.get('interlineWithPreviousLeg')), 'duration': l.get('duration') or 0,
-                         'realtime': bool(start_est), 'platform': platform})
+                         'realtime': bool(start_est), 'platform': platform, 'blockId': trip.get('blockId'),
+                         'tripStart': (trip.get('departureStoptime') or {}).get('scheduledDeparture')})
         # Contract 2: live, the vehicle's previous trip, or how late the departure usually is (predictions.py).
         predictions.annotate(legs, raw)
         if plan_for:
@@ -584,11 +586,16 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             if leg['mode'] != 'walk':
                 leg.setdefault('predictedDelaySeconds', leg['delaySeconds'])
                 leg.setdefault('predictionBasis', 'live' if leg['delaySeconds'] is not None else None)
-        transfers, previous, walking = [], None, 0.0
+        transfers, previous, previous_meta, walking = [], None, None, 0.0
         for leg, m in zip(legs, meta):
             if not m['transit']:
                 walking += m['duration']
                 continue
+            # Contract 3: the same vehicle goes on as the next line (OTP's interline, the feed's block, or the vehicle
+            # learned in blocks.py); the rider stays on, perhaps with a new ticket.
+            stays = previous is not None and predictions.stays_on_vehicle(previous, previous_meta, leg, m, walking)
+            if stays:
+                leg['staysOnVehicle'], leg['newTicket'] = True, predictions.new_ticket(previous, leg)
             # Every change of vehicle is rated, tied to the leg it boards (`legId`): staying seated on a through-run
             # (OTP's interline) is none. A change SŽ holds (train to its replacement bus and back) is rated comfortable
             # and, as before, not counted: it is one ride.
@@ -597,7 +604,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 required, safety = round(walking), req['minTransferSeconds']
                 if leg['canceled'] or previous['canceled']:
                     status, meets = 'unknown', None
-                elif m.get('held'):
+                elif m.get('held') or stays:  # held by SŽ, or the bus waits for itself
                     status, meets = 'safe', True
                 elif req.get('riskMode') == 'insane':
                     # Within the rider's allowance (down to -1 min) is a bet, labelled tight when under 2 min spare.
@@ -611,7 +618,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 transfers.append({'requiredSeconds': required, 'safetySeconds': safety, 'availableSeconds': round(available),
                                   'platform': m['platform'] or None, 'meetsSafetyMargin': meets, 'status': status, 'legId': leg['id'],
                                   **({'held': True} if m.get('held') else {})})
-            previous, walking = leg, 0.0
+            previous, previous_meta, walking = leg, m, 0.0
         notices = []
         for leg in legs:
             for alert_id in leg['alertIds']:
