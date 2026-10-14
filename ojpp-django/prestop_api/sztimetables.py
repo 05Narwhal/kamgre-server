@@ -93,18 +93,20 @@ def load(now: Optional[float] = None) -> Optional[Timetables]:
         if stamp == _state['stamp']:
             return _state['tables']
         _state['stamp'] = stamp
-        _state['tables'] = _read(where) if stamp else None
+        _state['tables'] = read(where, _state['files']) if stamp else None
+        _state['files'] = _state['tables'].files if _state['tables'] else {}
         return _state['tables']
 
 
-def _read(where: Path) -> Optional[Timetables]:
+def read(where: Path, known: Optional[dict[str, dict]] = None) -> Optional[Timetables]:
+    """The timetables in directory `where`; `known`: files already read, by checksum."""
     try:
         index = json.loads((where / 'index.json').read_text(encoding='utf-8'))
     except (OSError, ValueError) as e:
         logger.warning('SŽ timetables: index.json unreadable: %r', e)
         return None
     notices = {str(k): str(v) for k, v in (index.get('notices') or {}).items() if v}
-    old, files = _state['files'], {}
+    old, files = known or {}, {}
     for sha in set(notices.values()) | {str(s) for s in index.get('files') or [] if s}:
         if sha in old:  # a file is named by its PDF's checksum: one already read has not changed
             files[sha] = old[sha]
@@ -117,7 +119,6 @@ def _read(where: Path) -> Optional[Timetables]:
             logger.warning('SŽ timetables: %s.json left out: %r', sha, e)
             continue
         files[sha] = data
-    _state['files'] = files
     return Timetables({n: s for n, s in notices.items() if s in files}, files, index.get('updated'))
 
 

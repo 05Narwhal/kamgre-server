@@ -17,7 +17,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from . import closures, geometry, mapping, roads, sz
+from . import closures, geometry, mapping, roads, sz, sztimetables
 from . import replacement as replaced_by
 from .trips import service_day
 from .upstream import Cached, otp
@@ -131,42 +131,50 @@ def _load_timetable() -> list[dict]:
 
 shapes = Cached(_load_shapes, ttl=6 * 3600, max_stale=48 * 3600, revalidate=6 * 3600)
 timetable = Cached(_load_timetable, ttl=120, max_stale=6 * 3600, revalidate=600)
-_derived: dict = {'key': None, 'sections': {}, 'synthetic': [], 'by_id': {}}
+_derived: dict = {'key': None, 'sections': {}, 'synthetic': [], 'by_id': {}, 'suppressed': {}, 'decided': {}}
 # Other service days (a board or a journey for another date): their trains, and what replaces them that day.
 DAY_PLANS = 4
 _day_tables: dict[str, Cached] = {}
 _day_derived: dict[str, dict] = {}
 
 
-def _derive_into(slot: dict, trips: list[dict]) -> dict:
-    """Replaced sections and synthetic replacement buses for a timetable and the notices, recomputed
-    only when one of them changes (see replacement.py, closures.py)."""
+def _derive_into(slot: dict, trips: list[dict], defer_timetables: bool = False) -> dict:
+    """Replaced sections and synthetic replacement buses for a timetable, the notices and SŽ's replacement
+    timetables, recomputed only when one of them changes (see replacement.py, closures.py). With
+    `defer_timetables` (a request for today or tomorrow) new replacement timetables alone do not rebuild the
+    plan: the warmer does that in the background (warm.plans)."""
     loaded = closures.inputs()
     # The notices by content, the rest by identity (a reload is a new object).
-    key = (trips, closures.notices_fingerprint(loaded[0]), *loaded[1:]) if loaded else (trips,)
+    key = (trips, closures.notices_fingerprint(loaded[0]), *loaded[1:], sztimetables.current()) if loaded else (trips,)
     old = slot['key']
     same = lambda a, b: a == b if isinstance(a, int) else a is b  # noqa: E731
-    if old is None or len(old) != len(key) or not all(same(a, b) for a, b in zip(old, key)):
-        real = replaced_by.sections(trips)
-        synthetic = []
-        if loaded:
-            try:
-                synthetic = closures.build(trips, real, loaded)
-            except Exception as e:  # a notice we cannot read must not take the trains off the map
-                logger.warning('Synthetic replacement buses failed: %r', e)
-        merged = {k: list(v) for k, v in real.items()}
-        for train, extra in closures.sections(synthetic).items():
-            merged.setdefault(train, []).extend(extra)
-        by_trip: dict[str, list[dict]] = {}
-        for t in trips:
-            by_trip.setdefault(t['id'], []).append(t)
-        slot.update(key=key, sections=merged, synthetic=synthetic, by_id={b['id']: b for b in synthetic}, trips=by_trip)
+    if old is not None and len(old) == len(key):
+        rest = len(key) - 1 if loaded else len(key)  # everything but the replacement timetables
+        if all(same(a, b) for a, b in zip(old[:rest], key[:rest])) and (not loaded or defer_timetables or same(old[-1], key[-1])):
+            return slot
+    real = replaced_by.sections(trips)
+    built = {'buses': [], 'suppressed': {}, 'decided': {}}
+    if loaded:
+        try:
+            built = closures.build(trips, real, loaded, key[-1])
+        except Exception as e:  # a notice we cannot read must not take the trains off the map
+            logger.warning('Synthetic replacement buses failed: %r', e)
+    synthetic, suppressed = built['buses'], built['suppressed']
+    # The feed's buses a replacement timetable runs instead of no longer replace their trains.
+    merged = {k: v for k, v in ((k, [s for s in v if s['busTripId'] not in suppressed]) for k, v in real.items()) if v}
+    for train, extra in closures.sections(synthetic).items():
+        merged.setdefault(train, []).extend(extra)
+    by_trip: dict[str, list[dict]] = {}
+    for t in trips:
+        by_trip.setdefault(t['id'], []).append(t)
+    slot.update(key=key, sections=merged, synthetic=synthetic, by_id={b['id']: b for b in synthetic}, trips=by_trip,
+                suppressed=suppressed, decided=built['decided'])
     return slot
 
 
 def _derive(trips: Optional[list[dict]] = None) -> dict:
     """Today's (and yesterday's late) replacements. `trips`: a timetable the caller already holds."""
-    return _derive_into(_derived, timetable.get().value if trips is None else trips)
+    return _derive_into(_derived, timetable.get().value if trips is None else trips, defer_timetables=True)
 
 
 def replaced_sections(trips: Optional[list[dict]] = None) -> dict[str, list[dict]]:
@@ -190,21 +198,24 @@ def day_timetable(day: date) -> Cached:
     return cache
 
 
-def day_plan(day: date, wait: float = 0) -> Optional[dict]:
+def day_plan(day: date, wait: float = 0, refresh: bool = False) -> Optional[dict]:
     """What replaces trains on service day `day`: {'sections' (train trip id -> replaced sections), 'synthetic',
-    'by_id' (synthetic buses), 'trips' (trip id -> that day's timetable trips, trains and buses)}. Each day
-    has its own trains and only the notices in effect that day, so a closure that ends on the 11th leaves
-    the 12th's trains alone. None while the day's timetable is not loaded (after waiting up to `wait` s);
-    today's never waits unless asked to."""
+    'by_id' (synthetic buses), 'trips' (trip id -> that day's timetable trips, trains and buses), 'suppressed'
+    (feed buses a replacement timetable runs instead, see closures.plan), 'decided'}. Each day has its own
+    trains and only the notices in effect that day, so a closure that ends on the 11th leaves the 12th's
+    trains alone. None while the day's timetable is not loaded (after waiting up to `wait` s); today's never
+    waits unless asked to. New replacement timetables rebuild today's and tomorrow's plans only with
+    `refresh` (the warmer's call), so no request waits on that."""
     if closures.inputs() is None:
         closures.warm()
-    if day == service_day():
+    today = service_day()
+    if day == today:
         snap = timetable.wait(wait) if wait else timetable.get_nowait()
         slot = _derived
     else:
         snap = day_timetable(day).wait(wait)
-        slot = _day_derived.setdefault(day.isoformat(), {'key': None, 'sections': {}, 'synthetic': [], 'by_id': {}})
-    return _derive_into(slot, snap.value) if snap else None
+        slot = _day_derived.setdefault(day.isoformat(), {'key': None, 'sections': {}, 'synthetic': [], 'by_id': {}, 'suppressed': {}, 'decided': {}})
+    return _derive_into(slot, snap.value, defer_timetables=not refresh and day in (today, today + timedelta(days=1))) if snap else None
 
 
 def plan_at(when: float, wait: float = 0) -> Optional[dict]:

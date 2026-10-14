@@ -46,11 +46,13 @@ def caches():
 
 
 def plans():
-    """Today's and tomorrow's replacement plans, worked out ahead of the boards and journeys that need them."""
-    from . import scheduled
+    """Today's and tomorrow's replacement plans, worked out ahead of the boards and journeys that need them,
+    with SŽ's replacement timetables as last read (at most once a minute, sztimetables.load)."""
+    from . import scheduled, sztimetables
+    sztimetables.load()
     today = scheduled.service_day()
     for day in (today, today + timedelta(days=1)):
-        scheduled.day_plan(day)
+        scheduled.day_plan(day, refresh=True)
 
 
 def tick(now: float):
