@@ -69,6 +69,36 @@ class MergeTests(SimpleTestCase):
         merged, _ = stopgroups.merge(stops, ways={'IJPP:1': BOTH_WAYS, 'IJPP:2': EAST})
         self.assertEqual(len(merged), 2)
 
+    def test_a_few_patterns_using_the_other_side_s_pole_do_not_make_it_two_way(self):
+        """Kino Šiška (2026-10-14): IJPP's two poles each had a handful of patterns going the other way, so both looked
+        two-way, were 'alike' and merged across the road, and LPP's one-way poles joined neither."""
+        sw, ne = (46.0705, 14.4885), (46.0685, 14.4915)  # the stops before and after along Celovška
+        a, b = (46.06964, 14.489526), (46.069202, 14.49031)  # the two sides, 78 m apart
+        positions = {'prev': sw, 'next': ne, 'IJPP:1165648': a, 'IJPP:1165649': b, 'LPP:9afb': a, 'LPP:9cfa': b}
+        runs = ([['next', 'IJPP:1165648', 'prev']] * 91 + [['prev', 'IJPP:1165648', 'next']] * 11
+                + [['prev', 'IJPP:1165649', 'next']] * 79 + [['next', 'IJPP:1165649', 'prev']] * 3
+                + [['next', 'LPP:9afb', 'prev']] * 5 + [['prev', 'LPP:9cfa', 'next']] * 5)
+        ways = stopgroups.directions(runs, positions)
+        self.assertEqual(len(ways['IJPP:1165648']), 1)
+        stops = [stop('IJPP:1165648', 'Ljubljana Kino Šiška', *a), stop('IJPP:1165649', 'Ljubljana Kino Šiška', *b),
+                 stop('LPP:9afb', 'Kino Šiška', *a), stop('LPP:9cfa', 'Kino Šiška', *b)]
+        merged, groups = stopgroups.merge(stops, ways=ways)
+        self.assertEqual(groups['LPP:9afb'], ['IJPP:1165648', 'LPP:9afb'])
+        self.assertEqual(groups['LPP:9cfa'], ['IJPP:1165649', 'LPP:9cfa'])
+        self.assertEqual([s['name'] for s in merged], ['Ljubljana Kino Šiška'] * 2)
+
+    def test_ljubljana_tivoli_and_tivoli_going_the_same_way_are_one_stop(self):
+        a, b = (46.060423, 14.497217), (46.060444, 14.497163)  # IJPP and LPP pole, 5 m apart
+        positions = {'prev': (46.0615, 14.4955), 'next': (46.0590, 14.4990), 'IJPP:1165686': a, 'LPP:7484': b}
+        ways = stopgroups.directions([['prev', 'IJPP:1165686', 'next']] * 91 + [['next', 'IJPP:1165686', 'prev']] * 4
+                                     + [['prev', 'LPP:7484', 'next']] * 3, positions)
+        merged, _ = stopgroups.merge([stop('IJPP:1165686', 'Ljubljana Tivoli', *a), stop('LPP:7484', 'Tivoli', *b)], ways=ways)
+        self.assertEqual([(s['name'], s.get('memberIds')) for s in merged], [('Ljubljana Tivoli', ['IJPP:1165686', 'LPP:7484'])])
+
+    def test_a_stop_served_both_ways_alike_often_stays_two_way(self):
+        ways = stopgroups.directions([['w', 'x', 'e']] * 6 + [['e', 'x', 'w']] * 2, {'w': (46.0, 13.999), 'x': (46.0, 14.0), 'e': (46.0, 14.001)})
+        self.assertEqual(len(ways['x']), 2)
+
     def test_one_feed_with_an_unknown_direction_stays_apart(self):
         stops = [stop('IJPP:1', 'Kranj AP', 46.24597, 14.35471), stop('IJPP:2', 'Kranj AP', north_of(46.24597, 10), 14.35471)]
         merged, _ = stopgroups.merge(stops, ways={'IJPP:1': NORTH})

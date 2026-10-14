@@ -37,6 +37,9 @@ SAME_SPOT_METERS = 25
 DUPLICATE_METERS = 3
 # Directions of travel at most ~60° apart (cosine) count as the same way.
 SAME_WAY = 0.5
+# A way through a stop that runs against its main way on under a fifth as many patterns is a feed slip
+# (a few IJPP patterns use the other side's pole: "Ljubljana Kino Šiška" 91 runs one way, 11 the other).
+SLIP_SHARE = 0.2
 # Words that name the kind of stop rather than the place: "Koper AP" is "Koper".
 STOP_WORDS = re.compile(r'\b(avtobusna postaja|avtobusno postajalisce|zelezniska postaja|avt\.? ?post\.?|zel\.? ?post\.?|zel\.? ?p\.|ap|zp)(?=\W|$)')
 # A direction added to the name: "Bled / smer Lesce", "Bled (smer Lesce)".
@@ -85,8 +88,8 @@ def meters(a: dict, b: dict) -> float:
 
 def directions(sequences: Iterable[list[str]], positions: dict[str, tuple[float, float]]) -> dict[str, list[tuple[float, float]]]:
     """Stop id -> unit vectors of the ways vehicles travel through it: from the previous stop to the
-    next in each pattern's run of stops. `positions`: stop id -> (lat, lon)."""
-    out: dict[str, set] = {}
+    next in each pattern's run of stops, without slips (SLIP_SHARE). `positions`: stop id -> (lat, lon)."""
+    out: dict[str, dict] = {}
     for run in sequences:
         for i, sid in enumerate(run):
             a, b = positions.get(run[max(0, i - 1)]), positions.get(run[min(len(run) - 1, i + 1)])
@@ -95,8 +98,17 @@ def directions(sequences: Iterable[list[str]], positions: dict[str, tuple[float,
             dx, dy = (b[1] - a[1]) * math.cos(math.radians(a[0])), b[0] - a[0]
             n = math.hypot(dx, dy)
             if n:
-                out.setdefault(sid, set()).add((round(dx / n, 2), round(dy / n, 2)))
-    return {k: sorted(v) for k, v in out.items()}
+                way = out.setdefault(sid, {})
+                key = (round(dx / n, 2), round(dy / n, 2))
+                way[key] = way.get(key, 0) + 1
+    return {k: _without_slips(v) for k, v in out.items()}
+
+
+def _without_slips(counts: dict[tuple[float, float], int]) -> list[tuple[float, float]]:
+    def runs(v):  # patterns going v's way through the stop
+        return sum(c for w, c in counts.items() if v[0] * w[0] + v[1] * w[1] >= SAME_WAY)
+    total = {v: runs(v) for v in counts}
+    return sorted(v for v in counts if not any(v[0] * u[0] + v[1] * u[1] <= -SAME_WAY and total[v] < SLIP_SHARE * total[u] for u in counts))
 
 
 def same_way(a: Optional[list], b: Optional[list]) -> Optional[bool]:
