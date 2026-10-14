@@ -305,15 +305,23 @@ def _pick(translations: list[dict], language: str) -> tuple[Optional[str], bool]
 
 
 REPLACEMENT_WORDS = re.compile(r'nadomest|avtobusni prevoz|replacement bus|rail replacement')
-DISRUPTION_WORDS = re.compile(r'zapora|odpoved|ne vozi|zamud|obvoz|dela na progi|track works|detour|cancel')
+# Contract 6 kinds, first match wins: a moved stop and a detour usually also mention the closed road behind them.
+KIND_WORDS = [
+    ('stop-moved', re.compile(r'(prestavljen|premaknjen|zacasn\w* postajalisc|nadomestn\w* postajalisc|ukinjen\w* postajalisc|'
+                              r'postajalisc\w* (je |bo )?(prestavljen|ukinjen|zaprt)|stop (moved|relocated|closed))')),
+    ('detour', re.compile(r'obvoz|preusmer|spremenjen\w* (potek|tras)|detour|diversion|divert')),
+    ('delay', re.compile(r'zamud|zamik|delay')),
+    ('closure', re.compile(r'zapora|zaprt|odpoved|ne vozi|ukinjen|prekinitev|dela na progi|track works|cancel|closed')),
+]
 
 
 def alert_kind(text: str) -> str:
-    """'replacement' (buses instead of trains), 'disruption' (closures, cancellations, works) or 'info'."""
+    """'replacement' (buses instead of trains, as before), else contract 6: 'stop-moved', 'detour', 'delay', 'closure'
+    or 'other'."""
     folded = fold(text)
     if REPLACEMENT_WORDS.search(folded):
         return 'replacement'
-    return 'disruption' if DISRUPTION_WORDS.search(folded) else 'info'
+    return next((kind for kind, words in KIND_WORDS if words.search(folded)), 'other')
 
 
 def build_alerts(otp_alerts: Iterable[dict], language: str, now: Optional[float] = None) -> list[dict]:
@@ -359,6 +367,9 @@ def build_alerts(otp_alerts: Iterable[dict], language: str, now: Optional[float]
             'operatorId': operator, 'stopIds': sorted(stop_ids), 'routeIds': sorted(route_ids),
             'validFrom': iso(a.get('effectiveStartDate') or now), 'validTo': iso(end) if end else None,
             'sourceUrl': url, 'kind': alert_kind(f'{title or ""} {message or ""}'),
+            # Contract 6: where it comes from (SŽ's notices reach OTP as alerts of operator IJPP:1161) and when.
+            'source': 'sz' if operator in REPLACEMENT_AGENCIES or 'SZ-OVIRA' in _decoded(a['id']) else 'feed',
+            'from': iso(a.get('effectiveStartDate') or now), 'to': iso(end) if end else None,
             '_from': a.get('effectiveStartDate') or now, '_to': end, '_aliases': [f'alert:{a["id"]}'],
         }, title_match, (a.get('effectiveStartDate'), end, tuple(sorted(stop_ids | route_ids | agencies)))))
     # Some providers publish one alert per language (same window and entities). Keep the
@@ -377,6 +388,14 @@ def build_alerts(otp_alerts: Iterable[dict], language: str, now: Optional[float]
         else:
             merged[key] = alert
     return list(merged.values())
+
+
+def _decoded(alert_id: str) -> str:
+    import base64
+    try:
+        return base64.b64decode(alert_id + '=' * (-len(alert_id) % 4)).decode('utf-8', 'replace')
+    except ValueError:
+        return alert_id
 
 
 def alert_active(alert: dict, at: float) -> bool:

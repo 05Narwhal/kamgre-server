@@ -50,7 +50,7 @@ class AlertKindTests(SimpleTestCase):
         raw = [otp_alert('r', [{'language': 'sl', 'text': 'Vozni red nadomestnega prevoza: Ljubljana - Borovnica in obratno'}]),
                otp_alert('d', [{'language': 'sl', 'text': 'DELA NA PROGI: Občasna zapora enega tira'}], start=NOW - 40),
                otp_alert('i', [{'language': 'sl', 'text': 'OBVESTILO: Dodatni prestop na postaji Ljubljana Zalog'}], start=NOW - 30)]
-        self.assertEqual([a['kind'] for a in mapping.build_alerts(raw, 'sl', NOW)], ['replacement', 'disruption', 'info'])
+        self.assertEqual([a['kind'] for a in mapping.build_alerts(raw, 'sl', NOW)], ['replacement', 'closure', 'other'])
 
 
 class JourneyHeadsignTests(SimpleTestCase):

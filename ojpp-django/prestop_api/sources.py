@@ -17,6 +17,7 @@ import time
 from typing import Optional
 
 from django.conf import settings
+from django.db import DatabaseError
 
 from . import mapping, stopfix, stopgroups, supplement
 from .upstream import Cached, UpstreamError, get_json, otp
@@ -275,9 +276,15 @@ alerts_raw = Cached(lambda: otp().query(ALERTS_Q)['alerts'], ttl=60, max_stale=3
 
 
 def alerts(language: str) -> list[dict]:
-    from . import closures
+    from . import closures, detected
     # SŽ's replacement notices OTP doesn't carry yet, where we have their timetables (closures.sz_notice_alerts).
-    return closures.notice_alerts(mapping.build_alerts(alerts_raw.get().value, language))
+    out = closures.notice_alerts(mapping.build_alerts(alerts_raw.get().value, language))
+    try:  # vehicles standing where they shouldn't (detected.py)
+        known = routes.peek()
+        out += detected.alerts(language, known.value if known else {}, stop_names())
+    except DatabaseError as e:
+        logger.warning('Detected alerts unavailable: %r', e)
+    return out
 
 
 def _load_rentals():

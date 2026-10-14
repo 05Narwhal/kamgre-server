@@ -1,11 +1,10 @@
 import logging
 import time
 
+from django.conf import settings
 from django.core.management import BaseCommand
 
-from prestop_api import platforms
-from django.conf import settings
-
+from prestop_api import detected, platforms
 from prestop_api.upstream import UpstreamError, get_json
 from prestop_statistics import blocks
 from prestop_statistics.collector import ScheduleCache, collect_once
@@ -36,6 +35,8 @@ class Command(BaseCommand):
                 # Which vehicle serves which trip (blocks.py): vehicle positions with this poll's trip updates.
                 positions = get_json(settings.PRESTOP_RT_VEHICLES_URL, limit=16 * 1024 * 1024)
                 logger.info('vehicles on trips: %s', blocks.record(schedules, positions, schedules.updates))
+                # Vehicles standing where the timetable doesn't wait: detected disruptions (prestop_api/detected.py).
+                logger.info('vehicle halts: %s', detected.observe(schedules, positions))
             except Exception as e:  # never let the vehicle feed stop the delay collector
                 logger.warning('vehicle trips failed: %r', e)
             try:

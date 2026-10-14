@@ -734,7 +734,8 @@ def sz_notice_alerts(raw_notices, known: list[dict], tables: Optional[sztimetabl
             alert_id = notice_alert_id(number)
             alert = {'id': alert_id, 'title': title[:300], 'message': '\n\n'.join(p for p in (f'Proga: {line}' if line else '', text) if p),
                      'operatorId': 'IJPP:1161', 'stopIds': [], 'routeIds': [], 'validFrom': mapping.iso(start), 'validTo': mapping.iso(end),
-                     'sourceUrl': SZ_NOTICES_PAGE, 'kind': mapping.alert_kind(f'{title} {text}'),
+                     'sourceUrl': SZ_NOTICES_PAGE, 'kind': mapping.alert_kind(f'{title} {text}'), 'source': 'sz',
+                     'from': mapping.iso(start), 'to': mapping.iso(end),
                      '_from': start, '_to': end, '_aliases': [alert_id], '_line': line}
             alert['routeIds'] = sorted(line_routes(alert))
             have.add(number)

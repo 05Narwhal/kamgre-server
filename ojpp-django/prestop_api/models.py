@@ -19,3 +19,33 @@ class PlatformSeen(models.Model):
     operator = models.CharField(max_length=80, default='')
     updated = models.DateTimeField(auto_now=True)
 
+
+
+class VehicleHalt(models.Model):
+    """A vehicle that stood more than detected.HALT_SECONDS at a stop that is not where its trip ends or waits
+    (see detected.py): shown as a `vehicle-stopped` alert until it moves on (`cleared`). Kept 8 weeks."""
+    vehicle_id = models.CharField(max_length=200)
+    trip_id = models.CharField(max_length=200)
+    route_id = models.CharField(max_length=200)
+    stop_id = models.CharField(max_length=200)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    since = models.DateTimeField()
+    last_seen = models.DateTimeField()
+    cleared = models.DateTimeField(null=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['cleared', 'last_seen'], name='prestop_api_halt_open_idx')]
+
+
+class AlertVote(models.Model):
+    """"Is this right?" on a detected alert: one per alert and device (salted hashes, never the id or IP). Kept 8 weeks."""
+    alert_id = models.CharField(max_length=120)
+    device = models.CharField(max_length=64)   # salted hash of the app's random device id (or of the IP without one)
+    ip = models.CharField(max_length=64)       # salted hash of the IP, for the rate limit
+    vote = models.BooleanField()               # True: yes, it is right
+    created = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['alert_id', 'device'], name='prestop_alert_vote_unique')]
+        indexes = [models.Index(fields=['ip', 'created'], name='prestop_api_vote_ip_idx')]

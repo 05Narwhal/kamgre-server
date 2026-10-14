@@ -42,7 +42,7 @@ class ScheduleCache:
         return {k: self._data.get(k) for k in keys}
 
     def _fetch(self, keys):
-        fields = 'directionId blockId route { gtfsId agency { gtfsId } } stoptimesForDate(serviceDate: %s) { stopPosition scheduledArrival scheduledDeparture serviceDay stop { gtfsId } }'
+        fields = 'directionId blockId route { gtfsId agency { gtfsId } } stoptimesForDate(serviceDate: %s) { stopPosition scheduledArrival scheduledDeparture serviceDay stop { gtfsId lat lon } }'
         query = ' '.join(f't{i}: trip(id: {json.dumps(trip)}) {{ {fields % json.dumps(day)} }}' for i, (trip, day) in enumerate(keys))
         try:
             data = otp().query('{ ' + query + ' }')

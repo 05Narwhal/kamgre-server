@@ -432,6 +432,27 @@ def alerts(request):
     return envelope([mapping.public_alert(a) for a in items], snapshot_status(sources.alerts_raw, 300), used=['otp:alerts'])
 
 
+@csrf_exempt
+@require_POST
+@api
+def alert_votes(request, alert_id):
+    """Contract 6: "Is this right?" on a detected alert. Anonymous: no location, one vote per alert and device."""
+    from . import detected
+    try:
+        body = json.loads(request.body or b'{}')
+    except ValueError:
+        raise ApiError(422, 'INVALID_REQUEST', 'Expected a JSON body')
+    if not isinstance(body, dict):
+        raise ApiError(422, 'INVALID_REQUEST', 'Expected a JSON object')
+    header = settings.PRESTOP_CLIENT_IP_HEADER
+    ip = (request.headers.get(header) if header else None) or request.META.get('REMOTE_ADDR') or ''
+    try:
+        votes = detected.vote(alert_id, body.get('vote'), body.get('deviceId'), ip)
+    except detected.VoteError as e:
+        raise ApiError(e.status, e.code, str(e))
+    return envelope({'id': alert_id, 'votes': votes}, 'live')
+
+
 @require_GET
 @api
 def statistics_routes(request):

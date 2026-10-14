@@ -17,6 +17,7 @@ urlpatterns = [
     path('statistics/reliability', views.statistics_reliability),
     path('journeys', views.journeys),
     path('alerts', views.alerts),
+    path('alerts/<path:alert_id>/votes', views.alert_votes),
     path('statistics/routes', views.statistics_routes),
     path('statistics/routes/<path:route_id>/daily', views.statistics_daily),
 ]
