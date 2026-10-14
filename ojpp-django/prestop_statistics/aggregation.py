@@ -74,7 +74,7 @@ MIN_SEGMENT_SAMPLES = 3
 
 DEPARTURE_DAYS = 56  # eight weeks: enough Saturdays and Sundays for USUAL_MIN_SAMPLES
 USUAL_MIN_SAMPLES = 5  # "usually x late" needs at least this many trips of that departure
-_starts: dict[str, Optional[str]] = {}  # tripId -> scheduled start "HH:MM" (None: unknown to the planner)
+_starts: dict[str, Optional[int]] = {}  # tripId -> scheduled start, s after midnight (None: unknown to the planner)
 _starts_lock = threading.Lock()
 START_CHUNK = 80
 
@@ -87,8 +87,17 @@ def day_kind(day: date) -> str:
     return 'saturday' if day.weekday() == 5 else 'workday'
 
 
+def hhmm(seconds: int) -> str:
+    return f'{seconds // 3600 % 24:02d}:{seconds % 3600 // 60:02d}'
+
+
 def trip_starts(trip_ids) -> dict[str, str]:
-    """{tripId: "HH:MM"} scheduled departure from the first stop, from the planner (cached for the process)."""
+    """{tripId: "HH:MM"} scheduled departure from the first stop."""
+    return {t: hhmm(s) for t, s in trip_start_seconds(trip_ids).items()}
+
+
+def trip_start_seconds(trip_ids) -> dict[str, int]:
+    """{tripId: seconds after midnight} scheduled departure from the first stop, from the planner (cached for the process)."""
     import json
     from prestop_api.upstream import UpstreamError, otp
     missing = [t for t in dict.fromkeys(trip_ids) if t not in _starts]
@@ -102,8 +111,8 @@ def trip_starts(trip_ids) -> dict[str, str]:
         with _starts_lock:
             for n, t in enumerate(chunk):
                 seconds = ((data.get(f't{n}') or {}).get('departureStoptime') or {}).get('scheduledDeparture')
-                _starts[t] = f'{seconds // 3600 % 24:02d}:{seconds % 3600 // 60:02d}' if seconds is not None else None
-    return {t: _starts[t] for t in trip_ids if _starts.get(t)}
+                _starts[t] = seconds
+    return {t: _starts[t] for t in trip_ids if _starts.get(t) is not None}
 
 
 def _median(values: list[float]) -> Optional[float]:

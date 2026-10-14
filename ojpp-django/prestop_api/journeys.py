@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import geometry, journey_legs, leg_alerts, mapping, platforms, roads, stopfix, tracks
+from . import geometry, journey_legs, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks
 from . import geometry as geometry_lib
 from . import operators as companies
 
@@ -42,7 +42,7 @@ PLAN_Q = '''query($origin: PlanLabeledLocationInput!, $destination: PlanLabeledL
       legs { mode realtimeState transitLeg interlineWithPreviousLeg duration
         start { scheduledTime estimated { time } } end { scheduledTime estimated { time } }
         from { name lat lon stop { gtfsId platformCode } } to { name lat lon stop { gtfsId platformCode } }
-        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign }
+        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } }
         legGeometry { points } alerts { id } intermediatePlaces { name lat lon stop { gtfsId } } } } } } }'''
 
 
@@ -572,12 +572,18 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                     legs[-1]['platformUsual'] = True
             meta.append({'transit': transit, 'interline': bool(l.get('interlineWithPreviousLeg')), 'duration': l.get('duration') or 0,
                          'realtime': bool(start_est), 'platform': platform})
+        # Contract 2: live, the vehicle's previous trip, or how late the departure usually is (predictions.py).
+        predictions.annotate(legs, raw)
         if plan_for:
             from . import scheduled
             legs, meta = journey_legs.rewrite(legs, meta, plan_for, scheduled.road_shape_of)
             journey_legs.unreplaced_notices(legs, plan_for, by_id)
             journey_legs.name_replaced_trains(legs, plan_for)
         legs, meta = replacement_walks(legs, meta)
+        for leg in legs:
+            if leg['mode'] != 'walk':
+                leg.setdefault('predictedDelaySeconds', leg['delaySeconds'])
+                leg.setdefault('predictionBasis', 'live' if leg['delaySeconds'] is not None else None)
         transfers, previous, walking = [], None, 0.0
         for leg, m in zip(legs, meta):
             if not m['transit']:
@@ -595,6 +601,8 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                     status, meets = 'safe', True
                 elif req.get('riskMode') == 'insane':
                     # Within the rider's allowance (down to -1 min) is a bet, labelled tight when under 2 min spare.
+                    # Predicted delays count as live ones do: a transfer the arriving bus's usual delay breaks is missed.
+                    available += predictions.transfer_shift(previous, leg)
                     meets = available >= required + safety
                     status = 'missed' if available < required + min(0, safety) else ('tight' if available < required + RISKY_TRANSFER else 'safe')
                 else:

@@ -99,6 +99,9 @@ PRESTOP_TRUSTED_COUNTRY_HEADER = env('PRESTOP_TRUSTED_COUNTRY_HEADER', default='
 PRESTOP_WARM = False if 'test' in sys.argv[1:2] else env.bool('PRESTOP_WARM', default=True)
 # Insane mode: same-minute transfers, no transfer penalty and a brisk walking pace.
 PRESTOP_INSANE_MODE = env.bool('PRESTOP_INSANE_MODE', default=True)
+# Predicted delays on journey legs from history and the vehicle's previous trip (predictions.py); off under
+# manage.py test, where tests turn it on themselves.
+PRESTOP_PREDICTIONS = 'test' not in sys.argv[1:2] and env.bool('PRESTOP_PREDICTIONS', default=True)
 # Web Push (prestop_push): VAPID key pair from `vapid --gen` (see deploy/oracle/README.md).
 # Empty keys turn push off; only the public key is ever sent to clients.
 PRESTOP_VAPID_PUBLIC_KEY = env('PRESTOP_VAPID_PUBLIC_KEY', default='')

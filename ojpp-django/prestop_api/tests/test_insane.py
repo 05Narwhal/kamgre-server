@@ -1,7 +1,9 @@
 """Insane mode optimises for arrival time only (request builder, allowance, labels, order, the -1 min pass)."""
-from django.test import SimpleTestCase
+from unittest import mock
 
-from prestop_api import journeys
+from django.test import SimpleTestCase, override_settings
+
+from prestop_api import journeys, predictions
 from prestop_api.tests.test_journey_alerts import PLACE
 from prestop_api.tests.test_mapping import leg
 
@@ -96,3 +98,56 @@ class BetTests(SimpleTestCase):
     def test_no_second_pass_without_a_negative_allowance(self):
         data = plan([ride('10:00:00', '10:20:00', 'IJPP:t1'), ride('10:30:00', '11:30:00', 'IJPP:t2')])
         self.assertIs(journeys.bet_on_delays(data, request(slack=0), lambda *a: self.fail('asked OTP')), data)
+
+
+@override_settings(PRESTOP_PREDICTIONS=True)
+class PredictedDelayTests(SimpleTestCase):
+    """Contract 2 and A1: insane mode scores transfers with predicted delays, not just the timetable."""
+
+    def journey(self, usual=None, previous=None, second_est=None, now=None, slack=0):
+        first = ride('10:00:00', '10:20:00', 'IJPP:t1')
+        first['trip']['departureStoptime'] = {'scheduledDeparture': 9 * 3600 + 40 * 60}  # the bus left its first stop at 09:40
+        second = ride('10:25:00', '10:50:00', 'IJPP:t2', frm='IJPP:b', to='IJPP:c')
+        second['trip']['departureStoptime'] = {'scheduledDeparture': 10 * 3600 + 25 * 60}
+        if second_est:
+            second['start']['estimated'] = {'time': f'2026-10-09T{second_est}+02:00'}
+        with mock.patch.object(predictions, 'usual', return_value=usual or {}), \
+                mock.patch.object(predictions, 'previous_trip', side_effect=lambda r, start, d: previous if start == 10 * 3600 + 25 * 60 else None), \
+                mock.patch('prestop_api.predictions.time.time', return_value=now or 1791532800):  # 2026-10-09 12:00, after both
+            [j] = journeys.build_journeys(plan([first, second]), request(slack=slack), [])
+        return j
+
+    def test_a_transfer_that_works_on_paper_but_not_with_the_route_s_usual_four_minutes(self):
+        self.assertEqual(self.journey()['transfers'][0]['status'], 'safe')  # 5 min on paper
+        j = self.journey(usual={'09:40': 240.0})
+        first, second = [l for l in j['legs'] if l['mode'] != 'walk']
+        self.assertEqual((first['predictedDelaySeconds'], first['predictionBasis']), (240, 'history'))
+        self.assertEqual((second['predictedDelaySeconds'], second['predictionBasis']), (None, None))
+        self.assertEqual((j['transfers'][0]['status'], j['transfers'][0]['availableSeconds']), ('tight', 60))
+        self.assertEqual(self.journey(usual={'09:40': 360.0})['transfers'][0]['status'], 'missed')
+
+    def test_normal_mode_shows_the_prediction_but_keeps_the_timetable_status(self):
+        first = ride('10:00:00', '10:20:00', 'IJPP:t1')
+        first['trip']['departureStoptime'] = {'scheduledDeparture': 9 * 3600 + 40 * 60}
+        second = ride('10:25:00', '10:50:00', 'IJPP:t2', frm='IJPP:b', to='IJPP:c')
+        with mock.patch.object(predictions, 'usual', return_value={'09:40': 360.0}), mock.patch.object(predictions, 'previous_trip', return_value=None):
+            [j] = journeys.build_journeys(plan([first, second]), request(insane=False, slack=60), [])
+        self.assertEqual(j['legs'][0]['predictionBasis'], 'history')
+        self.assertEqual(j['transfers'][0]['status'], 'safe')
+
+    def test_live_beats_previous_trip_beats_history(self):
+        j = self.journey(usual={'10:25': 600.0}, second_est='10:27:00')
+        self.assertEqual((j['legs'][1]['predictedDelaySeconds'], j['legs'][1]['predictionBasis']), (120, 'live'))
+        # The bus for the 10:25 is on its previous trip 10 min late with a 3 min layover; now is 10:00.
+        j = self.journey(usual={'10:25': 600.0}, previous={'delaySeconds': 600, 'slack': 180}, now=1791532800 - 2 * 3600)
+        self.assertEqual((j['legs'][1]['predictedDelaySeconds'], j['legs'][1]['predictionBasis']), (420, 'previous-trip'))
+        self.assertEqual(j['transfers'][0]['availableSeconds'], 300 + 420)  # the leaving bus is running late now: counts
+        j = self.journey(usual={'10:25': 600.0})
+        self.assertEqual((j['legs'][1]['predictedDelaySeconds'], j['legs'][1]['predictionBasis']), (600, 'history'))
+        self.assertEqual(j['transfers'][0]['availableSeconds'], 300)  # "usually late" is no bet for the leaving bus
+
+    def test_no_prediction_without_data_or_when_turned_off(self):
+        j = self.journey()
+        self.assertEqual([(l['predictedDelaySeconds'], l['predictionBasis']) for l in j['legs'] if l['mode'] != 'walk'], [(None, None)] * 2)
+        with override_settings(PRESTOP_PREDICTIONS=False):
+            self.assertIsNone(self.journey(usual={'09:40': 240.0})['legs'][0]['predictionBasis'])
