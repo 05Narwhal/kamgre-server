@@ -33,6 +33,7 @@ class ScheduleCache:
 
     def __init__(self):
         self._data: dict[tuple[str, str], Optional[dict]] = {}
+        self.updates: dict = {}  # the last poll's trip updates (mapping.trip_update_index)
 
     def get_many(self, keys: list[tuple[str, str]]) -> dict[tuple[str, str], Optional[dict]]:
         missing = [k for k in dict.fromkeys(keys) if k not in self._data]
@@ -41,7 +42,7 @@ class ScheduleCache:
         return {k: self._data.get(k) for k in keys}
 
     def _fetch(self, keys):
-        fields = 'directionId route { gtfsId agency { gtfsId } } stoptimesForDate(serviceDate: %s) { stopPosition scheduledArrival scheduledDeparture serviceDay stop { gtfsId } }'
+        fields = 'directionId blockId route { gtfsId agency { gtfsId } } stoptimesForDate(serviceDate: %s) { stopPosition scheduledArrival scheduledDeparture serviceDay stop { gtfsId } }'
         query = ' '.join(f't{i}: trip(id: {json.dumps(trip)}) {{ {fields % json.dumps(day)} }}' for i, (trip, day) in enumerate(keys))
         try:
             data = otp().query('{ ' + query + ' }')
@@ -53,7 +54,7 @@ class ScheduleCache:
             stoptimes = (t or {}).get('stoptimesForDate') or []
             self._data[key] = {
                 'routeId': t['route']['gtfsId'], 'operatorId': (t['route'].get('agency') or {}).get('gtfsId') or '',
-                'direction': mapping.direction_key(t.get('directionId')),
+                'direction': mapping.direction_key(t.get('directionId')), 'blockId': t.get('blockId'),
                 'bySequence': {s['stopPosition']: s for s in stoptimes},
                 'byStop': {s['stop']['gtfsId']: s for s in stoptimes},
             } if stoptimes else None
@@ -127,6 +128,7 @@ def collect_once(schedules: ScheduleCache, now: Optional[float] = None, entities
         state.save()
         raise
     index = mapping.trip_update_index(entities)
+    schedules.updates = index  # blocks.record reads the delays of the same poll
     fresh = {t: tu for t, tu in index.items() if tu['updates'] and (not tu['timestamp'] or now - tu['timestamp'] <= MAX_UPDATE_AGE)}
     keys = [(t, d) for t, tu in fresh.items() for d in _service_days(tu['trip'], now)]
     found = schedules.get_many(keys)

@@ -33,3 +33,26 @@ class CollectorState(models.Model):
     last_error = models.TextField(blank=True)
     last_attempt = models.DateTimeField(null=True)
     counts = models.JSONField(default=dict)
+
+
+class VehicleTrip(models.Model):
+    """Which vehicle served a trip on a service day, from the vehicle positions feed (see blocks.py).
+
+    `start`/`end` are the scheduled first departure and last arrival in seconds after the service day's
+    midnight; `end_delay` is the trip's delay when the vehicle was last seen on it (its delay at the end
+    once the trip is over). Kept for KEEP_DAYS days, pruned daily."""
+    service_date = models.DateField()
+    trip_id = models.CharField(max_length=200)
+    vehicle_id = models.CharField(max_length=200)
+    route_id = models.CharField(max_length=200)
+    block_id = models.CharField(max_length=200, blank=True, default='')
+    start = models.IntegerField()
+    end = models.IntegerField()
+    end_delay = models.IntegerField(null=True)
+    first_seen = models.DateTimeField()
+    last_seen = models.DateTimeField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['service_date', 'trip_id'], name='prestop_vehicle_trip_unique')]
+        indexes = [models.Index(fields=['route_id', 'service_date'], name='prestop_sta_route_i_7c1f2a_idx'),
+                   models.Index(fields=['vehicle_id', 'service_date'], name='prestop_sta_vehicle_3b9e4d_idx')]

@@ -4,7 +4,10 @@ import time
 from django.core.management import BaseCommand
 
 from prestop_api import platforms
-from prestop_api.upstream import UpstreamError
+from django.conf import settings
+
+from prestop_api.upstream import UpstreamError, get_json
+from prestop_statistics import blocks
 from prestop_statistics.collector import ScheduleCache, collect_once
 
 logger = logging.getLogger('prestop collector')
@@ -29,6 +32,12 @@ class Command(BaseCommand):
             except UpstreamError as e:
                 backoff = min(backoff * 2, 15 * 60)
                 logger.warning('trip updates unavailable (%s); retrying in %ss', e, backoff)
+            try:
+                # Which vehicle serves which trip (blocks.py): vehicle positions with this poll's trip updates.
+                positions = get_json(settings.PRESTOP_RT_VEHICLES_URL, limit=16 * 1024 * 1024)
+                logger.info('vehicles on trips: %s', blocks.record(schedules, positions, schedules.updates))
+            except Exception as e:  # never let the vehicle feed stop the delay collector
+                logger.warning('vehicle trips failed: %r', e)
             try:
                 # Bus station departure boards: which bay each departure leaves from (platforms.py).
                 learned = platforms.learn()
