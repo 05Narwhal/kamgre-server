@@ -260,7 +260,7 @@ def relocate(stops: list[dict], points: Sequence[tuple[float, float]] = (), bus_
 
 # ---------------------------------------------------------------- synthesis
 
-def _service_date(trip: dict) -> str:
+def service_date(trip: dict) -> str:
     day = trip.get('serviceDay')
     stamp = day + 12 * 3600 if day else trip['departures'][0]
     return datetime.fromtimestamp(stamp, LOCAL).strftime('%Y%m%d')
@@ -293,7 +293,7 @@ def synthesize(trips: list[dict], real: dict[str, list[dict]], alerts: list[dict
             span = stretch(t, keys) if t['id'] not in real else None
             if not span or not in_effect(alert, t['departures'][span[0]], t['arrivals'][span[1]]):
                 continue
-            run = runs.setdefault((t['id'], _service_date(t)), {'train': t, 'spans': [], 'alerts': [], 'notices': []})
+            run = runs.setdefault((t['id'], service_date(t)), {'train': t, 'spans': [], 'alerts': [], 'notices': []})
             run['spans'].append(span)
             run['alerts'].append(alert['id'])
             run['notices'].append(notice_id(alert))
@@ -373,7 +373,7 @@ def plan(trips: list[dict], real: dict[str, list[dict]], alerts: list[dict], bus
     kept = {k: v for k, v in ((k, [s for s in v if s['busTripId'] not in timed['suppressed']]) for k, v in real.items()) if v}
 
     def decided(alert: dict, train: dict) -> bool:
-        return decides(timed['decided'].get((alert['id'], _service_date(train))), sz.train_parts(mapping.route_name(train['route']))[1])
+        return decides(timed['decided'].get((alert['id'], service_date(train))), sz.train_parts(mapping.route_name(train['route']))[1])
     guesses = synthesize(trips, kept, alerts, bus_patterns, points, bus_stops, decided)
     return {'buses': guesses + timed['buses'], 'suppressed': timed['suppressed'], 'decided': timed['decided']}
 
@@ -457,7 +457,7 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
     for t in trips:
         if (t['route'].get('agency') or {}).get('gtfsId') not in mapping.REPLACEMENT_AGENCIES:
             continue
-        day = _service_date(t)
+        day = service_date(t)
         if mapping.is_replacement(t['route']):
             feed_buses.setdefault(day, []).append(t)
             continue
@@ -468,7 +468,7 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
     out: dict = {'buses': [], 'suppressed': {}, 'decided': {}}
     taken: set[str] = set()
     memo: dict = {}
-    for day in sorted({_service_date(t) for t in trips}):
+    for day in sorted({service_date(t) for t in trips}):
         when = date(int(day[:4]), int(day[4:6]), int(day[6:]))
         used: dict[str, tuple[dict, list[dict]]] = {}
         for a in alerts:

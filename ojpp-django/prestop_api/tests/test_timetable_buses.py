@@ -13,7 +13,10 @@ from zoneinfo import ZoneInfo
 
 from django.test import SimpleTestCase
 
-from prestop_api import closures, mapping, replacement, scheduled, sources, sztimetables, warm
+import copy
+
+from prestop_api import closures, journey_legs, journeys, mapping, replacement, scheduled, sources, sztimetables, warm
+from prestop_api.tests.test_replacement_days import META, otp_leg
 
 LOCAL = ZoneInfo('Europe/Ljubljana')
 FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'sztimetables'
@@ -440,3 +443,117 @@ class StationBoardTests(SimpleTestCase):
                 mock.patch.object(sources, 'stop_names', return_value=names), mock.patch.object(scheduled, 'plan_at', return_value=plan):
             rows = sources.board(kranj, 'departure', int(epoch('2026-10-14', '07:40')), 'sl')
         self.assertEqual([r['routeName'] for r in rows[:3]], ['BUS 415', 'BUS 318/3', 'BUS 318/2'])
+
+
+def leg_on(trip: dict, frm: str, to: str) -> dict:
+    """A built leg (journeys.build_journeys) riding `trip` from station `frm` to `to`."""
+    names = [s['name'] for s in trip['stops']]
+    return otp_leg(trip, names.index(frm), names.index(to))
+
+
+def walk(to_leg: dict, seconds: int = 300, before: bool = True) -> dict:
+    """A walk leg ending where (and when) `to_leg` starts, or starting where it ends."""
+    at = to_leg['origin'] if before else to_leg['destination']
+    edge = datetime.fromisoformat(to_leg['scheduledDeparture'] if before else to_leg['scheduledArrival']).timestamp()
+    start, end = (edge - seconds, edge) if before else (edge, edge + seconds)
+    stamp = lambda e: datetime.fromtimestamp(e, LOCAL).isoformat()  # noqa: E731
+    return {'id': 'leg:x-w', 'mode': 'walk', 'operatorId': None, 'routeId': None, 'tripId': None, 'routeName': '', 'headsign': None,
+            'origin': {**at, 'name': 'Doma'} if before else at, 'destination': at if before else {**at, 'name': 'Doma'},
+            'scheduledDeparture': stamp(start), 'scheduledArrival': stamp(end), 'effectiveDeparture': stamp(start), 'effectiveArrival': stamp(end),
+            'geometry': [[at['longitude'], at['latitude']]] * 2, 'delaySeconds': None, 'delayProvenance': None, 'canceled': False, 'alertIds': []}
+
+
+WALK = {'transit': False, 'interline': False, 'duration': 300, 'realtime': False, 'platform': None}
+
+
+def hhmm(stamp: str) -> str:
+    return datetime.fromisoformat(stamp).astimezone(LOCAL).strftime('%H:%M')
+
+
+def rides(legs: list[dict]) -> list[tuple]:
+    return [(l['routeName'], l['origin']['name'], hhmm(l['effectiveDeparture']), l['destination']['name'], hhmm(l['effectiveArrival']))
+            for l in legs if l['mode'] != 'walk']
+
+
+ROAD = lambda stops: {'coords': [[s['lon'], s['lat']] for s in stops], 'complete': True}  # noqa: E731
+
+
+class JourneyTests(SimpleTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.plan = plan_for('20261014', [BUS_24009])
+        cls.trips = {t['route']['shortName']: t for t in feed('20261014')}
+
+    def rewrite(self, legs, metas, plan=None):
+        plan = plan or self.plan
+        return journey_legs.rewrite(legs, metas, lambda when: plan, ROAD)
+
+    def test_ljubljana_to_jesenice_on_318_rides_its_first_bus(self):
+        legs, meta = self.rewrite([leg_on(self.trips['RG 318'], 'Ljubljana', 'Jesenice')], [META])
+        self.assertEqual(rides(legs), [('BUS 318/1', 'Ljubljana', '07:42', 'Jesenice', '08:32')])
+        self.assertEqual((legs[0]['replacement'], legs[0]['replacesTrain'], legs[0]['mode']), (True, 'RG 318', 'bus'))
+
+    def test_ljubljana_to_lesce_bled_on_318_rides_its_second_bus(self):
+        legs, _ = self.rewrite([leg_on(self.trips['RG 318'], 'Ljubljana', 'Lesce-Bled')], [META])
+        self.assertEqual(rides(legs), [('BUS 318/2', 'Ljubljana', '07:42', 'Lesce-Bled', '08:47')])
+
+    def test_from_dobova_the_train_then_the_bus(self):
+        legs, meta = self.rewrite([leg_on(self.trips['RG 318'], 'Dobova', 'Jesenice')], [META])
+        self.assertEqual(rides(legs), [('RG 318', 'Dobova', '05:41', 'Ljubljana', '07:37'), ('BUS 318/1', 'Ljubljana', '07:42', 'Jesenice', '08:32')])
+        self.assertEqual([m.get('held') for m in meta], [False, True])
+
+    def test_train_2400_to_lesce_bled_then_its_bus(self):
+        legs, _ = self.rewrite([leg_on(self.trips['LPV 2400'], 'Ljubljana', 'Jesenice')], [META])
+        self.assertEqual(rides(legs), [('LPV 2400', 'Ljubljana', '04:40', 'Lesce-Bled', '05:37'),
+                                       ('BUS 2400', 'Lesce-Bled', '05:40', 'Jesenice', '05:57')])
+
+    def test_a_bus_leaving_before_the_train_would_moves_the_walk_to_it(self):
+        ride = leg_on(self.trips['RG 318'], 'Kranj', 'Jesenice')  # the train would leave Kranj at 08:14
+        legs, meta = self.rewrite([walk(ride), ride], [WALK, META])
+        self.assertEqual(rides(legs), [('BUS 318/3', 'Kranj', '07:47', 'Jesenice', '08:32')])
+        self.assertEqual((legs[0]['mode'], hhmm(legs[0]['effectiveArrival']), hhmm(legs[0]['effectiveDeparture'])), ('walk', '07:47', '07:42'))
+
+    def test_a_bus_that_left_before_the_rider_arrives_leaves_the_leg_as_planned(self):
+        ride = leg_on(self.trips['RG 318'], 'Kranj', 'Jesenice')
+        before = leg_on(self.trips['LPV 2442'], 'Ljubljana Stegne', 'Kranj')  # arrives in Kranj at 09:22
+        before = {**before, 'effectiveArrival': ride['effectiveDeparture'], 'scheduledArrival': ride['scheduledDeparture']}
+        legs, _ = self.rewrite([before, ride], [META, META])
+        self.assertEqual([l['routeName'] for l in legs], ['LPV 2442', 'RG 318'])
+
+    def test_two_buses_of_one_train_change_where_they_meet(self):
+        # 318 without its direct bus, and 318/3 leaving Kranj before 318/2 comes but Lesce Bled after it.
+        tables = copy.deepcopy(TABLES.files)
+        lesce = tables[next(iter(sha for sha in tables if '11248' in tables[sha]['notices']))]
+        cols = lesce['tables'][0]['columns']
+        cols[:] = [c for c in cols if c['label'] != '318/1']
+        third = next(c for c in cols if c['label'] == '318/3')
+        third['calls'] = [{'station': 'KRANJ', 'dep': '08:20'}, {'station': 'LESCE BLED', 'arr': '08:50', 'dep': '08:50'}, {'station': 'JESENICE', 'arr': '09:10'}]
+        trips = feed('20261014')
+        plan = DayPlanTests().derive({'key': None}, trips, sztimetables.Timetables(TABLES.notices, tables))
+        legs, meta = self.rewrite([leg_on(self.trips['RG 318'], 'Ljubljana', 'Jesenice')], [META], plan)
+        self.assertEqual(rides(legs), [('BUS 318/2', 'Ljubljana', '07:42', 'Lesce-Bled', '08:47'),
+                                       ('BUS 318/3', 'Lesce-Bled', '08:50', 'Jesenice', '09:10')])
+        self.assertFalse(meta[1].get('held'))  # a change between two buses is a real one
+
+    def test_a_feed_bus_leg_rides_the_timetables_bus_instead(self):
+        planned = {**leg_on(BUS_24009, 'Lesce-Bled', 'Jesenice'), 'mode': 'bus', 'replacement': True}
+        legs, _ = self.rewrite([planned], [META])
+        self.assertEqual(rides(legs), [('BUS 2400', 'Lesce-Bled', '05:40', 'Jesenice', '05:57')])
+        self.assertEqual(legs[0]['tripId'], next(b['id'] for b in self.plan['synthetic'] if b['route']['shortName'] == 'BUS 2400'))
+
+    def test_a_running_train_loses_the_notice_its_timetable_does_not_replace_it_by(self):
+        ride = leg_on(self.trips['LPV 2442'], 'Ljubljana Šiška', 'Kranj')
+        notice = next(a for a in ALERTS if closures.notice_id(a) == '11147')
+        ride['alertIds'] = [notice['id']]
+        journey_legs.unreplaced_notices([ride], lambda when: self.plan, {a['id']: a for a in ALERTS})
+        self.assertEqual(ride['alertIds'], [])
+        replaced = leg_on(self.trips['LPV 2400'], 'Ljubljana', 'Jesenice')
+        replaced['alertIds'] = [notice['id']]
+        journey_legs.unreplaced_notices([replaced], lambda when: self.plan, {a['id']: a for a in ALERTS})
+        self.assertEqual(replaced['alertIds'], [notice['id']])
+
+    def test_walks_to_the_replacement_stop_follow(self):
+        legs, meta = self.rewrite([leg_on(self.trips['RG 318'], 'Ljubljana', 'Jesenice')], [META])
+        walked, _ = journeys.replacement_walks(legs, meta)
+        self.assertTrue(all('_boardAt' not in l and '_alightAt' not in l for l in walked))
