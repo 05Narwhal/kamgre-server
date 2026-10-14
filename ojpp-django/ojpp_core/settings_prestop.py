@@ -77,6 +77,9 @@ PRESTOP_SZ_LIVE_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIVE_UR
 PRESTOP_SZ_TRACKS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TRACKS_URL', default='http://l10wspc3n0hqslvh6xuyd8la.141.255.217.12.sslip.io:12669/train_data')
 # SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py).
 PRESTOP_SZ_NOTICES_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_URL', default='https://api.modra.ninja/sz/ovire_raw?lang=sl')
+# The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
+# file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py).
+PRESTOP_SZ_TIMETABLES_DIR = env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))
 # Road routing (bus costing) for bus patterns without a usable shape; empty disables it.
 # Routed legs are stored in the database, so the public FOSSGIS server sees each once.
 # Tests never route (they would reach the public server from a background thread).

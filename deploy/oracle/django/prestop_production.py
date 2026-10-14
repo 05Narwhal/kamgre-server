@@ -33,6 +33,8 @@ CSRF_COOKIE_SECURE = True
 PRESTOP_TRAFFIC_GUARD = True
 PRESTOP_CLIENT_IP_HEADER = 'CF-Connecting-IP'
 PRESTOP_TRAFFIC_STATE_DIR = '/var/lib/prestop/traffic'
+# SŽ replacement timetables read from the notices' PDFs (prestop-szpdf.timer writes, the API reads).
+PRESTOP_SZ_TIMETABLES_DIR = '/var/lib/prestop/sz-timetables'
 
 # Reuse database connections between requests (peer auth over the local socket).
 DATABASES['default']['CONN_MAX_AGE'] = 60

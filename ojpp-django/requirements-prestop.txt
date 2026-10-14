@@ -4,3 +4,8 @@
 pywebpush==2.3.0
 py-vapid==1.9.4
 http-ece==1.2.1
+# SŽ replacement-timetable PDFs (prestop_api/szpdf, run by the prestop-szpdf timer). pdfplumber 0.11.10 needs
+# Pillow 12.2, the lock has 12.1.0; pdfminer.six and pypdfium2 are pinned to what 0.11.9 resolves to here.
+pdfplumber==0.11.9
+pdfminer.six==20251230
+pypdfium2==5.14.0
