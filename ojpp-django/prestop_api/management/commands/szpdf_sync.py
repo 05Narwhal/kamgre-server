@@ -30,6 +30,8 @@ class Command(BaseCommand):
     def handle(self, *args, source='', fixtures='', report=False, write_goldens=False, **options):
         if write_goldens:
             return self.goldens(fixtures)
+        if not settings.PRESTOP_SZ_TIMETABLES_DIR:
+            raise CommandError('PRESTOP_SZ_TIMETABLES_DIR is empty.')
         notices = self.notices(source)
         fetch = sync.fixture_fetcher(notices, Path(fixtures)) if fixtures else sync.download
         rows = sync.run(Path(settings.PRESTOP_SZ_TIMETABLES_DIR), notices, fetch)
