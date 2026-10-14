@@ -275,7 +275,9 @@ alerts_raw = Cached(lambda: otp().query(ALERTS_Q)['alerts'], ttl=60, max_stale=3
 
 
 def alerts(language: str) -> list[dict]:
-    return mapping.build_alerts(alerts_raw.get().value, language)
+    from . import closures
+    # SŽ's replacement notices OTP doesn't carry yet, where we have their timetables (closures.sz_notice_alerts).
+    return closures.notice_alerts(mapping.build_alerts(alerts_raw.get().value, language))
 
 
 def _load_rentals():

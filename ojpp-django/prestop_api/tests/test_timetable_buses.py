@@ -621,3 +621,32 @@ class UntimedNoticeTests(SimpleTestCase):
         text = closures.format_report(closures.report(plan, ALERTS + UNTIMED, '20261014'))
         self.assertIn('BUS 318/2', text)
         self.assertIn('11248', text)
+
+
+class NoticeWithoutOtpAlertTests(SimpleTestCase):
+    """A9: 11198's timetable was read on 2026-10-14 while OTP had no alert for it yet: SŽ's own notices feed makes it."""
+
+    RAW = json.loads((Path(__file__).resolve().parent / 'fixtures' / 'szpdf' / 'notices-2026-10-14.json').read_text(encoding='utf-8'))
+
+    def test_the_notice_becomes_an_alert_naming_its_line(self):
+        known = [a for a in ALERTS if closures.notice_id(a) != '11198']
+        made = closures.sz_notice_alerts(self.RAW, known, TABLES, lambda a: ['IJPP:rail-gorenjska'])
+        [a] = [a for a in made if closures.notice_id(a) == '11198']
+        self.assertEqual(a['id'], alert('11198')['id'])  # the id OTP will give it: one alert once OTP has it
+        self.assertTrue(closures.is_closure(a))
+        self.assertTrue(a['message'].startswith('Proga: Ljubljana - Jesenice - Beljak (Villach Hbf)'))
+        self.assertEqual(a['routeIds'], ['IJPP:rail-gorenjska'])
+        self.assertEqual((a['validFrom'], a['validTo']), (mapping.iso(epoch('2026-10-19')), mapping.iso(epoch('2026-10-23', '23:59'))))
+        self.assertNotIn('<', a['message'])
+        # Notices OTP has, or without a usable timetable, are left to OTP / the guesses.
+        self.assertFalse([x for x in made if closures.notice_id(x) in {closures.notice_id(k) for k in known}])
+        self.assertTrue(all(TABLES.files_for(closures.notice_id(x)) for x in made))
+
+    def test_its_buses_run_without_the_otp_alert(self):
+        with_otp = timetabled(build('20261019'))
+        without = [a for a in ALERTS if closures.notice_id(a) != '11198']
+        self.assertFalse(timetabled(build('20261019', alerts=without)))  # what happened on 2026-10-14
+        made = closures.sz_notice_alerts(self.RAW, without, TABLES)
+        rebuilt = timetabled(build('20261019', alerts=without + made))
+        self.assertEqual(sorted(rebuilt), sorted(with_otp))
+        self.assertTrue(rebuilt)

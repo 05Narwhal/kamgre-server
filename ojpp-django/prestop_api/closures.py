@@ -677,9 +677,95 @@ def _load_bus_patterns() -> list[tuple[str, str, frozenset]]:
     return out
 
 
+_notices: dict = {'raw': None}  # SŽ's notices feed as last read with the points (sz_notice_alerts)
+
+
 def _load_points() -> dict[str, list]:
     url = getattr(settings, 'PRESTOP_SZ_NOTICES_URL', '')
-    return notice_points(get_json(url, limit=8 * 1024 * 1024, timeout=(4, 20))) if url else {}
+    if not url:
+        return {}
+    raw = get_json(url, limit=8 * 1024 * 1024, timeout=(4, 20))
+    _notices['raw'] = raw
+    return notice_points(raw)
+
+
+SZ_NOTICES_PAGE = 'https://potniski.sz.si/ovire-in-izredne-spremembe/'
+DATE = re.compile(r'(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})')
+TAGS = re.compile(r'<[^>]+>')
+
+
+def _cell(item: dict, key: str, i: int) -> str:
+    value = item.get(key)
+    if isinstance(value, list):
+        value = value[i] if i < len(value) else (value[0] if len(value) == 1 else '')
+    return value.strip() if isinstance(value, str) else ''
+
+
+def notice_alert_id(number: str) -> str:
+    """The id OTP gives SŽ notice `number` ("alert:" + base64 "Alert:IJPP:SZ-OVIRA-<n>"), so a notice read from SŽ
+    and the same notice once OTP has it are one alert."""
+    return 'alert:' + base64.b64encode(f'Alert:IJPP:SZ-OVIRA-{number}'.encode()).decode().rstrip('=')
+
+
+def sz_notice_alerts(raw_notices, known: list[dict], tables: Optional[sztimetables.Timetables],
+                     line_routes: Callable[[dict], list[str]] = lambda alert: []) -> list[dict]:
+    """Replacement notices read from SŽ's own notices feed, for those whose replacement timetable we have (a usable
+    file) but OTP has no alert for yet (11198 on 2026-10-14): its buses run all the same, under an alert that names
+    the line (`Relacija`) and, through `line_routes`, the SŽ routes on it."""
+    if not tables or not isinstance(raw_notices, list):
+        return []
+    have = {notice_id(a) for a in known}
+    out = []
+    for item in raw_notices:
+        if not isinstance(item, dict):
+            continue
+        for i, number in enumerate(item.get('ID_ovire') or []):
+            number = str(number)
+            if number in have or not any(f.get('status') in ('ok', 'unsure') for f in tables.files_for(number)):
+                continue
+            title, line = _cell(item, 'Naslov', i), _cell(item, 'Relacija', i)
+            dates = DATE.findall(_cell(item, 'Cas', i))
+            if not title or not dates:
+                continue
+            first, last = (date(int(y), int(m), int(d)) for d, m, y in (dates[0], dates[-1]))
+            start = datetime(first.year, first.month, first.day, tzinfo=LOCAL).timestamp()
+            end = datetime(last.year, last.month, last.day, 23, 59, tzinfo=LOCAL).timestamp()
+            text = re.sub(r'\n{3,}', '\n\n', TAGS.sub('', html.unescape(_cell(item, 'Opis', i)))).strip()
+            alert_id = notice_alert_id(number)
+            alert = {'id': alert_id, 'title': title[:300], 'message': '\n\n'.join(p for p in (f'Proga: {line}' if line else '', text) if p),
+                     'operatorId': 'IJPP:1161', 'stopIds': [], 'routeIds': [], 'validFrom': mapping.iso(start), 'validTo': mapping.iso(end),
+                     'sourceUrl': SZ_NOTICES_PAGE, 'kind': mapping.alert_kind(f'{title} {text}'),
+                     '_from': start, '_to': end, '_aliases': [alert_id], '_line': line}
+            alert['routeIds'] = sorted(line_routes(alert))
+            have.add(number)
+            out.append(alert)
+    return out
+
+
+def rail_routes_on(alert: dict) -> list[str]:
+    """SŽ train routes calling at stations on both sides of the notice's section (the line it closes)."""
+    from . import sources
+    pats, routes = sources.patterns.peek(), sources.routes.peek()
+    if not pats or not routes:
+        return []
+    names = sources.stop_names()
+    notice = sides(alert)
+    if len(notice) < 2:
+        return []
+    out = set()
+    for p in pats.value['patterns']:
+        route = routes.value.get(p['routeId']) or {}
+        if route.get('agencyId') not in mapping.REPLACEMENT_AGENCIES or route.get('mode') != 'RAIL':
+            continue
+        stations = [names.get(s, '') for s in p['stops']]
+        if all(any(names_match(n, st) for n in side for st in stations) for side in notice[:2]):
+            out.add(p['routeId'])
+    return sorted(out)
+
+
+def notice_alerts(alerts: list[dict], tables: Optional[sztimetables.Timetables] = None) -> list[dict]:
+    """`alerts` and SŽ's notices OTP doesn't have yet (sz_notice_alerts), with SŽ's feed as last read."""
+    return alerts + sz_notice_alerts(_notices['raw'], alerts, tables or sztimetables.current(), rail_routes_on)
 
 
 bus_patterns = Cached(_load_bus_patterns, ttl=6 * 3600, max_stale=48 * 3600, revalidate=6 * 3600)
@@ -728,7 +814,7 @@ def inputs():
 def build(trips: list[dict], real: dict[str, list[dict]], loaded, tables: Optional[sztimetables.Timetables] = None) -> dict:
     """`plan` with the loaded inputs (see `inputs`)."""
     alerts_raw, patterns, linked, stop_index = loaded
-    return plan(trips, real, mapping.build_alerts(alerts_raw, 'sl'), patterns, linked, stop_index, tables)
+    return plan(trips, real, notice_alerts(mapping.build_alerts(alerts_raw, 'sl'), tables), patterns, linked, stop_index, tables)
 
 
 def unverified(buses: list[dict]) -> list[tuple[str, str]]:
