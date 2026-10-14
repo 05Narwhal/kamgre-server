@@ -338,7 +338,7 @@ def board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[d
         alert_list = []
     members = stop_group(stop_id)
     if len(members) == 1:
-        return _with_live_platforms(_member_board(stop_id, kind, start, alert_list), stop_id, kind)
+        return _with_live_platforms(_member_board(stop_id, kind, start, alert_list), stop_id, kind, start)
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(4, len(members))) as pool:
         boards = list(pool.map(lambda m: _member_board(m, kind, start, alert_list), members))
@@ -354,10 +354,10 @@ def board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[d
         seen.update({entry['id'], key})
         # Which of the merged stops it leaves from, by that stop's own name (stopgroups.py).
         entries.append({**entry, 'stopName': names[entry['stopId']]} if entry.get('stopId') in names else entry)
-    return _with_live_platforms(entries[:BOARD_MAX], stop_id, kind)
+    return _with_live_platforms(entries[:BOARD_MAX], stop_id, kind, start)
 
 
-def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str = 'departure') -> Optional[list[dict]]:
+def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str = 'departure', start: Optional[int] = None) -> Optional[list[dict]]:
     """Track numbers from SŽ's live feed, for trains whose next station is this one; trains a bus
     replaces from here show as that bus (see replacement.board_rows)."""
     if not entries:
@@ -365,8 +365,10 @@ def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str 
     from . import replacement, scheduled
     # Each row by its own service day. Today's never waits for the timetable (a 3–11 s rebuild; with
     # none loaded yet this one board shows the trains); another date's waits once, briefly, then is kept.
+    # The buses of SŽ's replacement timetables at this stop within the board's time get their own rows.
+    window = {'stop_ids': stop_group(stop_id), 'start': start, 'end': start + _until_service_day_end(start)} if start is not None else {}
     try:
-        entries = replacement.board_rows(entries, kind, stop_names(), lambda when: scheduled.plan_at(when, wait=6))
+        entries = replacement.board_rows(entries, kind, stop_names(), lambda when: scheduled.plan_at(when, wait=6), **window)
     except UpstreamError as e:
         logger.warning('Replaced trains unknown: %r', e)
     from . import platforms

@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from django.test import SimpleTestCase
 
-from prestop_api import closures, replacement, scheduled, sztimetables, warm
+from prestop_api import closures, mapping, replacement, scheduled, sources, sztimetables, warm
 
 LOCAL = ZoneInfo('Europe/Ljubljana')
 FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'sztimetables'
@@ -186,12 +186,22 @@ class MondayTests(SimpleTestCase):
         self.assertEqual(times(buses['BUS 316'])[:2], ['09:35', '09:44'])
         self.assertEqual(names(buses['BUS 415']), ['Jesenice', 'Lesce-Bled', 'Kranj', 'Ljubljana'])
 
-    def test_the_day_after_the_buses_run(self):
+    @staticmethod
+    def next_day_plan() -> dict:
+        """Tuesday 20 October: Monday's trains a day later, as a day plan."""
         trips = [{**t, 'serviceDay': t['serviceDay'] + 86400, 'arrivals': [x + 86400 for x in t['arrivals']],
                   'departures': [x + 86400 for x in t['departures']], 'scheduledArrivals': [x + 86400 for x in t['arrivals']],
                   'scheduledDepartures': [x + 86400 for x in t['departures']]} for t in feed('20261019')]
         with mock.patch('prestop_api.stopfix.replacement_stops', return_value=[]):
-            plan = closures.plan(trips, {}, ALERTS, [], {}, stop_index(trips), TABLES)
+            built = closures.plan(trips, {}, ALERTS, [], {}, stop_index(trips), TABLES)
+        by_trip = {}
+        for t in trips:
+            by_trip.setdefault(t['id'], []).append(t)
+        return {'buses': built['buses'], 'synthetic': built['buses'], 'by_id': {b['id']: b for b in built['buses']},
+                'sections': closures.sections(built['buses']), 'trips': by_trip, 'suppressed': built['suppressed']}
+
+    def test_the_day_after_the_buses_run(self):
+        plan = self.next_day_plan()
         buses = timetabled(plan)
         self.assertEqual(times(buses['BUS 2400'])[:3], ['04:40', '04:49', '04:52'])
         self.assertEqual(names(buses['BUS 2402'])[0], 'Ljubljana')
@@ -342,3 +352,91 @@ class MapTests(SimpleTestCase):
         derived = plan_for('20261014')
         self.assertNotIn(trip_id('20261014', 'RG 318'), self.shown(derived, '08:40'))
         self.assertIn(trip_id('20261014', 'RG 318'), self.shown(derived, '07:20'))  # Dobova - Ljubljana by train
+
+
+def board_row(trip: dict, station: str, kind: str = 'departure') -> dict:
+    """A board row (mapping.build_board) of `trip` at `station`."""
+    i = next(n for n, s in enumerate(trip['stops']) if s['name'] == station)
+    at = trip['departures'][i] if kind == 'departure' else trip['arrivals'][i]
+    end = trip['stops'][-1] if kind == 'departure' else trip['stops'][0]
+    row = {'id': f'{trip["id"]}@{trip["serviceDay"]}/{i}', 'stopId': trip['stops'][i]['gtfsId'], 'tripId': trip['id'],
+           'routeId': trip['route']['gtfsId'], 'operatorId': 'IJPP:1161', 'routeName': trip['route']['shortName'],
+           'mode': 'rail' if trip['route']['mode'] == 'RAIL' else 'bus', 'destination': end['name'], 'scheduledAt': mapping.iso(at),
+           'effectiveAt': None, 'updatedAt': None, 'quality': None, 'canceled': False, 'platform': None, 'alertIds': []}
+    if trip['route']['mode'] != 'RAIL':
+        row['replacement'] = True
+    return row
+
+
+class BoardTests(SimpleTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.plan = plan_for('20261014', [BUS_24009])
+        cls.trips = {t['route']['shortName']: t for t in feed('20261014') + [BUS_24009]}
+        cls.names = {s['gtfsId']: s['name'] for t in cls.trips.values() for s in t['stops']}
+        cls.ids = {name: sid for sid, name in cls.names.items()}
+
+    def board(self, station, kind, frm, to, entries):
+        return replacement.board_rows(entries, kind, self.names, lambda when: self.plan, stop_ids=[self.ids[station]],
+                                      start=epoch('2026-10-14', frm), end=epoch('2026-10-14', to))
+
+    def at(self, row):
+        return datetime.fromisoformat(row['scheduledAt'].replace('Z', '+00:00')).astimezone(LOCAL).strftime('%H:%M')
+
+    def test_the_train_leaves_lesce_bled_as_its_bus_and_the_feeds_bus_is_gone(self):
+        rows = self.board('Lesce-Bled', 'departure', '05:00', '06:00',
+                          [board_row(self.trips['LPV 2400'], 'Lesce-Bled'), board_row(BUS_24009, 'Lesce-Bled')])
+        self.assertEqual([(r['routeName'], self.at(r), r['destination'], r.get('replacesTrain')) for r in rows],
+                         [('BUS 2400', '05:40', 'Jesenice', 'LPV 2400')])
+        [row] = rows
+        self.assertEqual((row['mode'], row['replacement'], row['stopId'], row['tripId']),
+                         ('bus', True, self.ids['Lesce-Bled'], next(b['id'] for b in self.plan['synthetic'] if b['route']['shortName'] == 'BUS 2400')))
+        # It still arrives there as a train.
+        rows = self.board('Lesce-Bled', 'arrival', '05:00', '06:00', [board_row(self.trips['LPV 2400'], 'Lesce-Bled', 'arrival')])
+        # (with the buses from Jesenice that end there: 2441 and 2403)
+        self.assertEqual([(r['routeName'], self.at(r)) for r in rows], [('BUS 2441', '05:12'), ('LPV 2400', '05:37'), ('BUS 2403', '05:44')])
+
+    def test_each_of_a_trains_buses_has_its_own_row(self):
+        train = self.trips['RG 318']
+        rows = self.board('Ljubljana', 'departure', '07:30', '08:00', [board_row(train, 'Ljubljana')])
+        self.assertEqual(sorted((r['routeName'], self.at(r), r['destination']) for r in rows),
+                         [('BUS 318/1', '07:42', 'Jesenice'), ('BUS 318/2', '07:42', 'Lesce-Bled')])
+        rows = self.board('Kranj', 'departure', '07:30', '08:30', [board_row(train, 'Kranj')])
+        self.assertEqual([(r['routeName'], self.at(r), r['destination']) for r in rows],
+                         [('BUS 415', '07:45', 'Ljubljana'), ('BUS 318/3', '07:47', 'Jesenice'), ('BUS 318/2', '08:22', 'Lesce-Bled')])
+        rows = self.board('Kranj', 'arrival', '07:30', '08:30', [board_row(train, 'Kranj', 'arrival')])
+        self.assertEqual([(r['routeName'], self.at(r), r['destination']) for r in rows],
+                         [('BUS 415', '07:45', 'Jesenice'), ('BUS 318/2', '08:22', 'Ljubljana')])
+        # Arriving in Ljubljana from Dobova it is a train.
+        rows = self.board('Ljubljana', 'arrival', '07:30', '08:00', [board_row(train, 'Ljubljana', 'arrival')])
+        self.assertEqual([(r['routeName'], r['mode']) for r in rows], [('RG 318', 'rail')])
+
+    def test_buses_outside_the_boards_time_are_left_out(self):
+        rows = self.board('Kranj', 'departure', '07:50', '08:30', [board_row(self.trips['RG 318'], 'Kranj')])
+        self.assertEqual([r['routeName'] for r in rows], ['BUS 318/2'])
+
+    def test_an_extra_bus_replaces_no_train(self):
+        plan = MondayTests.next_day_plan()
+        names = {s['gtfsId']: s['name'] for b in plan['synthetic'] for s in b['stops']}
+        loka = next(i for i, n in names.items() if n == 'Škofja Loka')
+        start = epoch('2026-10-20', '06:00')
+        rows = replacement.board_rows([], 'departure', names, lambda when: plan, stop_ids=[loka], start=start, end=start + 3600)
+        extra = [r for r in rows if r['routeName'] == 'BUS 2402' and self.at(r) == '06:31']
+        self.assertEqual(len(extra), 1)
+        self.assertNotIn('replacesTrain', extra[0])
+        self.assertEqual(extra[0]['destination'], 'Jesenice')
+
+
+class StationBoardTests(SimpleTestCase):
+    def test_a_station_board_lists_the_timetable_buses_leaving_before_the_train_would(self):
+        # Kranj at 07:40: the train 318 row (08:14) is all OTP lists for it; its bus 318/3 leaves at 07:47.
+        plan = plan_for('20261014')
+        train = next(t for t in feed('20261014') if t['route']['shortName'] == 'RG 318')
+        kranj = next(s['gtfsId'] for s in train['stops'] if s['name'] == 'Kranj')
+        names = {s['gtfsId']: s['name'] for s in train['stops']}
+        with mock.patch.object(sources, '_member_board', return_value=[board_row(train, 'Kranj')]), \
+                mock.patch.object(sources, 'alerts', return_value=[]), mock.patch.object(sources, 'stop_group', return_value=[kranj]), \
+                mock.patch.object(sources, 'stop_names', return_value=names), mock.patch.object(scheduled, 'plan_at', return_value=plan):
+            rows = sources.board(kranj, 'departure', int(epoch('2026-10-14', '07:40')), 'sl')
+        self.assertEqual([r['routeName'] for r in rows[:3]], ['BUS 415', 'BUS 318/3', 'BUS 318/2'])

@@ -133,10 +133,16 @@ def bus_row(entry: dict, bus: dict, kind: str, here: str) -> dict:
     return row
 
 
-def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: Callable[[float], Optional[dict]]) -> list[dict]:
+def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: Callable[[float], Optional[dict]],
+               stop_ids: Optional[list[str]] = None, start: Optional[float] = None, end: Optional[float] = None) -> list[dict]:
     """Rows of trains that a bus replaces at this station become that bus's rows (BUS 1896 to Logatec, its
     own line and trip), judged by each row's own service day: `plan_for(when)` gives the day's plan
-    (scheduled.plan_at). A bus already listed on the board stands for its train itself."""
+    (scheduled.plan_at). A bus already listed on the board stands for its train itself.
+
+    The buses of SŽ's replacement timetables have their own times and stops, and a train can have several
+    (318/1 and 318/2 both leave Ljubljana): each gets its own row at every stop of the board (`stop_ids`) it
+    calls at between `start` and `end` (the board's time), and the rows of the trains they replace there, and
+    of the feed's buses they run instead of (the day's `suppressed`), are left out."""
     listed = {e['tripId'] for e in entries}
     plans: dict = {}
 
@@ -147,8 +153,10 @@ def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: 
         return plans[day]
     out = []
     for e in entries:
-        plan = plan_of(_epoch(e['scheduledAt'])) if e['mode'] == 'rail' else None
-        trip_sections = (plan or {}).get('sections', {}).get(e['tripId'])
+        plan = plan_of(_epoch(e['scheduledAt'])) if e['mode'] == 'rail' or e.get('replacement') else None
+        if e['tripId'] in ((plan or {}).get('suppressed') or {}):
+            continue
+        trip_sections = (plan or {}).get('sections', {}).get(e['tripId']) if e['mode'] == 'rail' else None
         train = run_near(plan, e['tripId'], _epoch(e['scheduledAt'])) if trip_sections else None
         here = sz.station_key(names.get(e['stopId'], ''))
         keys = _keys(train) if train else []
@@ -159,8 +167,51 @@ def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: 
         if hit['busTripId'] in listed:
             continue
         bus = plan['by_id'].get(hit['busTripId']) or run_near(plan, hit['busTripId'], hit['start'])
+        if bus and bus.get('source') == 'timetable':
+            continue  # its buses' own rows follow
         out.append(bus_row(e, bus, kind, here) if bus else {**e, 'replacedByBus': True})
+    times = [_epoch(e['scheduledAt']) for e in entries]
+    start = min(times, default=None) if start is None else start
+    end = max(times, default=None) if end is None else end
+    stops = set(stop_ids if stop_ids is not None else (e['stopId'] for e in entries))
+    # The plan of the board's start holds its whole time (a board runs to the end of that service day; today's
+    # plan also has yesterday's late trains), and asking for another day's would make it wait for that one.
+    plan = plan_of(start) if start is not None and end is not None and stops else None
+    if plan:
+        seen = {e['id'] for e in out}
+        for row in timetable_rows(plan, kind, stops, start, end, names, merged=len(stops) > 1):
+            if row['id'] not in seen:
+                seen.add(row['id'])
+                out.append(row)
     out.sort(key=lambda e: _epoch(e['scheduledAt']))
+    return out
+
+
+def timetable_rows(plan: dict, kind: str, stops: set[str], start: float, end: float, names: dict[str, str], merged: bool) -> list[dict]:
+    """Board rows of a day's replacement-timetable buses at `stops` between `start` and `end`."""
+    out = []
+    leave = kind == 'departure'
+    for bus in plan.get('synthetic') or []:
+        if bus.get('source') != 'timetable':
+            continue
+        last = len(bus['stops']) - 1
+        for k, stop in enumerate(bus['stops']):
+            if stop.get('gtfsId') not in stops or k == (last if leave else 0):
+                continue
+            at = bus['departures'][k] if leave else bus['arrivals'][k]
+            if not start <= at <= end:
+                continue
+            row = {'id': f'{bus["id"]}@{bus.get("serviceDay")}/{k}', 'stopId': stop['gtfsId'], 'tripId': bus['id'],
+                   'routeId': bus['route']['gtfsId'], 'operatorId': bus['route']['agency']['gtfsId'],
+                   'routeName': mapping.route_name(bus['route']), 'mode': 'bus',
+                   'destination': (bus['stops'][-1] if leave else bus['stops'][0]).get('name') or '',
+                   'scheduledAt': mapping.iso(at), 'effectiveAt': None, 'updatedAt': None, 'quality': None, 'canceled': False,
+                   'platform': stop.get('bay') or None, 'alertIds': list(bus.get('alertIds') or []), 'replacement': True}
+            if bus.get('trainName'):
+                row['replacesTrain'] = bus['trainName']
+            if merged and stop['gtfsId'] in names:
+                row['stopName'] = names[stop['gtfsId']]
+            out.append(row)
     return out
 
 
