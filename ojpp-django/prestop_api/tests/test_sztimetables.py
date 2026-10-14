@@ -145,12 +145,25 @@ class ColumnTests(SimpleTestCase):
     def test_a_starred_extra_bus_runs_on_workdays(self):
         gorenjska = fixture(GORENJSKA)
         starred = column(gorenjska, '2403', additional=True)
-        self.assertEqual(starred.get('mark'), '*')
+        self.assertEqual((starred.get('mark'), starred['footnotes']), ('*', ['98', '*']))
         self.assertIsNone(sztimetables.unusable(gorenjska, starred))
         self.assertTrue(sztimetables.runs_on(gorenjska, starred, date(2026, 10, 20)))
         self.assertFalse(sztimetables.runs_on(gorenjska, starred, date(2026, 10, 19)))  # its footnote 98 still holds
-        unexplained = {**gorenjska, 'notes': []}
-        self.assertIsNotNone(sztimetables.unusable(unexplained, starred))
+        self.assertFalse(sztimetables.runs_on(gorenjska, starred, date(2026, 10, 24)))
+        # Without its own "*" footnote, the legend line "*Vozi le ob delovnikih" says the same.
+        legend = {**starred, 'footnotes': ['98']}
+        self.assertIsNone(sztimetables.unusable(gorenjska, legend))
+        self.assertFalse(sztimetables.runs_on({**gorenjska, 'valid': {'from': '2026-10-19', 'to': '2026-10-31'}}, legend, date(2026, 10, 24)))
+        self.assertIsNotNone(sztimetables.unusable({**gorenjska, 'notes': []}, legend))
+
+    def test_sunday_and_information_footnotes(self):
+        data = {**fixture(LESCE), 'footnotes': {'7': {'text': 'Vozi ob nedeljah', 'rule': 'sundays'},
+                                                '1': {'text': 'Prevoz se opravi preko mejnega prehoda Sočerga', 'rule': 'info'}}}
+        sunday = {**column(data, '318/1'), 'footnotes': ['7']}
+        told = {**column(data, '318/1'), 'footnotes': ['1']}
+        self.assertTrue(sztimetables.runs_on(data, sunday, date(2026, 10, 18)))
+        self.assertFalse(sztimetables.runs_on(data, sunday, date(2026, 10, 17)))
+        self.assertTrue(all(sztimetables.runs_on(data, told, date(2026, 10, d)) for d in range(12, 19)))
 
     def test_train_numbers_of_a_column(self):
         lesce, logatec = fixture(LESCE), fixture(LOGATEC)

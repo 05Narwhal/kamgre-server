@@ -155,6 +155,8 @@ RULES = {
     'workdays': lambda day, note: not _weekend(day),
     'weekends_holidays': lambda day, note: _weekend(day),
     'not_saturday': lambda day, note: day.weekday() != 5,
+    'sundays': lambda day, note: day.weekday() == 6,
+    'info': lambda day, note: True,  # "1 - Prevoz se opravi preko mejnega prehoda Sočerga": says how, not when
     # "98 - dne 19.10. se nadomestni prevoz NE opravlja; VOZI VLAK!": that day the train runs instead.
     'train_runs_on': lambda day, note: day.isoformat() not in (note.get('dates') or []),
 }

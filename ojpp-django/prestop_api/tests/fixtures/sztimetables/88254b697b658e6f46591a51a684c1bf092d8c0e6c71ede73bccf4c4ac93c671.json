@@ -34,6 +34,10 @@
    "dates": [
     "2026-10-19"
    ]
+  },
+  "*": {
+   "text": "Vozi le ob delovnikih / Runs on weekdays only",
+   "rule": "workdays"
   }
  },
  "stationNotes": [
@@ -717,7 +721,8 @@
      "vehicle": "BUS",
      "additional": true,
      "footnotes": [
-      "98"
+      "98",
+      "*"
      ],
      "calls": [
       {
