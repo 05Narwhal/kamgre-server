@@ -77,7 +77,7 @@ class FacadeTests(TestCase):
             other = self.client.get('/api/v1/alerts', {'stopId': 'IJPP:elsewhere'}).json()['data']
         self.assertEqual([a['id'] for a in items], ['alert:a'])
         self.assertEqual(other, [])
-        self.assertEqual(set(items[0]), {'id', 'title', 'message', 'operatorId', 'stopIds', 'routeIds', 'validFrom', 'validTo', 'sourceUrl', 'kind'})
+        self.assertEqual(set(items[0]), {'id', 'title', 'message', 'operatorId', 'stopIds', 'routeIds', 'validFrom', 'validTo', 'sourceUrl', 'kind', 'source', 'from', 'to'})
 
     def test_far_future_alerts_wait_until_they_are_near(self):
         soon, far = (time.time() + 86400, time.time() + 10 * 86400)
