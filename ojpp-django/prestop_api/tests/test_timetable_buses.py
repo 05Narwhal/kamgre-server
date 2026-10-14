@@ -29,6 +29,9 @@ NOTICES = {  # SŽ notice: its OTP alert's title and days (none of them lists it
     '11056': ('Vozni red nadomestnega prevoza: Vintgar - Jesenice in obratno (23. 9. - 25. 10.).', '2026-09-23', '2026-10-25'),
     '11198': ('Vozni red nadomestnega prevoza: Ljubljana - Kranj / Jesenice / Beljak in obratno (19. - 23. 10.).', '2026-10-19', '2026-10-23'),
     '10088': ('Vozni red nadomestnega prevoza: Ljubljana - Logatec in obratno (do 12. decembra).', '2026-04-07', '2026-12-12'),
+    # Made up, without a timetable: guessed as before.
+    '99001': ('Vozni red nadomestnega prevoza: Ljubljana Šiška - Kranj in obratno (14. 10.).', '2026-10-14', '2026-10-14'),
+    '99002': ('Vozni red nadomestnega prevoza: Ljubljana - Lesce Bled in obratno (14. 10.).', '2026-10-14', '2026-10-14'),
 }
 
 
@@ -43,7 +46,8 @@ def alert(number: str, routes=()) -> dict:
             'routeIds': list(routes), 'stopIds': [], 'operatorId': 'IJPP:1161', '_from': epoch(start), '_to': epoch(end, '23:59')}
 
 
-ALERTS = [alert(n) for n in NOTICES]
+ALERTS = [alert(n) for n in NOTICES if not n.startswith('99')]
+UNTIMED = [alert('99001'), alert('99002')]
 
 
 def feed(day: str) -> list[dict]:
@@ -267,6 +271,9 @@ class PrecedenceTests(SimpleTestCase):
         self.assertEqual(buses['BUS 26729']['trainName'], 'LPV 2672')
         self.assertNotIn(by_name['BUS 26639'], plan['suppressed'])
         self.assertNotIn('BUS 26639', buses)
+        # Its train (2663) keeps the feed's buses altogether: the timetable's picture of it is incomplete.
+        self.assertNotIn(by_name['BUS 26638'], plan['suppressed'])
+        self.assertNotIn('BUS 26638', buses)
 
     def test_a_failed_or_missing_timetable_changes_nothing(self):
         failed = sztimetables.Timetables(TABLES.notices, {sha: {**f, 'status': 'failed'} for sha, f in TABLES.files.items()})
@@ -578,3 +585,31 @@ class LineAndTripTests(SimpleTestCase):
         podnart = next(s for s in entry['static']['stops'] if s['name'] == 'Podnart')
         self.assertIn('5 minut pred objavljenim voznim redom', podnart['note'])
         self.assertNotIn('note', next(s for s in entry['static']['stops'] if s['name'] == 'Kranj'))
+
+
+class UntimedNoticeTests(SimpleTestCase):
+    def test_a_notice_without_a_timetable_guesses_but_not_for_trains_a_timetable_replaces(self):
+        plan = build('20261014', alerts=ALERTS + UNTIMED)
+        guessed = {b['trainName'] for b in plan['buses'] if b.get('source') != 'timetable'}
+        self.assertIn('LPV 2442', guessed)       # 99001: Ljubljana Šiška - Kranj, no timetable
+        self.assertNotIn('LPV 2400', guessed)    # 99002 would, but its timetable bus Lesce Bled - Jesenice decides it
+        self.assertNotIn('RG 318', guessed)
+
+    def test_the_report_says_where_each_notices_buses_come_from(self):
+        plan = build('20261014', alerts=ALERTS + UNTIMED)
+        rows = {r['notice']: r for r in closures.report(plan, ALERTS + UNTIMED, '20261014')}
+        self.assertEqual(rows['11248']['source'], 'timetable (ok)')
+        self.assertEqual(rows['10088']['source'], 'timetable (unsure)')
+        self.assertEqual(rows['99001']['source'], 'guessed')
+        self.assertNotIn('11198', rows)  # not in effect on the 14th
+        by_train = {}
+        for bus in rows['11248']['buses']:
+            by_train.setdefault(bus['train'], []).append(bus)
+        self.assertEqual([(b['bus'], b['from'], b['to'], b['departs'], b['arrives']) for b in by_train['RG 318']],
+                         [('BUS 318/1', 'Ljubljana', 'Jesenice', '07:42', '08:32'), ('BUS 318/2', 'Ljubljana', 'Lesce-Bled', '07:42', '08:47'),
+                          ('BUS 318/3', 'Kranj', 'Jesenice', '07:47', '08:32')])
+        # 28 feed buses; 26639 (an unreadable cell) and 26638 (the other bus of the same train, 2663) stay.
+        self.assertEqual(rows['10088']['feedBusesReplaced'], 26)
+        text = closures.format_report(closures.report(plan, ALERTS + UNTIMED, '20261014'))
+        self.assertIn('BUS 318/2', text)
+        self.assertIn('11248', text)

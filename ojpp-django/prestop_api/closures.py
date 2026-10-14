@@ -371,6 +371,8 @@ def plan(trips: list[dict], real: dict[str, list[dict]], alerts: list[dict], bus
     bus_stops = [s for s in stop_index['list'] if 'bus' in s['modes']]
     timed = timetable_buses(trips, alerts, tables, stop_index, points, bus_stops) if tables else {'buses': [], 'suppressed': {}, 'decided': {}}
     kept = {k: v for k, v in ((k, [s for s in v if s['busTripId'] not in timed['suppressed']]) for k, v in real.items()) if v}
+    # A train a timetable's buses replace gets no guessed bus from another notice, as with the feed's buses.
+    kept.update({k: v for k, v in sections(timed['buses']).items() if k not in kept})
 
     def decided(alert: dict, train: dict) -> bool:
         return decides(timed['decided'].get((alert['id'], service_date(train))), sz.train_parts(mapping.route_name(train['route']))[1])
@@ -584,6 +586,39 @@ def _timetable_bus(data: dict, ti: int, ci: int, col: dict, calls: list[dict], d
 
 def _hhmm(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, LOCAL).strftime('%H:%M')
+
+
+def report(built: dict, alerts: list[dict], day: str) -> list[dict]:
+    """Per closure notice in effect on `day` (YYYYMMDD): where its buses come from (the timetable SŽ links, the
+    feed, guessed from the notice) and the trains they replace (manage.py closures_report)."""
+    out = []
+    for a in sorted((a for a in alerts if is_closure(a) and day in _days(a)), key=lambda a: notice_id(a) or ''):
+        decision = (built.get('decided') or {}).get((a['id'], day))
+        mine = sorted((b for b in built['buses'] if a['id'] in b.get('alertIds') or []), key=lambda b: (b.get('trainName') or '', b['departures'][0]))
+        if decision:
+            source = f'timetable ({"ok" if decision["all"] else "unsure"})'
+        elif mine:
+            source = 'guessed'
+        else:
+            source = 'feed or none'
+        timed = {b['id'] for b in mine if b.get('source') == 'timetable'}
+        out.append({
+            'notice': notice_id(a) or a['id'], 'title': a.get('title') or '', 'source': source,
+            'feedBusesReplaced': sum(1 for bus in (built.get('suppressed') or {}).values() if bus in timed),
+            'buses': [{'train': b.get('trainName') or 'extra', 'bus': mapping.route_name(b['route']), 'from': b['stops'][0].get('name'),
+                       'to': b['stops'][-1].get('name'), 'departs': _hhmm(b['departures'][0]), 'arrives': _hhmm(b['arrivals'][-1]),
+                       'source': b.get('source') or 'guessed'} for b in mine],
+        })
+    return out
+
+
+def format_report(rows: list[dict]) -> str:
+    lines = []
+    for r in rows:
+        lines.append(f'{r["notice"]}  {r["source"]}  {len(r["buses"])} buses, {r["feedBusesReplaced"]} feed buses replaced  {r["title"]}')
+        for b in r['buses']:
+            lines.append(f'    {b["train"]:<10} {b["bus"]:<12} {b["from"]} {b["departs"]} → {b["to"]} {b["arrives"]}')
+    return '\n'.join(lines)
 
 
 def _suppress(buses: list[dict], feed_buses: dict[str, list[dict]]) -> dict[str, str]:
