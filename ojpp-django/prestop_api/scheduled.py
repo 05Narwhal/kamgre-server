@@ -371,9 +371,10 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
     live = sz.live.get(now) if live is None else live
     derived = _derive()
     replaced = derived['sections']
+    suppressed = derived.get('suppressed') or {}  # the feed's buses a replacement timetable runs instead
     out, seen = [], set()
     for trip in trips + derived['synthetic']:
-        if trip['id'] in skip_trips or trip['id'] in seen:
+        if trip['id'] in skip_trips or trip['id'] in seen or trip['id'] in suppressed:
             continue
         shape = shape_index.get(trip['pattern'])
         replacement = mapping.is_replacement(trip['route'])

@@ -305,3 +305,40 @@ class DayPlanTests(SimpleTestCase):
         load.assert_called_once()
         self.assertEqual([(c.args[0], c.kwargs.get('refresh')) for c in day_plan.call_args_list],
                          [(today, True), (today.replace(day=15), True)])
+
+
+class _Value:
+    def __init__(self, value):
+        self.value = value
+
+    def get(self):
+        return self
+
+
+def plan_for(day: str, extra=()) -> dict:
+    """A day plan (scheduled.day_plan) of the snapshot's trips with the fixture timetables."""
+    trips = feed(day) + list(extra)
+    return DayPlanTests().derive({'key': None}, trips, TABLES)
+
+
+class MapTests(SimpleTestCase):
+    def shown(self, derived, at):
+        trips = [t for runs in derived['trips'].values() for t in runs]
+        with mock.patch.object(scheduled, 'timetable', _Value(trips)), mock.patch.object(scheduled, 'shapes', _Value({})),                 mock.patch.object(scheduled, '_derive', return_value=derived), mock.patch.object(scheduled, '_road_shape', return_value=None):
+            return {v['tripId'] for v in scheduled.vehicles(now=epoch('2026-10-14', at), live={})}
+
+    def test_the_timetables_bus_is_drawn_and_not_the_feeds_or_the_train(self):
+        derived = plan_for('20261014', [BUS_24009])
+        mine = next(b['id'] for b in derived['synthetic'] if b['route']['shortName'] == 'BUS 2400')
+        shown = self.shown(derived, '05:45')
+        self.assertIn(mine, shown)
+        self.assertNotIn(BUS_24009['id'], shown)
+        self.assertNotIn(trip_id('20261014', 'LPV 2400'), shown)
+        self.assertIn(trip_id('20261014', 'LPV 2400'), self.shown(derived, '05:20'))  # still a train before Lesce Bled
+
+    def test_a_split_train_stays_hidden_on_its_whole_replaced_stretch(self):
+        # At 08:40 train 318's timetable has it between Lesce Bled and Jesenice, where it does not run that day,
+        # though its buses 318/1 and 318/3 are already at Jesenice.
+        derived = plan_for('20261014')
+        self.assertNotIn(trip_id('20261014', 'RG 318'), self.shown(derived, '08:40'))
+        self.assertIn(trip_id('20261014', 'RG 318'), self.shown(derived, '07:20'))  # Dobova - Ljubljana by train
