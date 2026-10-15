@@ -511,11 +511,14 @@ def hop_presence(request):
     return envelope(_hop(lambda hop: hop.presence(body, _hop_ip(request))), 'live', used=['none'])
 
 
-@require_GET
+@csrf_exempt
+@require_POST
 @api
 def hop_nearby(request):
-    """Hop: the phones nearby this device can send to, under tokens only it can use."""
-    return envelope(_hop(lambda hop: hop.nearby(request.GET.get('device') or '')), 'live', used=['none'])
+    """Hop: the phones nearby this device can send to, under tokens only it can use. A POST, so the device id
+    stays out of the access log (which records URLs)."""
+    body = _hop_body(request)
+    return envelope(_hop(lambda hop: hop.nearby(body.get('device') if isinstance(body.get('device'), str) else '')), 'live', used=['none'])
 
 
 @csrf_exempt

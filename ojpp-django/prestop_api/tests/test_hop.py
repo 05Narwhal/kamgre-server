@@ -129,7 +129,7 @@ class HopTests(SimpleTestCase):
         post = lambda path, body, ip='198.51.100.1': self.client.post(f'/api/v1/hop/{path}', json.dumps(body), content_type='application/json', HTTP_CF_CONNECTING_IP=ip)
         code = post('presence', {'device': ana, 'nickname': 'Ana'}).json()['data']['code']
         post('presence', {'device': bor, 'nickname': 'Bor'})
-        [peer] = self.client.get('/api/v1/hop/nearby', {'device': ana}).json()['data']
+        [peer] = post('nearby', {'device': ana}).json()['data']
         self.assertEqual(peer['nickname'], 'Bor')
         self.assertEqual(post('send', {'device': bor, 'to': code, 'item': {'kind': 'journey', 'code': 'Bq3xA_-9'}}).status_code, 200)
         self.assertEqual(post('presence', {'device': ana, 'nickname': 'Ana'}).json()['data']['incoming'][0]['item'], {'kind': 'journey', 'code': 'Bq3xA_-9'})
