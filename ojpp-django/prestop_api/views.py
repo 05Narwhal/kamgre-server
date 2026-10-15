@@ -14,7 +14,7 @@ from functools import wraps
 
 from django.conf import settings
 from django.db import connection
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
@@ -455,6 +455,21 @@ def alert_votes(request, alert_id):
     except detected.VoteError as e:
         raise ApiError(e.status, e.code, str(e))
     return envelope({'id': alert_id, 'votes': votes}, 'live')
+
+
+@csrf_exempt
+@require_POST
+@api
+def stats_hello(request):
+    """The app's one-time "onboarding done": counts a new user (analytics.hello). No body, nothing stored about who."""
+    from . import analytics
+    ip = analytics.client_ip(request)
+    if ip and settings.PRESTOP_ANALYTICS:
+        try:
+            analytics.hello(ip, request.headers.get('User-Agent', ''))
+        except Exception as e:  # noqa: BLE001 — a lost count is no error for the app
+            logger.info('stats hello not counted: %r', e)
+    return HttpResponse(status=204)
 
 
 @require_GET

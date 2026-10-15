@@ -21,7 +21,10 @@ INSTALLED_APPS = ['prestop_data', 'prestop_api', 'prestop_statistics', 'prestop_
 
 # Load shedding for /api/v1 so a public server stays inside its free outbound allowance
 # (prestop_api/traffic.py). Off locally; the production settings turn it on.
-MIDDLEWARE = [MIDDLEWARE[0], 'prestop_api.traffic.TrafficGuardMiddleware', *MIDDLEWARE[1:]]
+MIDDLEWARE = [MIDDLEWARE[0], 'prestop_api.analytics.AnalyticsMiddleware', 'prestop_api.traffic.TrafficGuardMiddleware', *MIDDLEWARE[1:]]
+# Usage counts in Redis, flushed to Postgres by the collector (prestop_api/analytics.py); off under manage.py test.
+PRESTOP_ANALYTICS = 'test' not in sys.argv[1:2] and env.bool('PRESTOP_ANALYTICS', default=True)
+PRESTOP_ANALYTICS_REDIS_URL = env('PRESTOP_ANALYTICS_REDIS_URL', default='')
 PRESTOP_TRAFFIC_GUARD = env.bool('PRESTOP_TRAFFIC_GUARD', default=False)
 # Header with the visitor's IP set by the trusted proxy (CF-Connecting-IP); empty uses REMOTE_ADDR.
 PRESTOP_CLIENT_IP_HEADER = env('PRESTOP_CLIENT_IP_HEADER', default='')

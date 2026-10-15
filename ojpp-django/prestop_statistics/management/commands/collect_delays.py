@@ -4,7 +4,7 @@ import time
 from django.conf import settings
 from django.core.management import BaseCommand
 
-from prestop_api import detected, platforms
+from prestop_api import analytics, detected, platforms
 from prestop_api.upstream import UpstreamError, get_json
 from prestop_statistics import blocks, stays
 from prestop_statistics.collector import ScheduleCache, collect_once
@@ -54,6 +54,14 @@ class Command(BaseCommand):
                     logger.info('stays learned: %s', learned)
             except Exception as e:  # never let the learning stop the delay collector
                 logger.warning('stay learning failed: %r', e)
+            try:
+                # API usage counts: Redis -> AnalyticsHour every poll, and the finished day's visitors each night.
+                analytics.flush()
+                saved = analytics.nightly()
+                if saved:
+                    logger.info('usage days saved: %s', saved)
+            except Exception as e:  # never let the counts stop the delay collector
+                logger.warning('usage counts failed: %r', e)
             if once:
                 return
             time.sleep(max(1.0, backoff - (time.monotonic() - started)))

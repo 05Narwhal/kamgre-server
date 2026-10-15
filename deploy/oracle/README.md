@@ -143,6 +143,8 @@ From Windows, `yarn server:top` (optionally `yarn server:top 5` for every 5 s) o
 
 Its **Learning** block (refreshed once a minute) follows the stay-on learning (`prestop_statistics/stays.py`). It shows how much of today the collector has recorded and how many of the 72 allowed minutes of downtime are used. A day counts only at 95 % or more, and 7 counted days in a row open a feed. It also lists each feed's streak with the day it will open, the feeds already open with their `sure`/`likely` counts, and the last 14 days of the nightly check. It turns red when today will not count, or when a feed is open but the 04:30 nightly learning has not run.
 
+`yarn server:stats` (or `yarn server:stats week`, `month`, `all`; "this week" works too) prints the usage report: unique visitors, new users, requests with the change from the period before, a chart per hour or day, busiest hours, features and endpoints with error rate and p95, Hop, and the platform split. It runs `prestop-manage stats` on the server (`prestop_api/analytics.py`, `analytics_report.py`). The API counts requests per hour, route and status class in Redis; the collector moves them to Postgres every minute (kept 400 days). Visitors are a HyperLogLog per day of salted hashes whose salt is deleted when the day ends; the nightly save keeps only those (kept forever), never an IP.
+
 `yarn server:ssh` opens a shell on the server in your own terminal (`exit` or Ctrl+D leaves), for admin commands such as `sudo prestop-manage leg_detours --legs --delete` or `sudo prestop-status`.
 
 ```sh

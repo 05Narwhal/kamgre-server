@@ -49,3 +49,28 @@ class AlertVote(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=['alert_id', 'device'], name='prestop_alert_vote_unique')]
         indexes = [models.Index(fields=['ip', 'created'], name='prestop_api_vote_ip_idx')]
+
+
+class AnalyticsHour(models.Model):
+    """Requests in one hour to one route (its URL pattern, never a path with ids) by status class (analytics.py).
+    `buckets` counts requests by time taken (analytics.BUCKETS_MS), for a rough p95. Kept 400 days."""
+    hour = models.DateTimeField()                   # start of the hour (UTC)
+    route = models.CharField(max_length=64)         # "stops/*/board"
+    status = models.CharField(max_length=3)         # "2xx", "4xx", ...
+    count = models.PositiveIntegerField(default=0)
+    ms = models.BigIntegerField(default=0)          # summed time taken
+    buckets = models.JSONField(default=list)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['hour', 'route', 'status'], name='prestop_analytics_hour_unique')]
+
+
+class AnalyticsDay(models.Model):
+    """One day's unique visitors (analytics.py): HyperLogLogs of salted hashes whose salt was deleted when the day
+    ended, kept as bytes so any period can be merged. No IP, hash or id is stored. Kept forever."""
+    day = models.DateField(primary_key=True)        # Europe/Ljubljana
+    visitors = models.PositiveIntegerField(default=0)
+    visitors_hll = models.BinaryField(default=bytes)
+    new_users = models.PositiveIntegerField(default=0)  # onboarding finished (POST /stats/hello)
+    platforms = models.JSONField(default=dict)      # {"ios": visitors, "android": ..., "desktop": ..., "app": ..., "browser": ...}
+    platform_hll = models.JSONField(default=dict)   # the same as base64 HyperLogLogs
