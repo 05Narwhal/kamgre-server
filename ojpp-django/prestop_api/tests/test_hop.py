@@ -8,7 +8,7 @@ from django.test import SimpleTestCase, override_settings
 from prestop_api import hop
 
 HOP = dict(PRESTOP_HOP_REDIS_URL='redis://127.0.0.1:6379/13', PRESTOP_CLIENT_IP_HEADER='CF-Connecting-IP', ROOT_URLCONF='ojpp_core.urls_prestop')
-HOME, CAFE, FAR = 'u2edk5x', 'u2edk5z', 'u2ed2bx'  # Ljubljana: a cell, its neighbour, one ~5 km off
+HOME, CAFE, FAR = 'u2edk5x', 'u2edk5z', 'u2ed2bx'  # a geohash-7 cell, its neighbour, and one a few km off
 
 
 def device():
