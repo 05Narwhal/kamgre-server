@@ -6,7 +6,7 @@ from django.core.management import BaseCommand
 
 from prestop_api import detected, platforms
 from prestop_api.upstream import UpstreamError, get_json
-from prestop_statistics import blocks
+from prestop_statistics import blocks, stays
 from prestop_statistics.collector import ScheduleCache, collect_once
 
 logger = logging.getLogger('prestop collector')
@@ -46,6 +46,13 @@ class Command(BaseCommand):
                     logger.info('departure bays seen: %s', learned)
             except Exception as e:  # never let the boards stop the delay collector
                 logger.warning('departure boards failed: %r', e)
+            try:
+                # Once a night: check yesterday's stay-on predictions, then relearn them (stays.py).
+                learned = stays.nightly()
+                if learned:
+                    logger.info('stays learned: %s', learned)
+            except Exception as e:  # never let the learning stop the delay collector
+                logger.warning('stay learning failed: %r', e)
             if once:
                 return
             time.sleep(max(1.0, backoff - (time.monotonic() - started)))

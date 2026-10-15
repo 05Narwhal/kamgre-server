@@ -111,7 +111,7 @@ class PredictedDelayTests(SimpleTestCase):
         second['trip']['departureStoptime'] = {'scheduledDeparture': 10 * 3600 + 25 * 60}
         if second_est:
             second['start']['estimated'] = {'time': f'2026-10-09T{second_est}+02:00'}
-        with mock.patch.object(predictions, 'usual', return_value=usual or {}), \
+        with mock.patch.object(predictions, 'usual', return_value=usual or {}), mock.patch.object(predictions, 'departure', return_value=None), \
                 mock.patch.object(predictions, 'previous_trip', side_effect=lambda r, start, d: previous if start == 10 * 3600 + 25 * 60 else None), \
                 mock.patch('prestop_api.predictions.time.time', return_value=now or 1791532800):  # 2026-10-09 12:00, after both
             [j] = journeys.build_journeys(plan([first, second]), request(slack=slack), [])
@@ -130,7 +130,8 @@ class PredictedDelayTests(SimpleTestCase):
         first = ride('10:00:00', '10:20:00', 'IJPP:t1')
         first['trip']['departureStoptime'] = {'scheduledDeparture': 9 * 3600 + 40 * 60}
         second = ride('10:25:00', '10:50:00', 'IJPP:t2', frm='IJPP:b', to='IJPP:c')
-        with mock.patch.object(predictions, 'usual', return_value={'09:40': 360.0}), mock.patch.object(predictions, 'previous_trip', return_value=None):
+        with mock.patch.object(predictions, 'usual', return_value={'09:40': 360.0}), mock.patch.object(predictions, 'previous_trip', return_value=None), \
+                mock.patch.object(predictions, 'departure', return_value=None):
             [j] = journeys.build_journeys(plan([first, second]), request(insane=False, slack=60), [])
         self.assertEqual(j['legs'][0]['predictionBasis'], 'history')
         self.assertEqual(j['transfers'][0]['status'], 'safe')
@@ -155,45 +156,92 @@ class PredictedDelayTests(SimpleTestCase):
 
 @override_settings(PRESTOP_PREDICTIONS=True)
 class StayOnVehicleTests(SimpleTestCase):
-    """Contract 3: the bus goes on as another line and the rider stays on it."""
+    """Contract 3: the bus goes on as another line and the rider stays on it, only as learned from the vehicles."""
+    LEARNED = {'pattern': 'p2', 'origin': 'continues', 'level': 'sure', 'prev_route_id': 'IJPP:r', 'prev_start': 9 * 3600 + 40 * 60,
+               'prev_pattern': 'p1', 'prev_end': 10 * 3600 + 20 * 60, 'absorb': None, 'depot_delay': None}
 
-    def build(self, block=(None, None), previous=None, learned=None, frm='IJPP:b', interline=False, operators=('IJPP:bus', 'IJPP:bus')):
-        first = leg('BUS', '10:00:00', '10:20:00', trip='IJPP:t1')
-        second = leg('BUS', '10:22:00', '10:50:00', trip='IJPP:t2', interline=interline)
+    def build(self, learned=None, block=(None, None), frm='IJPP:b', interline=False, operators=('IJPP:bus', 'IJPP:bus'), patterns=None, mode='BUS'):
+        first = leg(mode, '10:00:00', '10:20:00', trip='IJPP:t1')
+        second = leg(mode, '10:22:00', '10:50:00', trip='IJPP:t2', interline=interline)
         first['to']['stop']['gtfsId'], second['from']['stop']['gtfsId'] = 'IJPP:b', frm
         second['route'] = {**second['route'], 'gtfsId': 'IJPP:r2', 'shortName': '2', 'agency': {'gtfsId': operators[1]}}
         first['route']['agency'] = {'gtfsId': operators[0]}
         for raw, b, start in ((first, block[0], 9 * 3600 + 40 * 60), (second, block[1], 10 * 3600 + 22 * 60)):
             raw['trip'].update(blockId=b, departureStoptime={'scheduledDeparture': start})
-        with mock.patch.object(predictions, 'previous_trip', return_value=previous), \
+        patterns = patterns or {'IJPP:t1': 'p1', 'IJPP:t2': 'p2'}
+        learned_for = lambda route, start, day: learned if (route, start) == ('IJPP:r2', 10 * 3600 + 22 * 60) else None
+        with mock.patch.object(predictions, 'previous_trip', return_value=None), \
                 mock.patch.object(predictions, 'usual', return_value={}), \
-                mock.patch.object(predictions, '_background', return_value={10 * 3600 + 22 * 60: {'previous': learned}} if learned else {}), \
+                mock.patch.object(predictions, 'departure', side_effect=learned_for), \
+                mock.patch.object(predictions, 'trip_pattern', side_effect=patterns.get), \
                 mock.patch('prestop_api.sources.stop_group', side_effect=lambda s: [s]):
             [j] = journeys.build_journeys(plan([first, second]), request(slack=0), [])
         return [l for l in j['legs'] if l['mode'] != 'walk'][1], j
 
-    def test_the_same_block_in_the_feed(self):
-        second, j = self.build(block=('B7', 'B7'))
-        self.assertEqual((second['staysOnVehicle'], second['newTicket']), (True, True))
-        self.assertEqual(j['transfers'][0]['status'], 'safe')
+    def test_a_sure_stay_is_not_a_change(self):
+        second, j = self.build(learned=self.LEARNED)
+        self.assertEqual((second['stayLevel'], second['ticketNote'], second['staysOnVehicle'], second['newTicket']), ('sure', 'new', True, True))
+        self.assertEqual((j['transfers'], j['transferCount']), ([], 0))  # never tight or missed: the bus waits for itself
 
-    def test_the_vehicle_learned_from_the_feed(self):
-        second, _ = self.build(previous={'tripId': 'IJPP:t1', 'vehicleId': 'IJPP:v1', 'delaySeconds': None, 'slack': 120})
-        self.assertTrue(second['staysOnVehicle'])
-        second, _ = self.build(learned={'routeId': 'IJPP:r', 'start': 9 * 3600 + 40 * 60, 'end': 10 * 3600 + 20 * 60})
-        self.assertTrue(second['staysOnVehicle'])
+    def test_a_likely_stay_is_timed_like_any_change_and_keeps_its_note(self):
+        second, j = self.build(learned={**self.LEARNED, 'level': 'likely'})
+        self.assertEqual((second['stayLevel'], second['ticketNote'], second['staysOnVehicle']), ('likely', 'new', False))
+        self.assertEqual((j['transferCount'], j['transfers'][0]['availableSeconds'], j['transfers'][0]['legId']), (1, 120, second['id']))
 
-    def test_otp_interline_and_the_ticket_rule(self):
-        second, _ = self.build(interline=True, operators=('IJPP:1161', 'IJPP:1161'))
-        self.assertTrue(second['staysOnVehicle'])
-        self.assertTrue(second['newTicket'])  # an SŽ bus to bus: unknown, so a new ticket
-        self.assertFalse(predictions.new_ticket({'routeId': 'R1', 'operatorId': 'IJPP:1161', 'mode': 'rail'},
-                                                {'routeId': 'R2', 'operatorId': 'IJPP:1161', 'mode': 'rail'}))
-        self.assertFalse(predictions.new_ticket({'routeId': 'R1', 'operatorId': 'LPP:lpp', 'mode': 'bus'}, {'routeId': 'R1', 'operatorId': 'LPP:lpp', 'mode': 'bus'}))
+    def test_the_feed_s_block_or_otp_s_interline_alone_is_a_change(self):
+        second, j = self.build(block=('B7', 'B7'), interline=True)
+        self.assertIsNone(second['stayLevel'])
+        self.assertNotIn('ticketNote', second)
+        self.assertNotIn('staysOnVehicle', second)
+        self.assertEqual(j['transferCount'], 1)
 
-    def test_a_different_bus_or_another_stop_is_a_change(self):
-        for kwargs in ({}, {'block': ('B7', 'B8')}, {'block': ('B7', 'B7'), 'frm': 'IJPP:elsewhere'},
-                       {'previous': {'tripId': 'IJPP:other', 'vehicleId': 'IJPP:v2', 'delaySeconds': None, 'slack': 0}}):
-            second, _ = self.build(**kwargs)
-            self.assertNotIn('staysOnVehicle', second, kwargs)
-            self.assertNotIn('newTicket', second, kwargs)
+    def test_another_timetable_another_stop_another_trip_before_or_a_train_is_a_change(self):
+        for kwargs in ({'patterns': {'IJPP:t1': 'p1', 'IJPP:t2': 'p9'}}, {'patterns': {'IJPP:t1': 'p1'}}, {'frm': 'IJPP:elsewhere'},
+                       {'mode': 'RAIL', 'operators': ('IJPP:1161', 'IJPP:1161')}):
+            second, j = self.build(learned=self.LEARNED, **kwargs)
+            self.assertIsNone(second['stayLevel'], kwargs)
+            self.assertEqual(j['transferCount'], 1, kwargs)
+        second, _ = self.build(learned={**self.LEARNED, 'prev_start': 8 * 3600})
+        self.assertIsNone(second['stayLevel'])
+
+    def test_lpp_inside_its_fare_window_needs_nothing(self):
+        second, _ = self.build(learned=self.LEARNED, operators=('LPP:lpp', 'LPP:lpp'))
+        self.assertEqual((second['ticketNote'], second['newTicket']), ('none', False))
+
+    def test_the_ticket_notes(self):
+        at = lambda hhmm: {'effectiveDeparture': f'2026-10-09T{hhmm}:00+02:00'}
+        rail = {'mode': 'rail', 'operatorId': 'IJPP:1161', 'routeId': 'R1'}
+        self.assertEqual(predictions.ticket_note(rail, {**rail, 'routeId': 'R2', **at('10:00')}, None), 'none')  # SŽ: a ticket for the relation
+        lpp = {'mode': 'bus', 'operatorId': 'LPP:lpp', 'routeId': 'LPP:6'}
+        first_boarding = predictions._ts('2026-10-09T09:00:00+02:00')
+        self.assertEqual(predictions.ticket_note(lpp, {**lpp, **at('10:30')}, first_boarding), 'none')        # 90 min: still inside
+        self.assertEqual(predictions.ticket_note(lpp, {**lpp, **at('10:31')}, first_boarding), 'revalidate')  # the window has run out
+        bus = {'mode': 'bus', 'operatorId': 'IJPP:arriva', 'routeId': 'IJPP:302'}
+        self.assertEqual(predictions.ticket_note(bus, {**bus, **at('10:00')}, None), 'new')  # even the same line: a new trip
+        self.assertEqual(predictions.ticket_note(lpp, {**bus, **at('10:00')}, first_boarding), 'new')
+
+
+@override_settings(PRESTOP_PREDICTIONS=True)
+class LearnedOriginTests(SimpleTestCase):
+    """Contract 2 with the learned origin: a continuing start inherits the delay, a depot start doesn't."""
+    START = 10 * 3600 + 25 * 60
+
+    def test_a_continuing_start_carries_the_previous_trip_s_delay_less_what_the_layover_takes_up(self):
+        from datetime import date
+        d = {'origin': 'continues', 'prev_route_id': 'IJPP:A', 'prev_start': 9 * 3600, 'prev_end': 10 * 3600 + 15 * 60, 'absorb': 240}
+        run = {'tripId': 'IJPP:a', 'vehicleId': 'IJPP:v1', 'routeId': 'IJPP:A', 'delaySeconds': 600}
+        with mock.patch.object(predictions, 'departure', return_value=d), mock.patch('prestop_statistics.stays.run_today', return_value=run):
+            self.assertEqual(predictions.previous_trip('IJPP:B', self.START, date(2026, 10, 9))['slack'], 240)
+            d['absorb'] = None  # too few late arrivals seen: the scheduled layover
+            self.assertEqual(predictions.previous_trip('IJPP:B', self.START, date(2026, 10, 9))['slack'], 600)
+            d['origin'] = 'depot'
+            self.assertIsNone(predictions.previous_trip('IJPP:B', self.START, date(2026, 10, 9)))
+
+    def test_a_depot_start_has_its_own_usual_delay(self):
+        second = ride('10:25:00', '10:50:00', 'IJPP:t2', frm='IJPP:b', to='IJPP:c')
+        second['trip']['departureStoptime'] = {'scheduledDeparture': self.START}
+        with mock.patch.object(predictions, 'departure', return_value={'origin': 'depot', 'depot_delay': 90}), \
+                mock.patch.object(predictions, 'usual', return_value={'10:25': 600.0}), \
+                mock.patch.object(predictions, 'previous_trip', return_value=None):
+            [j] = journeys.build_journeys(plan([second]), request(slack=0), [])
+        self.assertEqual((j['legs'][0]['predictedDelaySeconds'], j['legs'][0]['predictionBasis']), (90, 'history'))

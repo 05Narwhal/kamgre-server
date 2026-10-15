@@ -175,15 +175,17 @@ class JourneyTests(SimpleTestCase):
             leg('RAIL', '10:00:00', '10:30:00', trip='IJPP:1'),
             leg('WALK', '10:30:00', '10:32:00', transit=False, duration=120),
             leg('BUS', '10:34:00', '10:50:00', trip='IJPP:2', est='10:34:00'),  # 240 s available, 120 walk + 180 safety
-            leg('BUS', '10:50:00', '11:10:00', trip='IJPP:2', interline=True),   # same vehicle continues: no transfer
+            leg('BUS', '10:50:00', '11:10:00', trip='IJPP:2', interline=True),   # OTP's interline alone: still a change
         ]}}]}}
         merged = [{'id': 'alert:W', 'title': 'Replacement buses', 'routeIds': [], 'stopIds': [], 'operatorId': 'IJPP:1161',
                    '_from': 0, '_to': None, '_aliases': ['alert:W', 'alert:X']}]
         [j] = journeys.build_journeys(data, self.request(), merged)
         self.assertEqual(j['legs'][0]['alertIds'], ['alert:W'])
-        self.assertEqual(j['transferCount'], 1)
+        self.assertEqual(j['transferCount'], 2)
         self.assertEqual(j['transfers'][0], {'requiredSeconds': 120, 'safetySeconds': 180, 'availableSeconds': 240, 'platform': '2', 'meetsSafetyMargin': False, 'status': 'tight',
-                                             'legId': j['legs'][2]['id']})  # the leg boarded: the through-run after it is no change
+                                             'legId': j['legs'][2]['id']})  # the leg boarded
+        # Staying seated counts only once the vehicles were seen to do it (stays.py), so the through-run is timed.
+        self.assertEqual((j['transfers'][1]['status'], j['transfers'][1]['legId'], j['legs'][3]['stayLevel']), ('tight', j['legs'][3]['id'], None))
         self.assertEqual((j['freshness'], j['notices'], j['legs'][0]['origin']['name'], j['legs'][-1]['destination']['name']), ('live', ['Replacement buses'], 'Home', 'Bled'))
         self.assertEqual((j['legs'][2]['delaySeconds'], j['legs'][0]['delaySeconds']), (0, None))
         self.assertEqual(j['legs'][0]['stopCount'], 2)

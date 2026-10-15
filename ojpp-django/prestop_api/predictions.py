@@ -3,13 +3,13 @@
 Each transit leg gets `predictedDelaySeconds` and `predictionBasis`, best first:
 
 - `live`: the feed's own estimate for this trip (OTP's realtime times);
-- `previous-trip`: the trip hasn't started, but the vehicle that usually runs it (prestop_statistics.blocks) is
-  on its previous trip now, late: that delay minus the layover;
-- `history`: how late this departure usually is on this kind of day (the median of at least 5 trips,
-  aggregation.usual_delays);
+- `previous-trip`: the trip hasn't started, but the vehicle that runs it (learned in prestop_statistics.stays) is
+  on its previous trip now, late: that delay minus what the layover usually takes up;
+- `history`: for a departure whose vehicle comes from the depot, how late it usually starts then; else how late this
+  departure usually is on this kind of day (the median of at least 5 trips, aggregation.usual_delays);
 - otherwise both are null.
 
-History and the learned blocks are read from the database in the background (one worker), so a route seen for
+History and the learned departures are read from the database in the background (one worker), so a route seen for
 the first time doesn't slow the planner down: its first answer has no prediction, later ones do.
 """
 import logging
@@ -38,11 +38,11 @@ def _ts(value: str) -> float:
     return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
 
 
-def _background(key: tuple, load: Callable):
+def _background(key: tuple, load: Callable, ttl: float = TTL):
     """The cached value, or None while it is loaded in the background."""
     with _lock:
         hit = _memo.get(key)
-        if hit and time.monotonic() - hit[0] < TTL:
+        if hit and time.monotonic() - hit[0] < ttl:
             return hit[1]
         if key not in _pending:
             _pending.add(key)
@@ -68,21 +68,32 @@ def usual(route_id: str, day) -> Optional[dict]:
     return _background(('usual', route_id, day), lambda: usual_delays(route_id, day))
 
 
-def blocks_ready() -> bool:
-    from prestop_statistics import blocks
-    return bool(_background(('blocks-ready',), lambda: blocks.recorded_days() >= blocks.MIN_DAYS))
+def departure(route_id: str, start: int, day) -> Optional[dict]:
+    """What stays.py learned about a departure on `day`'s kind of day (StayDeparture), None while unknown or loading.
+    Empty until the feed's 7-full-days gate is open. Relearned every night, so the cache follows the learning day."""
+    from prestop_statistics import stays
+    from prestop_statistics.aggregation import day_kind
+    learned = _background(('stays-learned',), stays.learned_on, ttl=600)
+    if not learned:
+        return None
+    kind = day_kind(day)
+    return (_background(('stays', route_id, kind, learned), lambda: stays.departures(route_id, kind)) or {}).get(start)
 
 
 def previous_trip(route_id: str, start: int, day) -> Optional[dict]:
-    """Today's run of the trip before this one on the same vehicle (blocks.previous_run); its learned model loads in the background."""
-    from prestop_statistics import blocks
-    if not blocks_ready() or _background(('blocks', route_id, day), lambda: blocks.learn(route_id, day)) is None:
+    """Today's run of the departure this one continues on the same vehicle: {'tripId', 'vehicleId', 'routeId',
+    'delaySeconds' (live, or None), 'slack' (s of its delay the layover takes up)}; None for a depot start or unknown."""
+    from prestop_statistics import stays
+    d = departure(route_id, start, day)
+    if not d or d['origin'] != 'continues':
         return None
     try:
-        return blocks.previous_run(route_id, start, day)
+        run = stays.run_today(d['prev_route_id'], d['prev_start'], day)
     except Exception as e:  # noqa: BLE001
         logger.warning('Previous trip of %s unavailable: %r', route_id, e)
         return None
+    slack = d['absorb'] if d['absorb'] is not None else start - (d['prev_end'] or start)
+    return {**run, 'slack': slack} if run else None
 
 
 def _hhmm(seconds: int) -> str:
@@ -107,6 +118,9 @@ def predict_leg(leg: dict, raw: dict, now: Optional[float] = None) -> tuple[Opti
         if prev and prev['delaySeconds'] is not None:
             return max(0, prev['delaySeconds'] - max(0, prev['slack'] or 0)), 'previous-trip'
     if start is not None:
+        d = departure(leg['routeId'], start, day)
+        if d and d['origin'] == 'depot' and d['depot_delay'] is not None:  # a depot start inherits no delay
+            return d['depot_delay'], 'history'
         median = (usual(leg['routeId'], day) or {}).get(_hhmm(start))
         if median is not None:
             return round(median), 'history'
@@ -140,44 +154,72 @@ def transfer_shift(previous: dict, leg: dict) -> int:
 STAY_WALK = 60  # s: more walking than this between two legs is a change of vehicle
 
 
-def stays_on_vehicle(previous: dict, previous_meta: dict, leg: dict, meta: dict, walking: float) -> bool:
-    """The vehicle of `previous` goes on as `leg`: OTP's interline (stay-seated), the same block in the feed, or
-    the vehicle blocks.py learned (today's run of the leg's previous trip is `previous`, or it usually is)."""
-    if meta.get('interline'):
-        return True
-    if walking > STAY_WALK or meta.get('held') or leg.get('replacement') or previous.get('replacement'):
-        return False
+def _service_day(ts: float):
+    return (datetime.fromtimestamp(ts, LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()
+
+
+def trip_pattern(trip_id: str) -> Optional[str]:
+    from prestop_statistics import stays
+    return _background(('pattern', trip_id), lambda: stays.trip_pattern(trip_id))
+
+
+def stay_level(previous: dict, previous_meta: dict, leg: dict, meta: dict, walking: float) -> Optional[str]:
+    """'sure' or 'likely' when the vehicle of `previous` goes on as `leg`, else None (a normal change).
+
+    Only what the vehicles were seen to do counts (stays.py: per departure and kind of day, after the feed's 7-full-days
+    gate); OTP's interline and the feed's block_id never do on their own. Both trips must still have the stops they
+    were learned with, and today the vehicles already seen on them must not disagree. Trains: no vehicle data, none."""
+    if 'rail' in (previous['mode'], leg['mode']) or walking > STAY_WALK or meta.get('held') or leg.get('replacement') or previous.get('replacement'):
+        return None
+    if not settings.PRESTOP_PREDICTIONS or meta.get('tripStart') is None or previous_meta.get('tripStart') is None or not leg.get('routeId'):
+        return None
+    day = _service_day(_ts(leg['scheduledDeparture']))
+    d = departure(leg['routeId'], meta['tripStart'], day)
+    if not d or not d['level'] or d['prev_route_id'] != previous.get('routeId') or d['prev_start'] != previous_meta['tripStart']:
+        return None
     from .sources import stop_group
     end, begin = previous['destination'].get('stopId'), leg['origin'].get('stopId')
     if not end or (end != begin and begin not in stop_group(end)):
-        return False
-    feed = lambda l: (l.get('tripId') or ':').split(':', 1)[0]
-    if previous_meta.get('blockId') and previous_meta['blockId'] == meta.get('blockId') and feed(previous) == feed(leg):
-        return True
-    if not settings.PRESTOP_PREDICTIONS or meta.get('tripStart') is None or not leg.get('routeId'):
-        return False
-    day = (datetime.fromtimestamp(_ts(leg['scheduledDeparture']), LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()
-    prev = previous_trip(leg['routeId'], meta['tripStart'], day)
-    if prev and prev.get('tripId'):
-        return prev['tripId'] == previous.get('tripId')
-    from prestop_statistics import blocks
-    learned = ((_background(('blocks', leg['routeId'], day), lambda: blocks.learn(leg['routeId'], day)) or {}).get(meta['tripStart']) or {}).get('previous')
-    return bool(learned) and learned['routeId'] == previous.get('routeId') and learned['start'] == previous_meta.get('tripStart')
+        return None
+    if not leg.get('tripId') or not previous.get('tripId') or trip_pattern(leg['tripId']) != d['pattern'] or trip_pattern(previous['tripId']) != d['prev_pattern']:
+        return None  # another timetable (or its stops still loading): not what was learned
+    if day == _service_day(time.time()):
+        from prestop_statistics import blocks
+        try:
+            before, after = blocks.vehicle_on(previous['tripId'], day), blocks.vehicle_on(leg['tripId'], day)
+        except Exception as e:  # noqa: BLE001
+            logger.warning('Vehicles of %s unavailable: %r', leg['tripId'], e)
+            before = after = None
+        if before and after and before != after:
+            return None  # today another vehicle runs it
+    return d['level']
 
 
-# Whether staying on needs a new ticket or a re-scan when the line changes, by operator:
+# The ticket when staying on the same vehicle, by operator:
 # - SŽ (IJPP:1161), train to train: a ticket is for a relation, not for one train, so a through train that
-#   changes its number needs none (SŽ's conditions of carriage: "vozovnica velja za relacijo").
-# - LPP: one fare covers changes within 90 minutes, but every boarding is validated (the Urbana card or the
-#   phone is held to the reader again): a re-scan (lpp.si, Urbana; rtvslo.si/slovenija/lpp-namesto-zetona-90-minut-voznje/97648).
-# - IJPP intercity buses (Arriva, Nomago, ...): single tickets are bought for one line's relation from the driver
-#   or online (gov.si 2026-09-18: enkratne vozovnice IJPP po novem tudi prek spleta); nothing says they carry
-#   over to another line, so a new ticket.
+#   changes its number needs none (SŽ's conditions of carriage: "vozovnica velja za relacijo"). Trains get no stay
+#   level today (no vehicle data), so this waits for that.
+# - LPP: a fare paid with Urbana covers every ride within 90 minutes of the first validation, but each boarding is
+#   validated (lpp.si, Urbana; visitljubljana.com/en/visitors/travel-information/getting-around/city-buses/: "transfers
+#   free of charge within 90 minutes"; n1info.si 2023: the Urbana app counts the 90 minutes down). So nothing to do
+#   inside the window, and validate again once it has run out.
+# - IJPP intercity buses (Arriva, Nomago, Kranj, ...): single tickets are bought for one trip's relation from the
+#   driver or online (gov.si 2026-09-18: enkratne vozovnice IJPP po novem tudi prek spleta); nothing says they carry
+#   over to the next trip, even under the same line number (a new trip is a new journey), so a new ticket.
 # - Anyone else: unknown, so a new ticket.
 NO_NEW_TICKET = {'IJPP:1161'}
+LPP_WINDOW = 90 * 60
 
 
-def new_ticket(previous: dict, leg: dict) -> bool:
-    if previous.get('routeId') and previous.get('routeId') == leg.get('routeId'):
-        return False  # the same line goes on (a loop or a through-run under one name)
-    return not (previous.get('operatorId') == leg.get('operatorId') in NO_NEW_TICKET and previous['mode'] == leg['mode'] == 'rail')
+def is_lpp(leg: dict) -> bool:
+    return (leg.get('operatorId') or '').startswith('LPP:')
+
+
+def ticket_note(previous: dict, leg: dict, lpp_since: Optional[float]) -> str:
+    """'none', 'new' or 'revalidate' when staying on; `lpp_since`: when the rider first boarded LPP in this journey."""
+    if previous['mode'] == leg['mode'] == 'rail' and previous.get('operatorId') == leg.get('operatorId') in NO_NEW_TICKET:
+        return 'none'
+    if is_lpp(previous) and is_lpp(leg):
+        inside = lpp_since is not None and _ts(leg['effectiveDeparture']) - lpp_since <= LPP_WINDOW
+        return 'none' if inside else 'revalidate'
+    return 'new'

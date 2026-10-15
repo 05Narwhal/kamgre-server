@@ -21,13 +21,13 @@ class TransferRatingTests(SimpleTestCase):
 
     def test_a_through_run_in_between_does_not_shift_the_ratings(self):
         first, through = ride('10:00:00', '10:20:00', 'IJPP:1'), ride('10:20:00', '10:40:00', 'IJPP:2', frm='IJPP:b', to='IJPP:c')
-        through['interlineWithPreviousLeg'] = True  # stay seated: the bus runs on as another line
+        through['interlineWithPreviousLeg'] = True  # OTP says stay seated; only what the vehicles did counts (stays.py)
         last = ride('10:50:00', '11:10:00', 'IJPP:3', frm='IJPP:c', to='IJPP:d')
         j = self.build(first, through, last)
-        self.assertEqual(j['transferCount'], 1)
-        [t] = j['transfers']
-        self.assertEqual(t['legId'], j['legs'][2]['id'])  # the change at c, not at the through-run
-        self.assertEqual(t['status'], 'safe')
+        self.assertEqual(j['transferCount'], 2)
+        at_b, at_c = j['transfers']
+        self.assertEqual((at_b['legId'], at_b['status']), (j['legs'][1]['id'], 'tight'))  # 0 min on the timetable
+        self.assertEqual((at_c['legId'], at_c['status']), (j['legs'][2]['id'], 'safe'))  # each rating on the leg it boards
 
     def test_same_stop_without_a_walk_and_with_a_zero_minute_walk(self):
         a, b = ride('10:00:00', '10:20:00', 'IJPP:1', to=AP), ride('10:30:00', '10:50:00', 'IJPP:2', frm=AP, to='IJPP:z')

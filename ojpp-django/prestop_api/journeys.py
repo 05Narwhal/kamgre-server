@@ -591,25 +591,30 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             if leg['mode'] != 'walk':
                 leg.setdefault('predictedDelaySeconds', leg['delaySeconds'])
                 leg.setdefault('predictionBasis', 'live' if leg['delaySeconds'] is not None else None)
-        transfers, previous, previous_meta, walking = [], None, None, 0.0
+        transfers, previous, previous_meta, walking, lpp_since = [], None, None, 0.0, None
         for leg, m in zip(legs, meta):
             if not m['transit']:
                 walking += m['duration']
                 continue
-            # Contract 3: the same vehicle goes on as the next line (OTP's interline, the feed's block, or the vehicle
-            # learned in blocks.py); the rider stays on, perhaps with a new ticket.
-            stays = previous is not None and predictions.stays_on_vehicle(previous, previous_meta, leg, m, walking)
-            if stays:
-                leg['staysOnVehicle'], leg['newTicket'] = True, predictions.new_ticket(previous, leg)
-            # Every change of vehicle is rated, tied to the leg it boards (`legId`): staying seated on a through-run
-            # (OTP's interline) is none. A change SŽ holds (train to its replacement bus and back) is rated comfortable
-            # and, as before, not counted: it is one ride.
-            if previous is not None and not m['interline']:
+            if lpp_since is None and predictions.is_lpp(leg):
+                lpp_since = _ts(leg['effectiveDeparture'])  # LPP's fare window runs from the first LPP boarding
+            # Contract 3: the same vehicle goes on as the next line, as learned from the vehicles (stays.py); the rider
+            # stays on, perhaps with a ticket to see to. `stayLevel` is on every ride after the first (null: a change).
+            level = None
+            if previous is not None:
+                level = leg['stayLevel'] = predictions.stay_level(previous, previous_meta, leg, m, walking)
+                if level:
+                    note = leg['ticketNote'] = predictions.ticket_note(previous, leg, lpp_since)
+                    leg['staysOnVehicle'], leg['newTicket'] = level == 'sure', note != 'none'  # older app builds
+            # Every change of vehicle is rated, tied to the leg it boards (`legId`). A `sure` stay is none: the bus
+            # can't leave without you. A `likely` one is timed like any change. A change SŽ holds (train to its
+            # replacement bus and back) is rated comfortable and, as before, not counted: it is one ride.
+            if previous is not None and level != 'sure':
                 available = _ts(leg['effectiveDeparture']) - _ts(previous['effectiveArrival'])
                 required, safety = round(walking), req['minTransferSeconds']
                 if leg['canceled'] or previous['canceled']:
                     status, meets = 'unknown', None
-                elif m.get('held') or stays:  # held by SŽ, or the bus waits for itself
+                elif m.get('held'):  # held by SŽ
                     status, meets = 'safe', True
                 elif req.get('riskMode') == 'insane':
                     # Within the rider's allowance (down to -1 min) is a bet, labelled tight when under 2 min spare.

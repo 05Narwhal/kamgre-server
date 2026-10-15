@@ -97,3 +97,40 @@ class RecorderDay(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['day', 'feed'], name='prestop_recorder_day_unique')]
+
+
+class StayDeparture(models.Model):
+    """What stays.py learned, each night, about one departure (route + scheduled start + stop pattern) on one kind of
+    day: where its vehicle comes from (`origin`: continues after `prev_*`, depot, unknown) and how sure staying on is
+    (`level`). Only departures of feeds whose 7-full-days gate is open are written."""
+    kind = models.CharField(max_length=8)
+    feed = models.CharField(max_length=64)
+    route_id = models.CharField(max_length=200)
+    start = models.IntegerField()
+    pattern = models.CharField(max_length=16)
+    origin = models.CharField(max_length=10)
+    level = models.CharField(max_length=6, blank=True, default='')  # 'sure', 'likely' or ''
+    prev_route_id = models.CharField(max_length=200, blank=True, default='')
+    prev_start = models.IntegerField(null=True)
+    prev_pattern = models.CharField(max_length=16, blank=True, default='')
+    prev_end = models.IntegerField(null=True)
+    days = models.SmallIntegerField(default=0)    # observed days with a known origin
+    share = models.FloatField(default=0)          # of them, the share with the top origin
+    absorb = models.IntegerField(null=True)       # s of the previous trip's delay the layover takes up (median)
+    depot_delay = models.IntegerField(null=True)  # s: the usual start delay on days it came from the depot
+    learned_on = models.DateField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['kind', 'route_id', 'start'], name='prestop_stay_departure_unique')]
+
+
+class StayCheck(models.Model):
+    """The live check (stays.check): yesterday's `sure`/`likely` stays against what the vehicles did, per feed."""
+    day = models.DateField()
+    feed = models.CharField(max_length=64)
+    level = models.CharField(max_length=6)
+    hits = models.IntegerField(default=0)
+    misses = models.IntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['day', 'feed', 'level'], name='prestop_stay_check_unique')]

@@ -1,4 +1,4 @@
-"""Which vehicle runs which trip: recording from the vehicle feed, learning blocks, predicting from the previous trip."""
+"""Which vehicle runs which trip: recording from the vehicle feed (learning is in test_stays)."""
 from datetime import date, datetime, timedelta, timezone as tz
 
 from django.test import TestCase
@@ -50,50 +50,3 @@ class RecordTests(TestCase):
         self.assertEqual(blocks.prune(DAY + 12 * H), 1)
         self.assertEqual(blocks.prune(DAY + 13 * H), 0)
         self.assertEqual(list(VehicleTrip.objects.values_list('trip_id', flat=True)), ['IJPP:kept'])
-
-
-class LearnTests(TestCase):
-    """Line B's 07:50 is the bus that has just done line A's 07:00 (ends 07:40), on most workdays."""
-
-    def setUp(self):
-        blocks._learned.clear()
-        blocks._days['at'] = 0.0
-
-    def history(self, days, other_vehicle_on=()):
-        n = 0
-        day = TODAY
-        while n < days:
-            day -= timedelta(days=1)
-            if day.weekday() >= 5:
-                continue
-            n += 1
-            vehicle = 'IJPP:other' if n in other_vehicle_on else 'IJPP:v1'
-            run(day, f'IJPP:a-{day}', 'IJPP:v1', 'IJPP:A', 7 * H, 7 * H + 40 * 60)
-            run(day, f'IJPP:b-{day}', vehicle, 'IJPP:B', 7 * H + 50 * 60, 8 * H + 30 * 60)
-
-    def test_nothing_is_learned_before_seven_days(self):
-        self.history(6)
-        self.assertEqual(blocks.learn('IJPP:B', TODAY), {})
-
-    def test_a_departure_that_usually_follows_another_one_and_its_predicted_delay(self):
-        self.history(10, other_vehicle_on=(3, 7))  # 8 of 10 days: 80 %
-        m = blocks.learn('IJPP:B', TODAY)[7 * H + 50 * 60]
-        self.assertEqual((m['samples'], m['share'], m['slack']), (10, 0.8, 600))
-        self.assertEqual(m['previous'], {'routeId': 'IJPP:A', 'start': 7 * H, 'end': 7 * H + 40 * 60})
-        self.assertIsNone(blocks.learn('IJPP:A', TODAY)[7 * H]['previous'])  # line A's bus comes from the depot
-        # Today line A's 07:00 runs 15 min late: 10 of them are taken up by the layover.
-        run(TODAY, 'IJPP:a-today', 'IJPP:v1', 'IJPP:A', 7 * H, 7 * H + 40 * 60, delay=900)
-        self.assertEqual(blocks.predict('IJPP:B', 7 * H + 50 * 60, TODAY), 300)
-        VehicleTrip.objects.filter(trip_id='IJPP:a-today').update(end_delay=420)
-        blocks._learned.clear()
-        self.assertEqual(blocks.predict('IJPP:B', 7 * H + 50 * 60, TODAY), 0)  # never below 0
-        self.assertEqual(blocks.previous_run('IJPP:B', 7 * H + 50 * 60, TODAY)['vehicleId'], 'IJPP:v1')
-
-    def test_under_sixty_percent_the_same_counts_as_a_fresh_start(self):
-        self.history(10, other_vehicle_on=(1, 2, 3, 4, 5))
-        self.assertIsNone(blocks.learn('IJPP:B', TODAY)[7 * H + 50 * 60]['previous'])
-
-    def test_a_previous_trip_not_seen_lately_gives_no_live_delay(self):
-        self.history(8)
-        run(TODAY, 'IJPP:a-today', 'IJPP:v1', 'IJPP:A', 7 * H, 7 * H + 40 * 60, delay=900, seen=timezone.now() - timedelta(hours=1))
-        self.assertIsNone(blocks.predict('IJPP:B', 7 * H + 50 * 60, TODAY))

@@ -1,22 +1,15 @@
-"""Which vehicle runs which trip, learned from the vehicle positions feed.
+"""Which vehicle runs which trip, and what it does in between, recorded from the vehicle positions feed.
 
-`record` (every collector poll) writes, for each vehicle on a trip, a VehicleTrip row: the vehicle, the
-trip's scheduled start and end and its delay when last seen. Rows are kept KEEP_DAYS days.
-
-`learn` reads those rows back. Once MIN_DAYS service days are recorded, each departure of a route either
-continues a vehicle's previous trip (on at least SAME_SHARE of the observed days of that kind the same
-vehicle came off the same departure, at most MAX_GAP before) or starts fresh from the depot. Departures are
-keyed by route and scheduled start, not trip id: some feeds give a trip a new id every day.
-
-`predict` uses that: the next trip's expected delay is the previous trip's live delay minus the layover
-slack (the scheduled gap between the two), never below 0. Until MIN_DAYS days are recorded nothing is
-predicted here and the planner falls back to history ("usually x late", aggregation.usual_delays).
+`record` (every collector poll) writes, for each vehicle on a trip, a VehicleTrip row: the vehicle, the trip's
+scheduled start and end, its stop pattern, the delay it set off with and its delay when last seen. Between two trips
+of a vehicle a VehicleGap row sums up what it did (GapTracker), and RecorderDay counts how much of each day was
+recorded. Rows are kept KEEP_DAYS days. stays.py learns from all three: which departure a vehicle goes on to, where
+it comes from (depot or not), and whether a rider can stay on.
 """
 import hashlib
 import logging
 import math
 import time
-from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from typing import Optional
 
@@ -25,16 +18,12 @@ from django.db.models import F
 from django.utils import timezone
 
 from prestop_api import mapping
-from prestop_statistics.aggregation import day_kind
 from prestop_statistics.models import RecorderDay, VehicleGap, VehicleTrip
 
 logger = logging.getLogger(__name__)
 KEEP_DAYS = 56     # eight weeks
-MIN_DAYS = 7       # service days recorded before blocks are trusted
-SAME_SHARE = 0.6   # the same previous departure on at least this share of days
-MAX_GAP = 30 * 60  # s between the previous trip's scheduled end and this trip's start
+MAX_GAP = 30 * 60  # s at most between the previous trip's scheduled end and this trip's start
 LIVE_AGE = 10 * 60  # s: a previous trip last seen longer ago gives no live delay
-LEARN_TTL = 3600
 RECORDER_VERSION = 2   # rows written with gaps and coverage (VehicleGap, RecorderDay)
 TERMINUS_METERS = 200  # m: standing this close to the last stop is waiting at the terminus
 STILL_METERS = 60      # m: moving less than this between polls is standing still
@@ -42,8 +31,6 @@ IDLE_SECONDS = 10 * 60  # s stood still in one spot: an idle spot (depots are le
 MAX_OPEN = 20 * 3600   # s: a gap open longer than this (no next trip seen) is closed without one
 POLL_CREDIT = 180      # s: polls further apart than this count only this much (the collector polls every 60 s)
 _pruned: dict = {'day': None}
-_learned: dict = {}  # (routeId, day, kind) -> (time, model)
-_days: dict = {'at': 0.0, 'count': 0}
 
 
 # ---------------------------------------------------------------- recording
@@ -59,8 +46,11 @@ def _ordered(schedule: dict) -> list[dict]:
 
 def pattern_key(schedule: dict) -> str:
     """The trip's stops in order, hashed: the same departure with other stops (a timetable change) is another one."""
-    ids = '|'.join((s.get('stop') or {}).get('gtfsId') or '' for s in _ordered(schedule))
-    return hashlib.sha1(ids.encode()).hexdigest()[:16]
+    return hash_stops([(s.get('stop') or {}).get('gtfsId') or '' for s in _ordered(schedule)])
+
+
+def hash_stops(stop_ids: list[str]) -> str:
+    return hashlib.sha1('|'.join(stop_ids).encode()).hexdigest()[:16]
 
 
 def _terminus(schedule: dict) -> Optional[tuple[float, float]]:
@@ -261,84 +251,7 @@ def prune(now: Optional[float] = None) -> int:
     return deleted
 
 
-# ---------------------------------------------------------------- learning
-
-def recorded_days() -> int:
-    if time.monotonic() - _days['at'] > 600:
-        _days.update(at=time.monotonic(), count=VehicleTrip.objects.values('service_date').distinct().count())
-    return _days['count']
-
-
-def learn(route_id: str, today: date, kind: Optional[str] = None) -> dict[int, dict]:
-    """start -> {'samples', 'previous': {'routeId', 'start', 'end'} | None, 'share', 'slack'} for the route's departures
-    on days of `kind` (default: today's) before today. Empty until MIN_DAYS days are recorded."""
-    kind = kind or day_kind(today)
-    key = (route_id, today, kind)
-    hit = _learned.get(key)
-    if hit and time.monotonic() - hit[0] < LEARN_TTL:
-        return hit[1]
-    model = _learn(route_id, today, kind) if recorded_days() >= MIN_DAYS else {}
-    _learned[key] = (time.monotonic(), model)
-    return model
-
-
-def _learn(route_id: str, today: date, kind: str) -> dict[int, dict]:
-    since = today - timedelta(days=KEEP_DAYS)
-    own = [r for r in VehicleTrip.objects.filter(route_id=route_id, service_date__range=(since, today - timedelta(days=1)))
-           .only('service_date', 'vehicle_id', 'start', 'trip_id') if day_kind(r.service_date) == kind]
-    if not own:
-        return {}
-    runs: dict[tuple, list] = defaultdict(list)
-    for r in VehicleTrip.objects.filter(vehicle_id__in={r.vehicle_id for r in own}, service_date__in={r.service_date for r in own}) \
-            .only('service_date', 'vehicle_id', 'route_id', 'start', 'end', 'trip_id'):
-        runs[(r.vehicle_id, r.service_date)].append(r)
-    votes: dict[int, Counter] = defaultdict(Counter)
-    ends: dict[tuple, list] = defaultdict(list)
-    for r in own:
-        before = [o for o in runs[(r.vehicle_id, r.service_date)] if o.trip_id != r.trip_id and o.end <= r.start and r.start - o.end <= MAX_GAP]
-        prev = max(before, key=lambda o: o.end, default=None)
-        pick = (prev.route_id, prev.start) if prev else None
-        votes[r.start][pick] += 1
-        if prev:
-            ends[pick].append(prev.end)
-    model = {}
-    for start, counter in votes.items():
-        samples = sum(counter.values())
-        pick, n = counter.most_common(1)[0]
-        share = n / samples
-        if pick and share >= SAME_SHARE:
-            end = sorted(ends[pick])[len(ends[pick]) // 2]
-            model[start] = {'samples': samples, 'share': round(share, 2), 'slack': start - end,
-                            'previous': {'routeId': pick[0], 'start': pick[1], 'end': end}}
-        else:
-            model[start] = {'samples': samples, 'share': round(share, 2), 'slack': None, 'previous': None}
-    return model
-
-
-# ---------------------------------------------------------------- predicting
-
-def previous_run(route_id: str, start: int, today: date) -> Optional[dict]:
-    """Today's run of the departure that usually comes before this one on the same vehicle:
-    {'tripId', 'vehicleId', 'routeId', 'delaySeconds' (live, or None), 'slack'}; None for a fresh start or when unknown."""
-    m = learn(route_id, today).get(start)
-    if not m or not m['previous']:
-        return None
-    prev = m['previous']
-    row = VehicleTrip.objects.filter(route_id=prev['routeId'], start=prev['start'], service_date=today).order_by('-last_seen').first()
-    if not row:
-        return {'tripId': None, 'vehicleId': None, 'routeId': prev['routeId'], 'delaySeconds': None, 'slack': m['slack']}
-    fresh = (timezone.now() - row.last_seen).total_seconds() <= LIVE_AGE
-    return {'tripId': row.trip_id, 'vehicleId': row.vehicle_id, 'routeId': row.route_id,
-            'delaySeconds': row.end_delay if fresh else None, 'slack': m['slack']}
-
-
-def predict(route_id: str, start: int, today: date) -> Optional[int]:
-    """Expected delay (s) of a departure from its vehicle's previous trip, or None (no previous trip, or not running)."""
-    prev = previous_run(route_id, start, today)
-    if not prev or prev['delaySeconds'] is None:
-        return None
-    return max(0, prev['delaySeconds'] - max(0, prev['slack'] or 0))
-
+# ---------------------------------------------------------------- today
 
 def vehicle_on(trip_id: str, today: date) -> Optional[str]:
     """The vehicle seen on a trip today (fresh), if any."""
