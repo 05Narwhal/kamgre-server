@@ -129,7 +129,7 @@ class WednesdayTests(SimpleTestCase):
 
     def test_train_318_is_three_buses_with_the_timetables_times(self):
         first, second, third = self.buses['BUS 318/1'], self.buses['BUS 318/2'], self.buses['BUS 318/3']
-        self.assertEqual((names(first), times(first)), (['Ljubljana', 'Litostroj', 'Jesenice'], ['07:42', '07:51', '08:32']))
+        self.assertEqual((names(first), times(first)), (['Ljubljana', 'Litostroj', 'Jesenice', 'Beljak / Villach Hbf'], ['07:42', '07:51', '08:32', '09:25']))
         self.assertEqual((names(second), times(second)),
                          (['Ljubljana', 'Litostroj', 'Kranj', 'Lesce-Bled'], ['07:42', '07:51', '08:22', '08:47']))
         self.assertEqual((names(third), times(third)), (['Kranj', 'Lesce-Bled', 'Jesenice'], ['07:47', '08:12', '08:32']))
@@ -152,10 +152,12 @@ class WednesdayTests(SimpleTestCase):
         guessed = build('20261014', tables=None)
         self.assertTrue([b for b in guessed['buses'] if b.get('trainTripId') == train])
 
-    def test_stations_abroad_are_left_out(self):
-        self.assertEqual(names(self.buses['BUS 414'])[-1], 'Jesenice')
-        self.assertEqual(names(self.buses['BUS 415'])[0], 'Jesenice')
-        self.assertEqual(times(self.buses['BUS 415']), ['07:00', '07:20', '07:45', '08:25'])
+    def test_buses_run_on_to_the_station_abroad(self):
+        # SŽ's buses stop outside Villach Hbf; Jesenice is no longer where they end or start.
+        self.assertEqual(names(self.buses['BUS 414'])[-2:], ['Jesenice', 'Beljak / Villach Hbf'])
+        self.assertEqual(names(self.buses['BUS 415'])[:2], ['Beljak / Villach Hbf', 'Jesenice'])
+        self.assertEqual(times(self.buses['BUS 415']), ['06:06', '06:56', '07:20', '07:45', '08:25'])
+        self.assertTrue(sztimetables.is_abroad(self.buses['BUS 415']['stops'][0]['gtfsId']))
 
     def test_every_bus_carries_the_notices_that_link_its_timetable(self):
         ids = {a['id'] for a in ALERTS if closures.notice_id(a) in ('11147', '11248')}
@@ -191,7 +193,7 @@ class MondayTests(SimpleTestCase):
             self.assertNotIn(train, sections)
             self.assertFalse([b for b in plan['buses'] if b.get('trainTripId') == train])
         self.assertEqual(times(buses['BUS 316'])[:2], ['09:35', '09:44'])
-        self.assertEqual(names(buses['BUS 415']), ['Jesenice', 'Lesce-Bled', 'Kranj', 'Ljubljana'])
+        self.assertEqual(names(buses['BUS 415']), ['Beljak / Villach Hbf', 'Jesenice', 'Lesce-Bled', 'Kranj', 'Ljubljana'])
 
     @staticmethod
     def next_day_plan() -> dict:
@@ -261,6 +263,13 @@ class PrecedenceTests(SimpleTestCase):
         self.assertIn('2400', said)
         self.assertIn('05:41', said)
         self.assertIn('05:40', said)
+
+    def test_a_feed_bus_of_another_run_stays(self):
+        # Same number, same stations, but hours away from the timetable's 05:40 bus: another run (the Vižmarje
+        # timetable's evening BUS 310 once hid the feed's morning BUS 31006).
+        later = feed_bus('BUS 24009', ['Lesce-Bled', 'Žirovnica', 'Slovenski Javornik', 'Jesenice'], '14:41', step=300)
+        plan = build('20261014', extra=[later])
+        self.assertNotIn(later['id'], plan['suppressed'])
 
     def test_an_unsure_timetable_is_used_for_its_good_columns_only(self):
         # Ljubljana - Logatec: the feed has the buses itself; the timetable is unsure ("17::00" in 26639).
@@ -419,13 +428,13 @@ class BoardTests(SimpleTestCase):
         train = self.trips['RG 318']
         rows = self.board('Ljubljana', 'departure', '07:30', '08:00', [board_row(train, 'Ljubljana')])
         self.assertEqual(sorted((r['routeName'], self.at(r), r['destination']) for r in rows),
-                         [('BUS 318/1', '07:42', 'Jesenice'), ('BUS 318/2', '07:42', 'Lesce-Bled')])
+                         [('BUS 318/1', '07:42', 'Beljak / Villach Hbf'), ('BUS 318/2', '07:42', 'Lesce-Bled')])
         rows = self.board('Kranj', 'departure', '07:30', '08:30', [board_row(train, 'Kranj')])
         self.assertEqual([(r['routeName'], self.at(r), r['destination']) for r in rows],
                          [('BUS 415', '07:45', 'Ljubljana'), ('BUS 318/3', '07:47', 'Jesenice'), ('BUS 318/2', '08:22', 'Lesce-Bled')])
         rows = self.board('Kranj', 'arrival', '07:30', '08:30', [board_row(train, 'Kranj', 'arrival')])
         self.assertEqual([(r['routeName'], self.at(r), r['destination']) for r in rows],
-                         [('BUS 415', '07:45', 'Jesenice'), ('BUS 318/2', '08:22', 'Ljubljana')])
+                         [('BUS 415', '07:45', 'Beljak / Villach Hbf'), ('BUS 318/2', '08:22', 'Ljubljana')])
         # Arriving in Ljubljana from Dobova it is a train.
         rows = self.board('Ljubljana', 'arrival', '07:30', '08:00', [board_row(train, 'Ljubljana', 'arrival')])
         self.assertEqual([(r['routeName'], r['mode']) for r in rows], [('RG 318', 'rail')])
@@ -583,7 +592,7 @@ class LineAndTripTests(SimpleTestCase):
             line = scheduled.synthetic_line(route, datetime(2026, 10, 14).date())
         self.assertEqual((line['name'], line['replacesTrain'], line['replacement']), ('BUS 318', 'RG 318', True))
         self.assertEqual(sorted((p['stops'][0]['name'], p['stops'][-1]['name']) for p in line['patterns']),
-                         [('Kranj', 'Jesenice'), ('Ljubljana', 'Jesenice'), ('Ljubljana', 'Lesce-Bled')])
+                         [('Kranj', 'Jesenice'), ('Ljubljana', 'Beljak / Villach Hbf'), ('Ljubljana', 'Lesce-Bled')])
 
     def test_a_trip_page_tells_where_the_bus_leaves_earlier_than_published(self):
         plan = MondayTests.next_day_plan()  # 20 October, notice 11198
@@ -614,7 +623,7 @@ class UntimedNoticeTests(SimpleTestCase):
         for bus in rows['11248']['buses']:
             by_train.setdefault(bus['train'], []).append(bus)
         self.assertEqual([(b['bus'], b['from'], b['to'], b['departs'], b['arrives']) for b in by_train['RG 318']],
-                         [('BUS 318/1', 'Ljubljana', 'Jesenice', '07:42', '08:32'), ('BUS 318/2', 'Ljubljana', 'Lesce-Bled', '07:42', '08:47'),
+                         [('BUS 318/1', 'Ljubljana', 'Beljak / Villach Hbf', '07:42', '09:25'), ('BUS 318/2', 'Ljubljana', 'Lesce-Bled', '07:42', '08:47'),
                           ('BUS 318/3', 'Kranj', 'Jesenice', '07:47', '08:32')])
         # 28 feed buses; 26639 (an unreadable cell) and 26638 (the other bus of the same train, 2663) stay.
         self.assertEqual(rows['10088']['feedBusesReplaced'], 26)

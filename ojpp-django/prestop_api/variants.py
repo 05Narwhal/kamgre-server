@@ -63,10 +63,8 @@ def build(routes: dict, patterns: list[dict], names: dict[str, str], operator_of
         places = {rid: {place_of(names.get(x, x)) for x in served_ids[rid]} for rid in members}
         # Variants by the places they serve: a route listed once per direction is one variant.
         kinds = {frozenset(places[rid]) for rid in members}
-        if len(kinds) < 2:
-            continue
         holders = lambda place: frozenset(k for k in kinds if place in k)
-        for rid in members:
+        for rid in members if len(kinds) > 1 else []:
             mine = frozenset(places[rid])
             stops = longest.get(rid) or []
             middle = {}  # place -> (inside a shared town, distance from the middle of the way)
@@ -84,7 +82,42 @@ def build(routes: dict, patterns: list[dict], names: dict[str, str], operator_of
             inner = [p for p in cands if way & holders(p) < way and middle[p][0] <= middle[first][0]]
             second = min(inner, key=lambda p: (middle[p][0], len(way & holders(p)), middle[p][1], p), default=None)
             out[rid]['via'] = f'{first}, {second}' if second else first
+        _distinct(members, out, places, {rid: frozenset(names.get(x, x) for x in served_ids[rid]) for rid in members})
     return out
+
+
+def _distinct(members: list[str], out: dict, places: dict[str, set[str]], stops: dict[str, frozenset[str]]) -> None:
+    """Variants that serve different stops get different labels: while some share one, each adds what sets it apart
+    from the others sharing it, a place first, else a stop of its own ("Meja" and "Meja, Bohinjska Bistrica OŠ").
+    Routes serving the same stops are one variant (IJPP lists a line twice) and keep one label."""
+    by_stops: dict[frozenset, list[str]] = defaultdict(list)
+    for rid in members:
+        by_stops[stops[rid]].append(rid)
+    if len(by_stops) < 2:
+        return
+    label = {kind: out[rids[0]]['via'] for kind, rids in by_stops.items()}
+    place_set = {kind: frozenset(places[rids[0]]) for kind, rids in by_stops.items()}
+    for _ in range(4):
+        shared: dict = defaultdict(list)
+        for kind, text in label.items():
+            shared[text].append(kind)
+        clashes = [kinds for kinds in shared.values() if len(kinds) > 1]
+        if not clashes:
+            break
+        for kinds in clashes:
+            for kind in kinds:
+                others = [k for k in kinds if k != kind]
+                text = label[kind]
+                used = set((text or '').split(', '))
+                own_places = [p for p in place_set[kind] - used if p and any(p not in place_set[k] for k in others)]
+                own_stops = [s for s in kind - used if any(s not in k for k in others)]
+                pick = min(own_places, key=lambda p: (sum(p in place_set[k] for k in others), p), default=None) \
+                    or min(own_stops, key=lambda s: (sum(s in k for k in others), s), default=None)
+                if pick:
+                    label[kind] = f'{text}, {pick}' if text else pick
+    for kind, rids in by_stops.items():
+        for rid in rids:
+            out[rid]['via'] = label[kind]
 
 
 def table() -> dict[str, dict]:

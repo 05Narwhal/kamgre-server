@@ -238,7 +238,7 @@ def relocate(stops: list[dict], points: Sequence[tuple[float, float]] = (), bus_
     names = [s.get('name') or '' for s in stops]
     out = []
     for s in stops:
-        if s.get('lat') is None or s.get('gtfsId') is None:
+        if s.get('lat') is None or s.get('gtfsId') is None or s.get('abroad'):  # a station abroad: outside it
             out.append(s)
             continue
         key = (s['gtfsId'], s['lat'], s['lon'], tuple(points), fallback, tuple(names))
@@ -625,9 +625,13 @@ def format_report(rows: list[dict]) -> str:
     return '\n'.join(lines)
 
 
+SAME_RUN = 2 * 3600  # s: a feed bus and a timetable bus of one train leave at most this far apart
+
+
 def _suppress(buses: list[dict], feed_buses: dict[str, list[dict]]) -> dict[str, str]:
     """Feed bus trip id -> the timetable bus that runs instead: same day, same number (or the number of the train it
-    carries), a station in common. Where they differ, the difference is logged once per notice and day."""
+    carries), a station in common, leaving within SAME_RUN (the Vižmarje timetable's evening BUS 310 is not the
+    feed's morning Celje - Ljubljana BUS 31006). Where they differ, the difference is logged once per notice and day."""
     from .replacement import train_numbers
     out: dict[str, str] = {}
     told: dict[tuple[str, str], list[str]] = {}
@@ -636,7 +640,8 @@ def _suppress(buses: list[dict], feed_buses: dict[str, list[dict]]) -> dict[str,
         for fb in theirs:
             name = mapping.route_name(fb['route'])
             keys = [sz.station_key(s.get('name') or '') for s in fb['stops']]
-            near = [b for b in mine if set(keys) & {sz.station_key(s.get('name') or '') for s in b['stations']}]
+            near = [b for b in mine if set(keys) & {sz.station_key(s.get('name') or '') for s in b['stations']}
+                    and abs(b['departures'][0] - fb['departures'][0]) <= SAME_RUN]
             cands = [b for b in near if re.sub(r'\D', '', b['label']) == re.sub(r'\D', '', name)]
             for n in [] if cands else train_numbers(name):
                 cands = [b for b in near if n in b['numbers']]
@@ -765,7 +770,11 @@ def rail_routes_on(alert: dict) -> list[str]:
 
 
 def notice_alerts(alerts: list[dict], tables: Optional[sztimetables.Timetables] = None) -> list[dict]:
-    """`alerts` and SŽ's notices OTP doesn't have yet (sz_notice_alerts), with SŽ's feed as last read."""
+    """`alerts` and SŽ's notices OTP doesn't have yet (sz_notice_alerts), with SŽ's feed as last read. SŽ's notices
+    OTP ties to no route (a line that runs abroad) get the SŽ routes on their line."""
+    for a in alerts:
+        if a.get('source') == 'sz' and not a['routeIds']:
+            a['routeIds'] = rail_routes_on(a)
     return alerts + sz_notice_alerts(_notices['raw'], alerts, tables or sztimetables.current(), rail_routes_on)
 
 

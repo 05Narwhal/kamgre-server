@@ -229,9 +229,34 @@ def numbers(col: dict) -> list[str]:
 
 NEAR_LINE = 1500  # m: a stop that is no railway station lies this close to the line between the bus's stations
 BESIDE = 300      # m: the feed stop this close to the spot SŽ lists is where the bus stops
-# Stations abroad, which no feed has: the bus ends or starts at its last stop in Slovenia.
+# Stations abroad, which no feed has. Those SŽ's buses run to keep their stop (ABROAD_STATIONS); at any other
+# the bus ends or starts at its last stop in Slovenia.
 FOREIGN = {'beljak', 'villach', 'opcine', 'villa opicina', 'trst', 'trieste', 'buzet', 'cakovec', 'durmanec', 'pliberk', 'bleiburg',
            'spilje', 'spielfeld', 'spielfeld strass', 'zagreb', 'rijeka', 'gradec', 'graz'}
+ABROAD_PREFIX = 'IJPP:abroad-'  # stop id of a station abroad (no feed has one): never a stop page
+# The railway station (OpenStreetMap, 2026-10-14): SŽ's buses stop outside it ("zunanja stran ŽP").
+ABROAD_STATIONS = {
+    'opcine': ('opcine', 'Opčine / Villa Opicina', 45.694441, 13.791198),
+    'beljak': ('beljak', 'Beljak / Villach Hbf', 46.618618, 13.848445),
+    'buzet': ('buzet', 'Buzet', 45.426255, 13.985194),
+    'trst': ('trst', 'Trst / Trieste Centrale', 45.658301, 13.771581),
+    'cakovec': ('cakovec', 'Čakovec', 46.384367, 16.420519),
+}
+ABROAD_STATIONS.update({'villa opicina': ABROAD_STATIONS['opcine'], 'villach': ABROAD_STATIONS['beljak'],
+                        'trieste': ABROAD_STATIONS['trst']})
+
+
+def abroad_stop(name: str) -> Optional[dict]:
+    """The stop of a station abroad that SŽ's buses run to ('BELJAK' -> Beljak / Villach Hbf), or None."""
+    found = ABROAD_STATIONS.get(words(name))
+    if not found:
+        return None
+    key, label, lat, lon = found
+    return {'gtfsId': ABROAD_PREFIX + key, 'name': label, 'lat': lat, 'lon': lon, 'abroad': True}
+
+
+def is_abroad(stop_id: str) -> bool:
+    return (stop_id or '').startswith(ABROAD_PREFIX)
 
 
 def words(name: str) -> str:
@@ -278,10 +303,15 @@ class Stations:
         return self._rail_memo[name]
 
     def resolve(self, data: dict, col: dict) -> tuple[Optional[list[dict]], Optional[str]]:
-        """The column's calls in Slovenia, each with its `stop` (a feed stop: gtfsId, name, lat, lon, and for a
-        stop that is no railway station where the bus stops, `replacementLabel`), or (None, why not)."""
+        """The column's calls in Slovenia and at the stations abroad it runs to (abroad_stop), each with its `stop`
+        (a feed stop: gtfsId, name, lat, lon, and for a stop that is no railway station where the bus stops,
+        `replacementLabel`), or (None, why not)."""
         calls = [{**c, '_found': self.railway(c.get('station') or '')} for c in col.get('calls') or []]
-        calls = [c for c in calls if c['_found'] or not abroad(c.get('station') or '', data)]
+        for c in calls:
+            c['_abroad'] = not c['_found'] and abroad(c.get('station') or '', data)
+            if c['_abroad']:
+                c['stop'] = abroad_stop(c.get('station') or '')
+        calls = [c for c in calls if not c['_abroad'] or c.get('stop')]
         for c in calls:
             if len(c['_found']) == 1:
                 c['stop'] = _as_stop(c['_found'][0])
@@ -297,8 +327,8 @@ class Stations:
                 c['stop'] = self.elsewhere(c.get('station') or '', data, line, names)
                 if not c['stop']:
                     return None, f'stop {c.get("station")!r} not found'
-        if len(calls) < 2:
-            return None, 'fewer than two calls in Slovenia'
+        if len(calls) < 2 or all(c['stop'].get('abroad') for c in calls):
+            return None, 'fewer than two calls in Slovenia and at known stations abroad'
         out = [{k: v for k, v in c.items() if k in ('station', 'stop', 'arr', 'dep')} for c in calls]
         first, last = out[0], out[-1]
         first.setdefault('dep', first.get('arr'))

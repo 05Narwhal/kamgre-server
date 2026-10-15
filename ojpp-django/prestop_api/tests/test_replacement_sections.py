@@ -37,6 +37,16 @@ class MatchTests(SimpleTestCase):
         found = replacement.sections([bus, train])
         self.assertEqual((found['IJPP:ics'][0]['fromIndex'], found['IJPP:ics'][0]['toIndex']), (None, 0))
 
+    def test_a_train_trip_lists_the_stretch_its_bus_runs(self):
+        train = trip('1896', 'LPV 1896', NAMES, T0)
+        bus = trip('bus', 'BUS 18969', ['Brezovica', 'Borovnica', 'Logatec'], T0 + 600, mode='BUS')
+        plan = {'sections': replacement.sections([bus, train]), 'trips': {train['id']: [train], bus['id']: [bus]}, 'by_id': {}}
+        built = {'id': train['id'], 'stops': [{'name': s, 'scheduledDeparture': mapping.iso(train['departures'][i])} for i, s in enumerate(NAMES)]}
+        self.assertEqual(replacement.trip_sections(built, plan), [{'fromIndex': 1, 'toIndex': 3, 'busTripId': bus['id'], 'busName': 'BUS 18969'}])
+        # Another day's run of the train is not this trip's.
+        late = {**built, 'stops': [{**s, 'scheduledDeparture': mapping.iso(train['departures'][i] + 86_400)} for i, s in enumerate(built['stops'])]}
+        self.assertEqual(replacement.trip_sections(late, {**plan, 'trips': {train['id']: [{**train, 'departures': [d + 86_400 for d in train['departures']], 'arrivals': [a + 86_400 for a in train['arrivals']]}], bus['id']: [bus]}}), [])
+
     def test_car_trains_are_trains(self):
         self.assertFalse(mapping.is_replacement({'shortName': 'AVT 853', 'mode': 'RAIL', 'agency': SZ}))
 

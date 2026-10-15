@@ -55,3 +55,20 @@ class VariantTests(SimpleTestCase):
             self.assertEqual(rows[2], {'routeId': 'IJPP:66536', 'via': 'Žeje', 'name': '36'})
             self.assertEqual(variants.siblings('IJPP:unknown'), [])
             self.assertIsNone(variants.of('IJPP:unknown')['via'])
+
+    def test_variants_with_different_stops_never_share_a_label(self):
+        # Ljubljana - Bohinj as IJPP had it on 2026-10-14: A6346 is A6345 plus one school stop, A6345 listed twice.
+        way = ['Ljubljana AP', 'Medvode', 'Meja/Kr.', 'Kranj AP', 'Bled', 'Bohinjska Bistrica', 'Bohinj Ukanc']
+        school = way[:6] + ['Bohinjska Bistrica OŠ'] + way[6:]
+        polica = ['Ljubljana AP', 'Polica', 'Kranj AP', 'Bled', 'Bohinjska Bistrica', 'Bohinj Ukanc']
+        routes, patterns, names = {}, [], {}
+        for rid, stops in (('IJPP:66503', way), ('IJPP:67004', way), ('IJPP:66504', school), ('IJPP:66513', polica)):
+            routes[rid] = {'gtfsId': rid, 'agencyId': 'arriva', 'mode': 'BUS'}
+            ids = [f'{rid}:{i}' for i in range(len(stops))]
+            names.update(zip(ids, stops))
+            patterns.append({'routeId': rid, 'stops': ids})
+        out = variants.build(routes, patterns, names)
+        self.assertEqual(out['IJPP:66503']['via'], out['IJPP:67004']['via'])  # the same variant listed twice
+        labels = [out[r]['via'] for r in ('IJPP:66503', 'IJPP:66504', 'IJPP:66513')]
+        self.assertEqual(len(set(labels)), 3, labels)
+        self.assertEqual(out['IJPP:66504']['via'], f"{out['IJPP:66503']['via']}, Bohinjska Bistrica OŠ")

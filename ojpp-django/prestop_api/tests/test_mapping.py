@@ -104,6 +104,17 @@ class AlertTests(SimpleTestCase):
         self.assertEqual((alert['id'], alert['stopIds'], alert['_aliases']), ('alert:1', ['LPP:a', 'LPP:b'], ['alert:1', 'alert:2']))
 
 
+    def test_sz_notices_on_lines_without_a_feed_route_are_szs(self):
+        # Sežana - Opčine, Ljubljana - Villach: OTP ties the notice to no route or agency; it is SŽ's all the same.
+        import base64
+        sz_id = base64.b64encode(b'Alert:IJPP:SZ-OVIRA-11300').decode().rstrip('=')
+        other = base64.b64encode(b'Alert:IJPP:OTHER-1').decode().rstrip('=')
+        raw = [otp_alert(sz_id, [{'language': 'sl', 'text': 'Sežana - Opčine'}], entities=[]),
+               otp_alert(other, [{'language': 'sl', 'text': 'Nekaj'}], start=NOW - 50, entities=[])]
+        sz, unknown = mapping.build_alerts(raw, 'sl', NOW)
+        self.assertEqual(sz['operatorId'], 'IJPP:1161')
+        self.assertEqual(unknown['operatorId'], 'IJPP:unknown')
+
 class RentalTests(SimpleTestCase):
     def test_car_sharing_is_not_a_bike(self):
         stations = [{'stationId': 'sharengo:1', 'network': 'sharengo', 'name': 'Car', 'lat': 46, 'lon': 14, 'vehiclesAvailable': 2},
@@ -114,6 +125,19 @@ class RentalTests(SimpleTestCase):
         self.assertEqual([(r['id'], r['mode'], r['providerId']) for r in result],
                          [('jcdecaux_ljubljana:17', 'bike', 'jcdecaux_ljubljana:bike'), ('kvik:9', 'scooter', 'kvik:scooter')])
         self.assertEqual(mapping.provider_name('jcdecaux_ljubljana:bike'), 'BicikeLJ')
+
+    def test_a_free_floating_systems_stations_are_parking_zones(self):
+        # Bolt: e-bikes and scooters left in zones, scooters also anywhere; a dock system's racks stay docks.
+        stations = [{'stationId': 'bolt_359:z1', 'network': 'bolt_359', 'name': 'MOL - Situla', 'lat': 46, 'lon': 14, 'vehiclesAvailable': 0,
+                     'allowPickupNow': True, 'allowDropoffNow': True, 'availableSpaces': {'byType': [{'count': 5, 'vehicleType': {'formFactor': 'BICYCLE'}}]}},
+                    {'stationId': '17', 'network': 'jcdecaux_ljubljana', 'name': 'Prešernov trg', 'lat': 46, 'lon': 14, 'vehiclesAvailable': 4,
+                     'spacesAvailable': 3, 'capacity': 7, 'allowPickupNow': True, 'allowDropoffNow': True}]
+        scooter = lambda id_, lat: {'vehicleId': id_, 'lat': lat, 'lon': 14, 'vehicleType': {'formFactor': 'SCOOTER_STANDING'}, 'rentalNetwork': {'networkId': 'bolt_359'}}
+        # One scooter stands in the zone (already in its count), one out on the street.
+        zone, dock, street = mapping.build_rentals(stations, [scooter('bolt_359:in', 46.0002), scooter('bolt_359:out', 46.01)], NOW)
+        self.assertEqual((zone.get('zone'), zone['canReturn'], zone['canPickup']), (True, True, False))
+        self.assertNotIn('zone', dock)
+        self.assertEqual(street['id'], 'bolt_359:out')
 
 
 class GeometryTests(SimpleTestCase):

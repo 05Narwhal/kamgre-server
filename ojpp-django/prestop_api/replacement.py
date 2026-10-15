@@ -114,6 +114,33 @@ def section_at(trip_sections: Optional[list[dict]], i: int, when: float, kind: s
     return None
 
 
+def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
+    """A train trip's (trips.build_trip) stretches a bus runs instead that day: {'fromIndex', 'toIndex' (the bus's
+    first and last station in the trip's stops, None where the train does not call), 'busTripId', 'busName'}."""
+    found = (plan or {}).get('sections', {}).get(trip['id'])
+    if not found or not trip['stops']:
+        return []
+    when = _epoch(trip['stops'][0]['scheduledDeparture'])
+    train = run_near(plan, trip['id'], when)
+    if not train:
+        return []
+    keys, own = _keys(train), [sz.station_key(s['name']) for s in trip['stops']]
+    out = []
+    for s in found:
+        ia, ib = s['fromIndex'], s['toIndex']
+        at = train['departures'][ia] if ia is not None else train['arrivals'][ib]
+        if abs(at - (s['start'] if ia is not None else s['end'])) > MATCH_WINDOW:
+            continue  # another day's run of the train
+        bus = plan['by_id'].get(s['busTripId']) or run_near(plan, s['busTripId'], s['start'])
+        ends = [keys[i] if i is not None else None for i in (s['fromIndex'], s['toIndex'])]
+        a, b = (own.index(k) if k in own else None for k in ends)
+        if a is None and b is None:
+            continue
+        out.append({'fromIndex': a, 'toIndex': b, 'busTripId': s['busTripId'],
+                    'busName': mapping.route_name(bus['route']) if bus else None})
+    return out
+
+
 def bus_row(entry: dict, bus: dict, kind: str, here: str) -> dict:
     """A train's board row as the row of the bus that replaces it from (or to) this station."""
     keys = _keys(bus)

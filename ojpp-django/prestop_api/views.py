@@ -587,6 +587,7 @@ def trip_list(request):
     data = [trips.build_trip(found[t], _typical(found[t]), geometry) for t in ids if t in found]
     _with_observed(data, found)
     data = _dense(data)
+    _with_replaced(data)
     status = 'live' if any(t['realtime'] for t in data) else 'scheduled'
     return envelope(data, status, used=['otp:timetables', 'gtfs-rt:trip-updates'], source_updated=mapping.iso(time.time()))
 
@@ -600,7 +601,23 @@ def trip_detail(request, trip_id):
     data = trips.build_trip(found, _typical(found))
     _with_observed([data], {trip_id: found})
     [data] = _dense([data])
+    _with_replaced([data])
     return envelope(data, 'live' if data['realtime'] else 'scheduled', used=['otp:timetables', 'gtfs-rt:trip-updates'], source_updated=mapping.iso(time.time()))
+
+
+def _with_replaced(data: list[dict]) -> None:
+    """Each train's stretches that a replacement bus runs instead that day (`replacedSections`)."""
+    from . import replacement, scheduled
+    for trip in data:
+        if trip['mode'] != 'rail' or not trip['stops']:
+            continue
+        try:
+            sections = replacement.trip_sections(trip, scheduled.plan_at(replacement._epoch(trip['stops'][0]['scheduledDeparture']), wait=3))
+        except Exception as e:  # The trip is still useful without them.
+            logger.warning('Replaced sections failed: %r', e)
+            continue
+        if sections:
+            trip['replacedSections'] = sections
 
 
 def _with_observed(data: list[dict], found: dict[str, dict]) -> None:

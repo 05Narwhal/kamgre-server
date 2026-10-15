@@ -358,7 +358,10 @@ def build_alerts(otp_alerts: Iterable[dict], language: str, now: Optional[float]
                     agencies.add(ent['route']['agency']['gtfsId'])
             elif kind == 'Agency' and ent.get('gtfsId'):
                 agencies.add(ent['gtfsId'])
-        operator = (a.get('agency') or {}).get('gtfsId') or (sorted(agencies)[0] if agencies else f'{a.get("feed") or "otp"}:unknown')
+        operator = (a.get('agency') or {}).get('gtfsId') or (sorted(agencies)[0] if agencies else None)
+        if not operator:
+            # SŽ's notices about lines OTP finds no route on (Ljubljana - Villach, Sežana - Opčine) are SŽ's all the same.
+            operator = REPLACEMENT_AGENCIES[0] if 'SZ-OVIRA' in _decoded(a['id']) else f'{a.get("feed") or "otp"}:unknown'
         url = a.get('alertUrl') or (a.get('agency') or {}).get('url') or FALLBACK_URLS.get(operator) or FALLBACK_URLS.get(a.get('feed') or '') or 'https://brezavta.si/'
         if not re.match(r'^https?://', url):
             url = 'https://' + url.lstrip('/')
@@ -458,8 +461,21 @@ def _rack_details(s: dict) -> dict:
     return out
 
 
+ZONE_RADIUS = 40  # m: a vehicle this close to a parking zone of its system stands in it
+
+
+def _near(lat1: float, lon1: float, lat2: float, lon2: float, metres: float) -> bool:
+    dy = (lat1 - lat2) * 111_320
+    dx = (lon1 - lon2) * 111_320 * math.cos(math.radians(lat1))
+    return dx * dx + dy * dy <= metres * metres
+
+
 def build_rentals(stations: Iterable[dict], vehicles: Iterable[dict], now: Optional[float] = None) -> list[dict]:
     now = now or time.time()
+    vehicles = list(vehicles)
+    # Networks with free-floating vehicles (Bolt): their stations without docks are parking zones where the
+    # e-bikes and scooters are left, a system of their own rather than a dock.
+    floating = {(v.get('rentalNetwork') or {}).get('networkId') or v.get('network') or v['vehicleId'].split(':')[0] for v in vehicles}
     out = []
     for s in stations:
         types = [((t.get('vehicleType') or {}).get('formFactor')) for t in ((s.get('availableVehicles') or {}).get('byType') or [])]
@@ -479,11 +495,21 @@ def build_rentals(stations: Iterable[dict], vehicles: Iterable[dict], now: Optio
             'updatedAt': iso(s.get('lastUpdated') or now),
             **_rack_details(s),
         })
+        if network in floating and 'docksAvailable' not in out[-1]:
+            out[-1]['zone'] = True
+            out[-1]['canReturn'] = out[-1]['canReturn'] or s.get('allowDropoff') is not False
+    # A vehicle standing in its system's parking zone is already in that zone's count (Bolt reports it twice).
+    zones: dict[str, list[tuple[float, float]]] = {}
+    for r in out:
+        if r.get('zone'):
+            zones.setdefault(r['id'].split(':')[0], []).append((r['latitude'], r['longitude']))
     for v in vehicles:
         mode = _rental_mode([(v.get('vehicleType') or {}).get('formFactor')])
         if not mode or v.get('lat') is None or v.get('operative') is False:
             continue
         network = (v.get('rentalNetwork') or {}).get('networkId') or v.get('network') or v['vehicleId'].split(':')[0]
+        if any(_near(v['lat'], v['lon'], lat, lon, ZONE_RADIUS) for lat, lon in zones.get(network, ())):
+            continue
         out.append({
             'id': qualify(v['vehicleId'], network), 'name': v.get('name') or network,
             'latitude': round(v['lat'], 6), 'longitude': round(v['lon'], 6), 'mode': mode,
