@@ -28,10 +28,13 @@ PARTIAL_TTL = 30
 # moves to its own bay once the board shows it (platforms.learn polls every 3 min, ~50 min ahead).
 BAY_PENDING_TTL = 180
 BAY_HORIZON = 60 * 60
-ROAD_WAIT = 4.0
+# How long a request waits for a shape the public router is still matching (s). Past it the trip is served
+# provisional with the feed's shape: the vehicle page refetches every 20 s and the map refetches provisional
+# trips, and the match goes on and is kept (roads.py). Waiting longer put the vehicle page over a second.
+ROAD_WAIT = 1.0
 # The line screen waits less: it shows the feed's shape at once and refetches a provisional line
 # every 15 s, so its first view isn't held up by a shape the public router is still matching.
-LINE_ROAD_WAIT = 1.0
+LINE_ROAD_WAIT = 0.6
 CHUNK = 40
 # Within this long after midnight a trip's run of the previous day is looked up too (load_trips) ...
 OVERNIGHT = 6 * 3600

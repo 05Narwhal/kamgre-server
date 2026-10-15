@@ -62,6 +62,8 @@ def tick(now: float):
         return
     for cache in caches():
         cache.warm()
+    from . import sources
+    sources.warm_alerts()  # the alert lists boards and journeys share, rebuilt here instead of in a request
     plans()
     from . import variants
     variants.table()  # route groups (contract 4): rebuilt only when routes or patterns were reloaded

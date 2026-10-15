@@ -276,10 +276,44 @@ def _safe(cache: Cached) -> bool:
 alerts_raw = Cached(lambda: otp().query(ALERTS_Q)['alerts'], ttl=60, max_stale=3600, revalidate=300)
 
 
+ALERTS_TTL = 45.0  # s a built alert list is reused; a new OTP alert snapshot rebuilds it at once
+_built_alerts: dict[str, tuple[float, object, list[dict]]] = {}  # language -> (built at, alerts_raw snapshot, list)
+_building: set[str] = set()
+
+
 def alerts(language: str) -> list[dict]:
+    """Every alert in `language`: OTP's, SŽ's notices OTP lacks, operators' site notices and detected ones.
+
+    Building the list matches each notice against the rail patterns (0.3-0.9 s of CPU), and every board, alert
+    list and journey asks for it, so the list is built once per OTP snapshot and ALERTS_TTL (warm.py rebuilds it
+    ahead of requests). While one request rebuilds an expired list, the others get the previous one."""
+    snap = alerts_raw.get()
+    if not settings.PRESTOP_SHORT_CACHE:
+        return _build_alerts(snap.value, language)
+    hit = _built_alerts.get(language)
+    if hit and hit[1] is snap and (time.time() - hit[0] < ALERTS_TTL or language in _building):
+        return list(hit[2])
+    _building.add(language)
+    try:
+        out = _build_alerts(snap.value, language)
+    finally:
+        _building.discard(language)
+    _built_alerts[language] = (time.time(), snap, out)
+    return list(out)
+
+
+def warm_alerts(share: float = 0.6):
+    """Rebuilds the alert lists people asked for once they are `share` of ALERTS_TTL old (warm.py)."""
+    for language, (built, snap, _) in list(_built_alerts.items()):
+        if time.time() - built >= ALERTS_TTL * share or snap is not alerts_raw.peek():
+            fresh = alerts_raw.get()
+            _built_alerts[language] = (time.time(), fresh, _build_alerts(fresh.value, language))
+
+
+def _build_alerts(raw: list[dict], language: str) -> list[dict]:
     from . import closures, detected
     # SŽ's replacement notices OTP doesn't carry yet, where we have their timetables (closures.sz_notice_alerts).
-    out = closures.notice_alerts(mapping.build_alerts(alerts_raw.get().value, language))
+    out = closures.notice_alerts(mapping.build_alerts(raw, language))
     from . import operator_notices
     out += operator_notices.alerts()  # notices on operators' own websites (Arriva)
     if not settings.PRESTOP_DETECTED_ALERTS:
@@ -344,8 +378,28 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict]) -
     return mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list)
 
 
+BOARD_TTL = 15.0     # s a board is reused: realtime reaches OTP every 10-30 s, and the app polls each board
+BOARD_REUSE = 60     # s: a board asked for up to this much later than a reused one starts is the same board
+_boards: dict[tuple, tuple[float, int, Optional[list[dict]]]] = {}
+
+
 def board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[dict]]:
-    """Departures or arrivals; a merged stop lists every member's, in time order."""
+    """Departures or arrivals; a merged stop lists every member's, in time order. A board built in the last
+    BOARD_TTL seconds from up to BOARD_REUSE seconds earlier is served again (callers copy before changing it)."""
+    if not settings.PRESTOP_SHORT_CACHE:
+        return _board(stop_id, kind, start, language)
+    key = (stop_id, kind, language)
+    hit = _boards.get(key)
+    if hit and time.time() - hit[0] < BOARD_TTL and 0 <= start - hit[1] < BOARD_REUSE:
+        return hit[2]
+    items = _board(stop_id, kind, start, language)
+    if len(_boards) > 5000:
+        _boards.clear()
+    _boards[key] = (time.time(), start, items)
+    return items
+
+
+def _board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[dict]]:
     try:
         alert_list = alerts(language)
     except UpstreamError:

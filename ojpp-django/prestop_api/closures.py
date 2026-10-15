@@ -20,6 +20,7 @@ notice itself (Google Maps links), SŽ's list where it is only roughly placed, t
 stop within 500 m named like the station, the station itself. The last three are `unverified`.
 """
 import base64
+import functools
 import html
 import json
 import logging
@@ -86,8 +87,10 @@ def sides(alert: dict) -> list[list[str]]:
     return [sorted(side) for side in leg_alerts.title_sections(alert.get('title') or '')]
 
 
-def _tokens(name: str) -> list[str]:
-    return re.findall(r'[a-z0-9]+', mapping.fold((name or '').split('(')[0]))
+@functools.lru_cache(maxsize=32768)
+def _tokens(name: str) -> tuple[str, ...]:
+    # Station and notice names repeat: every alert list and day plan matches the same few thousand.
+    return tuple(re.findall(r'[a-z0-9]+', mapping.fold((name or '').split('(')[0])))
 
 
 def names_match(notice_name: str, station: str) -> bool:

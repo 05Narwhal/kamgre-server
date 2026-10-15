@@ -12,7 +12,7 @@ from . import geometry as geometry_lib
 from . import operators as companies
 
 MODES = {'walk', 'bus', 'rail', 'bike', 'scooter'}
-ROAD_WAIT = 4.0
+ROAD_WAIT = 1.5  # s a search waits for leg shapes still being matched (roads.py); later legs keep the feed's shape
 TRANSIT = {'bus': ['BUS', 'COACH', 'TROLLEYBUS'], 'rail': ['RAIL', 'TRAM', 'SUBWAY', 'MONORAIL', 'FUNICULAR']}
 MAX_OPERATORS = 80
 # Insane mode optimises for arrival time only: no per-transfer penalty, OTP's highest transfer limits,

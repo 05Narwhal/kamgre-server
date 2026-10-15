@@ -33,6 +33,7 @@ POLL = 300            # s between polls of today's tracks
 BACKOFF = (60, 1800)  # s, doubling while the scraper fails
 USUAL_SHARE = 0.8     # of a train's observed days at a station
 USUAL_DAYS = 3        # observed days needed before a track counts as usual
+STAMP_CHECK = 10      # s between checks whether the usual-track file changed
 
 
 def number(route_name: str) -> Optional[str]:
@@ -73,11 +74,15 @@ class Tracks:
         return getattr(settings, 'PRESTOP_SZ_TRACKS_URL', '')
 
     def usual(self) -> dict:
+        # The file changes a few times a year: its stamp is checked at most every STAMP_CHECK s, not per board row.
+        if time.monotonic() < self._usual.get('checked', float('-inf')) + STAMP_CHECK:
+            return self._usual['value']
         try:
             stamp = USUAL.stat().st_mtime
         except OSError:
             return {}
         with self._lock:
+            self._usual['checked'] = time.monotonic()
             if self._usual['stamp'] != stamp:
                 try:
                     value = json.loads(USUAL.read_text(encoding='utf-8')).get('trains') or {}

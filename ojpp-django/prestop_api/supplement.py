@@ -16,6 +16,7 @@ ids as in OTP's feed so stops and lines keep theirs) and read the same way: Sevn
 import csv
 import io
 import logging
+import time
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -37,15 +38,26 @@ KRANJ_COLORS = {'1': '00AEEF', '2': 'FFF200', '3': 'A54786', '4': 'EC008C', '5':
                 '7': 'F5821F', '11': '806B64', '14': '81D4F7'}
 
 
+FOLDER_CHECK = 10  # s between looks into LOCAL_GTFS: owns() asks for every vehicle and trip (900 per vehicle update)
+_folder: dict = {'at': float('-inf'), 'value': {}}
+
+
 def feeds() -> dict[str, str]:
     """feedId -> GTFS zip URL, or the directory of a hand-kept feed ('' turns a feed off)."""
     out = {}
     url = getattr(settings, 'PRESTOP_KRANJ_GTFS_URL', '')
     if url:
         out['MOKranj'] = url
-    if getattr(settings, 'PRESTOP_LOCAL_GTFS', True) and LOCAL_GTFS.is_dir():
-        out.update({d.name: str(d) for d in sorted(LOCAL_GTFS.iterdir()) if (d / 'trips.txt').is_file()})
+    if getattr(settings, 'PRESTOP_LOCAL_GTFS', True):
+        out.update(_hand_kept())
     return out
+
+
+def _hand_kept() -> dict[str, str]:
+    if time.monotonic() - _folder['at'] >= FOLDER_CHECK:
+        found = {d.name: str(d) for d in sorted(LOCAL_GTFS.iterdir()) if (d / 'trips.txt').is_file()} if LOCAL_GTFS.is_dir() else {}
+        _folder.update(at=time.monotonic(), value=found)
+    return _folder['value']
 
 
 def _local_zip(folder: str) -> bytes:

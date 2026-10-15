@@ -100,6 +100,9 @@ PRESTOP_AP_LJUBLJANA_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_AP_LJ
 PRESTOP_TRUSTED_COUNTRY_HEADER = env('PRESTOP_TRUSTED_COUNTRY_HEADER', default='')
 # Keep the timetable and stop indexes fresh while the app is in use (prestop_api/warm.py); never in tests.
 PRESTOP_WARM = False if 'test' in sys.argv[1:2] else env.bool('PRESTOP_WARM', default=True)
+# Boards and the built alert list are reused for a few seconds (sources.board, sources.alerts); off under
+# manage.py test, where tests turn it on themselves.
+PRESTOP_SHORT_CACHE = 'test' not in sys.argv[1:2] and env.bool('PRESTOP_SHORT_CACHE', default=True)
 # Insane mode: same-minute transfers, no transfer penalty and a brisk walking pace.
 PRESTOP_INSANE_MODE = env.bool('PRESTOP_INSANE_MODE', default=True)
 # Predicted delays on journey legs from history and the vehicle's previous trip (predictions.py); off under
