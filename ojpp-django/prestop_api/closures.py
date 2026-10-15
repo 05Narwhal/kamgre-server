@@ -302,9 +302,12 @@ def synthesize(trips: list[dict], real: dict[str, list[dict]], alerts: list[dict
             run['notices'].append(notice_id(alert))
     out, memo = [], {}
     for (_, day), run in runs.items():
-        for ia, ib in _merged(run['spans']):
+        spans = _merged(run['spans'])
+        for k, (ia, ib) in enumerate(spans, 1):
             stop_points = [p for n in run['notices'] if n for p in points.get(n, [])]
-            out.append(_bus(run['train'], day, ia, ib, list(dict.fromkeys(run['alerts'])), stop_points, bus_stops, memo))
+            # Several buses for one train are numbered like a timetable's ("BUS 214/1", "BUS 214/2"), in order.
+            out.append(_bus(run['train'], day, ia, ib, list(dict.fromkeys(run['alerts'])), stop_points, bus_stops, memo,
+                            nth=k if len(spans) > 1 else None))
     return out
 
 
@@ -319,7 +322,8 @@ def _merged(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
     return [(a, b) for a, b in out]
 
 
-def _bus(train: dict, day: str, ia: int, ib: int, alert_ids: list[str], points: list, bus_stops: list[dict], memo: Optional[dict] = None) -> dict:
+def _bus(train: dict, day: str, ia: int, ib: int, alert_ids: list[str], points: list, bus_stops: list[dict], memo: Optional[dict] = None,
+         nth: Optional[int] = None) -> dict:
     feed, local = train['id'].split(':', 1)
     number = sz.train_parts(mapping.route_name(train['route']))[1] or local
     stops = relocate(train['stops'][ia:ib + 1], points, bus_stops, fallback=True, memo=memo)
@@ -329,8 +333,9 @@ def _bus(train: dict, day: str, ia: int, ib: int, alert_ids: list[str], points: 
     return {
         'id': f'{feed}:{PREFIX}{day}-{local}-{ia}', 'synthetic': True, 'trainTripId': train['id'], 'fromIndex': ia, 'toIndex': ib,
         # Its own line ("BUS 214"), so the line screen shows the bus on the roads, not the train's railway.
-        'route': {'gtfsId': synthetic_line_id(train['route']['gtfsId']), 'shortName': f'BUS {number}', 'longName': '', 'mode': 'BUS',
-                  'agency': train['route'].get('agency') or {'gtfsId': mapping.REPLACEMENT_AGENCIES[0]}},
+        'route': {'gtfsId': synthetic_line_id(train['route']['gtfsId']), 'shortName': f'BUS {number}/{nth}' if nth else f'BUS {number}',
+                  'longName': '', 'mode': 'BUS', 'agency': train['route'].get('agency') or {'gtfsId': mapping.REPLACEMENT_AGENCIES[0]}},
+        'lineName': f'BUS {number}',
         'trainRouteId': train['route']['gtfsId'], 'trainName': mapping.route_name(train['route']),
         'pattern': f'{PREFIX}{train.get("pattern")}-{ia}-{ib}', 'headsign': stops[-1].get('name'),
         'stops': stops, 'serviceDay': train.get('serviceDay'), 'serviceDate': day,

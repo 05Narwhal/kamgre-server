@@ -132,6 +132,25 @@ class SynthesisTests(SimpleTestCase):
         self.assertEqual((bus['fromIndex'], bus['toIndex']), (0, 3))
         self.assertEqual(len(bus['alertIds']), 2)
 
+    def test_three_buses_for_one_train_are_numbered_like_a_timetables(self):
+        """A2: three closed stretches of one train are three buses, "BUS 2494/1" to "/3" (as SŽ's timetables number
+        them), on the train's line "BUS 2494"; never "1", "2", "3" or three alike."""
+        t = train('a', 'LPV 2494', LINE)
+        dates = ' in obratno (26. 9. - 11. 10.).'
+        alerts = [notice(f'Vozni red nadomestnega prevoza: {a} - {b}{dates}', ['IJPP:r-a'], number=n)
+                  for a, b, n in (('Ljubljana', 'Ljubljana Šiška', '1'), ('Medvode', 'Kranj', '2'), ('Jesenice', 'Bled Jezero', '3'))]
+        buses = sorted(self.build([t], alerts), key=lambda b: b['fromIndex'])
+        self.assertEqual([b['route']['shortName'] for b in buses], ['BUS 2494/1', 'BUS 2494/2', 'BUS 2494/3'])
+        self.assertEqual([(b['fromIndex'], b['toIndex']) for b in buses], [(0, 1), (2, 3), (5, 6)])
+        self.assertEqual({b['lineName'] for b in buses}, {'BUS 2494'})
+        self.assertEqual(len({b['id'] for b in buses}), 3)
+        # Each is still the bus of train 2494 (the number in its name fills it to five digits only for the feed's).
+        from prestop_api import replacement
+        self.assertEqual(replacement.train_numbers('BUS 18969/2'), replacement.train_numbers('BUS 18969'))
+        # One stretch is one bus with the plain name.
+        [one] = self.build([t], alerts[:1])
+        self.assertEqual(one['route']['shortName'], 'BUS 2494')
+
     def test_replacement_stops_in_order_of_trust(self):
         s = station('Jesenice')
         checked = [{'lat': s['lat'] + 0.003, 'lon': s['lon'], 'label': 'AP', 'stationId': s['gtfsId']}]

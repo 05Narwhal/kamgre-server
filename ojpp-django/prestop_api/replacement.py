@@ -28,8 +28,9 @@ MATCH_WINDOW = 3 * 3600  # s: a train this far from the bus in time is another d
 
 def train_numbers(bus_name: str) -> list[str]:
     """'BUS 18969' -> ['1896', '189', '18']: the train number with the bus's own suffix digits removed, longest
-    first. The suffix fills the bus number to five digits: LPV 1896 → 18969, IC 526 → 52606, ICS 14 → 14006."""
-    digits = re.sub(r'\D', '', bus_name or '')
+    first. The suffix fills the bus number to five digits: LPV 1896 → 18969, IC 526 → 52606, ICS 14 → 14006.
+    A bus of several for one train ("BUS 18969/2") is numbered like the first."""
+    digits = re.sub(r'\D', '', re.sub(r'/\d+\s*$', '', bus_name or ''))
     return [digits[:-n].lstrip('0') for n in (1, 2, 3) if len(digits) - n >= 2]
 
 
