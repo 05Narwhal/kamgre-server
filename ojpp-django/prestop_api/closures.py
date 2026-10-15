@@ -714,6 +714,10 @@ def _load_points() -> dict[str, list]:
     if not url:
         return {}
     raw = get_json(url, limit=8 * 1024 * 1024, timeout=(4, 20))
+    if not (isinstance(raw, list) and raw) and _notices['raw']:
+        # An empty or broken answer is not "no notices": keep the last ones (the cache keeps the last points).
+        logger.warning('SŽ notices feed returned %s; keeping the last %d notices', 'nothing' if not raw else type(raw).__name__, len(_notices['raw']))
+        raise UpstreamError('SŽ notices: empty answer')
     _notices['raw'] = raw
     return notice_points(raw)
 

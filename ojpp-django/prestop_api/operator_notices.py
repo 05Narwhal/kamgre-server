@@ -24,7 +24,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from . import mapping
-from .upstream import Cached, get_json
+from .upstream import Cached, UpstreamError, get_json
 
 logger = logging.getLogger(__name__)
 LOCAL = ZoneInfo('Europe/Ljubljana')
@@ -102,13 +102,24 @@ def window(title: str, text: str, posted: datetime) -> tuple[float, float]:
 
 
 def _load_arriva() -> list[dict]:
+    """Arriva's posts of the last MAX_AGE_DAYS. Something that is not a list of posts, or none at all after there were
+    some, is a failed read: the cache keeps the last posts (each notice still ends on its own day, see alerts())."""
     after = (datetime.now(LOCAL) - timedelta(days=MAX_AGE_DAYS)).strftime('%Y-%m-%dT00:00:00')
     posts = get_json(ARRIVA_POSTS, params={'per_page': 50, 'after': after, '_fields': 'id,date,link,title,content'},
                      limit=4 * 1024 * 1024, timeout=(5, 20))
-    return posts if isinstance(posts, list) else []
+    if not isinstance(posts, list):
+        logger.warning('Arriva notices: the site answered %s, not a list of posts; keeping the last ones', type(posts).__name__)
+        raise UpstreamError('Arriva posts: unexpected answer')
+    last = arriva.peek()
+    if not posts and last and last.value:
+        logger.warning('Arriva notices: the site returned no posts (it had %d); keeping the last ones', len(last.value))
+        raise UpstreamError('Arriva posts: none returned')
+    return posts
 
 
-arriva = Cached(_load_arriva, ttl=15 * 60, max_stale=6 * 3600, revalidate=15 * 60)
+# A failed read keeps the last posts for as long as notices are read back (MAX_AGE_DAYS), not 6 h: Arriva's
+# notices vanished from the disruptions list whenever the site was slow for a while.
+arriva = Cached(_load_arriva, ttl=15 * 60, max_stale=MAX_AGE_DAYS * 86400, revalidate=15 * 60)
 _routes_memo: dict = {}
 _lock = threading.Lock()
 

@@ -20,7 +20,7 @@ from django.conf import settings
 from django.db import DatabaseError
 
 from . import abroad, mapping, stopfix, stopgroups, supplement
-from .upstream import Cached, UpstreamError, get_json, otp
+from .upstream import Cached, Snapshot, UpstreamError, get_json, otp
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +273,41 @@ def _safe(cache: Cached) -> bool:
 
 # ---------------------------------------------------------------- alerts, rentals, boards
 
-alerts_raw = Cached(lambda: otp().query(ALERTS_Q)['alerts'], ttl=60, max_stale=3600, revalidate=300)
+FEED_GRACE = 2 * 3600  # s a feed's alerts are kept after OTP stops returning any for that feed
+_vanished: dict[str, float] = {}  # feed -> when OTP first returned none of its alerts
+
+
+def _load_alerts() -> list[dict]:
+    """OTP's alerts. OTP now and then answers without one feed's alerts (an updater restarting, a fallback server
+    without them), and Arriva's or Marprom's disruptions vanished from the list until the next good answer: a feed
+    that had alerts and now has none keeps its last ones for FEED_GRACE, each until its own end, and it is logged."""
+    return keep_vanished(otp().query(ALERTS_Q)['alerts'], alerts_raw.peek(), time.time())
+
+
+def keep_vanished(fresh: list[dict], previous: Optional[Snapshot], now: float) -> list[dict]:
+    feeds = {a.get('feed') for a in fresh}
+    out = list(fresh)
+    for feed, kept in _by_feed(previous.value if previous else []).items():
+        if feed in feeds:
+            if _vanished.pop(feed, None) is not None:
+                logger.info('OTP alerts of feed %s are back', feed)
+            continue
+        since = _vanished.setdefault(feed, now)
+        if since == now:
+            logger.warning('OTP returned no alerts of feed %s (it had %d); keeping them for up to %d min', feed, len(kept), FEED_GRACE // 60)
+        if now - since < FEED_GRACE:
+            out += [a for a in kept if not a.get('effectiveEndDate') or a['effectiveEndDate'] >= now]
+    return out
+
+
+def _by_feed(alerts: list[dict]) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {}
+    for a in alerts:
+        out.setdefault(a.get('feed'), []).append(a)
+    return out
+
+
+alerts_raw = Cached(_load_alerts, ttl=60, max_stale=3600, revalidate=300)
 
 
 ALERTS_TTL = 45.0  # s a built alert list is reused; a new OTP alert snapshot rebuilds it at once

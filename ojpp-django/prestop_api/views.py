@@ -19,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
-from . import geometry, mapping, maplinks, sources, trips, variants, warm
+from . import geometry, mapping, maplinks, operator_notices, sources, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
@@ -87,6 +87,9 @@ def all_sources():
         _source('otp:alerts', 'Provider service alerts (incl. SŽ disruptions)', sources.alerts_raw, ['alerts'], 300),
         _source('otp:rentals', 'Bike and scooter sharing (GBFS via OTP)', sources.rentals, ['rentals'], 300),
         _sz_source(),
+        # Arriva's site notices: the server can be shut out of the site (ConnectTimeout from Oracle on 2026-10-15),
+        # so /health says when they are missing instead of the disruptions list just lacking them.
+        _source('operator-site:arriva', "Arriva's website notices", operator_notices.arriva, ['alerts'], 3600),
         *_gbfs_sources(),
     ]
 
@@ -429,7 +432,7 @@ def alerts(request):
         items = [a for a in items if route_id in a['routeIds']]
     if request.GET.get('journeyId'):
         items = []  # journeys are not stored; legs carry their own alertIds
-    return envelope([mapping.public_alert(a) for a in items], snapshot_status(sources.alerts_raw, 300), used=['otp:alerts'])
+    return envelope([mapping.public_alert(a) for a in items], snapshot_status(sources.alerts_raw, 300), used=['otp:alerts', 'operator-site:arriva'])
 
 
 @csrf_exempt
