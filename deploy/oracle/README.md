@@ -100,7 +100,7 @@ Then copy `config.local.example` to `config.local` (git-ignored) and fill in the
 From the repository root in PowerShell:
 
 ```powershell
-powershell -File backend/deploy/oracle/push.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File backend/deploy/oracle/push.ps1
 ```
 
 The first run takes 10–20 minutes. It copies the backend, then installs PostgreSQL/PostGIS, Redis, Caddy and cloudflared, generates a secret key, creates the database, installs Python packages and runs migrations. It also imports the GTFS timetables, connects the tunnel, starts every service, and finishes with a health check (`https://api.<domain>/api/v1/health` then answers). Afterwards it publishes `backend/` to the public AGPL repository (`scripts/publish-backend.ps1`).
@@ -122,7 +122,7 @@ The delay statistics (line reliability, typical travel times) live only in this 
 About a minute before the restart, `push.sh` turns on the maintenance flag (`server/maintenance.sh on`): `/api/v1/health` then reports `maintenance: {message, until}` so open apps can say the server is updating. The flag goes again when the deploy ends, and the API ignores one older than ten minutes past its `until`.
 
 ```powershell
-powershell -File backend/deploy/oracle/push.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File backend/deploy/oracle/push.ps1
 ```
 
 ## What runs by itself
