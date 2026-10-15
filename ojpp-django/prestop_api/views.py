@@ -317,9 +317,9 @@ def places(request):
     if scope == 'stations':
         return envelope(stations, 'live', used=['otp:timetables'])
     try:
-        addresses = sources.geocode(q, limit, language(request), near_param(request))
+        addresses, complete = sources.geocode_soon(q, limit, language(request), near_param(request))
     except UpstreamError:
-        addresses = []
+        addresses, complete = [], True
     # Stops whose name starts with the query come first; stops that only contain it
     # ("Boštanj - HOFER" for "hofer") go after the places themselves.
     needle = mapping.fold(q)
@@ -327,7 +327,8 @@ def places(request):
     others = [s for s in stations if s not in leading]
     take = max(math.ceil(limit * 0.6), limit - len(addresses))
     result = (leading[:take] + addresses + others)[:limit]
-    return envelope(result, 'live', used=['otp:timetables'])
+    # partial: a geocoder is still answering (places.search); asking again shortly gives the whole list.
+    return envelope(result, 'live', used=['otp:timetables'], extra=None if complete else {'partial': True})
 
 
 @require_GET

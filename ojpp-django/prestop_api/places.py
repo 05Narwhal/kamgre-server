@@ -5,19 +5,31 @@ Every result carries a short `name`, a `detail` line (street and town) and a
 `category` from a small fixed vocabulary that the app maps to icons. Transit stops
 are left out: stations come from Prestop's own stop search, which knows their lines.
 """
+import hashlib
 import logging
 import math
 import re
-from concurrent.futures import ThreadPoolExecutor
+import threading
+import time
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from typing import Optional
 
 from django.conf import settings
+from django.core.cache import cache
 
 from .mapping import fold
 from .upstream import UpstreamError, get_json
 
 logger = logging.getLogger(__name__)
-_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='geocode')
+# Lookups outlive the request that started them (see search), so there is room for a few typists at once.
+_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix='geocode')
+
+GEOCODE_TTL = 3600  # s one geocoder's answer to one query is reused (Redis: shared by the workers)
+FAILED_TTL = 60  # s a failed lookup counts as an empty answer, so a partial result does not stay partial
+SOFT_WAIT = 0.3  # s a search waits for the slower geocoder once the other answered; the rest arrives on a refetch
+HARD_WAIT = 8  # s at most for any answer at all
+_inflight: dict[str, Future] = {}
+_inflight_lock = threading.Lock()
 
 # OpenStreetMap key=value (or key=*) -> category. First match wins.
 OSM_CATEGORIES = [
@@ -171,6 +183,8 @@ def merge(q: str, photon: list[dict], pelias: list[dict], near: Optional[tuple[f
     wants_number = bool(re.search(r'\d', q))
     out: list[dict] = []
     for order, place in enumerate(photon + pelias):
+        place = {**place}  # answers are shared by the requests waiting on one lookup
+
         # Same name close by is the same place; a town and its municipality (or another source's centre) can lie km apart.
         if any(fold(place['name']) == fold(other['name']) and _meters(place, other) < (15000 if place['category'] == other['category'] == 'town' else 150) for other in out):
             continue
@@ -199,17 +213,87 @@ def _pelias(q: str, limit: int, language: str, near):
     return [p for p in map(from_pelias, data.get('features') or []) if p]
 
 
-def geocode(q: str, limit: int, language: str, near: Optional[tuple[float, float]] = None) -> list[dict]:
-    """Both services at once; either may fail alone. Raises UpstreamError only if both do."""
-    jobs = {'photon': _pool.submit(_photon, q, limit, language, near), 'pelias': _pool.submit(_pelias, q, limit, language, near)}
-    results, errors = {}, []
-    for name, job in jobs.items():
+GEOCODERS = ('photon', 'pelias')
+
+
+def _key(name: str, q: str, limit: int, language: str, near) -> str:
+    where = f'{near[0]:.2f},{near[1]:.2f}' if near else ''
+    return 'geocode:' + hashlib.sha1(f'{name}|{fold(q.strip())}|{limit}|{language}|{where}'.encode()).hexdigest()
+
+
+def _cached(keys: list[str]) -> dict:
+    if not settings.PRESTOP_SHORT_CACHE:
+        return {}
+    try:
+        return cache.get_many(keys)
+    except Exception as e:  # noqa: BLE001 — without Redis every search asks the geocoders
+        logger.info('Geocode cache unavailable: %r', e)
+        return {}
+
+
+def _keep(key: str, value, ttl: float) -> None:
+    if settings.PRESTOP_SHORT_CACHE:
         try:
-            results[name] = job.result(timeout=8)
-        except Exception as e:  # noqa: BLE001 — one geocoder failing must not hide the other
-            logger.info('%s failed: %r', name, e)
-            errors.append(e)
-            results[name] = []
-    if len(errors) == len(jobs):
+            cache.set(key, value, ttl)
+        except Exception as e:  # noqa: BLE001
+            logger.info('Geocode cache unavailable: %r', e)
+
+
+def _lookup(name: str, key: str, *args) -> list[dict]:
+    try:
+        found = (_photon if name == 'photon' else _pelias)(*args)
+    except Exception:
+        _keep(key, [], FAILED_TTL)
+        raise
+    finally:
+        with _inflight_lock:
+            _inflight.pop(key, None)
+    _keep(key, found, GEOCODE_TTL)
+    return found
+
+
+def _start(name: str, key: str, *args) -> Future:
+    """One lookup per query at a time: a request for a query already being looked up waits on that lookup."""
+    with _inflight_lock:
+        job = _inflight.get(key)
+        if job is None:
+            job = _inflight[key] = _pool.submit(_lookup, name, key, *args)
+    return job
+
+
+def search(q: str, limit: int, language: str, near: Optional[tuple[float, float]] = None,
+           soft: Optional[float] = None) -> tuple[list[dict], bool]:
+    """Both services at once, merged, and whether the answer is complete. Either may fail alone; UpstreamError
+    only if both do. Answers are kept for GEOCODE_TTL. Photon (public, 0.6-1.8 s a query) is far slower than
+    Pelias (~0.1 s): with `soft`, once one has answered the search waits until `soft` s after it began, and a
+    geocoder still asking by then finishes into the cache for the next request (the answer is not complete)."""
+    start = time.monotonic()
+    keys = {name: _key(name, q, limit, language, near) for name in GEOCODERS}
+    hits = _cached(list(keys.values()))
+    results = {name: hits[key] for name, key in keys.items() if key in hits}
+    waiting = {_start(name, keys[name], q, limit, language, near): name for name in GEOCODERS if name not in results}
+    errors = []
+    while waiting:
+        answered = len(results) > len(errors)
+        until = start + (soft if soft is not None and answered else HARD_WAIT)
+        done, _ = wait(list(waiting), timeout=max(0.0, until - time.monotonic()), return_when=FIRST_COMPLETED)
+        if not done:
+            break
+        for job in done:
+            name = waiting.pop(job)
+            try:
+                results[name] = job.result()
+            except Exception as e:  # noqa: BLE001 — one geocoder failing must not hide the other
+                logger.info('%s failed: %r', name, e)
+                errors.append(e)
+                results[name] = []
+    if len(errors) == len(GEOCODERS):
         raise UpstreamError(f'Geocoders failed: {errors[0]!r}')
-    return merge(q, results['photon'], results['pelias'], near, limit)
+    if waiting and not soft:
+        logger.info('Geocoders timed out: %s', ', '.join(waiting.values()))
+    return merge(q, results.get('photon', []), results.get('pelias', []), near, limit), not waiting
+
+
+def geocode(q: str, limit: int, language: str, near: Optional[tuple[float, float]] = None) -> list[dict]:
+    """Both services at once, waiting for both (see search)."""
+    return search(q, limit, language, near)[0]

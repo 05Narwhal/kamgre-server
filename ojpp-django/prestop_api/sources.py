@@ -552,3 +552,9 @@ def geocode(q: str, limit: int, language: str, near=None) -> list[dict]:
     """Addresses and points of interest in Slovenia (Photon and Pelias merged, see places.py)."""
     from . import places
     return places.geocode(q, limit, language, near)
+
+
+def geocode_soon(q: str, limit: int, language: str, near=None) -> tuple[list[dict], bool]:
+    """geocode without waiting long for the slower geocoder: (places, complete); see places.search."""
+    from . import places
+    return places.search(q, limit, language, near, soft=places.SOFT_WAIT)
