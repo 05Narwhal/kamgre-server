@@ -180,6 +180,7 @@ class MotionHistory:
 
 def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, routes: dict, stop_names: dict,
                    now: Optional[float] = None, history: Optional[MotionHistory] = None) -> list[dict]:
+    from . import abroad
     now = now or time.time()
     out = []
     seen = set()
@@ -207,6 +208,8 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
         speed = pos.get('speed')
         speed = float(speed) if isinstance(speed, (int, float)) and 0 <= speed < 70 else None
         stop_id = v.get('stopId')
+        if stop_id and abroad.is_abroad_stop(stop_names.get(stop_id)):
+            continue  # on its way to or from its stops abroad: Slovenia only (abroad.py)
         report = (stamp, pos['latitude'], pos['longitude'])
         recent = history.observe(vehicle_id, *report, now=now) if history else [report]
         stopped, stopped_since = motion_state(recent, speed, v.get('currentStatus'))
@@ -251,7 +254,7 @@ def is_replacement(route: dict) -> bool:
 
 
 def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict]) -> list[dict]:
-    from . import stopfix
+    from . import abroad, stopfix
     out = []
     for st in stoptimes:
         trip = st.get('trip') or {}
@@ -270,6 +273,11 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         effective = day + (st['realtimeArrival'] if kind == 'arrival' else st['realtimeDeparture'])
         end = ((trip.get('departureStoptime' if kind == 'arrival' else 'arrivalStoptime') or {}).get('stop') or {})
         other_end = stopfix.renamed(end.get('gtfsId'), end.get('name'))
+        if abroad.is_abroad_stop(other_end):
+            other_end = abroad.place(other_end)
+        elif mode_of(route.get('mode')) == 'rail':  # an international train: its real end abroad
+            ends = abroad.train_ends(route_name(route), *((other_end, None) if kind == 'arrival' else (None, other_end)))
+            other_end = ends[0 if kind == 'arrival' else 1] or other_end
         route_id = route.get('gtfsId') or f'{stop_id.split(":")[0]}:unknown'
         trip_id = trip.get('gtfsId') or f'{route_id}-{scheduled}'
         out.append({

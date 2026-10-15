@@ -238,7 +238,7 @@ def relocate(stops: list[dict], points: Sequence[tuple[float, float]] = (), bus_
     names = [s.get('name') or '' for s in stops]
     out = []
     for s in stops:
-        if s.get('lat') is None or s.get('gtfsId') is None or s.get('abroad'):  # a station abroad: outside it
+        if s.get('lat') is None or s.get('gtfsId') is None:
             out.append(s)
             continue
         key = (s['gtfsId'], s['lat'], s['lon'], tuple(points), fallback, tuple(names))
@@ -580,7 +580,9 @@ def _timetable_bus(data: dict, ti: int, ci: int, col: dict, calls: list[dict], d
         'route': {'gtfsId': line, 'shortName': f'BUS {label}', 'longName': '', 'mode': 'BUS', 'agency': {'gtfsId': mapping.REPLACEMENT_AGENCIES[0]}},
         'lineName': f'BUS {number}',
         'trainRouteId': train['route']['gtfsId'] if train else None, 'trainName': mapping.route_name(train['route']) if train else None,
-        'pattern': f'{PREFIX}tt-{(data.get("sha256") or "")[:12]}-{ti}-{ci}', 'headsign': stops[-1].get('name'),
+        # A bus that runs abroad: the place there is where it goes (or comes from), as text (abroad.py).
+        'pattern': f'{PREFIX}tt-{(data.get("sha256") or "")[:12]}-{ti}-{ci}', 'headsign': calls[-1].get('goesTo') or stops[-1].get('name'),
+        **{k: c[k] for k, c in (('comesFrom', calls[0]), ('goesTo', calls[-1])) if c.get(k)},
         'stops': stops, 'stations': stations, 'serviceDay': base, 'serviceDate': day,
         'arrivals': arrivals, 'departures': departures, 'delays': [None] * len(stops),
         'scheduledArrivals': list(arrivals), 'scheduledDepartures': list(departures),
@@ -611,6 +613,7 @@ def report(built: dict, alerts: list[dict], day: str) -> list[dict]:
             'feedBusesReplaced': sum(1 for bus in (built.get('suppressed') or {}).values() if bus in timed),
             'buses': [{'train': b.get('trainName') or 'extra', 'bus': mapping.route_name(b['route']), 'from': b['stops'][0].get('name'),
                        'to': b['stops'][-1].get('name'), 'departs': _hhmm(b['departures'][0]), 'arrives': _hhmm(b['arrivals'][-1]),
+                       **{k: b[k] for k in ('comesFrom', 'goesTo') if b.get(k)},
                        'source': b.get('source') or 'guessed'} for b in mine],
         })
     return out
@@ -621,7 +624,8 @@ def format_report(rows: list[dict]) -> str:
     for r in rows:
         lines.append(f'{r["notice"]}  {r["source"]}  {len(r["buses"])} buses, {r["feedBusesReplaced"]} feed buses replaced  {r["title"]}')
         for b in r['buses']:
-            lines.append(f'    {b["train"]:<10} {b["bus"]:<12} {b["from"]} {b["departs"]} → {b["to"]} {b["arrives"]}')
+            ends = (f' (from {b["comesFrom"]})' if b.get('comesFrom') else '') + (f' (to {b["goesTo"]})' if b.get('goesTo') else '')
+            lines.append(f'    {b["train"]:<10} {b["bus"]:<12} {b["from"]} {b["departs"]} → {b["to"]} {b["arrives"]}{ends}')
     return '\n'.join(lines)
 
 

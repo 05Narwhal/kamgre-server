@@ -20,7 +20,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Callable, Optional
 
-from . import mapping, sz
+from . import abroad, mapping, sz
 
 LOCAL = ZoneInfo('Europe/Ljubljana')
 MATCH_WINDOW = 3 * 3600  # s: a train this far from the bus in time is another day's run
@@ -149,12 +149,16 @@ def bus_row(entry: dict, bus: dict, kind: str, here: str) -> dict:
     scheduled = (bus.get('scheduledDepartures') if leave else bus.get('scheduledArrivals')) or (bus['departures'] if leave else bus['arrivals'])
     live = bus['departures'] if leave else bus['arrivals']
     end = bus['stops'][-1] if leave else bus['stops'][0]
+    ends = abroad.scheduled_ends(bus)
     row = {**entry, 'id': f'{bus["id"]}@{entry["id"].split("@", 1)[-1]}', 'tripId': bus['id'], 'routeId': bus['route']['gtfsId'],
            'routeName': mapping.route_name(bus['route']) or entry['routeName'], 'mode': 'bus',
-           'destination': end.get('name') or entry['destination'], 'scheduledAt': mapping.iso(scheduled[k]),
+           'destination': ends[1 if leave else 0] or end.get('name') or entry['destination'], 'scheduledAt': mapping.iso(scheduled[k]),
            'effectiveAt': mapping.iso(live[k]) if bus['delays'][k] is not None else None,
            'replacement': True, 'replacesTrain': entry['routeName']}
     row.pop('replacedByBus', None)
+    row.pop('comesFrom', None)
+    if leave and ends[0]:
+        row['comesFrom'] = ends[0]
     if bus['stops'][k].get('bay'):
         row['platform'] = bus['stops'][k]['bay']
     return row
@@ -222,8 +226,10 @@ def timetable_rows(plan: dict, kind: str, stops: set[str], start: float, end: fl
         if bus.get('source') != 'timetable':
             continue
         last = len(bus['stops']) - 1
+        ends = abroad.scheduled_ends(bus)
         for k, stop in enumerate(bus['stops']):
-            if stop.get('gtfsId') not in stops or k == (last if leave else 0):
+            # Its end in Slovenia has no row, unless the bus runs on abroad (Sežana -> Opčine)
+            if stop.get('gtfsId') not in stops or (k == (last if leave else 0) and not ends[1 if leave else 0]):
                 continue
             at = bus['departures'][k] if leave else bus['arrivals'][k]
             if not start <= at <= end:
@@ -231,11 +237,13 @@ def timetable_rows(plan: dict, kind: str, stops: set[str], start: float, end: fl
             row = {'id': f'{bus["id"]}@{bus.get("serviceDay")}/{k}', 'stopId': stop['gtfsId'], 'tripId': bus['id'],
                    'routeId': bus['route']['gtfsId'], 'operatorId': bus['route']['agency']['gtfsId'],
                    'routeName': mapping.route_name(bus['route']), 'mode': 'bus',
-                   'destination': (bus['stops'][-1] if leave else bus['stops'][0]).get('name') or '',
+                   'destination': ends[1 if leave else 0] or (bus['stops'][-1] if leave else bus['stops'][0]).get('name') or '',
                    'scheduledAt': mapping.iso(at), 'effectiveAt': None, 'updatedAt': None, 'quality': None, 'canceled': False,
                    'platform': stop.get('bay') or None, 'alertIds': list(bus.get('alertIds') or []), 'replacement': True}
             if bus.get('trainName'):
                 row['replacesTrain'] = bus['trainName']
+            if leave and ends[0]:
+                row['comesFrom'] = ends[0]
             if merged and stop['gtfsId'] in names:
                 row['stopName'] = names[stop['gtfsId']]
             out.append(row)

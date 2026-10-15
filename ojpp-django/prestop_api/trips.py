@@ -14,8 +14,8 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import closures, mapping, platforms, roads, stopfix, supplement, tracks
-from .geometry import MAX_POINTS, SHAPE_POINTS, cumulative, simplify, stop_distances, trim_spurs  # noqa: F401
+from . import abroad, closures, mapping, platforms, roads, stopfix, supplement, tracks
+from .geometry import MAX_POINTS, SHAPE_POINTS, cumulative, simplify, slice_between, stop_distances, trim_spurs  # noqa: F401
 from .upstream import UpstreamError, otp
 
 logger = logging.getLogger(__name__)
@@ -99,13 +99,28 @@ def road_shape(raw: list, stops: list[dict], mode: str, deadline: Optional[float
     return simplify(raw, SHAPE_POINTS), complete
 
 
+def in_slovenia(geometry: list, stops: list[dict], a: int, b: int) -> list:
+    """The shape between a trip's first (`a`) and last (`b` - 1) stop in Slovenia (abroad.trim)."""
+    if a == 0 and b == len(stops) or len(geometry) < 2:
+        return geometry
+    d = stop_distances(geometry, stops)
+    return slice_between(geometry, cumulative(geometry), d[a], d[b - 1])
+
+
 def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
     route = t.get('route') or {}
     stoptimes = sorted(t.get('stoptimes') or [], key=lambda s: s['stopPosition'])
     if not stoptimes:
         return None
+    # A trip that runs abroad ends (starts) at its last (first) stop in Slovenia; the place abroad is text.
+    a, b, comes, goes = abroad.trim(stoptimes, lambda s: s['stop'].get('name'))
+    if a == b:
+        return None
+    if mapping.mode_of(route.get('mode')) == 'rail' and not (comes or goes):
+        comes, goes = abroad.train_ends(mapping.route_name(route), stoptimes[0]['stop'].get('name'), stoptimes[-1]['stop'].get('name'))
     replacement = mapping.is_replacement(route)
-    stops = _corrected([s['stop'] for s in stoptimes], replacement)
+    every = _corrected([s['stop'] for s in stoptimes], replacement)
+    stops, stoptimes = every[a:b], stoptimes[a:b]
     mode = mapping.mode_of(route.get('mode'))
     bay = None
     departure = _first_departure(t)
@@ -114,6 +129,8 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
     origin = platforms.origin_area(bay['station'] if bay else stops[0].get('gtfsId') or '') if mode == 'bus' else None
     destination = platforms.origin_area(stops[-1].get('gtfsId') or '') if mode == 'bus' else None
     raw = t.get('shapeCoordinates') or mapping.decode_polyline((t.get('tripGeometry') or {}).get('points') or '')
+    if (a, b) != (0, len(every)):  # the feed's shape runs on abroad: the part between the stops in Slovenia
+        raw = in_slovenia(raw, every, a, b) if len(raw) > 1 else raw
     geometry, complete = road_shape(raw, stops, mode, deadline, replacement, from_bay=bool(bay))
     distances = stop_distances(geometry, stops)
     length = cumulative(geometry)[-1] if len(geometry) > 1 else 0.0
@@ -121,7 +138,8 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
         'id': t['gtfsId'], 'routeId': route.get('gtfsId'), 'routeName': mapping.route_name(route) or '?',
         'operatorId': (route.get('agency') or {}).get('gtfsId') or f'{t["gtfsId"].split(":")[0]}:unknown',
         'mode': mapping.mode_of(route.get('mode')), 'color': f'#{route["color"]}' if route.get('color') else None,
-        'destination': stopfix.renamed(stops[-1].get('gtfsId'), stops[-1].get('name')) or t.get('tripHeadsign') or '', 'directionId': mapping.direction_key(t.get('directionId')),
+        'destination': goes or stopfix.renamed(stops[-1].get('gtfsId'), stops[-1].get('name')) or t.get('tripHeadsign') or '', 'directionId': mapping.direction_key(t.get('directionId')),
+        **({'comesFrom': comes} if comes else {}),
         'patternId': (t.get('pattern') or {}).get('code') or t['gtfsId'],
         'length': round(length, 1), 'geometry': geometry,
         'stops': [{'stopId': s['gtfsId'], 'name': stopfix.renamed(s['gtfsId'], s.get('name') or s['gtfsId']), 'latitude': round(s['lat'], 6), 'longitude': round(s['lon'], 6),
@@ -311,7 +329,7 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True) ->
         # announced (platforms.py): fetch the trip again shortly.
         'provisional': not static.get('complete', True) or _awaits_bay(static),
         'geometry': static['geometry'] if geometry else [], 'stops': stops,
-        **{k: static[k] for k in ('originArea', 'destinationArea') if static.get(k)},
+        **{k: static[k] for k in ('originArea', 'destinationArea', 'comesFrom') if static.get(k)},
         **({'replacement': True} if static.get('replacement') else {}),
     }
 
@@ -353,15 +371,22 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
     patterns = []
     complete = True
     replacement = mapping.is_replacement(route)
+    rail = mapping.mode_of(route.get('mode')) == 'rail'
     for p in route.get('patterns') or []:
         stops = _corrected(p.get('stops') or [], replacement)
+        a, b, _, goes = abroad.trim(stops, lambda s: s.get('name'))
+        if a == b:
+            continue
+        if rail and not goes:
+            goes = abroad.train_ends(mapping.route_name(route), stops[0].get('name'), stops[-1].get('name'))[1]
         raw = p.get('shapeCoordinates') or mapping.decode_polyline((p.get('patternGeometry') or {}).get('points') or '')
+        raw, stops = in_slovenia(raw, stops, a, b), stops[a:b]
         geometry, done = road_shape(raw, stops, mapping.mode_of(route.get('mode')), deadline, replacement)
         complete = complete and done
         distances = stop_distances(geometry, stops)
         patterns.append({
             'id': p['code'], 'directionId': mapping.direction_key(p.get('directionId')),
-            'headsign': p.get('headsign') or (stops[-1]['name'] if stops else ''),
+            'headsign': goes or p.get('headsign') or (stops[-1]['name'] if stops else ''),
             'tripCount': len(p.get('tripsForDate') or []),
             'departures': _departures(p.get('tripsForDate') or []),
             'length': round(cumulative(geometry)[-1], 1) if len(geometry) > 1 else 0.0,
@@ -373,6 +398,9 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
     patterns.sort(key=lambda p: (-p['tripCount'], p['directionId'], -len(p['stops'])))
     agency = route.get('agency') or {}
     origin, destination = mapping.route_ends(route)
+    if rail:  # an international train's line: its real ends abroad (abroad.train_ends)
+        comes, goes = abroad.train_ends(mapping.route_name(route), origin, destination)
+        origin, destination = comes or origin, goes or destination
     line = {
         'id': route['gtfsId'], 'name': mapping.route_name(route) or route['gtfsId'], 'longName': route.get('longName') or '',
         'operatorId': agency.get('gtfsId') or f'{route["gtfsId"].split(":")[0]}:unknown', 'operatorName': agency.get('name') or '',

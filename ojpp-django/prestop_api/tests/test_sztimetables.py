@@ -199,40 +199,38 @@ class StationTests(SimpleTestCase):
         self.assertEqual(calls[0]['stop']['name'], 'Lesce-Bled')
         self.assertEqual((calls[0].get('arr'), calls[0]['dep'], calls[-1]['arr']), (None, '05:40', '05:57'))
 
-    def test_buses_run_to_the_stations_abroad_sz_lists(self):
+    def test_stations_abroad_are_text_only(self):
         lesce = fixture(LESCE)
         stations = self.stations(RAIL + [stop('IJPP:lit', 'Litostroj', 46.0768, 14.4886)])
         calls, _ = stations.resolve(lesce, column(lesce, '318/1'))
-        # Ljubljana → Litostroj → Jesenice → Beljak: the bus runs on to Villach Hbf, as SŽ's timetable says.
-        self.assertEqual([c['stop']['name'] for c in calls], ['Ljubljana', 'Litostroj', 'Jesenice', 'Beljak / Villach Hbf'])
-        self.assertEqual((calls[-1]['arr'], calls[-1].get('dep')), ('09:25', None))
-        self.assertEqual(calls[-1]['stop']['gtfsId'], 'IJPP:abroad-beljak')
-        self.assertTrue(sztimetables.is_abroad(calls[-1]['stop']['gtfsId']))
-        calls, _ = stations.resolve(lesce, column(lesce, '415'))  # Beljak → Jesenice → ...
-        self.assertEqual((calls[0]['stop']['name'], calls[0].get('arr')), ('Beljak / Villach Hbf', None))
-        self.assertEqual(calls[1]['stop']['name'], 'Jesenice')
+        # Ljubljana → Litostroj → Jesenice → Beljak: the bus ends at Jesenice, its last stop in Slovenia, and goes to Villach.
+        self.assertEqual([c['stop']['name'] for c in calls], ['Ljubljana', 'Litostroj', 'Jesenice'])
+        self.assertEqual((calls[-1]['arr'], calls[-1].get('dep'), calls[-1]['goesTo']), ('08:32', None, 'Beljak / Villach'))
+        calls, _ = stations.resolve(lesce, column(lesce, '415'))  # Beljak → Jesenice → ...: starts at Jesenice
+        self.assertEqual((calls[0]['stop']['name'], calls[0].get('arr'), calls[0]['dep'], calls[0]['comesFrom']),
+                         ('Jesenice', None, '07:00', 'Beljak / Villach'))
 
-    def test_sezana_opcine_keeps_its_end_abroad(self):
+    def test_sezana_opcine_keeps_its_call_in_slovenia(self):
         data = {'title': 'Vozni red nadomestnega prevoza: Sežana - Opčine (I) in obratno', 'stops': [], 'tables': []}
         stations = self.stations([stop('IJPP:sezana', 'Sežana', 45.7066, 13.8692)])
         calls, why = stations.resolve(data, {'calls': [{'station': 'SEŽANA', 'dep': '06:10'}, {'station': 'OPČINE', 'arr': '06:30'}]})
         self.assertIsNone(why)
-        self.assertEqual([c['stop']['name'] for c in calls], ['Sežana', 'Opčine / Villa Opicina'])
-        self.assertEqual((calls[-1]['stop']['lat'], calls[-1]['stop']['lon']), (45.694441, 13.791198))
+        self.assertEqual([(c['stop']['name'], c.get('dep'), c.get('arr'), c.get('goesTo')) for c in calls], [('Sežana', '06:10', None, 'Opčine')])
+        calls, why = stations.resolve(data, {'calls': [{'station': 'OPČINE', 'dep': '07:00'}, {'station': 'SEŽANA', 'arr': '07:20'}]})
+        self.assertEqual([(c['stop']['name'], c.get('dep'), c.get('arr'), c.get('comesFrom')) for c in calls], [('Sežana', None, '07:20', 'Opčine')])
 
     def test_other_stations_abroad_are_left_out(self):
-        # Spielfeld has no known stop: the bus ends at its last stop in Slovenia.
         data = {'title': 'x', 'stops': [], 'tables': []}
         col = {'calls': [{'station': 'KRANJ', 'dep': '05:38'}, {'station': 'LESCE BLED', 'arr': '06:10', 'dep': '06:12'},
                          {'station': 'SPIELFELD', 'arr': '07:00'}]}
         calls, why = self.stations().resolve(data, col)
         self.assertIsNone(why)
         self.assertEqual([c['stop']['name'] for c in calls], ['Kranj', 'Lesce-Bled'])
-        self.assertEqual((calls[-1]['arr'], calls[-1].get('dep')), ('06:10', None))
+        self.assertEqual((calls[-1]['arr'], calls[-1].get('dep'), calls[-1]['goesTo']), ('06:10', None, 'Špilje / Spielfeld'))
         # Only stations abroad: no bus in Slovenia.
         calls, why = self.stations().resolve(data, {'calls': [{'station': 'BELJAK', 'dep': '06:00'}, {'station': 'TRST', 'arr': '08:00'}]})
         self.assertIsNone(calls)
-        self.assertIn('abroad', why)
+        self.assertIn('Slovenia', why)
 
     def test_a_stop_that_is_no_railway_station(self):
         data = {'title': 'x', 'stops': [{'station': 'LITOSTROJ', 'text': 'AP mestnega prometa Litostrojska (ob Litostrojski - NE obračališče)'}],

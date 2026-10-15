@@ -17,7 +17,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from . import closures, geometry, mapping, roads, sz, sztimetables
+from . import abroad, closures, geometry, mapping, roads, sz, sztimetables
 from . import replacement as replaced_by
 from .trips import service_day
 from .upstream import Cached, otp
@@ -259,6 +259,7 @@ def synthetic_entry(trip_id: str) -> Optional[dict]:
     static = {
         'id': bus['id'], 'routeId': route['gtfsId'], 'routeName': route['shortName'], 'operatorId': route['agency']['gtfsId'],
         'mode': 'bus', 'color': None, 'destination': bus['headsign'] or '', 'directionId': '0', 'patternId': bus['pattern'],
+        **({'comesFrom': bus['comesFrom']} if bus.get('comesFrom') else {}),
         'length': round(shape['cum'][-1], 1) if shape else 0.0, 'geometry': coords,
         'stops': [{'stopId': s['gtfsId'], 'name': s.get('name') or s['gtfsId'], 'latitude': round(s['lat'], 6), 'longitude': round(s['lon'], 6),
                    'distance': d, 'position': i,
@@ -327,7 +328,8 @@ def locate(trip: dict, shape: Optional[dict], now: float) -> Optional[dict]:
     """Where `trip` is at `now` by its stop times: distance along the shape, index of the
     stop it is at or heading to, whether it stands there, and its speed; None if not running."""
     arr, dep = trip['arrivals'], trip['departures']
-    if not dep[0] - BOARDING <= now <= arr[-1] + ARRIVED:
+    # A bus with one stop in Slovenia (Sežana -> Opčine): it waits there until it leaves the country.
+    if not dep[0] - BOARDING <= now <= (dep[0] if len(arr) == 1 else arr[-1] + ARRIVED):
         return None
     distances = shape['distances'] if shape and len(shape['distances']) == len(arr) else None
     for i in range(len(arr)):
@@ -417,12 +419,14 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             lon, lat, bearing = a['lon'] + (b['lon'] - a['lon']) * f, a['lat'] + (b['lat'] - a['lat']) * f, None
         route = trip['route']
         feed, local = trip['id'].split(':', 1)
+        ends = abroad.scheduled_ends(trip)
         out.append({
             'id': f'{feed}:scheduled-{local}', 'name': mapping.route_name(route) or trip['id'],
             'latitude': round(lat, 6), 'longitude': round(lon, 6), 'mode': 'bus' if replacement else 'rail',
             'operatorId': (route.get('agency') or {}).get('gtfsId') or f'{feed}:unknown',
             'routeId': route['gtfsId'], 'routeName': mapping.route_name(route) or '?',
-            'destination': stops[-1].get('name') or trip.get('headsign') or '',
+            'destination': ends[1] or stops[-1].get('name') or trip.get('headsign') or '',
+            **({'comesFrom': ends[0]} if ends[0] else {}),
             'nextStop': stops[i].get('name'), 'nextStopId': stops[i]['gtfsId'],
             'bearing': round(bearing, 1) if bearing is not None else None,
             'updatedAt': mapping.iso(report['at'] if report and quality != 'scheduled' else now),

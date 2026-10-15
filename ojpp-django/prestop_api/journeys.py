@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import geometry, journey_legs, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks
+from . import abroad, geometry, journey_legs, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks
 from . import geometry as geometry_lib
 from . import operators as companies
 
@@ -338,7 +338,12 @@ def _leg_place(end: dict, override: Optional[dict]) -> dict:
 def _headsign(leg: dict) -> Optional[str]:
     """Where the vehicle goes. SŽ headsigns repeat the route ("Ljubljana - Ilirska Bistrica"): keep the end."""
     text = (leg.get('headsign') or (leg.get('trip') or {}).get('tripHeadsign') or '').strip()
-    return text.split(' - ')[-1].strip() or None if text else None
+    end = text.split(' - ')[-1].strip() or None if text else None
+    if abroad.is_abroad_stop(end):
+        return abroad.place(end)
+    if mapping.mode_of((leg.get('route') or {}).get('mode')) == 'rail':  # an international train: its end abroad
+        return abroad.train_ends(mapping.route_name(leg.get('route') or {}), None, end)[1] or end
+    return end
 
 
 def _stop_names(raw: dict) -> set[str]:

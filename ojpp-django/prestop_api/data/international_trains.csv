@@ -1,0 +1,58 @@
+# International trains' real first and last stations (abroad.train_ends). The feed ends them at the border
+# station ("EC 115 Jesenice - Dobova"); only the ends abroad are shown, as destination or origin text.
+# Source: vagonweb.cz train pages, 2026 timetable (www.vagonweb.cz/razeni/vlak.php?zeme=SZ&kategorie=EC&cislo=115&rok=2026),
+# read 2026-10-15 for every SŽ EC/EN/MV train and every RG/IC train that ends at a border station in the feed.
+# Check again after each December timetable change. An empty column: that end is in Slovenia.
+train,from,to
+EC 38,,Villach Hbf
+EC 39,Villach Hbf,
+EC 70,,Wien Hbf
+EC 71,Wien Hbf,
+EC 78,Zagreb GK,Wien Hbf
+EC 79,Wien Hbf,Zagreb GK
+EC 115,München Hbf,Zagreb GK
+EC 214,Zagreb GK,
+EN 414,Zagreb Gl.Kol.,Salzburg Hbf
+EN 415,Salzburg Hbf,Zagreb Gl.Kol.
+EN 1272,Split,Wien Hbf
+EN 1273,Wien Hbf,Split
+MV 19,Villach Hbf,
+MV 246,Budapest-Déli,
+MV 247,,Budapest-Déli
+MV 311,Villach Hbf,
+MV 317,Villach Hbf,
+MV 430,Zagreb GK,
+MV 431,,Zagreb GK
+MV 480,Rijeka,
+MV 481,,Rijeka
+MV 575,Graz Hbf,
+MV 577,Graz Hbf,
+MV 1246,Budapest-Keleti,
+MV 1247,,Budapest-Keleti
+MV 1281,,Rijeka
+MV 1470,,Pula
+MV 1471,Pula,
+MV 1472,Zagreb GK,Pula
+MV 1473,Pula,
+MV 1474,,Pula
+MV 1475,Pula,Zagreb GK
+RG 18,,Villach Hbf
+RG 310,,Villach Hbf
+RG 312,,Villach Hbf
+RG 313,Villach Hbf,
+RG 572,,Graz Hbf
+RG 573,Graz Hbf,
+RG 574,,Graz Hbf
+RG 576,,Graz Hbf
+RG 670,,Graz Hbf
+RG 672,,Graz Hbf
+RG 677,Graz Hbf,
+RG 678,,Graz Hbf
+RG 679,Graz Hbf,
+RG 771,Graz Hbf,
+RG 774,,Graz Hbf
+RG 775,Graz Hbf,
+RG 778,,Graz Hbf
+RG 779,Graz Hbf,
+RG 873,Graz Hbf,
+RG 877,Graz Hbf,

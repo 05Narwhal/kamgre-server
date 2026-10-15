@@ -19,7 +19,7 @@ from typing import Optional
 from django.conf import settings
 from django.db import DatabaseError
 
-from . import mapping, stopfix, stopgroups, supplement
+from . import abroad, mapping, stopfix, stopgroups, supplement
 from .upstream import Cached, UpstreamError, get_json, otp
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,8 @@ def _load_stops():
     if extra:
         feeds = {s['gtfsId'].split(':', 1)[0] for s in extra}
         raw = [s for s in raw if s['gtfsId'].split(':', 1)[0] not in feeds] + extra
-    raw = stopfix.correct(raw, overrides, snaps)
+    # No stop abroad: KamGre shows Slovenia only (abroad.py).
+    raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'))]
     built = mapping.build_stops(raw)
     # Stops that are the same physical stop or station become one (see stopgroups.py).
     merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], _stop_directions(built))
