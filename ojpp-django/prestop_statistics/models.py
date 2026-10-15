@@ -49,6 +49,11 @@ class VehicleTrip(models.Model):
     start = models.IntegerField()
     end = models.IntegerField()
     end_delay = models.IntegerField(null=True)
+    # Recorder version 2 (blocks.py): the stop pattern (a timetable change makes a new departure), the delay as
+    # the trip set off, and where the vehicle ended and started.
+    version = models.SmallIntegerField(default=1)
+    pattern = models.CharField(max_length=16, blank=True, default='')
+    start_delay = models.IntegerField(null=True)
     first_seen = models.DateTimeField()
     last_seen = models.DateTimeField()
 
@@ -56,3 +61,39 @@ class VehicleTrip(models.Model):
         constraints = [models.UniqueConstraint(fields=['service_date', 'trip_id'], name='prestop_vehicle_trip_unique')]
         indexes = [models.Index(fields=['route_id', 'service_date'], name='prestop_sta_route_i_7c1f2a_idx'),
                    models.Index(fields=['vehicle_id', 'service_date'], name='prestop_sta_vehicle_3b9e4d_idx')]
+
+
+class VehicleGap(models.Model):
+    """What a vehicle did between two trips (blocks.GapTracker): a small summary, not its track. The trip before
+    and after are blank where unknown (its first trip of the day, the collector restarted). `idle`: the spots it
+    stood still at least blocks.IDLE_SECONDS, [[lat, lon, seconds], ...], from which depots are learned. Kept
+    KEEP_DAYS days, like VehicleTrip."""
+    service_date = models.DateField()  # the service day of the trip before (else of the trip after)
+    vehicle_id = models.CharField(max_length=200)
+    after_trip_id = models.CharField(max_length=200, blank=True, default='')
+    before_trip_id = models.CharField(max_length=200, blank=True, default='')
+    ended = models.DateTimeField()               # last seen on the trip before (or first seen without a trip)
+    started = models.DateTimeField(null=True)    # first seen on the trip after; null when the gap expired
+    terminus_wait = models.IntegerField(default=0)  # s stood within blocks.TERMINUS_METERS of the trip before's last stop
+    max_distance = models.IntegerField(default=0)   # m: farthest from that stop
+    seen_polls = models.IntegerField(default=0)     # polls the vehicle was in the feed without a trip
+    unseen_polls = models.IntegerField(default=0)   # polls it was missing from the feed
+    idle = models.JSONField(default=list)
+
+    class Meta:
+        indexes = [models.Index(fields=['vehicle_id', 'service_date'], name='prestop_sta_gap_vehicle_idx'),
+                   models.Index(fields=['service_date'], name='prestop_sta_gap_day_idx')]
+
+
+class RecorderDay(models.Model):
+    """How much of a calendar day the vehicle recorder ran (blocks.record): `seconds` covered by polls a minute or
+    so apart. Feed '*' is the collector itself; each feed also gets the seconds it had vehicles in the feed. The
+    stay-on-the-same-vehicle learning opens only after 7 full days (blocks.gate)."""
+    day = models.DateField()
+    feed = models.CharField(max_length=64)
+    version = models.SmallIntegerField(default=2)
+    seconds = models.IntegerField(default=0)
+    polls = models.IntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['day', 'feed'], name='prestop_recorder_day_unique')]
