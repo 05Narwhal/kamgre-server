@@ -183,7 +183,8 @@ class JourneyTests(SimpleTestCase):
         self.assertEqual(j['legs'][0]['alertIds'], ['alert:W'])
         self.assertEqual(j['transferCount'], 2)
         self.assertEqual(j['transfers'][0], {'requiredSeconds': 120, 'safetySeconds': 180, 'availableSeconds': 240, 'platform': '2', 'meetsSafetyMargin': False, 'status': 'tight',
-                                             'legId': j['legs'][2]['id']})  # the leg boarded
+                                             'legId': j['legs'][2]['id'],  # the leg boarded
+                                             'walkSeconds': 120, 'walkKind': 'walk', 'rating': 'tight'})
         # Staying seated counts only once the vehicles were seen to do it (stays.py), so the through-run is timed.
         self.assertEqual((j['transfers'][1]['status'], j['transfers'][1]['legId'], j['legs'][3]['stayLevel']), ('tight', j['legs'][3]['id'], None))
         self.assertEqual((j['freshness'], j['notices'], j['legs'][0]['origin']['name'], j['legs'][-1]['destination']['name']), ('live', ['Replacement buses'], 'Home', 'Bled'))

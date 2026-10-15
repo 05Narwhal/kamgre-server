@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import abroad, geometry, journey_legs, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks
+from . import abroad, geometry, journey_legs, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks, transfer_walk
 from . import geometry as geometry_lib
 from . import operators as companies
 
@@ -611,7 +611,11 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             # replacement bus and back) is rated comfortable and, as before, not counted: it is one ride.
             if previous is not None and level != 'sure':
                 available = _ts(leg['effectiveDeparture']) - _ts(previous['effectiveArrival'])
-                required, safety = round(walking), req['minTransferSeconds']
+                # The real walk (transfer_walk.py): OTP's, plus crossing the road, changing tracks or reaching the bay.
+                track = tracks.tracks.track(previous['routeName'], previous['destination'].get('stopId') or '',
+                                            _ts(previous['scheduledArrival']))[0] if previous['mode'] == 'rail' else None
+                required, walk_kind = transfer_walk.walk(previous, leg, walking, track)
+                safety = req['minTransferSeconds']
                 if leg['canceled'] or previous['canceled']:
                     status, meets = 'unknown', None
                 elif m.get('held'):  # held by SŽ
@@ -623,10 +627,12 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                     meets = available >= required + safety
                     status = 'missed' if available < required + min(0, safety) else ('tight' if available < required + RISKY_TRANSFER else 'safe')
                 else:
-                    meets = available >= required + safety
-                    status = 'missed' if available < required else ('safe' if meets else 'tight')
+                    status, meets, _ = transfer_walk.rate(available, required, safety)
                 transfers.append({'requiredSeconds': required, 'safetySeconds': safety, 'availableSeconds': round(available),
                                   'platform': m['platform'] or None, 'meetsSafetyMargin': meets, 'status': status, 'legId': leg['id'],
+                                  # A4: the walk on its own (minutes in the app), what it is, and comfortable or tight.
+                                  'walkSeconds': required, 'walkKind': walk_kind,
+                                  **({'rating': transfer_walk.rating_of(status)} if status != 'unknown' else {}),
                                   **({'held': True} if m.get('held') else {})})
             previous, previous_meta, walking = leg, m, 0.0
         notices = []

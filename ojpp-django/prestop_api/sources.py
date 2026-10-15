@@ -65,7 +65,8 @@ def _load_stops():
     raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'))]
     built = mapping.build_stops(raw)
     # Stops that are the same physical stop or station become one (see stopgroups.py).
-    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], _stop_directions(built))
+    ways = _stop_directions(built)
+    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways)
     for i, station in enumerate(merged):
         # Where SŽ's replacement buses leave from when that is beside the station, not at it.
         nearby = [r for sid in station.get('memberIds') or [station['id']] for r in overrides['replacement'].get(sid, [])]
@@ -76,7 +77,7 @@ def _load_stops():
         union = set().union(*(routes.get(i, set()) for i in ids))
         for i in ids:
             routes[i] = union
-    return {'list': merged, 'all': built, 'groups': groups, 'routes': routes}
+    return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways}
 
 
 def _stop_directions(built: list[dict]) -> dict[str, list]:
@@ -91,6 +92,12 @@ def _stop_directions(built: list[dict]) -> dict[str, list]:
     feeds = {run[0].split(':', 1)[0] for run in own if run}
     sequences = [p['stops'] for p in runs if p['stops'] and p['stops'][0].split(':', 1)[0] not in feeds] + own
     return stopgroups.directions(sequences, {s['id']: (s['latitude'], s['longitude']) for s in built})
+
+
+def stop_directions(stop_id: str) -> list[tuple[float, float]]:
+    """Unit vectors of the ways vehicles travel through a stop (empty: unknown)."""
+    snap = stops.peek()
+    return ((snap.value.get('directions') or {}).get(stop_id) or []) if snap else []
 
 
 def stop_group(stop_id: str) -> list[str]:
