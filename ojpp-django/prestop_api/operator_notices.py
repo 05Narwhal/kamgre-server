@@ -168,14 +168,35 @@ def arriva_alerts(posts: list[dict], operator_id: str, by_place: dict[str, set[s
     return out
 
 
+_reading: set = set()
+
+
+def _read_later(cache) -> None:
+    key = id(cache)
+    with _lock:
+        if key in _reading:
+            return
+        _reading.add(key)
+
+    def run():
+        try:
+            cache.get()
+        except Exception as e:  # noqa: BLE001 - logged; tried again on the next request
+            logger.warning('Operator notices unavailable: %r', e)
+        finally:
+            with _lock:
+                _reading.discard(key)
+    threading.Thread(target=run, daemon=True).start()
+
+
 def alerts() -> list[dict]:
     """The operators' site notices as last read (never waits for a site; warm.py keeps them fresh)."""
     snap = arriva.peek()
-    if snap is None:
-        return []
     from . import sources
     routes, pats = sources.routes.peek(), sources.patterns.peek()
-    if not routes:
+    if snap is None or not routes:
+        # Not read yet (or the last read failed): read in the background, so the next request has them.
+        _read_later(arriva if snap is None else sources.routes)
         return []
     ids = sorted({r['agencyId'] for r in routes.value.values() if r.get('agencyId') and 'arriva' in mapping.fold(r.get('agencyName') or '')})
     if not ids:

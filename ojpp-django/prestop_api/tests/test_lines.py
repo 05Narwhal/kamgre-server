@@ -44,3 +44,28 @@ class LineTests(SimpleTestCase):
             line, _ = trips.build_line(bus, date(2026, 10, 10))
         self.assertTrue(line['replacement'])
         self.assertNotIn('replacement', trips.build_line(LINE_PAYLOAD, date(2026, 10, 10))[0])
+
+
+class PopularEndsTests(SimpleTestCase):
+    @staticmethod
+    def pattern(first, last, trips):
+        return {'tripCount': trips, 'stops': [{'name': first}, {'name': 'Kranjska Gora'}, {'name': last}]}
+
+    def test_a_line_is_named_by_where_most_of_its_buses_go(self):
+        from prestop_api.mapping import popular_ends
+        patterns = [self.pattern('Rateče', 'Ljubljana AP', 8), self.pattern('Ljubljana AP', 'Rateče', 8),
+                    self.pattern('Rateče', 'Jesenice Integral', 3), self.pattern('Jesenice Integral', 'Rateče', 3)]
+        self.assertEqual(popular_ends(patterns, ('Rateče', 'Jesenice Integral')), ('Rateče', 'Ljubljana AP'))
+        self.assertEqual(popular_ends(patterns, ('Jesenice', 'Rateče')), ('Ljubljana AP', 'Rateče'))
+
+    def test_no_trips_keeps_the_feed_name(self):
+        from prestop_api.mapping import popular_ends
+        self.assertIsNone(popular_ends([self.pattern('A', 'B', 0)], ('A', 'B')))
+
+    def test_a_route_without_a_long_name_takes_its_most_common_termini(self):
+        from prestop_api.mapping import route_ends
+        heads = ['Rateče Planica - Jesenice Integral', 'Rateče Planica - Ljubljana AP', 'Ljubljana AP - Rateče Planica',
+                 'Jesenice Integral - Ljubljana AP', 'Ljubljana AP - Jesenice občina', 'Rateče Planica - Kranj AP', 'Kranj AP - Ljubljana AP']
+        route = {'longName': '', 'patterns': [{'headsign': h} for h in heads]}
+        self.assertEqual(route_ends(route), ('Rateče Planica', 'Ljubljana AP'))
+        self.assertEqual(route_ends({'longName': 'Ljubljana - Koper', 'patterns': route['patterns']}), ('Ljubljana', 'Koper'))

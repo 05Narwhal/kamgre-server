@@ -61,13 +61,45 @@ def route_name(route: dict) -> str:
 
 
 def route_ends(route: dict) -> tuple[str, str]:
-    """Best-effort origin/destination labels from a route's long name or first headsign."""
-    for text in [route.get('longName')] + [p.get('headsign') for p in route.get('patterns') or []]:
-        if text and re.search(r'\s[-–]\s', text):
-            parts = re.split(r'\s[-–]\s', text)
-            return parts[0].strip(), parts[-1].strip()
+    """Origin/destination labels: the route's long name, else the two termini its variants' headsigns ("A - B") name
+    most often (A6335 has no long name; most variants run Rateče – Ljubljana AP, one Rateče – Jesenice Integral)."""
+    def ends(text):
+        parts = re.split(r'\s[-–]\s', text or '')
+        return (parts[0].strip(), parts[-1].strip()) if len(parts) > 1 else None
+    if ends(route.get('longName')):
+        return ends(route['longName'])
+    named = [e for e in (ends(p.get('headsign')) for p in route.get('patterns') or []) if e]
+    if named:
+        popular = popular_ends([{'tripCount': 1, 'stops': [{'name': a}, {'name': b}]} for a, b in named], named[0])
+        return popular or named[0]
     headsigns = [p.get('headsign') for p in route.get('patterns') or [] if p.get('headsign')]
     return (headsigns[0], headsigns[-1]) if headsigns else ('', '')
+
+
+def popular_ends(patterns: list[dict], named: tuple[str, str]) -> Optional[tuple[str, str]]:
+    """A line's two ends by where its trips actually go: each variant's first and last stop counts its trips, and the
+    two busiest stops win ("Rateče – Ljubljana AP", not the feed's "Rateče – Jesenice Integral" when most buses run
+    on to Ljubljana). Kept in the order of the feed's name `named` where it names one of them; None without trips."""
+    from .stopgroups import similar
+    votes: dict[str, int] = {}
+    for p in patterns:
+        stops = p.get('stops') or []
+        if len(stops) < 2 or not p.get('tripCount'):
+            continue
+        ends = {stops[0]['name'], stops[-1]['name']}
+        for name in ends:
+            key = next((k for k in votes if similar(k, name)), name)
+            votes[key] = votes.get(key, 0) + p['tripCount']
+    top = sorted(votes, key=lambda k: -votes[k])[:2]
+    if len(top) < 2:
+        return None
+    a, b = top
+    busiest = max((p for p in patterns if len(p.get('stops') or []) > 1), key=lambda p: p.get('tripCount') or 0)
+    if named[0] and similar(named[0], b) or named[1] and similar(named[1], a):
+        a, b = b, a
+    elif not any(n and (similar(n, a) or similar(n, b)) for n in named) and similar(busiest['stops'][0]['name'], b):
+        a, b = b, a
+    return a, b
 
 
 def route_directions(route: dict) -> list[str]:

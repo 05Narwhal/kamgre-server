@@ -421,7 +421,19 @@ def _columns(data: dict, stations: sztimetables.Stations) -> list[tuple[int, int
     if key not in _prepared['files']:
         out = []
         for ti, table in enumerate(data.get('tables') or []):
-            for ci, col in enumerate(table.get('columns') or []):
+            columns = table.get('columns') or []
+            # Two vehicles for one train (Višnja Gora – Grosuplje: a bus straight through and an "8+1" van calling at
+            # Žalna and Mlačevo) are numbered like the other split buses ("BUS 3232/1", "BUS 3232/2"), not twins.
+            def twin(c):  # same number, leaving the same station at the same minute
+                first = (c.get('calls') or [{}])[0]
+                return (str(c.get('label') or ''), first.get('station'), first.get('dep'), json.dumps(c.get('footnotes'), sort_keys=True))
+            twins = [twin(c) for c in columns]
+            seen: dict[tuple, int] = {}
+            for ci, col in enumerate(columns):
+                key = twins[ci]
+                if key[0] and '/' not in key[0] and not col.get('part') and twins.count(key) > 1:
+                    seen[key] = seen.get(key, 0) + 1
+                    col = {**col, 'label': f'{key[0]}/{seen[key]}'}
                 why = sztimetables.unusable(data, col)
                 calls = None
                 if not why:

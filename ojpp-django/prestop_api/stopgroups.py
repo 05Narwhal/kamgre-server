@@ -110,7 +110,17 @@ def _without_slips(counts: dict[tuple[float, float], int]) -> list[tuple[float, 
     def runs(v):  # patterns going v's way through the stop
         return sum(c for w, c in counts.items() if v[0] * w[0] + v[1] * w[1] >= SAME_WAY)
     total = {v: runs(v) for v in counts}
-    return sorted(v for v in counts if not any(v[0] * u[0] + v[1] * u[1] <= -SAME_WAY and total[v] < SLIP_SHARE * total[u] for u in counts))
+    # The main way (the most patterns) first: main_way compares stops by it.
+    kept = [v for v in counts if not any(v[0] * u[0] + v[1] * u[1] <= -SAME_WAY and total[v] < SLIP_SHARE * total[u] for u in counts)]
+    return sorted(kept, key=lambda v: (-counts[v], v))
+
+
+def main_way(a: Optional[list], b: Optional[list]) -> Optional[bool]:
+    """Whether most vehicles at two stops travel the same way (None when either is unknown): a branch or turning
+    variant at one pole does not split it from its namesake, while poles on two sides of a road stay apart."""
+    if not a or not b:
+        return None
+    return a[0][0] * b[0][0] + a[0][1] * b[0][1] >= SAME_WAY
 
 
 def same_way(a: Optional[list], b: Optional[list]) -> Optional[bool]:
@@ -180,7 +190,7 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         shared = bool({_feed(stops[k]) for k in a} & {_feed(stops[k]) for k in b})
         for x in a:
             for y in b:
-                way = same_way(ways.get(stops[x]['id']), ways.get(stops[y]['id']))
+                way = main_way(ways.get(stops[x]['id']), ways.get(stops[y]['id']))
                 if way is False or (shared and way is None) or meters(stops[x], stops[y]) > MERGE_METERS:
                     return False
         return True
@@ -208,8 +218,8 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         elif _feed(a) == _feed(b) and namesakes and d <= DUPLICATE_METERS:
             join(i, j)
         elif may_join(i, j):
-            way = same_way(ways.get(a['id']), ways.get(b['id']))
-            if alike(ways.get(a['id']), ways.get(b['id'])):
+            way = main_way(ways.get(a['id']), ways.get(b['id']))
+            if alike(ways.get(a['id']), ways.get(b['id'])) or (way and _feed(a) != _feed(b) and (d <= NEAR_METERS or namesakes)):
                 join(i, j)
             # Alike names from two feeds ("Slovenija avto", "Ljubljana Slovenija avto") on the same side of the road.
             elif _feed(a) != _feed(b) and ((way and d <= NEAR_METERS) or (way is None and d <= SAME_SPOT_METERS)):
@@ -232,7 +242,9 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         head = ordered[0]
         ids = [s['id'] for s in ordered]
         pin = next((pinned[i] for i in ids if i in pinned), None)
-        lat, lon = pin or (sum(s['latitude'] for s in ordered) / len(ordered), sum(s['longitude'] for s in ordered) / len(ordered))
+        # IJPP often puts a pole on the other side of the road (Gosposvetska, Litostrojska): a city feed's pole places it.
+        placed = [s for s in ordered if _feed(s) != 'IJPP' and 'rail' not in s['modes']] or ordered
+        lat, lon = pin or (sum(s['latitude'] for s in placed) / len(placed), sum(s['longitude'] for s in placed) / len(placed))
         merged = {**head, 'name': head['name'] if stations[order[0]] else _fullest([s['name'] for s in ordered]),
                   'latitude': round(lat, 6), 'longitude': round(lon, 6),
                   'modes': sorted({m for s in ordered for m in s['modes']}),

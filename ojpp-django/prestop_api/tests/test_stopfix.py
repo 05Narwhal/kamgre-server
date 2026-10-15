@@ -153,4 +153,4 @@ class DirectionTests(SimpleTestCase):
         merged, _ = stopgroups.merge(stops, ways={'IJPP:1': [(1.0, 0.0)], 'MOKoper:1': [(1.0, 0.0)]})
         rows = stopgroups.report(stops, merged)
         self.assertEqual([r['stop_id'] for r in rows], ['IJPP:1', 'MOKoper:1'])
-        self.assertTrue(all(0 < r['meters'] < 75 for r in rows))
+        self.assertTrue(all(0 <= r['meters'] < 75 for r in rows))

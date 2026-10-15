@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import abroad, closures, mapping, platforms, roads, stopfix, supplement, tracks
+from . import abroad, closures, mapping, platforms, roads, stopfix, stopgroups, supplement, tracks
 from .geometry import MAX_POINTS, SHAPE_POINTS, cumulative, simplify, slice_between, stop_distances, trim_spurs  # noqa: F401
 from .upstream import UpstreamError, otp
 
@@ -401,8 +401,13 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
     if rail:  # an international train's line: its real ends abroad (abroad.train_ends)
         comes, goes = abroad.train_ends(mapping.route_name(route), origin, destination)
         origin, destination = comes or origin, goes or destination
+    long_name = route.get('longName') or ''
+    ends = None if rail else mapping.popular_ends(patterns, (origin, destination))
+    if ends and not (stopgroups.similar(ends[0], origin) and stopgroups.similar(ends[1], destination)):
+        origin, destination = ends  # named by where most of its buses go, not by the feed's long name
+        long_name = f'{origin} – {destination}'
     line = {
-        'id': route['gtfsId'], 'name': mapping.route_name(route) or route['gtfsId'], 'longName': route.get('longName') or '',
+        'id': route['gtfsId'], 'name': mapping.route_name(route) or route['gtfsId'], 'longName': long_name,
         'operatorId': agency.get('gtfsId') or f'{route["gtfsId"].split(":")[0]}:unknown', 'operatorName': agency.get('name') or '',
         'mode': mapping.mode_of(route.get('mode')), 'color': f'#{route["color"]}' if route.get('color') else None,
         'origin': origin, 'destination': destination, 'serviceDate': day.isoformat(), 'patterns': patterns[:12],
