@@ -25,6 +25,8 @@ MIDDLEWARE = [MIDDLEWARE[0], 'prestop_api.analytics.AnalyticsMiddleware', 'prest
 # Usage counts in Redis, flushed to Postgres by the collector (prestop_api/analytics.py); off under manage.py test.
 PRESTOP_ANALYTICS = 'test' not in sys.argv[1:2] and env.bool('PRESTOP_ANALYTICS', default=True)
 PRESTOP_ANALYTICS_REDIS_URL = env('PRESTOP_ANALYTICS_REDIS_URL', default='')
+# Hop's presence and messages (prestop_api/hop.py); empty uses the cache's Redis.
+PRESTOP_HOP_REDIS_URL = env('PRESTOP_HOP_REDIS_URL', default='')
 PRESTOP_TRAFFIC_GUARD = env.bool('PRESTOP_TRAFFIC_GUARD', default=False)
 # Header with the visitor's IP set by the trusted proxy (CF-Connecting-IP); empty uses REMOTE_ADDR.
 PRESTOP_CLIENT_IP_HEADER = env('PRESTOP_CLIENT_IP_HEADER', default='')

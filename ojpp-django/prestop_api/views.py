@@ -472,6 +472,61 @@ def stats_hello(request):
     return HttpResponse(status=204)
 
 
+def _hop(action):
+    """Runs a Hop call (hop.py): its own errors become API errors, Redis trouble a retryable 503."""
+    import redis
+    from . import hop
+    try:
+        return action(hop)
+    except hop.HopError as e:
+        raise ApiError(e.status, e.code, str(e))
+    except redis.RedisError:
+        raise ApiError(503, 'HOP_UNAVAILABLE', 'Hop is not available right now. Please try again.', True)
+
+
+def _hop_body(request) -> dict:
+    from . import hop
+    if len(request.body or b'') > hop.MAX_BODY:
+        raise ApiError(413, 'TOO_LARGE', 'At most 4 KB.')
+    try:
+        body = json.loads(request.body or b'{}')
+    except ValueError:
+        raise ApiError(422, 'INVALID_REQUEST', 'Expected a JSON body')
+    if not isinstance(body, dict):
+        raise ApiError(422, 'INVALID_REQUEST', 'Expected a JSON object')
+    return body
+
+
+def _hop_ip(request) -> str:
+    from . import analytics
+    return analytics.client_ip(request) or request.META.get('REMOTE_ADDR') or ''
+
+
+@csrf_exempt
+@require_POST
+@api
+def hop_presence(request):
+    """Hop: this device is here (every ~15 s while the app is visible); answers its code and the hops waiting for it."""
+    body = _hop_body(request)
+    return envelope(_hop(lambda hop: hop.presence(body, _hop_ip(request))), 'live', used=['none'])
+
+
+@require_GET
+@api
+def hop_nearby(request):
+    """Hop: the phones nearby this device can send to, under tokens only it can use."""
+    return envelope(_hop(lambda hop: hop.nearby(request.GET.get('device') or '')), 'live', used=['none'])
+
+
+@csrf_exempt
+@require_POST
+@api
+def hop_send(request):
+    """Hop: sends an app object (journey, stop, line, vehicle) to a nearby peer or a code."""
+    body = _hop_body(request)
+    return envelope(_hop(lambda hop: hop.send(body)), 'live', used=['none'])
+
+
 @require_GET
 @api
 def statistics_routes(request):
