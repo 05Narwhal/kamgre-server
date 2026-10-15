@@ -70,7 +70,7 @@ class Command(BaseCommand):
             if not row.geometry or len(row.geometry) < 2:
                 continue
             a, b = ({'lat': float(p.split(',')[0]), 'lon': float(p.split(',')[1])} for p in row.key.split(';'))
-            if not roads.plausible(row.geometry, a, b):
+            if not roads.plausible(roads.untangle(row.geometry), a, b):
                 bad.append(row.key)
                 self.stdout.write(f'leg {row.key}: {round(geometry.cumulative(row.geometry)[-1])} m, refused')
             elif roads.detours(row.geometry, [a, b]):

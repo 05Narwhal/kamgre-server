@@ -184,6 +184,29 @@ def plausible(leg: list, a: dict, b: dict) -> bool:
     return not looped or TURN_ROUND < looped[2] and looped[3] < length - TURN_ROUND
 
 
+def untangle(leg: list) -> list:
+    """A routed leg without the loop it drives to turn round at either end: the router put the stop on the far side of
+    the road, drove past it and came back (772 m round the block at Celje station). The bus stops where it first passes
+    the stop instead. Without this the whole leg was refused, and SŽ's direct Ljubljana - Celje bus, whose only leg is
+    that one, was drawn as a 61 km straight line."""
+    for _ in range(2):  # one loop at each end
+        looped = geometry.loop(leg, *LOOP)
+        if not looped:
+            break
+        cum = geometry.cumulative(leg)
+        _, _, start, end = looped
+        if end >= cum[-1] - TURN_ROUND:
+            part = geometry.slice_between(leg, cum, 0, start)
+        elif start <= TURN_ROUND:
+            part = geometry.slice_between(leg, cum, end, cum[-1])
+        else:
+            break  # a loop in between (switchbacks) is the road itself
+        if len(part) < 2:
+            break
+        leg = part
+    return leg
+
+
 def splice(coords: list, stops: list[dict], bad: list[bool], legs: dict[str, list]) -> list:
     """The shape between the first and last stop, with bad segments replaced by routed legs.
 
@@ -196,6 +219,7 @@ def splice(coords: list, stops: list[dict], bad: list[bool], legs: dict[str, lis
     out: list = []
     for i, is_bad in enumerate(bad):
         leg = legs.get(leg_key(stops[i], stops[i + 1])) if is_bad else None
+        leg = untangle(leg) if leg and len(leg) > 2 else leg
         if leg and len(leg) > 1 and plausible(leg, stops[i], stops[i + 1]):
             part = leg
         elif is_bad and (along[i] >= along[i + 1] or shapeless(coords, stops)):

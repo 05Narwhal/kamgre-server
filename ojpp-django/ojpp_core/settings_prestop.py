@@ -91,6 +91,9 @@ PRESTOP_VALHALLA_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_VALHALLA_
 PRESTOP_VALHALLA_GAP = env.float('PRESTOP_VALHALLA_GAP', default=0.35)
 # Map-match every bus shape onto the roads (roads.matched), so lines follow the streets exactly.
 PRESTOP_SHAPE_MATCH = env.bool('PRESTOP_SHAPE_MATCH', default=True)
+# Vehicles standing at a stop become "possible disruption" alerts (detected.py). Off: Slovenian buses are
+# usually just late, and the alerts (and the notifications they set off) came too often.
+PRESTOP_DETECTED_ALERTS = env.bool('PRESTOP_DETECTED_ALERTS', default=False)
 # AP Ljubljana's departure board (bay per departure, platforms.py); empty disables it.
 PRESTOP_AP_LJUBLJANA_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_AP_LJUBLJANA_URL', default='https://www.ap-ljubljana.si/api/upcoming')
 # Header set by a trusted reverse proxy (e.g. CF-IPCountry); empty disables IP-based language hints.

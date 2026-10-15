@@ -36,7 +36,8 @@ class Command(BaseCommand):
                 positions = get_json(settings.PRESTOP_RT_VEHICLES_URL, limit=16 * 1024 * 1024)
                 logger.info('vehicles on trips: %s', blocks.record(schedules, positions, schedules.updates))
                 # Vehicles standing where the timetable doesn't wait: detected disruptions (prestop_api/detected.py).
-                logger.info('vehicle halts: %s', detected.observe(schedules, positions))
+                if settings.PRESTOP_DETECTED_ALERTS:
+                    logger.info('vehicle halts: %s', detected.observe(schedules, positions))
             except Exception as e:  # never let the vehicle feed stop the delay collector
                 logger.warning('vehicle trips failed: %r', e)
             try:

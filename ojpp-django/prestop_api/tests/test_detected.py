@@ -115,6 +115,11 @@ class AlertAndVoteTests(TestCase):
             self.assertEqual(self.vote('yes', device='device-cccccc').status_code, 429)
             self.assertEqual(self.vote('yes', device='device-dddddd', ip='5.6.7.8').status_code, 200)
 
+    @override_settings(PRESTOP_DETECTED_ALERTS=True)
     def test_detected_alerts_join_the_alert_list(self):
         with mock.patch.object(sources, 'alerts_raw', mock.Mock(get=lambda: mock.Mock(value=[]))):
             self.assertEqual([a['id'] for a in sources.alerts('en')], [self.id])
+
+    def test_detected_alerts_are_off_by_default(self):
+        with mock.patch.object(sources, 'alerts_raw', mock.Mock(get=lambda: mock.Mock(value=[]))):
+            self.assertEqual(sources.alerts('en'), [])

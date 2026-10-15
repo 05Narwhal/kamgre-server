@@ -282,6 +282,22 @@ class LoopTests(SimpleTestCase):
         self.assertTrue(roads.plausible(SWITCHBACKS, self.A, {'lat': 46.0506, 'lon': 14.512}))
         self.assertTrue(roads.plausible(leg(self.A, self.B), self.A, self.B))
 
+    def test_a_leg_turning_round_at_its_last_stop_is_cut_where_it_passes_the_stop(self):
+        # Like Celje station: the router drives past the stop, round the block and back to it.
+        turn = [[14.50, 46.05], [14.506, 46.05], [14.5125, 46.05], [14.515, 46.05], [14.515, 46.0502], [14.512, 46.0502], [14.512, 46.05]]
+        straight = [[self.A['lon'], self.A['lat']], [self.B['lon'], self.B['lat']]]
+        out = roads.splice(straight, [self.A, self.B], [True], {roads.leg_key(self.A, self.B): turn})
+        self.assertIsNone(geometry.loop(out))
+        self.assertGreater(len(out), 2)  # the road, not a straight line
+        self.assertLess(geometry.distance(out[-1], straight[-1]), 60)
+
+    def test_a_leg_turning_round_at_its_first_stop_is_cut_too(self):
+        turn = [[14.50, 46.05], [14.497, 46.05], [14.497, 46.0502], [14.50, 46.0502], [14.506, 46.0502], [14.512, 46.05]]
+        out = roads.untangle(turn)
+        self.assertIsNone(geometry.loop(out))
+        self.assertTrue(roads.plausible(out, self.A, self.B))
+        self.assertEqual(roads.untangle(SWITCHBACKS), SWITCHBACKS)
+
     def test_a_long_detour_between_two_stops_is_reported(self):
         detour = [[14.50, 46.05], [14.50, 46.06], [14.512, 46.06], [14.512, 46.05]]  # 2.2 km for 0.9 km
         [d] = roads.detours(detour, [self.A, self.B])

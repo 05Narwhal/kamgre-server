@@ -282,6 +282,8 @@ def alerts(language: str) -> list[dict]:
     out = closures.notice_alerts(mapping.build_alerts(alerts_raw.get().value, language))
     from . import operator_notices
     out += operator_notices.alerts()  # notices on operators' own websites (Arriva)
+    if not settings.PRESTOP_DETECTED_ALERTS:
+        return out
     try:  # vehicles standing where they shouldn't (detected.py)
         known = routes.peek()
         out += detected.alerts(language, known.value if known else {}, stop_names())

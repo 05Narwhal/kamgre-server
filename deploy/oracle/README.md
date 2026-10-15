@@ -147,6 +147,8 @@ powershell -File backend/deploy/oracle/push.ps1
 
 From Windows, `yarn server:top` (optionally `yarn server:top 5` for every 5 s) opens the live view in your own terminal over SSH, using `config.local`. It sends the local `server/top.sh`, so it works before the next deploy.
 
+Its **Learning** block (refreshed once a minute) follows the stay-on learning (`prestop_statistics/stays.py`). It shows how much of today the collector has recorded and how many of the 72 allowed minutes of downtime are used. A day counts only at 95 % or more, and 7 counted days in a row open a feed. It also lists each feed's streak with the day it will open, the feeds already open with their `sure`/`likely` counts, and the last 14 days of the nightly check. It turns red when today will not count, or when a feed is open but the 04:30 nightly learning has not run.
+
 `yarn server:ssh` opens a shell on the server in your own terminal (`exit` or Ctrl+D leaves), for admin commands such as `sudo prestop-manage leg_detours --legs --delete` or `sudo prestop-status`.
 
 ```sh
