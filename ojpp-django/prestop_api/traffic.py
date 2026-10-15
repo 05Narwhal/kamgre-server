@@ -64,7 +64,7 @@ class TrafficGuardMiddleware:
         self.enabled = getattr(settings, 'PRESTOP_TRAFFIC_GUARD', False)
         self.ip_header = getattr(settings, 'PRESTOP_CLIENT_IP_HEADER', '')
         self.state_dir = getattr(settings, 'PRESTOP_TRAFFIC_STATE_DIR', '')
-        self.per_minute = getattr(settings, 'PRESTOP_TRAFFIC_PER_MINUTE', 300)
+        self.per_minute = getattr(settings, 'PRESTOP_TRAFFIC_PER_MINUTE', 1200)
         self.max_active = getattr(settings, 'PRESTOP_TRAFFIC_MAX_ACTIVE', 3000)
         self.hourly_bytes = getattr(settings, 'PRESTOP_TRAFFIC_HOURLY_MB', 30000) * 1_000_000
         self.salt = settings.SECRET_KEY.encode()

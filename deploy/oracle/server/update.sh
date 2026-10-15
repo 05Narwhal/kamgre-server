@@ -16,7 +16,7 @@ if [ -f /etc/prestop/deploy.vars ]; then
   rm -f /etc/prestop/deploy.vars
 fi
 
-chmod 0755 "$DEPLOY"/server/*.sh "$DEPLOY"/floor/prestop_floor.py
+chmod 0755 "$DEPLOY"/server/*.sh
 if [ ! -f /etc/prestop/.bootstrapped ]; then
   bash "$DEPLOY/server/bootstrap.sh"
 fi
@@ -36,6 +36,12 @@ command -v tesseract >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get instal
 install -d -o prestop -g prestop -m 0750 "$STATE/sz-timetables"
 
 step "Config files"
+# The utilization floor kept a free-only account from being reclaimed as idle. The account is Pay As You Go
+# since 2026-10-15, where idle reclamation does not apply, so it is gone (it cost about 0.2 of a core).
+if [ -f /etc/systemd/system/prestop-floor.service ]; then
+  systemctl disable -q --now prestop-floor || true
+  rm -f /etc/systemd/system/prestop-floor.service
+fi
 install -m 0644 "$DEPLOY"/systemd/*.service "$DEPLOY"/systemd/*.timer /etc/systemd/system/
 install -m 0644 "$DEPLOY/caddy/Caddyfile" /etc/caddy/Caddyfile
 # Caddy and the tunnel stay off while the egress guard has tripped this month, even after a reboot.
@@ -92,6 +98,9 @@ if [ ! -f "$STATE/.insane-mode-on" ]; then
   touch "$STATE/.insane-mode-on"
   echo "Insane mode on"
 fi
+# 2026.1.8-b: 300 requests a minute per visitor was too tight for a household or school behind one IP address.
+# Only the old default is replaced; a value set by hand stays.
+sed -i 's/^PRESTOP_TRAFFIC_PER_MINUTE=300$/PRESTOP_TRAFFIC_PER_MINUTE=1200/' /etc/prestop/prestop.env
 
 step "Statistics copy"
 # Reliability and typical travel times are months of observed delays: a copy before anything touches
@@ -112,7 +121,7 @@ step "Statistics check"
 bash "$DEPLOY/server/keep-stats.sh" check
 
 step "Services"
-systemctl enable -q prestop-web prestop-collector prestop-push prestop-ingest prestop-floor caddy redis-server postgresql
+systemctl enable -q prestop-web prestop-collector prestop-push prestop-ingest caddy redis-server postgresql
 systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer prestop-szpdf.timer
 # changed <name> <unit> [files]: true when the unit or the files differ from the last deploy (or the unit is down).
 changed() {
@@ -126,7 +135,6 @@ changed() {
 if changed web prestop-web /etc/prestop/prestop.env; then systemctl restart prestop-web
 else systemctl kill -s HUP --kill-whom=main prestop-web; fi
 systemctl restart prestop-collector prestop-push prestop-ingest
-systemctl restart prestop-floor
 # Keep public traffic off while the egress guard has tripped this month.
 [ -f "$STATE/egress-tripped" ] || systemctl reload-or-restart caddy
 if [ -s /etc/cloudflared/token ]; then

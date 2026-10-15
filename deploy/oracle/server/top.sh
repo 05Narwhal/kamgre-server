@@ -3,7 +3,7 @@
 # Usage: sudo prestop-top [seconds between updates, default 2]
 set -uo pipefail
 INTERVAL=${1:-2}
-SERVICES=(prestop-web prestop-collector prestop-push prestop-ingest prestop-floor caddy cloudflared postgresql redis-server)
+SERVICES=(prestop-web prestop-collector prestop-push prestop-ingest caddy cloudflared postgresql redis-server)
 IFACE=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
 declare -A CPU_PREV
 NET_PREV=""
@@ -121,9 +121,6 @@ draw() {
     health=$(curl -fsS -o /tmp/prestop-top-health -w '%{time_total}' --max-time 5 http://127.0.0.1:8066/api/v1/health 2>/dev/null) \
       && printf 'Health   %s ms  %s\n' "$(awk -v t="$health" 'BEGIN { printf "%d", t * 1000 }')" "$(jq -r '"api \(.api) · db \(.database) · collector \(.collector.status // "?")" + (if .collector.updatedAt then " (\(now - (.collector.updatedAt | sub("\\.[0-9]+"; "") | fromdateiso8601) | floor)s ago)" else "" end)' /tmp/prestop-top-health 2>&1 | head -1)" \
       || printf 'Health   %sunavailable%s\n' "$R" "$N"
-    if [ -f /run/prestop-floor/status.json ]; then
-      jq -r '"Floor    CPU \(.cpu_total)%  '"$D"'workload \(.cpu_workload)% · filler \(.cpu_filler_duty)% · mem \(.mem_used)%'"$N"'"' /run/prestop-floor/status.json
-    fi
     echo; printf '%s\n' "$LEARN_OUT"
 }
 while true; do

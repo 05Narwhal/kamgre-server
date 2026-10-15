@@ -27,7 +27,7 @@ PRESTOP_TRAFFIC_GUARD = env.bool('PRESTOP_TRAFFIC_GUARD', default=False)
 PRESTOP_CLIENT_IP_HEADER = env('PRESTOP_CLIENT_IP_HEADER', default='')
 # Directory where the egress guard writes `busy` / `stopped`; empty disables those checks.
 PRESTOP_TRAFFIC_STATE_DIR = env('PRESTOP_TRAFFIC_STATE_DIR', default='')
-PRESTOP_TRAFFIC_PER_MINUTE = env.int('PRESTOP_TRAFFIC_PER_MINUTE', default=300)
+PRESTOP_TRAFFIC_PER_MINUTE = env.int('PRESTOP_TRAFFIC_PER_MINUTE', default=1200)
 PRESTOP_TRAFFIC_MAX_ACTIVE = env.int('PRESTOP_TRAFFIC_MAX_ACTIVE', default=3000)
 PRESTOP_TRAFFIC_HOURLY_MB = env.int('PRESTOP_TRAFFIC_HOURLY_MB', default=30000)
 # JSON file `{message: {sl, en}, until}` that push.sh writes shortly before a deploy restarts the API;

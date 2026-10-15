@@ -10,14 +10,14 @@ visitor ──HTTPS──> api.kamgre.si  ──> Cloudflare ──tunnel──>
                                                            ├─ /static/*  → /var/lib/prestop/static
                                                            └─ everything else → 404
 prestop-collector (delay statistics)   prestop-ingest (LPP history, nightly GTFS refresh)
-PostgreSQL 18 + PostGIS   Redis (cache)   prestop-floor (keeps the instance from looking idle)
+PostgreSQL 18 + PostGIS   Redis (cache)
 ```
 
 No ports are open to the internet except SSH. Native packages, not Docker: the `postgis/postgis` images in `docker-compose.yml` have no reliable arm64 builds, and this matches the local WSL setup (PG 18 + PostGIS 3.6, Python 3.12).
 
 ## Cost safety
 
-The account is (or is being) upgraded to **Pay As You Go**: Oracle serves A1 capacity to paying accounts first, Always Free resources stay free, and idle reclamation does not apply to them. The flip side is that the card *can* be charged for anything outside the Always Free allowance, so the account is locked down in three layers:
+The account is upgraded to **Pay As You Go** (since 2026-10-15): Oracle serves A1 capacity to paying accounts first, Always Free resources stay free, and idle reclamation does not apply to them. The flip side is that the card *can* be charged for anything outside the Always Free allowance, so the account is locked down in three layers:
 
 1. **Quotas (hard block).** `oci/guardrails.sh` sets quota policies so Oracle refuses to create anything billable: compute is zeroed except `VM.Standard.A1.Flex` at **2 OCPU / 12 GB**, disks are capped at **200 GB** with **5 backups** and no replication, object storage at **20 GB**, no reserved public IPs, and every other quota-capable service (databases, load balancers, GPUs, firewalls, Kubernetes, ...) is zeroed. This also applies to clicks in the console.
 2. **Budget alert.** A 1 USD monthly budget on the whole account e-mails you at **0.01 USD actual** or **1 USD forecast** spend. It only alerts; with the quotas in place it should never fire.
@@ -25,7 +25,7 @@ The account is (or is being) upgraded to **Pay As You Go**: Oracle serves A1 cap
 
 On the server, outbound traffic (the only usage-based charge left: Oracle bills above **10 TB/month**) is limited in layers that act on their own, without waiting for anyone to read an alert:
 
-- **Per request** (`prestop_api/traffic.py`, always on in production): a visitor sending more than 300 requests a minute gets 429. When more than 3000 visitors were active in 15 minutes, or the API sent more than 30 GB in the last hour, **new visitors** get a 503 "very busy" message while people already using the app (signed `kg_admit` cookie) keep working.
+- **Per request** (`prestop_api/traffic.py`, always on in production): a visitor (one IP address) sending more than 1200 requests a minute gets 429: a whole household, school or mobile network behind one address stays well under it. When more than 3000 visitors were active in 15 minutes, or the API sent more than 30 GB in the last hour, **new visitors** get a 503 "very busy" message while people already using the app (signed `kg_admit` cookie) keep working.
 - **Every 5 minutes** (`prestop-egress.timer`): this month's outbound data is the larger of vnstat's count and the guard's own count of the kernel counter. Above `EGRESS_BUSY_GB` (6000), or when the month runs ahead of its pace, the API turns away new visitors with a JSON 503 the app shows as "very busy". At `EGRESS_LIMIT_GB` (8000, capped at 9000) the tunnel and Caddy stop, the API answers 503 to everyone, and a systemd drop-in keeps Caddy and cloudflared from starting again, even after a reboot, until the next month (UTC).
 
 ```sh
@@ -42,14 +42,9 @@ Rules:
 - If the budget e-mail ever arrives: run `audit.sh`, then terminate or shrink what it lists.
 - Log in to the Oracle console at least once every 60 days.
 
-## Idle reclamation and the utilization floor
+## Idle reclamation
 
-Oracle may reclaim an Always Free instance when, over 7 days, the 95th-percentile CPU, the network **and** (A1) the memory utilization all stay under 20%. `prestop-floor` keeps CPU and memory at **25%** whatever the traffic:
-
-- **CPU:** one burner per core at `SCHED_IDLE` priority fills the gap between what Prestop uses and 25%. Any real work (requests, Postgres, the collector) preempts it instantly, and when real use is above 25% the burners stop.
-- **Memory:** a ballast of resident memory tops usage up to 25%. It shrinks as Prestop needs more, is released at once if free memory drops below 15%, and the kernel kills the floor first if memory ever runs out (the service then restarts).
-
-Tested in WSL: idle → CPU 24–25%; with a real 50% load added → filler 0% within one interval; back to 25% afterwards. Tune it in `/etc/prestop/floor.env` (see `floor/floor.env.example`). Check it with `sudo prestop-status`, and in the console under **Instance → Metrics** (needs the Oracle Cloud Agent, which Ubuntu images include).
+Oracle may reclaim an idle Always Free instance (95th-percentile CPU, network and memory all under 20% for 7 days), but only on free-only accounts. The account is Pay As You Go since 2026-10-15, so idle reclamation does not apply. The utilization floor (`prestop-floor`) that kept CPU and memory at 25% until then is removed, and `update.sh` disables it on a server that still has it. Should the account ever be free-only again, it is in git history (`backend/deploy/oracle/floor/`).
 
 ## First deploy
 
@@ -136,7 +131,6 @@ powershell -File backend/deploy/oracle/push.ps1
 | --- | --- |
 | API, collector, push sender, ingestion, Caddy, tunnel, database, cache | systemd services: start at boot, restart on crash |
 | API hangs | `prestop-watchdog.timer` checks `/api/v1/health` every 2 min, restarts the API after 3 failures |
-| Idle reclamation | `prestop-floor` keeps CPU and memory at 25% (only needed while the account is free-only) |
 | Outbound data | API load shedding; `prestop-egress.timer` refuses new visitors at 6000 GB or ahead of pace and stops public traffic at 8000 GB/month, before Oracle bills above 10 TB |
 | Timetables | `prestop-ingest` refreshes GTFS nightly at 04:30 |
 | SŽ replacement timetables | `prestop-szpdf.timer` every 30 min (3 min after boot, and once after each deploy): `prestop-manage szpdf_sync` reads the PDFs SŽ's notices link into `/var/lib/prestop/sz-timetables` (one JSON per PDF plus `index.json`, which the API reads). A PDF is downloaded when its link is new (a link it has is re-checked once a day with a conditional request) and parsed when its checksum or the parser version is new, so most runs take a second or two. A one-shot service with `Nice=10`, `CPUQuota=50%`, `MemoryMax=400M`; a screenshot pasted over a table is read with `tesseract-ocr`, which `update.sh` installs. Files of notices gone for 7 days are deleted. `sudo prestop-manage szpdf_sync --report` shows one line per notice (status ok / unsure / failed / missing) |
@@ -153,9 +147,9 @@ Its **Learning** block (refreshed once a minute) follows the stay-on learning (`
 
 ```sh
 ssh -i ~/.ssh/oracle_prestop ubuntu@<ip>
-sudo prestop-status                          # services, floor, health, last backup, disk
+sudo prestop-status                          # services, health, last backup, disk
 sudo prestop-top                             # live view: per-service CPU/memory, network, API latency (q quits)
-journalctl -u prestop-web -f                 # API log (also prestop-collector, prestop-push, prestop-ingest, prestop-floor)
+journalctl -u prestop-web -f                 # API log (also prestop-collector, prestop-push, prestop-ingest)
 sudo prestop-manage <command>                # any manage.py command, e.g. createsuperuser, import_gtfs
 sudo systemctl start prestop-backup          # back up now
 sudo prestop-restore /var/backups/prestop/prestop-YYYY-MM-DD.dump
@@ -209,4 +203,3 @@ sudo systemctl start prestop-backup && journalctl -u prestop-backup -n 5
 | `django/prestop_production.py` | Production settings on top of `ojpp_core.settings_prestop` |
 | `systemd/` | Services and timers |
 | `caddy/Caddyfile`, `postgres/prestop.conf` | Web server; PostgreSQL tuning (3 GB buffer cache, prewarm) |
-| `floor/` | Utilization floor and its settings |
