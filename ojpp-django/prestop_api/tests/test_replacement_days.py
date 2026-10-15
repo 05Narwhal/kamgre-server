@@ -2,7 +2,7 @@
 from datetime import date, datetime
 from unittest import mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from prestop_api import closures, journey_legs, journeys, mapping, replacement, scheduled
 from prestop_api.tests.test_closures import DAY, JESENICE, T0, notice, station, train
@@ -90,6 +90,27 @@ class SyntheticLineTests(SimpleTestCase):
         self.assertEqual(pattern['geometry'], road)
         self.assertEqual([d['tripId'] for d in pattern['departures']], [bus['id']])
         self.assertEqual([s['name'] for s in pattern['stops']], ['Ljubljana', 'Kranj', 'Jesenice'])
+
+    @override_settings(ROOT_URLCONF='ojpp_core.urls_prestop')
+    def test_the_line_asked_for_another_day_has_that_days_buses(self):
+        # The same train is replaced on 10 and 12 October, leaving an hour later on the 12th: GET /lines/<id>?date=
+        # (a journey planned ahead) must give that day's buses, not today's.
+        closed = notice(JESENICE, ['IJPP:r-a'], end=DAY + 3 * 86400)
+        later = {**train('a', 'LPV 2400', ['Ljubljana', 'Kranj', 'Jesenice'], start=T0 + 2 * 86400 + 3600), 'serviceDay': DAY + 2 * 86400}
+        plans = {}
+        for t in (train('a', 'LPV 2400', ['Ljubljana', 'Kranj', 'Jesenice']), later):
+            [bus] = synthesize([t], [closed])
+            plans[datetime.fromtimestamp(t['serviceDay'] + 43200, closures.LOCAL).date()] = (plan_of([t], [bus]), bus)
+        shape = {'coords': [[14.5, 46.05], [14.44, 46.11]], 'cum': [0, 2], 'distances': [0, 1, 2], 'complete': True}
+        with mock.patch.object(scheduled, 'day_plan', side_effect=lambda day, *a, **k: plans[day][0] if day in plans else None),                 mock.patch.object(scheduled, '_road_shape', return_value=shape),                 mock.patch('prestop_api.variants.table', return_value={}),                 mock.patch('prestop_statistics.aggregation.final_observed_delays', return_value={}):
+            for day in (date(2026, 10, 10), date(2026, 10, 12)):
+                response = self.client.get(f'/api/v1/lines/IJPP:sub-r-r-a?date={day.isoformat()}')
+                self.assertEqual(response.status_code, 200)
+                data = response.json()['data']
+                self.assertEqual(data['serviceDate'], day.isoformat())
+                [pattern] = data['patterns']
+                self.assertEqual([d['tripId'] for d in pattern['departures']], [plans[day][1]['id']])
+                self.assertTrue(pattern['departures'][0]['departure'].startswith(day.isoformat()))
 
     def test_ids(self):
         self.assertEqual(closures.synthetic_day('IJPP:sub-20261012-453228-0'), date(2026, 10, 12))
