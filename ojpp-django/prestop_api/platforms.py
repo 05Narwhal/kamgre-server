@@ -49,6 +49,7 @@ LEARN_EVERY = 180   # s between polls of a departure board
 # A departure the board has not shown yet gets its destination's usual bay if this share of that
 # destination's departures used it (measured 2026-10-12: the usual bay was right for 86%).
 USUAL_SHARE = 0.5
+DEPARTURE_WINDOW = 10  # min: a departure seen this close to the time is the same departure (A5)
 PERON = re.compile(r'peron\w*\s+((?:\d+\s*(?:,|in|-|–)?\s*)+)', re.IGNORECASE)
 STOPWORDS = {'ap', 'avtobusna', 'postaja', 'zp', 'center', 'bs', 'k', 'pri', 'na', 'v', 'ob'}
 
@@ -173,9 +174,11 @@ def station_seen(station_id: str) -> Optional[list]:
 
 
 def usual_platform(station_id: str, departure: float, destination: str, seen: Optional[Iterable] = None, share: float = USUAL_SHARE) -> Optional[str]:
-    """The bay departures to `destination` usually leave from, at any time of day (the board only
-    reaches ~50 minutes ahead; a line keeps its bay): the most frequent one, if at least `share` of
-    that destination's departures used it; of equally frequent bays, the one seen nearest that time."""
+    """The bay this departure usually leaves from: the one its own departure (to `destination`, within
+    DEPARTURE_WINDOW minutes of that time: timetables shift a little) was seen at, else the one departures to
+    `destination` usually leave from at any time of day (the board only reaches ~50 minutes ahead; a line keeps its
+    bay): the most frequent one, if at least `share` of those departures used it; of equally frequent bays, the one
+    seen nearest that time."""
     if seen is None:
         seen = station_seen(station_id)
         if seen is None:
@@ -188,12 +191,20 @@ def usual_platform(station_id: str, departure: float, destination: str, seen: Op
         return None
     minute = lambda hhmm: int(hhmm[:2]) * 60 + int(hhmm[3:5]) if re.fullmatch(r'\d\d:\d\d', hhmm) else 0
     at = minute(datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M'))
-    counts: dict[str, list[int]] = {}
+    gaps = []
     for s in matches:
         gap = abs(minute(s.key.split('|')[1]) - at)
-        counts.setdefault(s.platform, []).append(min(gap, 1440 - gap))
-    best = max(counts, key=lambda p: (len(counts[p]), -min(counts[p])))
-    return best if len(counts[best]) >= share * len(matches) else None
+        gaps.append((s, min(gap, 1440 - gap)))
+    for pool in ([(s, g) for s, g in gaps if g <= DEPARTURE_WINDOW], gaps):  # this departure's, then the destination's
+        counts: dict[str, list[int]] = {}
+        for s, gap in pool:
+            counts.setdefault(s.platform, []).append(gap)
+        if not counts:
+            continue
+        best = max(counts, key=lambda p: (len(counts[p]), -min(counts[p])))
+        if len(counts[best]) >= share * len(pool):
+            return best
+    return None
 
 
 def platform_for(station_id: str, departure: float, destination: str, seen: Optional[Iterable] = None) -> tuple[Optional[str], bool]:

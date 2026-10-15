@@ -312,6 +312,8 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
             other_end = ends[0 if kind == 'arrival' else 1] or other_end
         route_id = route.get('gtfsId') or f'{stop_id.split(":")[0]}:unknown'
         trip_id = trip.get('gtfsId') or f'{route_id}-{scheduled}'
+        # When the trip leaves its first stop ("HH:MM"): what its departure usually does is learned under it (A5).
+        start = (trip.get('departureStoptime') or {}).get('scheduledDeparture')
         out.append({
             'id': f'{trip_id}@{day}/{st.get("stopPosition", 0)}',
             'stopId': stop_id, 'tripId': trip_id, 'routeId': route_id,
@@ -325,6 +327,7 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
             'canceled': canceled,
             'platform': (st.get('stop') or {}).get('platformCode') or None,
             'alertIds': [a['id'] for a in alerts if (stop_id in a['stopIds'] or route_id in a['routeIds']) and alert_active(a, scheduled)],
+            **({'tripStart': f'{start // 3600 % 24:02d}:{start % 3600 // 60:02d}'} if isinstance(start, int) else {}),
         })
         if is_replacement(route):
             out[-1]['replacement'] = True

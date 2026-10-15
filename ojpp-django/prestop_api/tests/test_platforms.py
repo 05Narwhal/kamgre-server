@@ -61,8 +61,16 @@ class UsualBayTests(SimpleTestCase):
 
     def test_the_bay_a_destination_mostly_uses(self):
         seen = self.seen(('07:00', 'Bled', '8'), ('09:00', 'Bled', '8'), ('13:00', 'Bled', '26'), ('13:00', 'Koper', '12'))
-        self.assertEqual(platforms.usual_platform(AP, AT_13, 'Bled AP', seen), '8')
-        self.assertIsNone(platforms.usual_platform(AP, AT_13, 'Maribor', seen))
+        at_1330 = AT_13 + 1800  # no Bled departure seen within DEPARTURE_WINDOW of 13:30
+        self.assertEqual(platforms.usual_platform(AP, at_1330, 'Bled AP', seen), '8')
+        self.assertIsNone(platforms.usual_platform(AP, at_1330, 'Maribor', seen))
+
+    def test_the_bay_its_own_departure_used_comes_first(self):
+        """A5: the 13:05 to Bled (13:00 last timetable, seen at bay 26) usually leaves from 26, not the 8 most Bled
+        buses use; a departure with none of its own within the window gets the destination's."""
+        seen = self.seen(('07:00', 'Bled', '8'), ('09:00', 'Bled', '8'), ('11:00', 'Bled', '8'), ('13:00', 'Bled', '26'))
+        self.assertEqual(platforms.usual_platform(AP, AT_13 + 300, 'Bled', seen), '26')
+        self.assertEqual(platforms.usual_platform(AP, AT_13 + 3600, 'Bled', seen), '8')
 
     def test_a_destinations_own_departures_count_before_namesakes(self):
         seen = self.seen(('07:00', 'Bled', '8'), ('08:00', 'Bled', '8'), ('09:00', 'Bled', '26'), ('10:00', 'Bled shuttle', '30'), ('11:00', 'Bled shuttle', '30'))

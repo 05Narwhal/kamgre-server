@@ -48,6 +48,14 @@ def stoptime(trip, first, last, dep=36000, rt=None, state='SCHEDULED'):
 
 
 class BoardTests(SimpleTestCase):
+    def test_each_row_says_when_its_trip_starts(self):
+        """A5: a row's "usually" is its own departure's, learned under the trip's start (aggregation.departure_delays)."""
+        morning, evening = stoptime('IJPP:m', 'IJPP:x', 'IJPP:y'), stoptime('IJPP:e', 'IJPP:x', 'IJPP:y', dep=66000)
+        morning['trip']['departureStoptime']['scheduledDeparture'] = 7 * 3600 + 600
+        evening['trip']['departureStoptime']['scheduledDeparture'] = 18 * 3600 + 600
+        rows = mapping.build_board('IJPP:s', [morning, evening, stoptime('IJPP:n', 'IJPP:x', 'IJPP:y')], 'departure', [])
+        self.assertEqual([r.get('tripStart') for r in rows], ['07:10', '18:10', None])
+
     def test_departures_skip_terminating_trips_and_arrivals_skip_originating(self):
         here = 'IJPP:here'
         rows = [stoptime('IJPP:a', 'IJPP:x', 'IJPP:y'), stoptime('IJPP:ends', 'IJPP:x', here), stoptime('IJPP:starts', here, 'IJPP:y')]
