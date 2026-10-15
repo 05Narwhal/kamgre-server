@@ -7,11 +7,15 @@ SERVICES=(prestop-web prestop-collector prestop-push prestop-ingest caddy cloudf
 IFACE=$(ip route show default 2>/dev/null | awk '{print $5; exit}')
 declare -A CPU_PREV
 NET_PREV=""
+STAT_PREV=""
 T_PREV=0
 
 cpu_ns() { systemctl show -p CPUUsageNSec --value "$1" 2>/dev/null | sed 's/[^0-9]//g'; }
 mem_mb() { local m; m=$(systemctl show -p MemoryCurrent --value "$1" 2>/dev/null); [[ $m =~ ^[0-9]+$ ]] && echo $((m / 1048576)) || echo -; }
 net_bytes() { awk -v i="$IFACE:" '$1 == i {print $2, $10}' /proc/net/dev; }
+# busy and total jiffies of all cores (first line of /proc/stat; guest time is already inside user)
+cpu_jiffies() { local _ us ni sy id io irq si st; read -r _ us ni sy id io irq si st _ </proc/stat
+  echo $((us + ni + sy + irq + si + st)) $((us + ni + sy + id + io + irq + si + st)); }
 human() { awk -v b="$1" 'BEGIN { s="B/s KB/s MB/s GB/s"; split(s, u, " "); n=1; while (b >= 1024 && n < 4) { b /= 1024; n++ } printf "%.1f %s", b, u[n] }'; }
 
 B=$'\033[1m'; D=$'\033[2m'; G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; N=$'\033[0m'
@@ -84,7 +88,7 @@ FRAME=$(mktemp); tput civis; tput rmam
 trap 'tput smam; tput cnorm; rm -f "$FRAME"; echo; exit' INT TERM EXIT
 clear
 draw() {
-    printf '%sKamGre server%s   %s   load %s   %sq quits · %ss%s\n\n' "$B" "$N" "$(date '+%H:%M:%S')" "$(cut -d' ' -f1-3 /proc/loadavg)" "$D" "$INTERVAL" "$N"
+    printf '%sKamGre server%s   %s   %sq quits · %ss%s\n\n' "$B" "$N" "$(date '+%H:%M:%S')" "$D" "$INTERVAL" "$N"
     printf '%s  %-12s %6s %8s%s\n' "$D" SERVICE CPU MEM "$N"
     for s in "${SERVICES[@]}"; do
       u=$s; [[ $s == postgresql && -n $PG ]] && u=$PG
@@ -95,6 +99,13 @@ draw() {
       printf '%s %-12s %6s %8s\n' "$(dot "$(systemctl is-active "$u" 2>/dev/null)")" "${s#prestop-}" "$pct" "$m"
     done
     echo
+    # CPU: busy share of all cores since the last frame, plus the 1/5/15 min load average
+    stat=$(cpu_jiffies); load="load $(cut -d' ' -f1-3 /proc/loadavg) · $(nproc) cores"
+    if [[ -n $STAT_PREV ]]; then
+      read -r b0 t0 <<<"$STAT_PREV"; read -r b1 t1 <<<"$stat"; cpct=0; ((t1 > t0)) && cpct=$(( (b1 - b0) * 100 / (t1 - t0) ))
+      printf 'CPU      %s  %3d %% busy  %s%s%s\n' "$(bar "$cpct")" "$cpct" "$D" "$load" "$N"
+    else printf 'CPU      %smeasuring…%s  %s\n' "$D" "$N" "$load"; fi
+    STAT_PREV=$stat
     read -r _ total _ _ _ _ avail _ < <(free -m | awk 'NR==2')
     used=$((total - avail))
     printf 'Memory   %s  %4.1f / %.1f GB\n' "$(bar $((used * 100 / total)))" "$(awk "BEGIN{print $used/1024}")" "$(awk "BEGIN{print $total/1024}")"
