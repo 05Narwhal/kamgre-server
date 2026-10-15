@@ -129,6 +129,7 @@ class Cached(Generic[T]):
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _flag: threading.Lock = field(default_factory=threading.Lock)
     _retry_at: float = 0
+    _last_error: str = ''
     _refreshing: bool = False
 
     def get(self) -> Snapshot[T]:
@@ -160,8 +161,12 @@ class Cached(Generic[T]):
             snap = self._snap
             if snap and snap.age < self.ttl and not force:
                 return snap
-            if snap and time.time() < self._retry_at:
-                return snap
+            if time.time() < self._retry_at:
+                # Backing off after a failure: the last value, or with none the same failure (no new attempt), so a
+                # dead upstream is not asked by every request (Arriva unreachable from the server: ~600 tries an hour).
+                if snap:
+                    return snap
+                raise UpstreamError(self._last_error or 'retrying later')
             try:
                 self._snap = Snapshot(self.load(), time.time())
                 return self._snap
@@ -169,6 +174,7 @@ class Cached(Generic[T]):
                 logger.warning('Refresh failed (%s): %r', getattr(self.load, '__name__', 'source'), e)
                 # Back off before retrying so a dead upstream is not hammered by every request.
                 self._retry_at = time.time() + min(60.0, max(5.0, self.ttl))
+                self._last_error = str(e)
                 if snap and snap.age < self.max_stale:
                     snap.error = str(e)
                     return snap

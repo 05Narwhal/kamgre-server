@@ -76,3 +76,23 @@ class HandKeptFeedTests(SimpleTestCase):
             for _ in range(50):
                 self.assertIn('Sevnica', supplement.feeds())
             self.assertEqual(folder.iterdir.call_count, 1)
+
+
+class BackoffTests(SimpleTestCase):
+    def test_a_source_that_never_loaded_is_not_asked_by_every_request(self):
+        """A6: Arriva unreachable from the server was tried on every request (~600 five-second connects an hour)."""
+        from prestop_api.upstream import Cached, UpstreamError
+        tries = []
+
+        def load():
+            tries.append(1)
+            raise UpstreamError('ConnectTimeout')
+        cache = Cached(load, ttl=900, max_stale=3600)
+        for _ in range(5):
+            with self.assertRaises(UpstreamError):
+                cache.get()
+        self.assertEqual(len(tries), 1)
+        cache._retry_at = 0  # the back-off is over: asked again
+        with self.assertRaises(UpstreamError):
+            cache.get()
+        self.assertEqual(len(tries), 2)
