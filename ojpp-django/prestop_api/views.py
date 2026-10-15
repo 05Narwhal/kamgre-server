@@ -650,7 +650,36 @@ def line_detail(request, route_id):
     line = _with_final_delays(line)
     # Contract 4: the line's group, what sets it apart, and the other variants of the group.
     grouped = {**variants.of(line['id']), 'variants': variants.siblings(line['id'])}
-    return envelope({**line, **grouped, 'patterns': _dense(line['patterns'])}, 'scheduled', used=['otp:timetables'])
+    patterns = _dense(line['patterns'])
+    if line.get('mode') == 'rail':
+        patterns = _with_sibling_trains(line['id'], patterns, grouped['variants'], _day_param(request))
+    return envelope({**line, **grouped, 'patterns': patterns}, 'scheduled', used=['otp:timetables'])
+
+
+SIBLING_TRAINS = 40
+
+
+def _with_sibling_trains(route_id: str, patterns: list[dict], siblings: list[dict], day) -> list[dict]:
+    """A train's line lists every train of its group (same ends, same direction) by departure, not by the way each
+    takes: a sibling's departures join the pattern ending at the same stop, marked with their own `routeId`."""
+    others = [s['routeId'] for s in siblings if s['routeId'] != route_id][:SIBLING_TRAINS]
+    if not others or not patterns:
+        return patterns
+    patterns = [{**p, 'departures': [{**d, 'routeId': route_id} for d in p.get('departures') or []]} for p in patterns]
+    by_end = {p['stops'][-1]['name']: p for p in patterns if p.get('stops')}
+    for rid in others:
+        try:
+            other = trips.load_line(rid, day)
+        except Exception as e:  # The line is still useful with its own trains only.
+            logger.warning('Sibling train %s failed: %r', rid, e)
+            continue
+        for p in (other or {}).get('patterns') or []:
+            target = by_end.get(p['stops'][-1]['name']) if p.get('stops') else None
+            if target is not None:
+                target['departures'] += [{**d, 'routeId': rid} for d in p.get('departures') or []]
+    for p in patterns:
+        p['departures'].sort(key=lambda d: d['departure'])
+    return patterns
 
 
 def _with_final_delays(line: dict) -> dict:

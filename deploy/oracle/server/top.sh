@@ -78,12 +78,12 @@ learning() {
     }' <<<"$rows"
 }
 
-tput civis; trap 'tput cnorm; echo; exit' INT TERM EXIT
+# Long lines are cut by the terminal (auto-wrap off) and the frame is cut to the window height, so nothing ever scrolls;
+# every line clears its own leftovers. draw runs in this shell (not $(...)), so the CPU/network samples carry over.
+FRAME=$(mktemp); tput civis; tput rmam
+trap 'tput smam; tput cnorm; rm -f "$FRAME"; echo; exit' INT TERM EXIT
 clear
-while true; do
-  now=$(date +%s%N)
-  if (( ${now:0:10} - LEARN_T >= 60 )); then LEARN_OUT=$(learning); LEARN_T=${now:0:10}; fi
-  out=$(
+draw() {
     printf '%sKamGre server%s   %s   load %s   %sq quits · %ss%s\n\n' "$B" "$N" "$(date '+%H:%M:%S')" "$(cut -d' ' -f1-3 /proc/loadavg)" "$D" "$INTERVAL" "$N"
     printf '%s  %-12s %6s %8s%s\n' "$D" SERVICE CPU MEM "$N"
     for s in "${SERVICES[@]}"; do
@@ -119,14 +119,19 @@ while true; do
         "$(redis-cli -u "$REDIS_URL" --no-auth-warning PFCOUNT "${k1[@]}")" "$(redis-cli -u "$REDIS_URL" --no-auth-warning PFCOUNT "${k5[@]}")" "$N"
     else printf 'Users    %sunavailable%s\n' "$R" "$N"; fi
     health=$(curl -fsS -o /tmp/prestop-top-health -w '%{time_total}' --max-time 5 http://127.0.0.1:8066/api/v1/health 2>/dev/null) \
-      && printf 'Health   %s ms  %s\n' "$(awk -v t="$health" 'BEGIN { printf "%d", t * 1000 }')" "$(jq -r '"api \(.api) · db \(.database) · collector \(.collector.status // "?")" + (if .collector.updatedAt then " (\(now - (.collector.updatedAt | sub("\.[0-9]+"; "") | fromdateiso8601) | floor)s ago)" else "" end)' /tmp/prestop-top-health 2>/dev/null)" \
+      && printf 'Health   %s ms  %s\n' "$(awk -v t="$health" 'BEGIN { printf "%d", t * 1000 }')" "$(jq -r '"api \(.api) · db \(.database) · collector \(.collector.status // "?")" + (if .collector.updatedAt then " (\(now - (.collector.updatedAt | sub("\\.[0-9]+"; "") | fromdateiso8601) | floor)s ago)" else "" end)' /tmp/prestop-top-health 2>&1 | head -1)" \
       || printf 'Health   %sunavailable%s\n' "$R" "$N"
     if [ -f /run/prestop-floor/status.json ]; then
       jq -r '"Floor    CPU \(.cpu_total)%  '"$D"'workload \(.cpu_workload)% · filler \(.cpu_filler_duty)% · mem \(.mem_used)%'"$N"'"' /run/prestop-floor/status.json
     fi
     echo; printf '%s\n' "$LEARN_OUT"
-  )
+}
+while true; do
+  now=$(date +%s%N)
+  if (( ${now:0:10} - LEARN_T >= 60 )); then LEARN_OUT=$(learning); LEARN_T=${now:0:10}; fi
+  draw >"$FRAME"
   T_PREV=$now
-  tput cup 0 0; printf '%s' "$out"; tput ed
+  read -r rows _ < <(stty size </dev/tty 2>/dev/null); rows=${rows:-40}
+  tput cup 0 0; head -n "$((rows - 1))" "$FRAME" | sed $'s/$/\033[K/'; tput ed
   read -rsn1 -t "$INTERVAL" key && [[ $key == q ]] && break
 done

@@ -2,10 +2,11 @@
 
 IJPP publishes each way a bus can take as its own route: Tržič–Ljubljana via Kovor and via Duplje, Kropa–Kranj
 via Strahinj and via Podnart. Routes form a group (`groupId`) when their operator and mode match and their
-longest patterns run between the same two places (end stop names normalised, either direction). Within a group,
-`via` names the place on a variant the fewest others pass ("Kovor", "Duplje"), then, when some share it, a place
-that sets it apart from them ("Kovor, Naklo"); ties go to the place nearest the middle of its way, where variants
-part. A route alone in its group, or one with nothing of its own, has `via: null`.
+longest patterns run from the same place to the same place (end stop names normalised, in that direction: Ljubljana–
+Jesenice and Jesenice–Ljubljana stay apart). Within a group, `via` names the stop on a variant the fewest others pass
+by its whole name ("Kovor C", "Duplje/Trž."), then, when some share it, a stop that sets it apart from them ("Kovor C,
+Naklo"); ties go to the stop nearest the middle of its way, where variants part. A route alone in its group, or one
+with nothing of its own, has `via: null`.
 """
 import hashlib
 import threading
@@ -22,12 +23,6 @@ def _place(name: str) -> str:
     """The place a stop is in or at, by its first word ("Kovor C" -> "Kovor", "Duplje/Trž." -> "Duplje")."""
     words = (name or '').replace(',', ' ').split()
     return words[0].split('/')[0].rstrip('.') if words else ''
-
-
-def _in_town(name: str) -> str:
-    """Where in its town a stop is ("Ljubljana Šentvid" -> "Šentvid"); the whole name for a bare code ("Ruše GD")."""
-    place = _place(name.split(None, 1)[1])
-    return name if len(place) <= 3 or place.isupper() else place
 
 
 def build(routes: dict, patterns: list[dict], names: dict[str, str], operator_of=lambda r: r.get('agencyId')) -> dict[str, dict]:
@@ -47,7 +42,7 @@ def build(routes: dict, patterns: list[dict], names: dict[str, str], operator_of
     for rid, r in routes.items():
         stops = longest.get(rid)
         if stops:
-            ends = sorted(stopgroups.normalize(names.get(s, s)) for s in (stops[0], stops[-1]))
+            ends = [stopgroups.normalize(names.get(s, s)) for s in (stops[0], stops[-1])]
             key = f'{operator_of(r) or rid.split(":", 1)[0]}|{r.get("mode")}|{ends[0]}|{ends[1]}'
         else:
             key = f'route|{rid}'
@@ -57,9 +52,9 @@ def build(routes: dict, patterns: list[dict], names: dict[str, str], operator_of
     for members in groups.values():
         if len(members) < 2:
             continue
-        # A town every variant passes names the stops in it ("Ljubljana Šentvid" is at Šentvid).
+        # Towns every variant passes: their stops name a way last (a village names it better than a city street).
         towns = frozenset.intersection(*(frozenset(_place(names.get(x, x)) for x in served_ids[rid]) for rid in members))
-        place_of = lambda name: _in_town(name) if _place(name) in towns and len(name.split()) > 1 else _place(name)
+        place_of = lambda name: (name or '').strip()
         places = {rid: {place_of(names.get(x, x)) for x in served_ids[rid]} for rid in members}
         # Variants by the places they serve: a route listed once per direction is one variant.
         kinds = {frozenset(places[rid]) for rid in members}

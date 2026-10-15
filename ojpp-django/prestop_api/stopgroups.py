@@ -44,6 +44,7 @@ SLIP_SHARE = 0.2
 STOP_WORDS = re.compile(r'\b(avtobusna postaja|avtobusno postajalisce|zelezniska postaja|avt\.? ?post\.?|zel\.? ?post\.?|zel\.? ?p\.|ap|zp)(?=\W|$)')
 # A direction added to the name: "Bled / smer Lesce", "Bled (smer Lesce)".
 DIRECTION_SUFFIX = re.compile(r'\s*[/(,-]?\s*\bsmer\b.*$')
+TOWN_SUFFIX = re.compile(r'(?<=\w)/[^\s/]+')
 _CELL = (MERGE_METERS / 110_574, MERGE_METERS / 77_000)  # degrees; 77 km per degree of longitude is Slovenia's minimum
 
 
@@ -57,8 +58,9 @@ def normalize(name: str) -> str:
 
 
 def words(name: str) -> list[str]:
-    """The place words of a stop name: folded, without stop-kind words, a direction suffix and punctuation."""
-    return re.findall(r'[a-z0-9]+', STOP_WORDS.sub(' ', DIRECTION_SUFFIX.sub('', fold(name or ''))))
+    """The place words of a stop name: folded, without stop-kind words, a direction suffix, the town after a slash
+    ("Ajdovščina/Lj." is Ajdovščina in Ljubljana) and punctuation."""
+    return re.findall(r'[a-z0-9]+', STOP_WORDS.sub(' ', TOWN_SUFFIX.sub(' ', DIRECTION_SUFFIX.sub('', fold(name or '')))))
 
 
 def _word_alike(a: str, b: str) -> bool:
@@ -129,7 +131,7 @@ def alike(a: Optional[list], b: Optional[list]) -> bool:
 
 def _fullest(names: list[str]) -> str:
     """The most complete of a group's names: most place words, then most letters; the first on a tie."""
-    return max(names, key=lambda n: (len(words(n)), len(''.join(words(n)))))
+    return max(names, key=lambda n: (len(words(n)), len(''.join(words(n))), '/' not in n))
 
 
 def _feed(stop: dict) -> str:
@@ -209,7 +211,8 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
             way = same_way(ways.get(a['id']), ways.get(b['id']))
             if alike(ways.get(a['id']), ways.get(b['id'])):
                 join(i, j)
-            elif _feed(a) != _feed(b) and namesakes and ((way and d <= NEAR_METERS) or (way is None and d <= SAME_SPOT_METERS)):
+            # Alike names from two feeds ("Slovenija avto", "Ljubljana Slovenija avto") on the same side of the road.
+            elif _feed(a) != _feed(b) and ((way and d <= NEAR_METERS) or (way is None and d <= SAME_SPOT_METERS)):
                 join(i, j)
     at = {s['id']: i for i, s in enumerate(stops)}
     for member, target in forced.items():

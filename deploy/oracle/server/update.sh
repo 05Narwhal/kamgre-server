@@ -114,14 +114,25 @@ bash "$DEPLOY/server/keep-stats.sh" check
 step "Services"
 systemctl enable -q prestop-web prestop-collector prestop-push prestop-ingest prestop-floor caddy redis-server postgresql
 systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer prestop-szpdf.timer
-systemctl restart prestop-web prestop-collector prestop-push prestop-ingest
+# changed <name> <unit> [files]: true when the unit or the files differ from the last deploy (or the unit is down).
+changed() {
+  local f="$STATE/.deploy-sum-$1" s; s=$({ systemctl cat "$2"; cat "${@:3}"; } 2>/dev/null | sha256sum)
+  [ "$(cat "$f" 2>/dev/null)" != "$s" ] || ! systemctl is-active -q "$2" || return 1
+  echo "$s" >"$f"
+}
+# Public traffic keeps flowing during a deploy: gunicorn swaps its workers on HUP (new code, no dropped requests),
+# Caddy reloads its config in place, and the tunnel only restarts when its token or unit changed. A restart is
+# still used when the unit or prestop.env changed, since systemd hands those over only at start.
+if changed web prestop-web /etc/prestop/prestop.env; then systemctl restart prestop-web
+else systemctl kill -s HUP --kill-whom=main prestop-web; fi
+systemctl restart prestop-collector prestop-push prestop-ingest
 systemctl restart prestop-floor
 # Keep public traffic off while the egress guard has tripped this month.
-[ -f "$STATE/egress-tripped" ] || systemctl restart caddy
+[ -f "$STATE/egress-tripped" ] || systemctl reload-or-restart caddy
 if [ -s /etc/cloudflared/token ]; then
   systemctl enable -q cloudflared
   # A tunnel problem (wrong token, deleted tunnel) must not stop the rest of the deploy.
-  [ -f "$STATE/egress-tripped" ] || systemctl restart cloudflared ||
+  [ -f "$STATE/egress-tripped" ] || ! changed tunnel cloudflared /etc/cloudflared/token || systemctl restart cloudflared ||
     echo "Tunnel did not connect: journalctl -u cloudflared -n 20 (\"Tunnel not found\" = token of a deleted tunnel)"
 else
   echo "No tunnel token yet: set CLOUDFLARE_TUNNEL_TOKEN in config.local and deploy again."

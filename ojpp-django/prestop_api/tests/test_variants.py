@@ -1,4 +1,4 @@
-"""Route variants (contract 4): same operator and ends -> one group; `via` tells the variants apart."""
+"""Route variants (contract 4): same operator, ends and direction -> one group; `via` tells the variants apart."""
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -29,14 +29,17 @@ def network():
 
 
 class VariantTests(SimpleTestCase):
-    def test_trzic_ljubljana_variants_are_one_group_told_apart_by_via(self):
+    def test_trzic_ljubljana_variants_are_one_group_per_direction_told_apart_by_via(self):
         out = variants.build(*network())
-        group = {out[r]['groupId'] for r in ('IJPP:65303', 'IJPP:66508', 'IJPP:66536', 'IJPP:67010')}
-        self.assertEqual(len(group), 1)
+        to_ljubljana = {out[r]['groupId'] for r in ('IJPP:65303', 'IJPP:67010')}
+        to_trzic = {out[r]['groupId'] for r in ('IJPP:66508', 'IJPP:66536')}
+        self.assertEqual(len(to_ljubljana), 1)
+        self.assertEqual(len(to_trzic), 1)
+        self.assertNotEqual(to_ljubljana, to_trzic)  # opposite directions never merge
         self.assertEqual(out['IJPP:66536']['via'], 'Žeje')
         self.assertEqual(out['IJPP:67010']['via'], 'Žeje')
         self.assertEqual(out['IJPP:65303']['via'], 'Zvirče')
-        self.assertEqual(out['IJPP:66508']['via'], 'Naklo, Zvirče')
+        self.assertEqual(out['IJPP:66508']['via'], 'Zvirče')
         self.assertTrue(out['IJPP:66536']['groupId'].startswith('g:'))
 
     def test_another_operator_or_other_ends_are_another_group_without_via(self):
@@ -51,8 +54,8 @@ class VariantTests(SimpleTestCase):
         with mock.patch.object(variants, 'table', return_value=table), \
                 mock.patch('prestop_api.sources.routes.peek', return_value=mock.Mock(value={r: {**v, 'shortName': r[-2:]} for r, v in routes.items()})):
             rows = variants.siblings('IJPP:66536')
-            self.assertEqual([r['routeId'] for r in rows], ['IJPP:65303', 'IJPP:66508', 'IJPP:66536', 'IJPP:67010'])
-            self.assertEqual(rows[2], {'routeId': 'IJPP:66536', 'via': 'Žeje', 'name': '36'})
+            self.assertEqual([r['routeId'] for r in rows], ['IJPP:66508', 'IJPP:66536'])
+            self.assertEqual(rows[1], {'routeId': 'IJPP:66536', 'via': 'Žeje', 'name': '36'})
             self.assertEqual(variants.siblings('IJPP:unknown'), [])
             self.assertIsNone(variants.of('IJPP:unknown')['via'])
 
