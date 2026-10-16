@@ -527,6 +527,9 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
                 numbers = _numbers_on(col, day, trains)
                 if why or not sztimetables.runs_on(data, col, when) or (not col.get('additional') and unusable & set(numbers)):
                     continue
+                calls = sztimetables.calls_on(data, data['tables'][ti], col, calls, when)
+                if not calls:
+                    continue
                 bus = _timetable_bus(data, ti, ci, col, calls, day, numbers, trains, linked, points, bus_stops, memo, taken)
                 out['buses'].append(bus)
                 if not bus['trainTripId'] and not bus['additional'] and not col.get('footnotes'):

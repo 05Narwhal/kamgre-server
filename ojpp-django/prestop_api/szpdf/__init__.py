@@ -11,7 +11,7 @@ import pdfplumber
 from . import layout, ocr, tables, texts
 
 SCHEMA = 1
-PARSER = 1  # bump when parsing changes: every cached PDF is parsed again
+PARSER = 2 # bump when parsing changes: every cached PDF is parsed again
 
 
 def parse(path) -> dict:
@@ -76,7 +76,9 @@ def assemble(grids, lines, problems) -> dict:
 
 def _footnote(text: str, start: date) -> dict:
     rule, dates = texts.footnote_rule(texts.slovene(text), start)
-    return {'text': texts.slovene(text), 'rule': rule, **({'dates': dates} if dates else {})}
+    section = texts.footnote_section(texts.slovene(text)) if rule == 'train_runs_on' else None
+    return {'text': texts.slovene(text), 'rule': rule, **({'dates': dates} if dates else {}),
+            **({'section': section} if section else {})}
 
 
 def _heading(grid, directions) -> str:

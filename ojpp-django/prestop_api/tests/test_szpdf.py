@@ -279,6 +279,12 @@ class TextTests(SimpleTestCase):
         for text, (rule, dates) in cases.items():
             self.assertEqual(texts.footnote_rule(text, year), (rule, dates), text)
 
+    def test_a_day_the_train_runs_on_part_of_the_line(self):
+        text = 'dne 19. 10. se nadomestni prevoz na relaciji Ljubljana - Lesce Bled NE opravlja; VOZI VLAK!'
+        self.assertEqual(texts.footnote_rule(text, date(2026, 10, 19)), ('train_runs_on', ['2026-10-19']))
+        self.assertEqual(texts.footnote_section(text), ['ljubljana', 'lesce bled'])
+        self.assertIsNone(texts.footnote_section('dne 19. 10. se nadomestni prevoz NE opravlja; VOZI VLAK!'))
+
 
 # Every column of every golden, as checked against the rendered page on 2026-10-14 (395 columns; 200–300 dpi crops,
 # 400 dpi for the pasted image in 11056 and 600 dpi where a label looked overprinted).

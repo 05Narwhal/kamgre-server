@@ -120,6 +120,20 @@ class DayTests(SimpleTestCase):
         self.assertTrue(sztimetables.runs_on(gorenjska, column(gorenjska, '2400'), date(2026, 10, 20)))
         self.assertTrue(sztimetables.runs_on(gorenjska, column(gorenjska, '316'), date(2026, 10, 19)))
 
+    def test_a_day_the_train_runs_on_part_of_the_line(self):
+        # SŽ's later wording: "dne 19. 10. se nadomestni prevoz na relaciji Ljubljana - Lesce Bled NE opravlja".
+        data = fixture(GORENJSKA)
+        data['footnotes']['98'] = {**data['footnotes']['98'], 'section': ['ljubljana', 'lesce bled']}
+        mon, tue = date(2026, 10, 19), date(2026, 10, 20)
+        for ti, label, first, last in ((0, '2400', 'Lesce Bled', 'JESENICE'), (1, '2401', 'JESENICE', 'Lesce Bled')):
+            col = next(c for c in data['tables'][ti]['columns'] if c['label'] == label)
+            self.assertTrue(sztimetables.runs_on(data, col, mon))
+            cut = sztimetables.calls_on(data, data['tables'][ti], col, col['calls'], mon)
+            self.assertEqual((cut[0]['station'], cut[-1]['station']), (first, last))
+            self.assertNotIn('arr', cut[0])
+            self.assertNotIn('dep', cut[-1])
+            self.assertEqual(sztimetables.calls_on(data, data['tables'][ti], col, col['calls'], tue), col['calls'])
+
     def test_a_list_of_days(self):
         data = {**fixture(LESCE), 'valid': {'from': None, 'to': None, 'dates': ['2026-10-10', '2026-10-17']}}
         self.assertTrue(sztimetables.runs_on(data, column(data, '318/1'), date(2026, 10, 17)))

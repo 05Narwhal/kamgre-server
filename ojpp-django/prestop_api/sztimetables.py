@@ -159,7 +159,8 @@ RULES = {
     'sundays': lambda day, note: day.weekday() == 6,
     'info': lambda day, note: True,  # "1 - Prevoz se opravi preko mejnega prehoda Sočerga": says how, not when
     # "98 - dne 19.10. se nadomestni prevoz NE opravlja; VOZI VLAK!": that day the train runs instead.
-    'train_runs_on': lambda day, note: day.isoformat() not in (note.get('dates') or []),
+    # "… se nadomestni prevoz na relaciji Ljubljana - Lesce Bled NE opravlja": the bus runs, cut short (calls_on).
+    'train_runs_on': lambda day, note: bool(note.get('section')) or day.isoformat() not in (note.get('dates') or []),
 }
 WORKDAYS_ONLY = re.compile(r'^\*\s*vozi le ob delovnikih')  # the legend of a starred extra bus ("BUS*")
 
@@ -213,6 +214,32 @@ def runs_on(data: dict, col: dict, day: date) -> bool:
     if col.get('mark') == '*' and '*' not in (col.get('footnotes') or []) and _weekend(day):
         return False
     return True
+
+
+def calls_on(data: dict, table: dict, col: dict, calls: list[dict], day: date) -> list[dict]:
+    """The calls the bus makes on `day`: on the days of a footnote "na relaciji A - B NE opravlja; VOZI VLAK!" it
+    leaves out the stations from A up to (not including) B, in the order the table prints them, where the train
+    runs instead; B stays as the bus's end. Fewer than two calls left: the bus does not run that day ([])."""
+    order = [words(s) for s in table.get('stations') or []]
+    for key in col.get('footnotes') or []:
+        note = (data.get('footnotes') or {}).get(str(key)) or {}
+        section = note.get('section')
+        if note.get('rule') != 'train_runs_on' or not section or day.isoformat() not in (note.get('dates') or []):
+            continue
+        a, b = (words(s) for s in section)
+        if a not in order or b not in order:
+            return []  # cannot tell where the cut is: trust "VOZI VLAK" for the whole bus
+        i, j = order.index(a), order.index(b)
+        gone = set(order[i:j] if i < j else order[j + 1:i + 1])
+        kept = [c for c in calls if words(c.get('station')) not in gone]
+        if len(kept) < 2:
+            return []
+        calls = [dict(c) for c in kept]
+        calls[0].setdefault('dep', calls[0].get('arr'))
+        calls[0].pop('arr', None)
+        calls[-1].setdefault('arr', calls[-1].get('dep'))
+        calls[-1].pop('dep', None)
+    return calls
 
 
 def numbers(col: dict) -> list[str]:
