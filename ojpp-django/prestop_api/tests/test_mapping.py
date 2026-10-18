@@ -280,6 +280,26 @@ class JourneyTests(SimpleTestCase):
         [j] = journeys.build_journeys({'planConnection': {'edges': [{'node': {'walkTime': 0, 'legs': [raw]}}]}}, self.request(), [])
         self.assertIsNone(j['legs'][0]['headsign'])
 
+    def test_price_fields_are_accepted_and_used_only_with_show_prices(self):
+        profile = {'cards': ['urbana-monthly', 'urbana-monthly'], 'bikeMemberships': ['jcdecaux_ljubljana'], 'scooterPasses': [],
+                   'car': {'fuel': 'diesel', 'litresPer100km': 5.5, 'vignette': False}}
+        req = self.request(modes=['walk', 'bus', 'car', 'carPark'], showPrices=True, costPreset='balanced', priceProfile=profile)
+        self.assertEqual((req['showPrices'], req['costPreset']), (True, 'balanced'))
+        self.assertEqual(req['priceProfile'], {**profile, 'cards': ['urbana-monthly']})
+        # Not asked for prices: today's order and nothing of the profile kept.
+        req = self.request(costPreset='cheapest', priceProfile=profile)
+        self.assertEqual((req['showPrices'], req['costPreset'], req['priceProfile']), (False, 'fastest', None))
+        # Car modes are accepted; until they are planned (A7) OTP is asked exactly as before.
+        self.assertEqual(journeys.otp_variables(self.request(modes=['walk', 'bus', 'car', 'carPark'])), journeys.otp_variables(self.request(modes=['walk', 'bus'])))
+
+    def test_bad_price_fields_are_refused(self):
+        for overrides in ({'showPrices': 'yes'}, {'costPreset': 'free'}, {'priceProfile': []}, {'priceProfile': {'cards': ['a b']}},
+                          {'priceProfile': {'cards': ['x'] * 13}}, {'priceProfile': {'car': {'fuel': 'coal', 'litresPer100km': 6, 'vignette': True}}},
+                          {'priceProfile': {'car': {'fuel': 'petrol', 'litresPer100km': 90, 'vignette': True}}},
+                          {'priceProfile': {'car': {'fuel': 'petrol', 'litresPer100km': True, 'vignette': True}}}):
+            with self.subTest(overrides=overrides), self.assertRaises(journeys.RequestError):
+                self.request(**overrides)
+
 
 class MotionStateTests(SimpleTestCase):
     def test_same_place_for_twenty_seconds_is_stopped(self):

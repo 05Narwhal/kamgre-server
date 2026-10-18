@@ -11,7 +11,11 @@ from . import abroad, geometry, journey_legs, leg_alerts, mapping, platforms, pr
 from . import geometry as geometry_lib
 from . import operators as companies
 
-MODES = {'walk', 'bus', 'rail', 'bike', 'scooter'}
+MODES = {'walk', 'bus', 'rail', 'bike', 'scooter', 'car', 'carPark'}  # car: drive all the way; carPark: drive, park, ride
+COST_PRESETS = ('fastest', 'balanced', 'cheapest')
+FUELS = ('petrol', 'diesel', 'lpg', 'electric')
+PRICE_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,47}')
+PROFILE_LIMITS = {'cards': 12, 'bikeMemberships': 24, 'scooterPasses': 8}
 ROAD_WAIT = 1.5  # s a search waits for leg shapes still being matched (roads.py); later legs keep the feed's shape
 TRANSIT = {'bus': ['BUS', 'COACH', 'TROLLEYBUS'], 'rail': ['RAIL', 'TRAM', 'SUBWAY', 'MONORAIL', 'FUNICULAR']}
 MAX_OPERATORS = 80
@@ -79,6 +83,30 @@ def town_stops(place: dict) -> set[str]:
     return {m for s in ids for m in stop_group(s)}
 
 
+def _price_profile(value) -> dict:
+    """The rider's tickets and car from the request body (src/contracts/transit.ts priceProfileSchema). Used for this
+    answer only: never stored or logged."""
+    if value is None:
+        return {'cards': [], 'bikeMemberships': [], 'scooterPasses': [], 'car': None}
+    if not isinstance(value, dict):
+        raise RequestError('INVALID_REQUEST', 'priceProfile must be an object')
+    profile = {}
+    for key, limit in PROFILE_LIMITS.items():
+        ids = value.get(key) or []
+        if not isinstance(ids, list) or len(ids) > limit or not all(isinstance(i, str) and PRICE_ID.fullmatch(i) for i in ids):
+            raise RequestError('INVALID_REQUEST', f'priceProfile.{key} must be up to {limit} ids')
+        profile[key] = list(dict.fromkeys(ids))
+    car = value.get('car')
+    if car is not None:
+        per_100 = car.get('litresPer100km') if isinstance(car, dict) else None
+        if (not isinstance(car, dict) or car.get('fuel') not in FUELS or not isinstance(car.get('vignette'), bool)
+                or isinstance(per_100, bool) or not isinstance(per_100, (int, float)) or not 0.5 <= per_100 <= 40):
+            raise RequestError('INVALID_REQUEST', 'priceProfile.car needs fuel, litresPer100km (0.5–40) and vignette')
+        car = {'fuel': car['fuel'], 'litresPer100km': float(per_100), 'vignette': car['vignette']}
+    profile['car'] = car
+    return profile
+
+
 def parse_request(body: dict, insane_enabled: bool) -> dict:
     if not isinstance(body, dict):
         raise RequestError('INVALID_REQUEST', 'Expected a JSON object')
@@ -116,6 +144,13 @@ def parse_request(body: dict, insane_enabled: bool) -> dict:
     max_transfers = body.get('maxTransfers')
     if max_transfers is not None and (not isinstance(max_transfers, int) or isinstance(max_transfers, bool) or not 0 <= max_transfers <= MAX_TRANSFERS_LIMIT):
         raise RequestError('INVALID_REQUEST', f'maxTransfers must be 0–{MAX_TRANSFERS_LIMIT}')
+    show_prices = body.get('showPrices', False)
+    if not isinstance(show_prices, bool):
+        raise RequestError('INVALID_REQUEST', 'showPrices must be true or false')
+    preset = body.get('costPreset', 'fastest')
+    if preset not in COST_PRESETS:
+        raise RequestError('INVALID_REQUEST', 'costPreset must be fastest, balanced or cheapest')
+    profile = _price_profile(body.get('priceProfile'))
     return {
         'origin': _place(body.get('origin'), 'origin'), 'destination': _place(body.get('destination'), 'destination'),
         'via': [_place(v, f'via[{i}]') for i, v in enumerate(via)], 'dateTime': when, 'timeMode': body['timeMode'],
@@ -123,6 +158,8 @@ def parse_request(body: dict, insane_enabled: bool) -> dict:
         'modes': set(modes), 'minTransferSeconds': min(0, slack) if risk == 'insane' else slack, 'riskMode': risk,
         'operators': list(dict.fromkeys(operators)), 'pageCursor': cursor, 'pageDirection': direction,
         'maxTransfers': max_transfers,
+        # Prices: without showPrices the profile and preset are not used (and today's order stays).
+        'showPrices': show_prices, 'costPreset': preset if show_prices else 'fastest', 'priceProfile': profile if show_prices else None,
     }
 
 
