@@ -458,7 +458,11 @@ CAR_NETWORKS = re.compile(r'sharengo|avant2go|greengo|car', re.I)
 PROVIDER_NAMES = {'jcdecaux_ljubljana': 'BicikeLJ', 'jcdecaux_maribor': 'MBajk', 'bolt_359': 'Bolt', 'kvik': 'Kvik', 'micikel': 'Micikel',
                   # Nomago Bikes systems run on nextbike; names from each feed's system_information.
                   'nextbike_cc': 'Bicikel (Nomago Bikes)', 'nextbike_cd': 'GO2GO Gorizia (Nomago Bikes)', 'nextbike_ce': 'GO2GO (Nomago Bikes)',
-                  'nextbike_cf': 'Zanaprej (Nomago Bikes)', 'nextbike_cn': 'KolesCE (Nomago Bikes)', 'nextbike_cx': 'KoroBajk (Nomago Bikes)'}
+                  'nextbike_cf': 'Zanaprej (Nomago Bikes)', 'nextbike_cn': 'KolesCE (Nomago Bikes)', 'nextbike_cx': 'KoroBajk (Nomago Bikes)',
+                  # Smart City bikes networks: the town from their stations' names (OTP, 2026-10-18), docs/research/2026-10-18-sharing-systems.md.
+                  'scbikes_gbike': 'Gorenjska.bike (Kranj)', 'scbikes_gonm': 'GoNM (Dolenjska)', 'scbikes_sobota': 'Sobota bikes (Pomurje)',
+                  'scbikes_posbikes': 'Posbikes (Postojna)', 'scbikes_biciklanc': 'Biciklanc (Vrhnika)', 'scbikes_kras': 'Kras bikes (Sežana)',
+                  'scbikes_pors': 'PorS (Rogaška Slatina)', 'scbikes_pokolo': 'Pokolo (Litija)', 'scbikes_kulu': 'KuLu (Ajdovščina)'}
 
 
 def provider_name(provider_id: str) -> str:

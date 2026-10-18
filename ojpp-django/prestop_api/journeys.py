@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import abroad, geometry, journey_legs, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks, transfer_walk
+from . import abroad, geometry, journey_legs, sharing, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks, transfer_walk
 from . import geometry as geometry_lib
 from . import operators as companies
 
@@ -43,9 +43,11 @@ PLAN_Q = '''query($origin: PlanLabeledLocationInput!, $destination: PlanLabeledL
     routingErrors { code description }
     pageInfo { startCursor endCursor hasPreviousPage hasNextPage searchWindowUsed }
     edges { node { walkTime
-      legs { mode realtimeState transitLeg interlineWithPreviousLeg duration
+      legs { mode realtimeState transitLeg interlineWithPreviousLeg duration distance rentedBike
         start { scheduledTime estimated { time } } end { scheduledTime estimated { time } }
-        from { name lat lon stop { gtfsId platformCode } } to { name lat lon stop { gtfsId platformCode } }
+        from { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } }
+          rentalVehicle { vehicleId vehicleType { formFactor } rentalNetwork { networkId } } }
+        to { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } } }
         route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } }
         legGeometry { points } alerts { id } intermediatePlaces { name lat lon stop { gtfsId } } } } } } }'''
 
@@ -610,6 +612,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 'delayProvenance': 'predicted' if transit and start_est else None,
                 'canceled': l.get('realtimeState') == 'CANCELED',
                 'stopCount': len(l.get('intermediatePlaces') or []) + 1 if transit else None,
+                **({'rental': rental} if (rental := sharing.leg_rental(l)) else {}),
                 'alertIds': [canonical.get(f'alert:{a["id"]}', f'alert:{a["id"]}') for a in l.get('alerts') or []],
             })
             if transit and mapping.is_replacement(route):
