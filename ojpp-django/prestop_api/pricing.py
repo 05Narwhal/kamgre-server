@@ -14,7 +14,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Optional
 
-from . import geometry, sharing
+from . import driving, geometry, sharing
 
 TEXT = {
     'en': {'unknown': 'Price unknown', 'covered': 'Covered by your {card}', 'routeBound': 'Covered by your pass, if it is for this route',
@@ -22,13 +22,19 @@ TEXT = {
            'supplement': '{rank} supplement', 'sameTicket': 'On the same ticket', 'city': '{name} single fare, changes free for {minutes} min',
            'cityDay': '{name} day ticket', 'cityChange': 'Free change on the same ticket', 'rideMember': '{name} with your membership',
            'rideJoin': '{name}: membership needed (from {cents}), then the ride', 'rideUnknown': '{name}: price list incomplete',
-           'note': "Estimate from the operators' price lists, checked {date}"},
+           'note': "Estimate from the operators' price lists, checked {date}",
+           'fuel': 'Fuel ≈ {amount} {unit} ({fuel})', 'defaultCar': 'an average petrol car, {per100} l/100 km', 'vignette': '7-day vignette',
+           'parking': 'parking {name}', 'parkingUnknown': 'parking {name} (fee unknown)', 'parkRide': 'Included in the P+R parking ticket',
+           'fuels': {'petrol': 'petrol', 'diesel': 'diesel', 'lpg': 'LPG, price unknown', 'electric': 'public charging, estimate'}},
     'sl': {'unknown': 'Cena ni znana', 'covered': 'Velja tvoja vozovnica: {card}', 'routeBound': 'Velja tvoja vozovnica, če je za to relacijo',
            'ijpp': 'Enotna vozovnica IJPP, {km} km', 'sz': 'Vozovnica SŽ, {km} km', 'szRank': 'Vozovnica SŽ, {km} km, z doplačilom za {rank}',
            'supplement': 'Doplačilo za {rank}', 'sameTicket': 'Na isti vozovnici', 'city': '{name}, enkratna vožnja, prestopi brezplačni {minutes} min',
            'cityDay': '{name}, dnevna vozovnica', 'cityChange': 'Brezplačen prestop na isti vozovnici', 'rideMember': '{name} z naročnino',
            'rideJoin': '{name}: potrebna je naročnina (od {cents}), nato vožnja', 'rideUnknown': '{name}: cenik ni popoln',
-           'note': 'Ocena po cenikih prevoznikov, preverjeno {date}'},
+           'note': 'Ocena po cenikih prevoznikov, preverjeno {date}',
+           'fuel': 'Gorivo ≈ {amount} {unit} ({fuel})', 'defaultCar': 'povprečen bencinski avto, {per100} l/100 km', 'vignette': 'tedenska vinjeta',
+           'parking': 'parkiranje {name}', 'parkingUnknown': 'parkiranje {name} (cena ni znana)', 'parkRide': 'Vključeno v parkirni listek P+R',
+           'fuels': {'petrol': 'bencin', 'diesel': 'dizel', 'lpg': 'avtoplin, cena ni znana', 'electric': 'javne polnilnice, ocena'}},
 }
 
 
@@ -113,10 +119,38 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
     cards = {c['id']: c for c in data['transit']['cards'] if c['id'] in set(profile.get('cards') or [])}
     covering = lambda system: next((c for c in cards.values() if system in c['covers']), None)
     legs = journey['legs']
+    included: dict[str, list] = {}  # city system -> [bus rides left on a P+R parking ticket, the car park's tariff]
 
     def put(leg, cents, basis, source, **extra):
         leg['price'] = {'amountCents': cents, 'currency': 'EUR', 'basis': basis, 'source': source['source'], 'checked': data['checked'],
                         **({'sourceUrl': source['sourceUrl']} if source.get('sourceUrl') else {}), **extra}
+
+    # Driving: fuel, the 7-day vignette once when motorways are used without one, and the car park's fee.
+    rules = data['driving']
+    car = profile.get('car') or rules['defaultCar']
+    vignette_due = not car['vignette']
+    for leg in legs:
+        if leg.get('mode') != 'car' or 'car' not in leg:
+            continue
+        due = vignette_due and leg['car']['motorway']
+        vignette_due = vignette_due and not due
+        cents, leg['car'] = driving.cost(leg['car'], car, rules, due)
+        amount = leg['car'].get('energyKwh') if car['fuel'] == 'electric' else leg['car']['fuelLitres']
+        parts = [text['fuel'].format(amount=f'{amount:.1f}'.replace('.', ',') if language == 'sl' else f'{amount:.1f}',
+                                     unit='kWh' if car['fuel'] == 'electric' else 'l', fuel=text['fuels'][car['fuel']])]
+        if not profile.get('car'):
+            parts[0] += f" · {text['defaultCar'].format(per100=car['litresPer100km'])}"
+        if due:
+            parts.append(text['vignette'])
+        park = leg['car'].get('parking')
+        if park:
+            parts.append((text['parking'] if park['feeCents'] is not None else text['parkingUnknown']).format(name=park['name']))
+            known = driving.parking(park['name'], rules)
+            if known and known.get('includesRides'):
+                included[known['system']] = [known['includesRides'], known]
+        source = {'source': rules['fuel']['source'], 'sourceUrl': rules['fuel']['sourceUrl']} if car['fuel'] != 'electric' else rules['electric']
+        leg['price'] = {'amountCents': cents, 'currency': 'EUR', 'basis': ' + '.join(parts), 'source': source['source'],
+                        'sourceUrl': source['sourceUrl'], 'checked': datetime.now().date().isoformat()}
 
     # Intercity tickets: consecutive IJPP legs (walks between them do not break a ticket).
     groups, current = [], []
@@ -167,6 +201,10 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             leg['price'] = {'amountCents': None, 'currency': 'EUR', 'basis': text['unknown'], 'source': '—', 'checked': data['checked']}
             continue
         city = data['transit']['city'][system]
+        if included.get(system) and included[system][0] > 0:
+            included[system][0] -= 1
+            put(leg, 0, text['parkRide'], included[system][1])
+            continue
         card = covering(system)
         if card:
             put(leg, 0, text['covered'].format(card=_name(card, language)), card, coveredBy=card['id'])
@@ -236,10 +274,23 @@ BALANCED_CENTS = 150    # ... for every this much it saves (about 9 € an hour)
 CHEAPEST_WINDOW = 45    # min: Cheapest is the cheapest journey arriving within this of the fastest
 
 
+def is_drive(journey: dict) -> bool:
+    """Driven all the way (walks to and from the car aside)."""
+    modes = {l['mode'] for l in journey['legs']} - {'walk'}
+    return modes == {'car'}
+
+
 def rank(journeys: list[dict], req: dict) -> list[dict]:
     """Journeys in the order of the rider's cost preset; `fastest` keeps the planner's own order untouched. Time is
     the arrival after the asked-for time (arrive-by: how early it leaves). An unknown price ranks as the dearest known
-    one, so it never wins on price. Each journey's price says how much it saves against the fastest."""
+    one, so it never wins on price. Each journey's price says how much it saves against driving (when a drive-only
+    journey is among them, whatever the preset), else against the fastest."""
+    total = lambda j: (j.get('price') or {}).get('totalCents')
+    drive = next((j for j in journeys if is_drive(j) and total(j) is not None), None)
+    if drive:
+        for j in journeys:
+            if j is not drive and total(j) is not None:
+                j['price'].update(savedCents=total(drive) - total(j), comparedTo='car')
     preset = req.get('costPreset', 'fastest')
     if preset == 'fastest' or len(journeys) < 2:
         return journeys
@@ -248,7 +299,6 @@ def rank(journeys: list[dict], req: dict) -> list[dict]:
         minutes = lambda j: (asked - _ts(j['effectiveDeparture'])) / 60
     else:
         minutes = lambda j: (_ts(j['effectiveArrival']) - asked) / 60
-    total = lambda j: (j.get('price') or {}).get('totalCents')
     known = [total(j) for j in journeys if total(j) is not None]
     cost = lambda j: total(j) if total(j) is not None else max(known, default=0)
     fastest = min(journeys, key=minutes)
@@ -257,7 +307,8 @@ def rank(journeys: list[dict], req: dict) -> list[dict]:
     else:
         within = lambda j: minutes(j) - minutes(fastest) <= CHEAPEST_WINDOW
         key = lambda j: (not within(j), cost(j) if within(j) else minutes(j), minutes(j))
-    for j in journeys:
-        if j is not fastest and total(j) is not None and total(fastest) is not None and j.get('price'):
-            j['price'].update(savedCents=total(fastest) - total(j), comparedTo='fastest')
+    if not drive:
+        for j in journeys:
+            if j is not fastest and total(j) is not None and total(fastest) is not None and j.get('price'):
+                j['price'].update(savedCents=total(fastest) - total(j), comparedTo='fastest')
     return sorted(journeys, key=key)

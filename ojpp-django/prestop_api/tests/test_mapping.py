@@ -242,8 +242,10 @@ class JourneyTests(SimpleTestCase):
 
     def test_request_validation_and_otp_variables(self):
         with self.assertRaises(journeys.RequestError) as e:
-            self.request(modes=['walk', 'bike'])
+            self.request(modes=['walk'])
         self.assertEqual(e.exception.code, 'NO_MODES')
+        # Shared bikes alone: a street-only search (OTP refuses an empty transit list).
+        self.assertEqual(journeys.otp_variables(self.request(modes=['walk', 'bike']))['modes'], {'direct': ['WALK', 'BICYCLE_RENTAL'], 'directOnly': True})
         with self.assertRaises(journeys.RequestError) as e:
             self.request(riskMode='insane')
         self.assertEqual(e.exception.code, 'FEATURE_UNAVAILABLE')

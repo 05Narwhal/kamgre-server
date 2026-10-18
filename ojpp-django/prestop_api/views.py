@@ -424,11 +424,19 @@ def journeys(request):
     from . import scheduled
     # What replaces trains that day loads while OTP plans (another date's timetable takes a few seconds).
     scheduled.plan_at(req['dateTime'].timestamp())
-    data = planner.plan(req, lambda q, v: otp().query(q, v, timeout=(5, 45)))
+    asked = [0]  # OTP queries this request (shared rules: at most planner.MAX_OTP_QUERIES with the extra searches)
+
+    def counted(timeout):
+        def query(q, v):
+            asked[0] += 1
+            return otp().query(q, v, timeout=timeout)
+        return query
+    data = planner.plan(req, counted((5, 45)))
     page = planner.page_info(data)
-    data = planner.bet_on_delays(data, req, lambda q, v: otp().query(q, v, timeout=(5, 20)))
-    # Searches OTP cannot fold into one (scooters next to bikes, the rider's own bike networks): bounded and cached.
-    data = planner.with_extras(data, req, lambda q, v: otp().query(q, v, timeout=(5, 20)))
+    data = planner.bet_on_delays(data, req, counted((5, 20)))
+    # Searches OTP cannot fold into one (driving, drive + park + ride, scooters next to bikes, the rider's own bike
+    # networks): with what is left of the budget, and cached.
+    data = planner.with_extras(data, req, counted((5, 20)), budget=planner.MAX_OTP_QUERIES - asked[0])
     errors = (data.get('planConnection') or {}).get('routingErrors') or []
     try:
         alert_list = sources.alerts(language(request))

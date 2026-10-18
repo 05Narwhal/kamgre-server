@@ -773,5 +773,109 @@
     ]
    }
   ]
+ },
+ "driving": {
+  "about": "Fuel in euros per litre (kWh for electric). The regulated prices are read daily from gov.si (fuel.csvUrl); fallback holds the last ones read. defaultCar: when the rider gave no car. parking: P+R sites by name, cents per 24 h; includesRides: city bus rides included (system).",
+  "fuel": {
+   "csvUrl": "https://www.gov.si/teme/cene-naftnih-derivatov/element/162094/izvoz.csv",
+   "source": "Regulated fuel prices, gov.si (outside motorways)",
+   "sourceUrl": "https://www.gov.si/teme/cene-naftnih-derivatov/",
+   "fallback": {
+    "petrol": 1.742,
+    "diesel": 1.881,
+    "valid": "od 13. 10. do 19. 10. 2026"
+   },
+   "note": "Motorway stations are not regulated and usually dearer."
+  },
+  "electric": {
+   "eurPerKwh": 0.55,
+   "estimate": true,
+   "note": "Mean of Petrol ad-hoc public charging (0.41 up to 22 kW, 0.51 to 50 kW, 0.73 over 50 kW per kWh), price list from 1. 11. 2025.",
+   "source": "Petrol public charging price list, 1. 11. 2025",
+   "sourceUrl": "https://www.petrol.si/mobilnost/zasebni-uporabniki/javne-elektricne-polnilnice/cenik-polnjenje-eng",
+   "checked": "2026-10-18"
+  },
+  "lpg": {
+   "eurPerLitre": null,
+   "note": "Not regulated and no official price published: price unknown."
+  },
+  "defaultCar": {
+   "fuel": "petrol",
+   "litresPer100km": 6.5,
+   "vignette": true
+  },
+  "vignette": {
+   "weekCents": 1600,
+   "monthCents": 3200,
+   "yearCents": 11750,
+   "source": "DARS e-vinjeta, class 2A",
+   "sourceUrl": "https://evinjeta.dars.si/",
+   "checked": "2026-10-18"
+  },
+  "parking": {
+   "Dolgi most": {
+    "cents": 150,
+    "includesRides": 2,
+    "system": "LPP",
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice, price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-18",
+    "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
+   },
+   "Ježica": {
+    "cents": 150,
+    "includesRides": 2,
+    "system": "LPP",
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice, price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-18",
+    "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
+   },
+   "Barje": {
+    "cents": 150,
+    "includesRides": 2,
+    "system": "LPP",
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice, price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-18",
+    "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
+   },
+   "Stožice": {
+    "cents": 150,
+    "includesRides": 2,
+    "system": "LPP",
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice, price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-18",
+    "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
+   },
+   "Studenec": {
+    "cents": 150,
+    "includesRides": 2,
+    "system": "LPP",
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice, price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-18",
+    "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
+   },
+   "Stanežiče": {
+    "cents": 150,
+    "includesRides": 2,
+    "system": "LPP",
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice, price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-18",
+    "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
+   },
+   "Letališka": {
+    "cents": 150,
+    "includesRides": 2,
+    "system": "LPP",
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice, price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-18",
+    "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
+   }
+  }
  }
 }

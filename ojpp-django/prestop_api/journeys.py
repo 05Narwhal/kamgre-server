@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import abroad, geometry, journey_legs, sharing, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks, transfer_walk
+from . import abroad, driving, geometry, journey_legs, sharing, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks, transfer_walk
 from . import geometry as geometry_lib
 from . import operators as companies
 from .upstream import UpstreamError
@@ -17,6 +17,8 @@ from .upstream import UpstreamError
 logger = logging.getLogger(__name__)
 
 MODES = {'walk', 'bus', 'rail', 'bike', 'scooter', 'car', 'carPark'}  # car: drive all the way; carPark: drive, park, ride
+RIDE_MODES = {'bike', 'scooter'}
+CAR_MODES = {'car', 'carPark'}
 COST_PRESETS = ('fastest', 'balanced', 'cheapest')
 # 2026-10-18, 6 bike rides in 4 towns: SAFE_STREETS (OTP's default) 26 % on cycle paths, SHORTEST_DURATION 6 % (-10 % time).
 RIDE_OPTIMIZATION = 'SAFE_STREETS'
@@ -54,7 +56,7 @@ PLAN_Q = '''query($origin: PlanLabeledLocationInput!, $destination: PlanLabeledL
         start { scheduledTime estimated { time } } end { scheduledTime estimated { time } }
         from { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } }
           rentalVehicle { vehicleId vehicleType { formFactor } rentalNetwork { networkId } } }
-        to { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } } }
+        to { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } } vehicleParking { name } }
         route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } }
         legGeometry { points } alerts { id } intermediatePlaces { name lat lon stop { gtfsId } } } } } } }'''
 
@@ -131,7 +133,7 @@ def parse_request(body: dict, insane_enabled: bool) -> dict:
     modes = body.get('modes') or []
     if not isinstance(modes, list) or not modes or not set(modes) <= MODES:
         raise RequestError('INVALID_REQUEST', 'Unknown or missing modes')
-    if not set(modes) & set(TRANSIT):
+    if not set(modes) & (set(TRANSIT) | RIDE_MODES | CAR_MODES):
         raise RequestError('NO_MODES', 'Choose at least one public transport mode.')
     risk = body.get('riskMode', 'normal')
     if risk == 'insane' and not insane_enabled:
@@ -231,7 +233,7 @@ def otp_variables(req: dict) -> dict:
     variables = {
         'origin': _location(req['origin']), 'destination': _location(req['destination']), 'via': via,
         'dateTime': {'latestArrival': stamp} if req['timeMode'] == 'arriveBy' else {'earliestDeparture': stamp},
-        'modes': {'direct': street, 'transit': {'access': street, 'egress': street, 'transfer': ['WALK'], 'transit': transit}},
+        'modes': {'direct': street, **({'transit': {'access': street, 'egress': street, 'transfer': ['WALK'], 'transit': transit}} if transit else {'directOnly': True})},
         'preferences': preferences, 'first': count,
     }
     # Earlier / later connections: OTP pages with the cursors of the previous response.
@@ -271,20 +273,29 @@ def _edges(data: dict) -> list[dict]:
     return [e for e in (data.get('planConnection') or {}).get('edges') or [] if e['node'].get('legs')]
 
 
-MAX_EXTRA_SEARCHES = 2   # per plan request, on top of the main search (shared rules: at most 4 OTP queries)
+MAX_EXTRA_SEARCHES = 2   # per plan request, on top of the main search
+MAX_OTP_QUERIES = 4      # per plan request in all (shared rules); extra searches get what the main search left
 EXTRA_TTL = 300          # s an extra search's answer is reused
 _extra_cache: dict[str, tuple[float, dict]] = {}
 
 
 def extra_searches(req: dict) -> list[tuple[str, dict]]:
     """(kind, OTP variables) of the searches OTP cannot fold into the main one, most useful first, at most
-    MAX_EXTRA_SEARCHES: scooters when bikes are asked for too, and the rider's own bike networks when cheaper rides are
-    wanted (BicikeLJ with a membership before a Nomago bike)."""
+    MAX_EXTRA_SEARCHES: driving all the way, drive + park + ride, scooters when bikes are asked for too, and the rider's
+    own bike networks when cheaper rides are wanted (BicikeLJ with a membership before a Nomago bike)."""
     if req.get('pageCursor'):
         return []
     base = otp_variables(req)
-    street = lambda modes: {**base['modes'], 'direct': modes, 'transit': {**base['modes']['transit'], 'access': modes, 'egress': modes}}
+    street = lambda modes: {**base['modes'], 'direct': modes, **({'transit': {**base['modes']['transit'], 'access': modes, 'egress': modes}} if 'transit' in base['modes'] else {})}
+    drive = lambda modes: {**base, 'modes': {'direct': modes, 'directOnly': True}, 'first': 1}
     out = []
+    if 'car' in req['modes'] and not req['via']:
+        out.append(('car', drive(['CAR'])))
+    if 'carPark' in req['modes']:
+        # Drive to a car park OTP knows (OSM park_ride / station car parks), then ride; buses and trains even when
+        # only Car + transit is chosen.
+        transit = base['modes'].get('transit', {}).get('transit') or [{'mode': m} for key in ('bus', 'rail') for m in TRANSIT[key]]
+        out.append(('carPark', {**base, 'modes': {'transit': {'access': ['CAR_PARKING'], 'egress': ['WALK'], 'transfer': ['WALK'], 'transit': transit}}, 'first': 3}))
     if 'bike' in req['modes'] and 'scooter' in req['modes']:
         out.append(('scooter', {**base, 'modes': street(['WALK', 'SCOOTER_RENTAL'])}))
     members = (req.get('priceProfile') or {}).get('bikeMemberships') or []
@@ -295,34 +306,54 @@ def extra_searches(req: dict) -> list[tuple[str, dict]]:
     return out[:MAX_EXTRA_SEARCHES]
 
 
+def fallback_search(kind: str, req: dict) -> Optional[dict]:
+    """A second try for an extra search that found nothing: a drive that cannot reach a car-free place (Prešernov trg)
+    parks at the nearest car park OTP knows and walks from there."""
+    if kind != 'car':
+        return None
+    return {**otp_variables(req), 'modes': {'direct': ['CAR_PARKING'], 'directOnly': True}, 'first': 1}
+
+
 def _leg_key(node: dict) -> str:
     return '|'.join(f"{l.get('mode')}:{(l.get('trip') or {}).get('gtfsId')}@{l['start']['scheduledTime']}" for l in node.get('legs') or [])
 
 
-def with_extras(data: dict, req: dict, query) -> dict:
-    """The main search's answer with the connections of extra_searches added after OTP's own (repeats dropped). A
-    failed extra search only loses its connections."""
+def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> dict:
+    """The main search's answer with the connections of extra_searches added after OTP's own (repeats dropped).
+    `budget`: OTP queries left for this request; a cached answer costs none. A failed extra search only loses its
+    connections."""
     searches = extra_searches(req)
     if not searches:
         return data
     edges = list(_edges(data))
     seen = {_leg_key(e['node']) for e in edges}
-    now = time.monotonic()
-    for kind, variables in searches:
+    left = [budget]
+
+    def ask(kind: str, variables: dict) -> Optional[dict]:
         key = hashlib.sha1(json.dumps(variables, sort_keys=True).encode()).hexdigest()
         hit = _extra_cache.get(key)
-        if hit and now - hit[0] < EXTRA_TTL:
-            extra = hit[1]
-        else:
-            try:
-                extra = query(PLAN_Q, variables)
-            except UpstreamError as e:
-                logger.info('Extra %s search failed: %r', kind, e)
-                continue
-            _extra_cache[key] = (now, extra)
-            if len(_extra_cache) > 500:
-                for k, _ in sorted(_extra_cache.items(), key=lambda kv: kv[1][0])[:250]:
-                    _extra_cache.pop(k, None)
+        if hit and time.monotonic() - hit[0] < EXTRA_TTL:
+            return hit[1]
+        if left[0] <= 0:
+            return None
+        left[0] -= 1
+        try:
+            answer = query(PLAN_Q, variables)
+        except UpstreamError as e:
+            logger.info('Extra %s search failed: %r', kind, e)
+            return None
+        _extra_cache[key] = (time.monotonic(), answer)
+        if len(_extra_cache) > 500:
+            for k, _ in sorted(_extra_cache.items(), key=lambda kv: kv[1][0])[:250]:
+                _extra_cache.pop(k, None)
+        return answer
+
+    for kind, variables in searches:
+        extra = ask(kind, variables)
+        if extra is not None and not _edges(extra) and (second := fallback_search(kind, req)):
+            extra = ask(kind, second)
+        if extra is None:
+            continue
         for e in _edges(extra):
             if _leg_key(e['node']) not in seen:
                 seen.add(_leg_key(e['node']))
@@ -367,6 +398,8 @@ def plan(req: dict, query) -> dict:
     mode would (brisk walking, so a station further away is in reach, any number of transfers, no transfer slack) and
     mark the answer `wider`; its transfers are still rated against the rider's buffer (build_journeys). Kropa →
     Ljubljana after the last bus (17:29) is then a walk to the train at Otoče instead of nothing."""
+    if not set(req['modes']) & (set(TRANSIT) | RIDE_MODES):
+        return {'planConnection': {'edges': [], 'pageInfo': {}}}
     cursor = req.get('pageCursor') or ''
     if cursor.startswith(WIDER_CURSOR):
         return {**_plan({**req, 'pageCursor': cursor[len(WIDER_CURSOR):], 'wider': True}, query), 'wider': True}
@@ -451,7 +484,7 @@ def _ts(value: str) -> float:
 def _leg_mode(leg: dict) -> str:
     if leg.get('transitLeg'):
         return mapping.mode_of((leg.get('route') or {}).get('mode') or leg.get('mode'))
-    return {'BICYCLE': 'bike', 'SCOOTER': 'scooter'}.get(leg.get('mode'), 'walk')
+    return {'BICYCLE': 'bike', 'SCOOTER': 'scooter', 'CAR': 'car'}.get(leg.get('mode'), 'walk')
 
 
 def _leg_place(end: dict, override: Optional[dict]) -> dict:
@@ -686,6 +719,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 'canceled': l.get('realtimeState') == 'CANCELED',
                 'stopCount': len(l.get('intermediatePlaces') or []) + 1 if transit else None,
                 **({'rental': rental} if (rental := sharing.leg_rental(l)) else {}),
+                **({'car': driving.leg_car(l, geometry)} if l.get('mode') == 'CAR' else {}),
                 'alertIds': [canonical.get(f'alert:{a["id"]}', f'alert:{a["id"]}') for a in l.get('alerts') or []],
             })
             if transit and mapping.is_replacement(route):

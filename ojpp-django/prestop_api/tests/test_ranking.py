@@ -10,7 +10,7 @@ ASKED = datetime(2026, 10, 19, 8, 0, tzinfo=timezone.utc)
 
 def journey(name, arrive_min, cents, depart_min=0):
     at = lambda m: mapping.iso(ASKED.timestamp() + m * 60)
-    return {'id': name, 'effectiveDeparture': at(depart_min), 'effectiveArrival': at(arrive_min), 'price': {'totalCents': cents}}
+    return {'id': name, 'legs': [{'mode': 'bus'}], 'effectiveDeparture': at(depart_min), 'effectiveArrival': at(arrive_min), 'price': {'totalCents': cents}}
 
 
 def req(preset, mode='departAt'):
