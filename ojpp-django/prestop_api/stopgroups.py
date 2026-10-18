@@ -42,6 +42,8 @@ SAME_WAY = 0.5
 SLIP_SHARE = 0.2
 # Words that name the kind of stop rather than the place: "Koper AP" is "Koper".
 STOP_WORDS = re.compile(r'\b(avtobusna postaja|avtobusno postajalisce|zelezniska postaja|avt\.? ?post\.?|zel\.? ?post\.?|zel\.? ?p\.|ap|zp)(?=\W|$)')
+# A town's bus station by its name: "Kranj AP", "Avtobusna postaja Celje" (search_stations' town results).
+BUS_STATION_WORDS = re.compile(r'\b(avtobusna postaja|avt\.? ?post\.?|ap)(?=\W|$)')
 # A direction added to the name: "Bled / smer Lesce", "Bled (smer Lesce)".
 DIRECTION_SUFFIX = re.compile(r'\s*[/(,-]?\s*\bsmer\b.*$')
 TOWN_SUFFIX = re.compile(r'(?<=\w)/[^\s/]+')

@@ -1,6 +1,8 @@
+from unittest import mock
+
 from django.test import SimpleTestCase
 
-from prestop_api import journeys, mapping
+from prestop_api import journeys, mapping, sources
 
 NOW = 1791557200  # 2026-10-09 15:26:40 UTC
 
@@ -177,6 +179,37 @@ class JourneyTests(SimpleTestCase):
         body = {'origin': PLACE, 'destination': {**PLACE, 'name': 'Bled'}, 'via': [], 'dateTime': '2026-10-09T10:00:00Z',
                 'timeMode': 'departAt', 'minTransferSeconds': 180, 'modes': ['walk', 'bus', 'rail'], 'searchScope': 'all', 'riskMode': 'normal', **overrides}
         return journeys.parse_request(body, insane_enabled=False)
+
+    def test_a_town_starts_and_ends_at_the_station_used_without_the_walk_from_between(self):
+        town = {'name': 'Kranj', 'latitude': 46.05, 'longitude': 14.45, 'kind': 'station', 'stopId': 'IJPP:a', 'stopIds': ['IJPP:a', 'IJPP:ap']}
+        walk_in, walk_out = leg('WALK', '09:55:00', '10:00:00', transit=False, duration=300), leg('WALK', '10:30:00', '10:36:00', transit=False, duration=360)
+        walk_in['to']['stop'] = {'gtfsId': 'IJPP:a'}
+        walk_out['from']['stop'] = {'gtfsId': 'IJPP:b'}
+        data = {'planConnection': {'edges': [{'node': {'walkTime': 660, 'legs': [walk_in, leg('BUS', '10:00:00', '10:30:00', trip='IJPP:1'), walk_out]}}]}}
+        req = self.request(origin=town, destination={**town, 'name': 'Bled', 'stopId': 'IJPP:b', 'stopIds': ['IJPP:b', 'IJPP:bap']})
+        with mock.patch.object(sources, 'stop_group', side_effect=lambda s: [s]):
+            self.assertEqual(journeys.otp_variables(req)['origin']['location'], {'coordinate': {'latitude': 46.05, 'longitude': 14.45}})
+            [j] = journeys.build_journeys(data, req, [])
+        self.assertEqual([l['mode'] for l in j['legs']], ['bus'])
+        self.assertEqual((j['legs'][0]['origin']['name'], j['legs'][0]['destination']['name'], j['walkSeconds']), ('A', 'B', 0))
+        self.assertEqual(j['effectiveDeparture'], '2026-10-09T10:00:00+02:00')
+        with self.assertRaises(journeys.RequestError):
+            self.request(origin={**town, 'stopIds': 'IJPP:a'})
+
+    def test_a_town_keeps_journeys_through_another_stop_only_when_none_uses_its_stations(self):
+        town = {'name': 'Kranj', 'latitude': 46.05, 'longitude': 14.45, 'kind': 'station', 'stopId': 'IJPP:a', 'stopIds': ['IJPP:a', 'IJPP:ap']}
+        def walk_to(stop_id, start='09:55:00'):
+            walk = leg('WALK', start, '10:00:00', transit=False, duration=300)
+            walk['to']['stop'] = {'gtfsId': stop_id}
+            return walk
+        station = {'node': {'walkTime': 300, 'legs': [walk_to('IJPP:ap'), leg('BUS', '10:00:00', '10:30:00', trip='IJPP:1')]}}
+        elsewhere = {'node': {'walkTime': 300, 'legs': [walk_to('IJPP:globus', '09:50:00'), leg('BUS', '10:00:00', '10:20:00', trip='IJPP:2')]}}
+        req = self.request(origin=town)
+        with mock.patch.object(sources, 'stop_group', side_effect=lambda s: [s]):
+            kept = journeys.build_journeys({'planConnection': {'edges': [elsewhere, station]}}, req, [])
+            alone = journeys.build_journeys({'planConnection': {'edges': [elsewhere]}}, req, [])
+        self.assertEqual([j['legs'][0]['tripId'] for j in kept], ['IJPP:1'])
+        self.assertEqual([j['legs'][0]['mode'] for j in alone], ['walk'])
 
     def test_transfer_statuses_use_walking_plus_safety(self):
         data = {'planConnection': {'edges': [{'node': {'walkTime': 300, 'legs': [

@@ -60,7 +60,23 @@ def _place(value, field: str) -> dict:
         raise RequestError('INVALID_REQUEST', f'{field} needs valid coordinates')
     if not isinstance(value.get('name'), str) or not value['name']:
         raise RequestError('INVALID_REQUEST', f'{field} needs a name')
+    town = value.get('stopIds')
+    if town is not None and (not isinstance(town, list) or len(town) > MAX_TOWN_STOPS or not all(isinstance(s, str) and ':' in s for s in town)):
+        raise RequestError('INVALID_REQUEST', f'{field}.stopIds must be up to {MAX_TOWN_STOPS} stop ids')
     return value
+
+
+MAX_TOWN_STOPS = 8
+
+
+def town_stops(place: dict) -> set[str]:
+    """Every feed stop of a town's main stations (sources.search_stations: Kranj's railway and bus station as one
+    place); empty for any other place."""
+    ids = place.get('stopIds') or []
+    if len(ids) < 2:
+        return set()
+    from .sources import stop_group
+    return {m for s in ids for m in stop_group(s)}
 
 
 def parse_request(body: dict, insane_enabled: bool) -> dict:
@@ -116,8 +132,9 @@ def _merged(stop_id: str) -> bool:
 
 
 def _location(place: dict) -> dict:
-    # A merged station is several feed stops: start from its position so OTP may use any of them.
-    if place.get('stopId') and not _merged(place['stopId']):
+    # A merged station is several feed stops, a town two stations: start from its position so OTP may use any of
+    # them (build_journeys drops the walk to a town's station).
+    if place.get('stopId') and not place.get('stopIds') and not _merged(place['stopId']):
         return {'label': place['name'], 'location': {'stopLocation': {'stopLocationId': place['stopId']}}}
     return {'label': place['name'], 'location': {'coordinate': {'latitude': place['latitude'], 'longitude': place['longitude']}}}
 
@@ -142,7 +159,7 @@ def otp_variables(req: dict) -> dict:
         visit = {'label': v['name'], 'minimumWaitTime': 'PT0S'}
         if v.get('stopId'):
             from .sources import stop_group
-            visit['stopLocationIds'] = stop_group(v['stopId'])
+            visit['stopLocationIds'] = sorted(town_stops(v)) or stop_group(v['stopId'])
         else:
             visit['coordinate'] = {'latitude': v['latitude'], 'longitude': v['longitude']}
         via.append({'visit': visit})
@@ -505,11 +522,23 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
     journeys = []
     deadline = time.monotonic() + ROAD_WAIT
     seen_bays: dict = {}  # station -> its PlatformSeen rows, read once per request
+    from_town, to_town = town_stops(req['origin']), town_stops(req['destination'])
     for edge in (data.get('planConnection') or {}).get('edges') or []:
         node = edge['node']
         raw = node.get('legs') or []
         if not raw:
             continue
+        # A town (Kranj: railway and bus station) is planned from between its stations: the journey starts at the
+        # one it leaves from, and ends at the one it arrives at, without the walk from or to that middle.
+        trimmed = 0.0
+        if len(raw) > 1 and not raw[0].get('transitLeg') and (raw[0]['to'].get('stop') or {}).get('gtfsId') in from_town:
+            trimmed += raw[0].get('duration') or 0
+            raw = raw[1:]
+        if len(raw) > 1 and not raw[-1].get('transitLeg') and (raw[-1]['from'].get('stop') or {}).get('gtfsId') in to_town:
+            trimmed += raw[-1].get('duration') or 0
+            raw = raw[:-1]
+        # Still a walk from or to the middle: the journey uses another stop ("Kranj Globus"), not the town's stations.
+        stray = len(raw) > 1 and ((from_town and not raw[0].get('transitLeg')) or (to_town and not raw[-1].get('transitLeg')))
         key = hashlib.sha1('|'.join(f'{(l.get("trip") or {}).get("gtfsId")}@{l["start"]["scheduledTime"]}' for l in raw).encode()).hexdigest()[:16]
         legs, meta = [], []
         for i, l in enumerate(raw):
@@ -534,8 +563,9 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 'tripId': (l.get('trip') or {}).get('gtfsId') if transit else None,
                 'routeName': mapping.route_name(route) if transit else '',
                 'headsign': _headsign(l) if transit else None,
-                'origin': _leg_place(l['from'], req['origin'] if i == 0 else None),
-                'destination': _leg_place(l['to'], req['destination'] if i == len(raw) - 1 else None),
+                # A town's station keeps its own name ("Kranj AP"), not the town's.
+                'origin': _leg_place(l['from'], req['origin'] if i == 0 and not from_town else None),
+                'destination': _leg_place(l['to'], req['destination'] if i == len(raw) - 1 and not to_town else None),
                 'scheduledDeparture': l['start']['scheduledTime'], 'scheduledArrival': l['end']['scheduledTime'],
                 'effectiveDeparture': start_est or l['start']['scheduledTime'], 'effectiveArrival': end_est or l['end']['scheduledTime'],
                 'geometry': geometry,
@@ -647,8 +677,12 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             'id': f'otp:{key}', 'legs': legs, 'alerts': [mapping.public_alert(a) for a in in_journey],
             'scheduledDeparture': legs[0]['scheduledDeparture'], 'scheduledArrival': legs[-1]['scheduledArrival'],
             'effectiveDeparture': legs[0]['effectiveDeparture'], 'effectiveArrival': legs[-1]['effectiveArrival'],
-            'walkSeconds': max(0, round(node.get('walkTime') or 0)), 'transferCount': sum(1 for t in transfers if not t.get('held')),
+            'walkSeconds': max(0, round((node.get('walkTime') or 0) - trimmed)), 'transferCount': sum(1 for t in transfers if not t.get('held')),
             'transfers': transfers,
             'notices': notices[:3], 'freshness': 'live' if any(m['realtime'] for m in meta) else 'scheduled',
+            '_stray': stray,
         })
-    return journeys
+    # A town means its stations: journeys through another stop only when none leaves or arrives at them.
+    if not all(j['_stray'] for j in journeys):
+        journeys = [j for j in journeys if not j['_stray']]
+    return [{k: v for k, v in j.items() if k != '_stray'} for j in journeys]

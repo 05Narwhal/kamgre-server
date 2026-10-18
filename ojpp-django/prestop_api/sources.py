@@ -521,8 +521,11 @@ def search_stations(q: str, limit: int) -> list[dict]:
     if not needle:
         return []
     groups: dict[str, list[dict]] = {}
+    railway = set()  # every railway station's name, so a town's district ("Celje Lava") is not a town of its own
     for s in stops.get().value['list']:
         name = mapping.fold(s['name'])
+        if 'rail' in s['modes']:
+            railway.add(name)
         if needle in name:
             groups.setdefault(name, []).append(s)
     places = []
@@ -543,9 +546,68 @@ def search_stations(q: str, limit: int) -> list[dict]:
                 'latitude': round(sum(s['latitude'] for s in c) / len(c), 6),
                 'longitude': round(sum(s['longitude'] for s in c) / len(c), 6),
                 '_rank': (mapping.fold(head['name']) != needle, not mapping.fold(head['name']).startswith(needle), 'rail' not in head['modes'], -len(c), len(head['name'])),
+                '_rail': 'rail' in head['modes'], '_members': [s['id'] for s in c],
             })
     places.sort(key=lambda p: p.pop('_rank'))
-    return places[:limit]
+    return _with_towns(places, railway)[:limit]
+
+
+TOWN_METERS = 3000  # a town's railway station and its bus station this far apart are still the town (Kranj: 780 m)
+TOWN_STOPS = 8  # stop ids a town carries at most (journeys.MAX_TOWN_STOPS): both poles of each station
+
+
+def _town_bus_stations(places: list[dict], railway: set[str]) -> dict[str, dict]:
+    """Railway station id -> its town's bus station among `places`: a bus stop of the same town name ("Kranj AP" for
+    "Kranj", "Radovljica" for "Radovljica") within TOWN_METERS, a bus station by name ("AP") first, then the nearest.
+    A stop named after the railway station ("Kranj ŽP") is the station's own bus stop, not the town's bus station. A
+    station named as another one and more ("Celje Lava", "Novo mesto Šmihel") is a part of that town, not a town."""
+    by_town: dict[str, list[dict]] = {}
+    for p in places:
+        if not p['_rail']:
+            by_town.setdefault(stopgroups.normalize(p['name']), []).append(p)
+    found, taken = {}, set()
+    for rail in (p for p in places if p['_rail']):
+        name = mapping.fold(rail['name'])
+        if any(name.startswith(other + ' ') for other in railway):
+            continue
+        best = None
+        for p in by_town.get(stopgroups.normalize(rail['name']), []):
+            named = bool(stopgroups.BUS_STATION_WORDS.search(mapping.fold(p['name'])))
+            if p['id'] in taken or (not named and stopgroups.name_key(p['name']) != stopgroups.name_key(rail['name'])):
+                continue
+            d = stopgroups.meters(rail, p)
+            if d <= TOWN_METERS and (best is None or (not named, d) < best[0]):
+                best = ((not named, d), p)
+        if best:
+            found[rail['id']] = best[1]
+            taken.add(best[1]['id'])
+    return found
+
+
+def _with_towns(places: list[dict], railway: set[str]) -> list[dict]:
+    """A town whose railway station and bus station are apart (Kranj, Radovljica) is one more result, both stations as
+    one place (`stopIds`: plan from whichever suits, journeys.py), right before them; the two stay results of their own
+    next to it. Stations close enough to be one are one stop already (stopgroups.merge) and need no town."""
+    bus_of = _town_bus_stations(places, railway)
+    rail_of = {bus['id']: rail_id for rail_id, bus in bus_of.items()}
+    by_id = {p['id']: p for p in places}
+    out, placed = [], set()
+    for p in places:
+        if p['id'] in placed:
+            continue
+        rail = p if p['id'] in bus_of else by_id.get(rail_of.get(p['id'], ''))
+        if not rail:
+            out.append(p)
+            continue
+        bus = bus_of[rail['id']]
+        out += [{
+            'id': f'town:{rail["id"]}', 'name': rail['name'], 'kind': 'station', 'category': 'town', 'stopId': rail['id'],
+            # Every pole of both (Kranj AP's other side is another stop): a journey may leave from any of them.
+            'stopIds': (rail['_members'] + bus['_members'])[:TOWN_STOPS] if len(rail['_members']) < TOWN_STOPS else [rail['id'], bus['id']], 'modes': sorted(set(rail['modes']) | set(bus['modes'])),
+            'latitude': round((rail['latitude'] + bus['latitude']) / 2, 6), 'longitude': round((rail['longitude'] + bus['longitude']) / 2, 6),
+        }, rail, bus]
+        placed.update((rail['id'], bus['id']))
+    return [{k: v for k, v in p.items() if k not in ('_rail', '_members')} for p in out]
 
 
 def geocode(q: str, limit: int, language: str, near=None) -> list[dict]:

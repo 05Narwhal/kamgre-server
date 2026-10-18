@@ -142,6 +142,31 @@ class SearchTests(SimpleTestCase):
                   stop('IJPP:3', 'Kovor', north_of(46.30, 400), 14.30)]
         with mock.patch.object(sources.stops, 'get', return_value=mock.Mock(value={'list': listed})):
             found = sources.search_stations('Radovljica', 10)
-            self.assertEqual([(p['stopId'], p['modes']) for p in found], [('IJPP:1122815', ['rail']), ('IJPP:1129160', ['bus'])])
-            self.assertEqual(found[0]['latitude'], 46.340415)  # the station where it is, not between the two
+            # The town first (both stations), then each of them on its own.
+            self.assertEqual([(p['id'], p['modes']) for p in found], [('town:IJPP:1122815', ['bus', 'rail']), ('IJPP:1122815', ['rail']), ('IJPP:1129160', ['bus'])])
+            self.assertEqual((found[0]['category'], found[0]['stopId'], found[0]['stopIds']), ('town', 'IJPP:1122815', ['IJPP:1122815', 'IJPP:1129160']))
+            self.assertEqual(found[1]['latitude'], 46.340415)  # the station where it is, not between the two
             self.assertEqual(sorted(p['stopId'] for p in sources.search_stations('Kovor', 10)), ['IJPP:1', 'IJPP:3'])
+
+    def test_a_town_is_its_railway_station_and_its_bus_station(self):
+        listed = [stop('IJPP:1122811', 'Kranj', 46.238955, 14.348073, modes=('bus', 'rail')),
+                  stop('IJPP:1121309', 'Kranj ŽP', 46.23705, 14.349335),  # the station's own bus stop, 230 m
+                  stop('IJPP:1121246', 'Kranj Globus', 46.242085, 14.355485),
+                  stop('IJPP:1121237', 'Kranj AP', 46.24589, 14.354703),  # the bus station, 940 m
+                  stop('IJPP:1121238', 'Kranj AP', 46.24582, 14.35453),  # its other side
+                  stop('IJPP:9', 'Kranjska Gora', 46.4847, 13.7856)]
+        with mock.patch.object(sources.stops, 'get', return_value=mock.Mock(value={'list': listed})):
+            found = sources.search_stations('kranj', 10)
+            self.assertEqual([p['id'] for p in found][:3], ['town:IJPP:1122811', 'IJPP:1122811', 'IJPP:1121237'])
+            self.assertEqual(found[0]['stopIds'], ['IJPP:1122811', 'IJPP:1121237', 'IJPP:1121238'])  # every pole of both
+            self.assertEqual({p['id'] for p in found[3:]}, {'IJPP:1121309', 'IJPP:1121246', 'IJPP:9'})
+            # Stations stop being one town some way apart, and a bus stop that only shares the start of the name is not one.
+            far = [stop('IJPP:1', 'Kranj', 46.0, 14.0, modes=('rail',)), stop('IJPP:2', 'Kranj AP', north_of(46.0, 3500), 14.0)]
+            with mock.patch.object(sources.stops, 'get', return_value=mock.Mock(value={'list': far})):
+                self.assertEqual([p['id'] for p in sources.search_stations('Kranj', 10)], ['IJPP:1', 'IJPP:2'])
+            self.assertEqual([p['id'] for p in sources.search_stations('Kranjska', 10)], ['IJPP:9'])
+        # A part of a town with its own halt and bus stop is not a town.
+        district = [stop('IJPP:1', 'Celje', 46.0, 14.0, modes=('rail',)), stop('IJPP:2', 'Celje Lava', 46.01, 14.0, modes=('rail',)),
+                    stop('IJPP:3', 'Celje Lava', north_of(46.01, 200), 14.0)]
+        with mock.patch.object(sources.stops, 'get', return_value=mock.Mock(value={'list': district})):
+            self.assertEqual([p['id'] for p in sources.search_stations('Celje Lava', 10)], ['IJPP:2', 'IJPP:3'])
