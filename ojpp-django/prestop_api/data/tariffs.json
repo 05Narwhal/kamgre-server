@@ -1,0 +1,61 @@
+{
+  "about": "Prices for KamGre's estimates, read from the operators' published price lists. Every entry names its source and the day it was read. Amounts in euro cents incl. VAT. Not exact: the app always shows them as estimates.",
+  "checked": "2026-10-18",
+  "sharing": {
+    "about": "Per ride for a member: freeMinutes free, then charges once the ride passes each minute ([after, cents]), then every [after, step minutes, cents] per started step, capped at capCents; maxMinutes: longest rental allowed. resetOnReturn: a new rental starts a new free period (after waitSeconds). Scooters: unlockCents + perMinuteCents per started minute.",
+    "networks": {
+      "jcdecaux_ljubljana": {
+        "name": "BicikeLJ", "membership": [{"id": "bicikelj-annual", "cents": 300, "period": "year"}, {"id": "bicikelj-weekly", "cents": 100, "period": "week"}],
+        "freeMinutes": 60, "charges": [[60, 100], [120, 200]], "every": [180, 60, 400], "maxMinutes": 1440, "resetOnReturn": true, "waitSeconds": 300,
+        "source": "Visit Ljubljana (City of Ljubljana), BicikeLJ", "sourceUrl": "https://www.visitljubljana.com/sl/obiskovalci/informacije/promet-in-transport/bicikelj-samopostrezna-izposoja-koles", "checked": "2026-10-18"
+      },
+      "jcdecaux_maribor": {
+        "name": "MBajk", "membership": [{"id": "mbajk-annual", "cents": 300, "period": "year"}],
+        "freeMinutes": 60, "charges": [], "resetOnReturn": false,
+        "note": "Only the first free hour and the 3 EUR annual fee are confirmed (launch, RTV SLO); later charges unknown, so rides past an hour have no price.",
+        "source": "RTV SLO, MBajk launch", "sourceUrl": "https://www.rtvslo.si/radio-si/news/maribor-unveils-its-mbajk-bicycle-sharing-system/620750", "checked": "2026-10-18"
+      },
+      "nextbike_cc": {
+        "name": "Bicikel (Nomago Bikes)", "membership": [{"id": "nomago-ljubljana-annual", "cents": 2500, "period": "year"}, {"id": "nomago-ljubljana-weekly", "cents": 800, "period": "week"}],
+        "freeMinutes": 45, "every": [45, 30, 130], "capCents": 2000, "resetOnReturn": false,
+        "note": "Annual subscription (weekly: 30 free minutes). Price list lists e-bikes only.",
+        "source": "Nomago Bikes price list, valid from 18. 9. 2026", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
+      },
+      "nextbike_cn": {
+        "name": "KolesCE (Nomago Bikes)", "membership": [{"id": "kolesce-annual", "cents": 2000, "period": "year"}],
+        "freeMinutes": 30, "every": [30, 30, 50], "capCents": 2000, "resetOnReturn": false,
+        "note": "Regular bike; e-bike 1.00 EUR per 30 min.",
+        "source": "Nomago Bikes price list, valid from 16. 3. 2026", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
+      },
+      "nextbike_ce": {
+        "name": "GO2GO (Nomago Bikes)", "membership": [{"id": "go2go-annual", "cents": 2000, "period": "year"}],
+        "freeMinutes": 30, "every": [30, 30, 50], "capCents": 2000, "resetOnReturn": false,
+        "note": "Regular bike; e-bike 1.00 EUR per 30 min.",
+        "source": "Nomago Bikes price list", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
+      },
+      "nextbike_cf": {
+        "name": "Zanaprej (Nomago Bikes)", "membership": [{"id": "zanaprej-annual", "cents": 2000, "period": "year"}],
+        "freeMinutes": 30, "every": [30, 30, 100], "capCents": 2000, "resetOnReturn": false,
+        "note": "E-bikes only.",
+        "source": "Nomago Bikes price list", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
+      },
+      "nextbike_cx": {
+        "name": "KoroBajk (Nomago Bikes)", "membership": [{"id": "korobajk-annual", "cents": 2500, "period": "year"}, {"id": "korobajk-weekly", "cents": 800, "period": "week"}],
+        "freeMinutes": 45, "every": [45, 45, 150], "capCents": 2000, "resetOnReturn": false,
+        "note": "E-bikes.",
+        "source": "Nomago Bikes price list, valid from 17. 9. 2026", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
+      },
+      "scbikes_gbike": {
+        "name": "Gorenjska.bike", "membership": [{"id": "gorenjska-annual", "cents": 2500, "period": "year"}, {"id": "gorenjska-monthly", "cents": 1000, "period": "month"}, {"id": "gorenjska-3day", "cents": 300, "period": "day"}],
+        "freeMinutes": 120, "charges": [], "maxMinutes": 120, "resetOnReturn": false,
+        "note": "Members ride free up to 2 hours a day in total (3-day package: 840 minutes).",
+        "source": "Gorenjska.bike price list, valid from 30. 5. 2025", "sourceUrl": "https://www.gorenjska.bike/documents/gorenjskabike/Dokumenti/Cenik-2025.pdf", "checked": "2026-10-18"
+      },
+      "bolt_359": {
+        "name": "Bolt", "unlockCents": null, "perMinuteCents": 15,
+        "note": "From 0.15 EUR a minute plus an unlock fee the page does not state; passes from 0.99 EUR a month (unlimited unlocks).",
+        "source": "Bolt scooters, Slovenia", "sourceUrl": "https://bolt.eu/sl-si/scooters/", "checked": "2026-10-18"
+      }
+    }
+  }
+}

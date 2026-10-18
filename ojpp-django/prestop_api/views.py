@@ -433,6 +433,14 @@ def journeys(request):
     except UpstreamError:
         alert_list = []
     result = planner.build_journeys(data, req, alert_list, plan_for=lambda when: scheduled.plan_at(when, wait=6))
+    if any(leg.get('rental') for j in result for leg in j['legs']):
+        # Shared rides: when their free time ends, and a swap at a station along the way when that keeps it free.
+        from . import sharing
+        try:
+            stations = sources.rentals.get().value
+        except UpstreamError:
+            stations = []
+        result = [sharing.free_periods(j, stations) for j in result]
     if req['maxTransfers'] is not None:
         # OTP's limit counts a stay-seated through-run differently; the rider's count is the one shown.
         result = [j for j in result if j['transferCount'] <= req['maxTransfers']]
