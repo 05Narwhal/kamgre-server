@@ -14,6 +14,8 @@ AP = 'IJPP:1126954'
 BAYS = {
     '13': {'lat': 46.0580472, 'lon': 14.5145895, 'heading': 29.9, 'path': [[14.5145045, 46.0579443], [14.5146746, 46.05815]]},
     '27': {'lat': 46.05806, 'lon': 14.5157, 'heading': 29.6, 'path': []},
+    '28': {'lat': 46.05807, 'lon': 14.51578, 'heading': 29.6, 'path': []},
+    '29': {'lat': 46.05808, 'lon': 14.51586, 'heading': 29.7, 'path': []},
     '37': {'lat': 46.0581476, 'lon': 14.5143907, 'heading': 269.3, 'path': []},
 }
 LOCAL = ZoneInfo('Europe/Ljubljana')
@@ -37,6 +39,11 @@ class MatchingTests(SimpleTestCase):
         self.assertEqual(platforms.first_bay('27-29', BAYS), '27')
         self.assertEqual(platforms.first_bay('37, 38 in 39', BAYS), '37')
         self.assertIsNone(platforms.first_bay('99', BAYS))
+
+    def test_a_range_on_the_board_names_every_bay_in_it(self):
+        self.assertEqual(platforms.bay_refs('27-29', BAYS), ['27', '28', '29'])
+        self.assertEqual(platforms.bay_refs('13, 27', BAYS), ['13', '27'])
+        self.assertEqual(platforms.bay_refs('99', BAYS), [])
 
     def test_board_rows_without_a_bay_are_skipped(self):
         rows = platforms.board_rows(BOARD)
@@ -116,6 +123,9 @@ class PlaceTests(SimpleTestCase):
         with mock.patch.object(platforms, 'platform_for', return_value=('27-29', True)):
             placed, bay = platforms.place(stops, AT_13, 'Koper')
         self.assertEqual((placed[0]['bay'], placed[0]['bayUsual'], bay['station']), ('27', True, AP))
+        # Spec 2026-10-18 A3: the rest of the range is where it stands when 27 is taken.
+        self.assertEqual([b['ref'] for b in bay['alternates']], ['28', '29'])
+        self.assertEqual(bay['alternates'][0]['heading'], 29.6)
 
     def test_an_unknown_departure_or_another_station_stays_put(self):
         stops = [{'gtfsId': AP, 'name': 'Ljubljana AP', 'lat': 46.0, 'lon': 14.0}]

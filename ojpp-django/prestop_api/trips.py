@@ -153,6 +153,10 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
         # whether its bay is still to be announced.
         **({'originArea': origin} if origin else {}),
         **({'destinationArea': destination} if destination else {}),
+        # The other bays its departure may use (a range on the board): taken by another bus, it stands in one of these.
+        **({'originBays': [{'platform': b['ref'], 'latitude': round(b['lat'], 7), 'longitude': round(b['lon'], 7),
+                            **({'heading': round(b['heading'], 1)} if b.get('heading') is not None else {})}
+                           for b in bay['alternates']]} if bay and bay.get('alternates') else {}),
         'bayPending': bool(origin) and (not bay or bay['usual']) and departure is not None,
         'departure': departure,
     }
@@ -332,7 +336,7 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True) ->
         # announced (platforms.py): fetch the trip again shortly.
         'provisional': not static.get('complete', True) or _awaits_bay(static),
         'geometry': static['geometry'] if geometry else [], 'stops': stops,
-        **{k: static[k] for k in ('originArea', 'destinationArea', 'comesFrom') if static.get(k)},
+        **{k: static[k] for k in ('originArea', 'destinationArea', 'originBays', 'comesFrom') if static.get(k)},
         **({'replacement': True} if static.get('replacement') else {}),
     }
 

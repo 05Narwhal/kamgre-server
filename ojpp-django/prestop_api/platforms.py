@@ -81,10 +81,18 @@ def bays(station_id: str) -> dict:
 
 def first_bay(platform: str, known: dict) -> Optional[str]:
     """The bay to draw for a board's platform text: '13' → '13', '27-29' → '27', '37, 38 in 39' → '37'."""
-    for ref in re.findall(r'\d+', platform or ''):
-        if ref in known:
-            return ref
-    return None
+    refs = bay_refs(platform, known)
+    return refs[0] if refs else None
+
+
+def bay_refs(platform: str, known: dict) -> list[str]:
+    """Every known bay a board's platform text names, in order: '27-29' → ['27', '28', '29'] (a range is each bay
+    in it), '37, 38 in 39' → ['37', '38', '39']."""
+    out: list[str] = []
+    for a, b in re.findall(r'(\d+)(?:\s*[-–]\s*(\d+))?', platform or ''):
+        span = range(int(a), int(b) + 1) if b and 0 <= int(b) - int(a) <= 10 else [int(a)]
+        out += [str(n) for n in span if str(n) in known and str(n) not in out]
+    return out
 
 
 # ---------------------------------------------------------------- departure boards
@@ -232,13 +240,17 @@ def bay_for(stop: dict, departure: Optional[float], destination: str, label: str
     known = bays(station)
     if not known:
         return None
-    ref = first_bay(named.group(1), known) if named else None
+    refs = bay_refs(named.group(1), known) if named else []
     usual = False
-    if ref is None and departure is not None:
+    if not refs and departure is not None:
         seen = station_seen(station)
         platform, usual = platform_for(station, departure, destination, seen)
-        ref = first_bay(platform or '', known)
-    return {**known[ref], 'ref': ref, 'usual': usual, 'station': station} if ref else None
+        refs = bay_refs(platform or '', known)
+    if not refs:
+        return None
+    # The other bays the board names for it ("27-29"): a bus finding its bay taken stands in a free one of them.
+    alternates = [{'ref': r, 'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in refs[1:]]
+    return {**known[refs[0]], 'ref': refs[0], 'usual': usual, 'station': station, 'alternates': alternates}
 
 
 def origin_area(station_id: str) -> Optional[dict]:
