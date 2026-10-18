@@ -56,6 +56,8 @@ class VehicleTrip(models.Model):
     start_delay = models.IntegerField(null=True)
     first_seen = models.DateTimeField()
     last_seen = models.DateTimeField()
+    # How long it stood at each stop, {stopId: seconds}; 0: it drove through (dwell.py, spec 2026-10-18 A5).
+    dwell = models.JSONField(default=dict)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['service_date', 'trip_id'], name='prestop_vehicle_trip_unique')]
@@ -134,3 +136,20 @@ class StayCheck(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['day', 'feed', 'level'], name='prestop_stay_check_unique')]
+
+
+class LearnedTime(models.Model):
+    """What learned.py learned each night for one route on one kind of day ('workday', 'saturday', 'sunday', or '*'
+    for all) in one hour band ('night', 'am', 'day', 'pm', 'eve', or '*'): running times between consecutive stops,
+    `segments` {"from>to": [median, q25, q75, samples]}, and dwells, `dwells` {stopId: [mean s (0 s for trips that drove through included), share of trips
+    that stood there, samples]}. Only keys with enough samples (learned.MIN_SAMPLES, MIN_FINE_SAMPLES for a kind of
+    day or band); the table is rewritten each night."""
+    route_id = models.CharField(max_length=200)
+    kind = models.CharField(max_length=8)
+    band = models.CharField(max_length=5)
+    segments = models.JSONField(default=dict)
+    dwells = models.JSONField(default=dict)
+    learned_on = models.DateField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['route_id', 'kind', 'band'], name='prestop_learned_time_unique')]

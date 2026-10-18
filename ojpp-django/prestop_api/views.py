@@ -632,8 +632,19 @@ def _dense(shapes: list[dict]) -> list[dict]:
 
 
 def _typical(entry: dict) -> dict:
+    """{'typical': {"from>to": s}, 'dwells': {stopId: learned}} for build_trip: the running and dwell times learned
+    for the trip's route on its kind of day at its hour (prestop_statistics.learned), backed off to the route's
+    plain 21-day medians."""
     # A synthetic replacement bus shares the train's route and stops, not its running times.
-    return {} if entry['static'].get('synthetic') else typical_segments(entry['static']['routeId'])
+    if entry['static'].get('synthetic'):
+        return {'typical': {}, 'dwells': {}}
+    from prestop_statistics import learned
+    from prestop_statistics.aggregation import day_kind
+    route = entry['static']['routeId']
+    first = min(entry['times'], key=lambda s: s['stopPosition'], default=None)
+    hour = (first['scheduledDeparture'] // 3600) if first else 12
+    segments, dwells = learned.lookup(route, day_kind(entry['serviceDate']), hour)
+    return {'typical': {**typical_segments(route), **segments}, 'dwells': dwells}
 
 
 def _ids_param(request, name: str, limit: int) -> list[str]:
@@ -661,7 +672,7 @@ def trip_list(request):
     ids = _ids_param(request, 'ids', MAX_TRIPS)
     geometry = request.GET.get('geometry', '1') != '0'
     found = trips.load_trips(ids, _day_param(request))
-    data = [trips.build_trip(found[t], _typical(found[t]), geometry) for t in ids if t in found]
+    data = [trips.build_trip(found[t], geometry=geometry, **_typical(found[t])) for t in ids if t in found]
     _with_observed(data, found)
     data = _dense(data)
     _with_replaced(data)
@@ -675,7 +686,7 @@ def trip_detail(request, trip_id):
     found = trips.load_trips([trip_id], _day_param(request)).get(trip_id)
     if not found:
         raise ApiError(404, 'TRIP_NOT_FOUND', 'This trip is not in the current timetable.')
-    data = trips.build_trip(found, _typical(found))
+    data = trips.build_trip(found, **_typical(found))
     _with_observed([data], {trip_id: found})
     [data] = _dense([data])
     _with_replaced([data])

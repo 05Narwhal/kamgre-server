@@ -301,7 +301,10 @@ def _load_own(ids: list[str], day: date, deadline: float, now: float) -> dict[st
     return out
 
 
-def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True) -> dict:
+def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True, dwells: Optional[dict] = None) -> dict:
+    """The API trip. `typical`: learned running times {"from>to": s}; `dwells`: learned dwells {stopId: [median, share,
+    samples]} (prestop_statistics.learned), each stop's `dwellSeconds` (0: usually driven through)."""
+    from prestop_statistics.learned import dwell_seconds
     static, times = entry['static'], {s['stopPosition']: s for s in entry['times']}
     stops = []
     realtime = False
@@ -322,6 +325,7 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True) ->
             'effectiveDeparture': mapping.iso(day + st['realtimeDeparture']) if live and not canceled else None,
             'canceled': canceled,
             'typicalSeconds': typical.get(f'{stop["stopId"]}>{nxt}') if nxt else None,
+            'dwellSeconds': dwell_seconds((dwells or {}).get(stop['stopId'])),
             **({'platform': stop['platform'], 'platformUsual': stop['platformUsual']} if stop.get('platform') else {}),
         })
         if static['mode'] == 'rail' and 'platform' not in stops[-1]:
