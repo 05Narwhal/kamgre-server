@@ -434,8 +434,10 @@ def journeys(request):
         alert_list = []
     result = planner.build_journeys(data, req, alert_list, plan_for=lambda when: scheduled.plan_at(when, wait=6))
     if any(leg.get('rental') for j in result for leg in j['legs']):
-        # Shared rides: when their free time ends, and a swap at a station along the way when that keeps it free.
         from . import sharing
+        # E-scooters walk where they may not ride (roads over 50 km/h without a cycle lane, ZPrCP 97.a).
+        result = [j for j in (sharing.scooter_rules(j) for j in result) if j is not None]
+        # Shared rides: when their free time ends, and a swap at a station along the way when that keeps it free.
         try:
             stations = sources.rentals.get().value
         except UpstreamError:

@@ -181,3 +181,107 @@ def _split(leg: dict, rule: dict, rentals: list[dict], start: float, end: float,
               'scheduledArrival': mapping.iso(_ts(leg['scheduledArrival']) + added), 'effectiveArrival': mapping.iso(end + added),
               'rental': {k: v for k, v in leg['rental'].items() if k != 'freeUntil'} | {'fromStationId': station['id']}}
     return first, second, added
+
+
+# ---------------------------------------------------------------- where scooters may ride (A4)
+
+NO_SCOOTER = Path(__file__).resolve().parent / 'data' / 'no_scooter.json'
+SAMPLE = 10.0       # m between checked points along a ride
+MIN_CLOSED = 30.0   # m: shorter stretches are crossings or map noise
+PUSH_SPEED = 1.2    # m/s walking beside the scooter
+
+
+@lru_cache(maxsize=1)
+def _closed() -> tuple[float, float, list[tuple[tuple, set]]]:
+    data = json.loads(NO_SCOOTER.read_text(encoding='utf-8'))
+    areas = []
+    for area in data['areas'].values():
+        cells = {(int(iy), ix) for iy, spans in area['rows'].items() for a, b in spans for ix in range(a, b + 1)}
+        areas.append((tuple(area['bbox']), cells))
+    return data['cellLat'], data['cellLon'], areas
+
+
+def closed_at(lon: float, lat: float) -> bool:
+    """Whether an e-scooter may not ride here (a road over 50 km/h without a cycle lane, data/no_scooter.json)."""
+    cell_lat, cell_lon, areas = _closed()
+    key = (round(lat / cell_lat), round(lon / cell_lon))
+    return any(w <= lon <= e and s <= lat <= n and key in cells for (w, s, e, n), cells in areas)
+
+
+def _closed_stretches(coords: list) -> list[tuple[float, float]]:
+    """(from, to) metres along the line where it runs on closed cells for at least MIN_CLOSED."""
+    cum = geometry.cumulative(coords)
+    out, start, i = [], None, 1
+    for k in range(int(cum[-1] // SAMPLE) + 2):
+        d = min(k * SAMPLE, cum[-1])
+        while i < len(coords) - 1 and cum[i] < d:
+            i += 1
+        span = cum[i] - cum[i - 1] or 1.0
+        t = (d - cum[i - 1]) / span
+        a, b = coords[i - 1], coords[i]
+        closed = closed_at(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+        if closed and start is None:
+            start = d
+        if (not closed or d >= cum[-1]) and start is not None:
+            if d - start >= MIN_CLOSED:
+                out.append((start, d))
+            start = None
+    return out
+
+
+def _cut(coords: list, a: float, b: float) -> list:
+    """The part of a line from a to b metres along it."""
+    cum = geometry.cumulative(coords)
+    total = cum[-1] or 1.0
+    pa, ia = _point_at(coords, a / total)
+    pb, ib = _point_at(coords, b / total)
+    return [pa] + [list(c) for c in coords[ia:ib]] + [pb]
+
+
+def scooter_rules(journey: dict) -> Optional[dict]:
+    """Scooter rides along a road closed to e-scooters walk that stretch beside the scooter (the ride splits into
+    scooter / walk / scooter legs and arrives later). None when that would miss the next bus or train: the journey
+    is then not offered."""
+    legs, i = journey['legs'], 0
+    while i < len(legs):
+        leg = legs[i]
+        if leg.get('mode') != 'scooter' or len(leg['geometry']) < 2:
+            i += 1
+            continue
+        stretches = _closed_stretches(leg['geometry'])
+        if not stretches:
+            i += 1
+            continue
+        start, end = _ts(leg['effectiveDeparture']), _ts(leg['effectiveArrival'])
+        length = geometry.cumulative(leg['geometry'])[-1] or 1.0
+        speed = length / max(end - start, 1.0)
+        parts, at, t = [], 0.0, start
+        for a, b in stretches + [(length, length)]:
+            for mode, x, y in (('scooter', at, a), ('walk', a, b)):
+                if y - x < 1:
+                    continue
+                seconds = (y - x) / (speed if mode == 'scooter' else PUSH_SPEED)
+                part = {**leg, 'id': f"{leg['id']}-{len(parts)}" if parts else leg['id'], 'mode': mode, 'geometry': _cut(leg['geometry'], x, y),
+                        'scheduledDeparture': mapping.iso(t), 'effectiveDeparture': mapping.iso(t),
+                        'scheduledArrival': mapping.iso(t + seconds), 'effectiveArrival': mapping.iso(t + seconds)}
+                if mode == 'walk':
+                    part.pop('rental', None)
+                parts.append(part)
+                t += seconds
+            at = b
+        added = t - end
+        if added > _slack_after(legs, i):
+            return None
+        for k in range(len(parts) - 1):
+            # Where the ride stops and the walk starts (or the other way): a point on the street, as OTP names one.
+            lon, lat = parts[k]['geometry'][-1]
+            parts[k]['destination'] = parts[k + 1]['origin'] = {'name': 'Location', 'latitude': lat, 'longitude': lon, 'kind': 'address'}
+        legs[i:i + 1] = parts
+        for later in legs[i + len(parts):]:
+            if later.get('tripId'):
+                break
+            _shift(later, added)
+        i += len(parts)
+    journey['scheduledArrival'] = max(journey['scheduledArrival'], legs[-1]['scheduledArrival'], key=_ts)
+    journey['effectiveArrival'] = max(journey['effectiveArrival'], legs[-1]['effectiveArrival'], key=_ts)
+    return journey

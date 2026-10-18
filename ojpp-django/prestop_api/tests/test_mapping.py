@@ -264,7 +264,7 @@ class JourneyTests(SimpleTestCase):
                 'minTransferSeconds': 300, 'modes': ['walk', 'bus'], 'riskMode': 'insane', 'operators': ['IJPP:1118', 'IJPP:1118']}
         v = journeys.otp_variables(journeys.parse_request(body, insane_enabled=True))
         self.assertEqual(v['preferences']['transit'], {'transfer': {'slack': 'PT0S', 'cost': 0, 'maximumTransfers': 29, 'maximumAdditionalTransfers': 30}, 'filters': [{'include': [{'agencies': ['IJPP:1118', 'LPP:lpp']}]}]})  # every feed's id of LPP (operator_aliases.csv)
-        self.assertEqual(v['preferences']['street'], {'walk': {'speed': journeys.INSANE_WALK_SPEED}})
+        self.assertEqual(v['preferences']['street']['walk'], {'speed': journeys.INSANE_WALK_SPEED})
 
     def test_leg_carries_the_line_headsign(self):
         data = {'planConnection': {'edges': [{'node': {'walkTime': 0, 'legs': [leg('BUS', '10:00:00', '10:20:00', trip='LPP:1', headsign='Ljubljana Vižmarje')]}}]}}
@@ -279,6 +279,11 @@ class JourneyTests(SimpleTestCase):
         raw['trip']['tripHeadsign'] = '  '
         [j] = journeys.build_journeys({'planConnection': {'edges': [{'node': {'walkTime': 0, 'legs': [raw]}}]}}, self.request(), [])
         self.assertIsNone(j['legs'][0]['headsign'])
+
+    def test_bikes_and_scooters_are_routed_along_cycle_paths(self):
+        street = journeys.otp_variables(self.request(modes=['walk', 'bus', 'bike', 'scooter']))['preferences']['street']
+        self.assertEqual(street['bicycle'], {'optimization': {'type': 'SAFE_STREETS'}})
+        self.assertEqual(street['scooter'], {'optimization': {'type': 'SAFE_STREETS'}})
 
     def test_price_fields_are_accepted_and_used_only_with_show_prices(self):
         profile = {'cards': ['urbana-monthly', 'urbana-monthly'], 'bikeMemberships': ['jcdecaux_ljubljana'], 'scooterPasses': [],

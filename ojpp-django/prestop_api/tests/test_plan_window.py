@@ -77,7 +77,7 @@ class DayWindowTests(SimpleTestCase):
         """Kropa → Ljubljana after the last bus: only a brisk walk to the train at Otoče gets there."""
         normal = FakeOtp()
         wider = FakeOtp(ride('20:22:00', '21:56:00', 'IJPP:train'))
-        query = lambda q, v: (wider if v['preferences'].get('street') else normal)(q, v)
+        query = lambda q, v: (wider if 'walk' in v['preferences']['street'] else normal)(q, v)
         req = request(insane=False, slack=180, dateTime='2026-10-09T20:00:00+02:00')
         data = journeys.plan(req, query)
         self.assertEqual(trips(data), ['IJPP:train'])
@@ -98,10 +98,10 @@ class DayWindowTests(SimpleTestCase):
     def test_found_within_the_usual_limits_or_insane_is_not_widened(self):
         otp = FakeOtp(ride('20:22:00', '21:56:00', 'IJPP:bus'))
         self.assertNotIn('wider', journeys.plan(request(insane=False, dateTime='2026-10-09T20:00:00+02:00'), otp))
-        self.assertTrue(all('street' not in v['preferences'] for v in otp.asked))
+        self.assertTrue(all('walk' not in v['preferences']['street'] for v in otp.asked))
         empty = FakeOtp()
         self.assertNotIn('wider', journeys.plan(request(dateTime='2026-10-09T20:00:00+02:00'), empty))
-        self.assertTrue(all(v['preferences'].get('street') for v in empty.asked))  # Insane asked once, as itself
+        self.assertTrue(all('walk' in v['preferences']['street'] for v in empty.asked))  # Insane asked once, as itself
 
     def test_the_window_never_passes_otp_s_limit_or_the_day(self):
         at = lambda when, mode='departAt': journeys.day_window(request(insane=False, dateTime=when, timeMode=mode))

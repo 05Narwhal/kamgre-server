@@ -13,6 +13,8 @@ from . import operators as companies
 
 MODES = {'walk', 'bus', 'rail', 'bike', 'scooter', 'car', 'carPark'}  # car: drive all the way; carPark: drive, park, ride
 COST_PRESETS = ('fastest', 'balanced', 'cheapest')
+# 2026-10-18, 6 bike rides in 4 towns: SAFE_STREETS (OTP's default) 26 % on cycle paths, SHORTEST_DURATION 6 % (-10 % time).
+RIDE_OPTIMIZATION = 'SAFE_STREETS'
 FUELS = ('petrol', 'diesel', 'lpg', 'electric')
 PRICE_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,47}')
 PROFILE_LIMITS = {'cards': 12, 'bikeMemberships': 24, 'scooterPasses': 8}
@@ -205,10 +207,13 @@ def otp_variables(req: dict) -> dict:
     stamp = req['dateTime'].isoformat()
     insane = req.get('riskMode') == 'insane' or req.get('wider')
     transfer = {'slack': f'PT{0 if insane else max(0, req["minTransferSeconds"])}S'}
-    preferences: dict = {'transit': {'transfer': transfer}}
+    # Bikes and scooters keep to cycle paths and quiet streets (OTP's SAFE_STREETS; e-scooters must use cycle
+    # infrastructure, ZPrCP 97.a), said outright so a change of OTP's default cannot move riders onto main roads.
+    preferences: dict = {'transit': {'transfer': transfer}, 'street': {'bicycle': {'optimization': {'type': RIDE_OPTIMIZATION}},
+                                                                       'scooter': {'optimization': {'type': RIDE_OPTIMIZATION}}}}
     if insane:
         transfer.update(cost=0, maximumTransfers=INSANE_MAX_TRANSFERS[0], maximumAdditionalTransfers=INSANE_MAX_TRANSFERS[1])
-        preferences['street'] = {'walk': {'speed': INSANE_WALK_SPEED}}
+        preferences['street']['walk'] = {'speed': INSANE_WALK_SPEED}
     if req.get('maxTransfers') is not None:
         # The rider's limit; OTP stops searching beyond it.
         transfer['maximumTransfers'] = req['maxTransfers']
