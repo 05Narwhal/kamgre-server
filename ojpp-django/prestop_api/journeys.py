@@ -1,6 +1,8 @@
 """Journey planning through OTP `planConnection`, which applies realtime delays and
 cancellations, supports native via points and a minimum transfer slack."""
 import hashlib
+import json
+import logging
 import re
 import time
 from datetime import datetime, timedelta
@@ -10,6 +12,9 @@ from zoneinfo import ZoneInfo
 from . import abroad, geometry, journey_legs, sharing, leg_alerts, mapping, platforms, predictions, roads, stopfix, tracks, transfer_walk
 from . import geometry as geometry_lib
 from . import operators as companies
+from .upstream import UpstreamError
+
+logger = logging.getLogger(__name__)
 
 MODES = {'walk', 'bus', 'rail', 'bike', 'scooter', 'car', 'carPark'}  # car: drive all the way; carPark: drive, park, ride
 COST_PRESETS = ('fastest', 'balanced', 'cheapest')
@@ -184,7 +189,9 @@ def otp_variables(req: dict) -> dict:
     street = ['WALK']
     if 'bike' in req['modes']:
         street.append('BICYCLE_RENTAL')
-    if 'scooter' in req['modes']:
+    elif 'scooter' in req['modes']:
+        # OTP takes one rental kind per search ("only one or two modes for a leg"): with bikes too, scooters are an
+        # extra search (extra_searches).
         street.append('SCOOTER_RENTAL')
     transit = [{'mode': m} for key in ('bus', 'rail') if key in req['modes'] for m in TRANSIT[key]]
     agencies = companies.expand(req.get('operators') or [])  # every feed's id of each chosen company
@@ -262,6 +269,67 @@ def day_window(req: dict) -> int:
 
 def _edges(data: dict) -> list[dict]:
     return [e for e in (data.get('planConnection') or {}).get('edges') or [] if e['node'].get('legs')]
+
+
+MAX_EXTRA_SEARCHES = 2   # per plan request, on top of the main search (shared rules: at most 4 OTP queries)
+EXTRA_TTL = 300          # s an extra search's answer is reused
+_extra_cache: dict[str, tuple[float, dict]] = {}
+
+
+def extra_searches(req: dict) -> list[tuple[str, dict]]:
+    """(kind, OTP variables) of the searches OTP cannot fold into the main one, most useful first, at most
+    MAX_EXTRA_SEARCHES: scooters when bikes are asked for too, and the rider's own bike networks when cheaper rides are
+    wanted (BicikeLJ with a membership before a Nomago bike)."""
+    if req.get('pageCursor'):
+        return []
+    base = otp_variables(req)
+    street = lambda modes: {**base['modes'], 'direct': modes, 'transit': {**base['modes']['transit'], 'access': modes, 'egress': modes}}
+    out = []
+    if 'bike' in req['modes'] and 'scooter' in req['modes']:
+        out.append(('scooter', {**base, 'modes': street(['WALK', 'SCOOTER_RENTAL'])}))
+    members = (req.get('priceProfile') or {}).get('bikeMemberships') or []
+    if 'bike' in req['modes'] and members and req.get('costPreset', 'fastest') != 'fastest':
+        prefs = {**base['preferences'], 'street': {**base['preferences']['street'],
+                                                   'bicycle': {**base['preferences']['street']['bicycle'], 'rental': {'allowedNetworks': sorted(members)}}}}
+        out.append(('memberBikes', {**base, 'modes': street(['WALK', 'BICYCLE_RENTAL']), 'preferences': prefs}))
+    return out[:MAX_EXTRA_SEARCHES]
+
+
+def _leg_key(node: dict) -> str:
+    return '|'.join(f"{l.get('mode')}:{(l.get('trip') or {}).get('gtfsId')}@{l['start']['scheduledTime']}" for l in node.get('legs') or [])
+
+
+def with_extras(data: dict, req: dict, query) -> dict:
+    """The main search's answer with the connections of extra_searches added after OTP's own (repeats dropped). A
+    failed extra search only loses its connections."""
+    searches = extra_searches(req)
+    if not searches:
+        return data
+    edges = list(_edges(data))
+    seen = {_leg_key(e['node']) for e in edges}
+    now = time.monotonic()
+    for kind, variables in searches:
+        key = hashlib.sha1(json.dumps(variables, sort_keys=True).encode()).hexdigest()
+        hit = _extra_cache.get(key)
+        if hit and now - hit[0] < EXTRA_TTL:
+            extra = hit[1]
+        else:
+            try:
+                extra = query(PLAN_Q, variables)
+            except UpstreamError as e:
+                logger.info('Extra %s search failed: %r', kind, e)
+                continue
+            _extra_cache[key] = (now, extra)
+            if len(_extra_cache) > 500:
+                for k, _ in sorted(_extra_cache.items(), key=lambda kv: kv[1][0])[:250]:
+                    _extra_cache.pop(k, None)
+        for e in _edges(extra):
+            if _leg_key(e['node']) not in seen:
+                seen.add(_leg_key(e['node']))
+                edges.append(e)
+    connection = dict(data.get('planConnection') or {})
+    connection['edges'] = edges
+    return {**data, 'planConnection': connection}
 
 
 def search(req: dict, query) -> dict:

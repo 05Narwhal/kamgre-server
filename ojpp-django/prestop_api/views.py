@@ -427,6 +427,8 @@ def journeys(request):
     data = planner.plan(req, lambda q, v: otp().query(q, v, timeout=(5, 45)))
     page = planner.page_info(data)
     data = planner.bet_on_delays(data, req, lambda q, v: otp().query(q, v, timeout=(5, 20)))
+    # Searches OTP cannot fold into one (scooters next to bikes, the rider's own bike networks): bounded and cached.
+    data = planner.with_extras(data, req, lambda q, v: otp().query(q, v, timeout=(5, 20)))
     errors = (data.get('planConnection') or {}).get('routingErrors') or []
     try:
         alert_list = sources.alerts(language(request))
@@ -451,7 +453,7 @@ def journeys(request):
     if req['showPrices']:
         # The rider's cards (request body only) price this answer and are dropped with it.
         from . import pricing
-        result = [pricing.price_journey(j, req['priceProfile'], language(request)) for j in result]
+        result = pricing.rank([pricing.price_journey(j, req['priceProfile'], language(request)) for j in result], req)
     if not result and errors:
         codes = {e.get('code') for e in errors}
         if codes & {'OUTSIDE_BOUNDS', 'LOCATION_NOT_FOUND'}:

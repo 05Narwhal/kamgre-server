@@ -227,3 +227,37 @@ def catalog() -> dict:
                       'eligibility': 'all', 'period': yearly['period'], 'priceCents': yearly['cents'], 'networks': [network],
                       'source': rule['source'], **({'sourceUrl': rule['sourceUrl']} if rule.get('sourceUrl') else {})})
     return {'checked': data['checked'], 'regions': data['transit']['regions'], 'cards': cards}
+
+
+# ---------------------------------------------------------------- cheaper first (A6)
+
+BALANCED_MINUTES = 10   # Balanced takes a journey this many minutes later ...
+BALANCED_CENTS = 150    # ... for every this much it saves (about 9 € an hour)
+CHEAPEST_WINDOW = 45    # min: Cheapest is the cheapest journey arriving within this of the fastest
+
+
+def rank(journeys: list[dict], req: dict) -> list[dict]:
+    """Journeys in the order of the rider's cost preset; `fastest` keeps the planner's own order untouched. Time is
+    the arrival after the asked-for time (arrive-by: how early it leaves). An unknown price ranks as the dearest known
+    one, so it never wins on price. Each journey's price says how much it saves against the fastest."""
+    preset = req.get('costPreset', 'fastest')
+    if preset == 'fastest' or len(journeys) < 2:
+        return journeys
+    asked = req['dateTime'].timestamp()
+    if req['timeMode'] == 'arriveBy':
+        minutes = lambda j: (asked - _ts(j['effectiveDeparture'])) / 60
+    else:
+        minutes = lambda j: (_ts(j['effectiveArrival']) - asked) / 60
+    total = lambda j: (j.get('price') or {}).get('totalCents')
+    known = [total(j) for j in journeys if total(j) is not None]
+    cost = lambda j: total(j) if total(j) is not None else max(known, default=0)
+    fastest = min(journeys, key=minutes)
+    if preset == 'balanced':
+        key = lambda j: (minutes(j) + cost(j) / BALANCED_CENTS * BALANCED_MINUTES, minutes(j))
+    else:
+        within = lambda j: minutes(j) - minutes(fastest) <= CHEAPEST_WINDOW
+        key = lambda j: (not within(j), cost(j) if within(j) else minutes(j), minutes(j))
+    for j in journeys:
+        if j is not fastest and total(j) is not None and total(fastest) is not None and j.get('price'):
+            j['price'].update(savedCents=total(fastest) - total(j), comparedTo='fastest')
+    return sorted(journeys, key=key)
