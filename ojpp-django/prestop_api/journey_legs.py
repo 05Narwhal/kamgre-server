@@ -76,6 +76,19 @@ def _train_piece(leg: dict, train: dict, a: int, b: int, suffix: str) -> dict:
     }
 
 
+def _own_bay(piece: dict, stop: dict) -> dict:
+    """A replacement bus has no railway track. The piece is cut from the train's leg, so it inherited that leg's
+    platform (a track predicted from the train number, tracks.py): drop it, and keep only the bay of a bus station the
+    bus leaves from, when the stop has one (platforms.place)."""
+    piece.pop('platform', None)
+    piece.pop('platformUsual', None)
+    if stop.get('bay'):
+        piece['platform'] = stop['bay']
+        if stop.get('bayUsual'):
+            piece['platformUsual'] = True
+    return piece
+
+
 def _bus_piece(leg: dict, bus: dict, train: dict, a: int, b: int, road: Callable[[list[dict]], Optional[dict]], suffix: str) -> Optional[dict]:
     """The bus between the train's stops `a` and `b`, or None when the bus does not call at both."""
     keys = [sz.station_key(s.get('name') or '') for s in bus['stops']]
@@ -92,7 +105,7 @@ def _bus_piece(leg: dict, bus: dict, train: dict, a: int, b: int, road: Callable
     sched_dep = (bus.get('scheduledDepartures') or bus['departures'])[ka]
     sched_arr = (bus.get('scheduledArrivals') or bus['arrivals'])[kb]
     like = leg['scheduledDeparture']
-    return {
+    piece = {
         **leg, 'id': f'{leg["id"]}-{suffix}', 'mode': 'bus', 'routeId': bus['route']['gtfsId'], 'tripId': bus['id'],
         'routeName': mapping.route_name(bus['route']) or leg['routeName'], 'headsign': stops[kb].get('name') or bus.get('headsign'),
         'origin': _place(train['stops'][a]), 'destination': _place(train['stops'][b]),
@@ -103,6 +116,7 @@ def _bus_piece(leg: dict, bus: dict, train: dict, a: int, b: int, road: Callable
         # Read by journeys.replacement_walks, then dropped: where the bus stops beside each station.
         '_boardAt': part[0], '_alightAt': part[-1],
     }
+    return _own_bay(piece, part[0])
 
 
 def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor, road: Callable[[list[dict]], Optional[dict]]) -> tuple[list[dict], list[dict]]:
@@ -292,7 +306,7 @@ def _bus_ride(leg: dict, bus: dict, p: int, q: int, road: Callable[[list[dict]],
     piece.pop('replacesTrain', None)
     if name:
         piece['replacesTrain'] = name
-    return piece
+    return _own_bay(piece, part[0])
 
 
 def _connects(pieces: list[dict], before: Optional[dict], after: Optional[dict]) -> bool:
