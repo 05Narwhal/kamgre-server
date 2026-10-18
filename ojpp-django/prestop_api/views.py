@@ -448,6 +448,10 @@ def journeys(request):
         result = [j for j in result if j['transferCount'] <= req['maxTransfers']]
     if req['riskMode'] == 'insane':
         result = planner.by_arrival(result)
+    if req['showPrices']:
+        # The rider's cards (request body only) price this answer and are dropped with it.
+        from . import pricing
+        result = [pricing.price_journey(j, req['priceProfile'], language(request)) for j in result]
     if not result and errors:
         codes = {e.get('code') for e in errors}
         if codes & {'OUTSIDE_BOUNDS', 'LOCATION_NOT_FOUND'}:
@@ -458,6 +462,16 @@ def journeys(request):
     # `wider`: nothing within the usual limits, so these were found as Insane mode would search (journeys.plan).
     return envelope(result, status, used=['otp:timetables', 'gtfs-rt:trip-updates'], source_updated=mapping.iso(time.time()),
                     extra={'page': page, **({'wider': True} if data.get('wider') and result else {})})
+
+
+@require_GET
+@api
+def pricing_catalog(request):
+    # Static: the dated tariff file's cards and bike memberships with their regions; cached a day.
+    from . import pricing
+    response = envelope(pricing.catalog(), 'live', used=['otp:timetables'])
+    response['Cache-Control'] = 'public, max-age=86400'
+    return response
 
 
 @require_GET

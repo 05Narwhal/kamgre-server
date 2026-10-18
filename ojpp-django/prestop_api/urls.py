@@ -20,6 +20,7 @@ urlpatterns = [
     path('lines/<path:route_id>', views.line_detail),
     path('statistics/reliability', views.statistics_reliability),
     path('journeys', views.journeys),
+    path('pricing/catalog', views.pricing_catalog),
     path('alerts', views.alerts),
     path('alerts/<path:alert_id>/votes', views.alert_votes),
     path('statistics/routes', views.statistics_routes),

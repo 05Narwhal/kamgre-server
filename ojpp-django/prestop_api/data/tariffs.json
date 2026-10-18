@@ -1,61 +1,777 @@
 {
-  "about": "Prices for KamGre's estimates, read from the operators' published price lists. Every entry names its source and the day it was read. Amounts in euro cents incl. VAT. Not exact: the app always shows them as estimates.",
-  "checked": "2026-10-18",
-  "sharing": {
-    "about": "Per ride for a member: freeMinutes free, then charges once the ride passes each minute ([after, cents]), then every [after, step minutes, cents] per started step, capped at capCents; maxMinutes: longest rental allowed. resetOnReturn: a new rental starts a new free period (after waitSeconds). Scooters: unlockCents + perMinuteCents per started minute.",
-    "networks": {
-      "jcdecaux_ljubljana": {
-        "name": "BicikeLJ", "membership": [{"id": "bicikelj-annual", "cents": 300, "period": "year"}, {"id": "bicikelj-weekly", "cents": 100, "period": "week"}],
-        "freeMinutes": 60, "charges": [[60, 100], [120, 200]], "every": [180, 60, 400], "maxMinutes": 1440, "resetOnReturn": true, "waitSeconds": 300,
-        "source": "Visit Ljubljana (City of Ljubljana), BicikeLJ", "sourceUrl": "https://www.visitljubljana.com/sl/obiskovalci/informacije/promet-in-transport/bicikelj-samopostrezna-izposoja-koles", "checked": "2026-10-18"
-      },
-      "jcdecaux_maribor": {
-        "name": "MBajk", "membership": [{"id": "mbajk-annual", "cents": 300, "period": "year"}],
-        "freeMinutes": 60, "charges": [], "resetOnReturn": false,
-        "note": "Only the first free hour and the 3 EUR annual fee are confirmed (launch, RTV SLO); later charges unknown, so rides past an hour have no price.",
-        "source": "RTV SLO, MBajk launch", "sourceUrl": "https://www.rtvslo.si/radio-si/news/maribor-unveils-its-mbajk-bicycle-sharing-system/620750", "checked": "2026-10-18"
-      },
-      "nextbike_cc": {
-        "name": "Bicikel (Nomago Bikes)", "membership": [{"id": "nomago-ljubljana-annual", "cents": 2500, "period": "year"}, {"id": "nomago-ljubljana-weekly", "cents": 800, "period": "week"}],
-        "freeMinutes": 45, "every": [45, 30, 130], "capCents": 2000, "resetOnReturn": false,
-        "note": "Annual subscription (weekly: 30 free minutes). Price list lists e-bikes only.",
-        "source": "Nomago Bikes price list, valid from 18. 9. 2026", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
-      },
-      "nextbike_cn": {
-        "name": "KolesCE (Nomago Bikes)", "membership": [{"id": "kolesce-annual", "cents": 2000, "period": "year"}],
-        "freeMinutes": 30, "every": [30, 30, 50], "capCents": 2000, "resetOnReturn": false,
-        "note": "Regular bike; e-bike 1.00 EUR per 30 min.",
-        "source": "Nomago Bikes price list, valid from 16. 3. 2026", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
-      },
-      "nextbike_ce": {
-        "name": "GO2GO (Nomago Bikes)", "membership": [{"id": "go2go-annual", "cents": 2000, "period": "year"}],
-        "freeMinutes": 30, "every": [30, 30, 50], "capCents": 2000, "resetOnReturn": false,
-        "note": "Regular bike; e-bike 1.00 EUR per 30 min.",
-        "source": "Nomago Bikes price list", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
-      },
-      "nextbike_cf": {
-        "name": "Zanaprej (Nomago Bikes)", "membership": [{"id": "zanaprej-annual", "cents": 2000, "period": "year"}],
-        "freeMinutes": 30, "every": [30, 30, 100], "capCents": 2000, "resetOnReturn": false,
-        "note": "E-bikes only.",
-        "source": "Nomago Bikes price list", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
-      },
-      "nextbike_cx": {
-        "name": "KoroBajk (Nomago Bikes)", "membership": [{"id": "korobajk-annual", "cents": 2500, "period": "year"}, {"id": "korobajk-weekly", "cents": 800, "period": "week"}],
-        "freeMinutes": 45, "every": [45, 45, 150], "capCents": 2000, "resetOnReturn": false,
-        "note": "E-bikes.",
-        "source": "Nomago Bikes price list, valid from 17. 9. 2026", "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki", "checked": "2026-10-18"
-      },
-      "scbikes_gbike": {
-        "name": "Gorenjska.bike", "membership": [{"id": "gorenjska-annual", "cents": 2500, "period": "year"}, {"id": "gorenjska-monthly", "cents": 1000, "period": "month"}, {"id": "gorenjska-3day", "cents": 300, "period": "day"}],
-        "freeMinutes": 120, "charges": [], "maxMinutes": 120, "resetOnReturn": false,
-        "note": "Members ride free up to 2 hours a day in total (3-day package: 840 minutes).",
-        "source": "Gorenjska.bike price list, valid from 30. 5. 2025", "sourceUrl": "https://www.gorenjska.bike/documents/gorenjskabike/Dokumenti/Cenik-2025.pdf", "checked": "2026-10-18"
-      },
-      "bolt_359": {
-        "name": "Bolt", "unlockCents": null, "perMinuteCents": 15,
-        "note": "From 0.15 EUR a minute plus an unlock fee the page does not state; passes from 0.99 EUR a month (unlimited unlocks).",
-        "source": "Bolt scooters, Slovenia", "sourceUrl": "https://bolt.eu/sl-si/scooters/", "checked": "2026-10-18"
-      }
-    }
+ "about": "Prices for KamGre's estimates, read from the operators' published price lists. Every entry names its source and the day it was read. Amounts in euro cents incl. VAT. Not exact: the app always shows them as estimates.",
+ "checked": "2026-10-18",
+ "sharing": {
+  "about": "Per ride for a member: freeMinutes free, then charges once the ride passes each minute ([after, cents]), then every [after, step minutes, cents] per started step, capped at capCents; maxMinutes: longest rental allowed. resetOnReturn: a new rental starts a new free period (after waitSeconds). Scooters: unlockCents + perMinuteCents per started minute.",
+  "networks": {
+   "jcdecaux_ljubljana": {
+    "name": "BicikeLJ",
+    "membership": [
+     {
+      "id": "bicikelj-annual",
+      "cents": 300,
+      "period": "year"
+     },
+     {
+      "id": "bicikelj-weekly",
+      "cents": 100,
+      "period": "week"
+     }
+    ],
+    "freeMinutes": 60,
+    "charges": [
+     [
+      60,
+      100
+     ],
+     [
+      120,
+      200
+     ]
+    ],
+    "every": [
+     180,
+     60,
+     400
+    ],
+    "maxMinutes": 1440,
+    "resetOnReturn": true,
+    "waitSeconds": 300,
+    "source": "Visit Ljubljana (City of Ljubljana), BicikeLJ",
+    "sourceUrl": "https://www.visitljubljana.com/sl/obiskovalci/informacije/promet-in-transport/bicikelj-samopostrezna-izposoja-koles",
+    "checked": "2026-10-18",
+    "regions": [
+     "ljubljana"
+    ]
+   },
+   "jcdecaux_maribor": {
+    "name": "MBajk",
+    "membership": [
+     {
+      "id": "mbajk-annual",
+      "cents": 300,
+      "period": "year"
+     }
+    ],
+    "freeMinutes": 60,
+    "charges": [],
+    "resetOnReturn": false,
+    "note": "Only the first free hour and the 3 EUR annual fee are confirmed (launch, RTV SLO); later charges unknown, so rides past an hour have no price.",
+    "source": "RTV SLO, MBajk launch",
+    "sourceUrl": "https://www.rtvslo.si/radio-si/news/maribor-unveils-its-mbajk-bicycle-sharing-system/620750",
+    "checked": "2026-10-18",
+    "regions": [
+     "maribor"
+    ]
+   },
+   "nextbike_cc": {
+    "name": "Bicikel (Nomago Bikes)",
+    "membership": [
+     {
+      "id": "nomago-ljubljana-annual",
+      "cents": 2500,
+      "period": "year"
+     },
+     {
+      "id": "nomago-ljubljana-weekly",
+      "cents": 800,
+      "period": "week"
+     },
+     {
+      "id": "nomago-starter",
+      "cents": 500,
+      "period": "single",
+      "includesMinutes": 200
+     }
+    ],
+    "freeMinutes": 45,
+    "every": [
+     45,
+     30,
+     130
+    ],
+    "capCents": 2000,
+    "resetOnReturn": false,
+    "note": "Annual subscription (weekly: 30 free minutes). Price list lists e-bikes only.",
+    "source": "Nomago Bikes price list, valid from 18. 9. 2026",
+    "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki",
+    "checked": "2026-10-18",
+    "regions": [
+     "ljubljana"
+    ]
+   },
+   "nextbike_cn": {
+    "name": "KolesCE (Nomago Bikes)",
+    "membership": [
+     {
+      "id": "kolesce-annual",
+      "cents": 2000,
+      "period": "year"
+     },
+     {
+      "id": "nomago-starter",
+      "cents": 500,
+      "period": "single",
+      "includesMinutes": 200
+     }
+    ],
+    "freeMinutes": 30,
+    "every": [
+     30,
+     30,
+     50
+    ],
+    "capCents": 2000,
+    "resetOnReturn": false,
+    "note": "Regular bike; e-bike 1.00 EUR per 30 min.",
+    "source": "Nomago Bikes price list, valid from 16. 3. 2026",
+    "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki",
+    "checked": "2026-10-18",
+    "regions": [
+     "celje"
+    ]
+   },
+   "nextbike_ce": {
+    "name": "GO2GO (Nomago Bikes)",
+    "membership": [
+     {
+      "id": "go2go-annual",
+      "cents": 2000,
+      "period": "year"
+     },
+     {
+      "id": "nomago-starter",
+      "cents": 500,
+      "period": "single",
+      "includesMinutes": 200
+     }
+    ],
+    "freeMinutes": 30,
+    "every": [
+     30,
+     30,
+     50
+    ],
+    "capCents": 2000,
+    "resetOnReturn": false,
+    "note": "Regular bike; e-bike 1.00 EUR per 30 min.",
+    "source": "Nomago Bikes price list",
+    "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki",
+    "checked": "2026-10-18",
+    "regions": [
+     "goriska"
+    ]
+   },
+   "nextbike_cf": {
+    "name": "Zanaprej (Nomago Bikes)",
+    "membership": [
+     {
+      "id": "zanaprej-annual",
+      "cents": 2000,
+      "period": "year"
+     },
+     {
+      "id": "nomago-starter",
+      "cents": 500,
+      "period": "single",
+      "includesMinutes": 200
+     }
+    ],
+    "freeMinutes": 30,
+    "every": [
+     30,
+     30,
+     100
+    ],
+    "capCents": 2000,
+    "resetOnReturn": false,
+    "note": "E-bikes only.",
+    "source": "Nomago Bikes price list",
+    "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki",
+    "checked": "2026-10-18",
+    "regions": [
+     "zasavje"
+    ]
+   },
+   "nextbike_cx": {
+    "name": "KoroBajk (Nomago Bikes)",
+    "membership": [
+     {
+      "id": "korobajk-annual",
+      "cents": 2500,
+      "period": "year"
+     },
+     {
+      "id": "korobajk-weekly",
+      "cents": 800,
+      "period": "week"
+     },
+     {
+      "id": "nomago-starter",
+      "cents": 500,
+      "period": "single",
+      "includesMinutes": 200
+     }
+    ],
+    "freeMinutes": 45,
+    "every": [
+     45,
+     45,
+     150
+    ],
+    "capCents": 2000,
+    "resetOnReturn": false,
+    "note": "E-bikes.",
+    "source": "Nomago Bikes price list, valid from 17. 9. 2026",
+    "sourceUrl": "https://www.nomago.si/izposoja-koles/informacije/ceniki",
+    "checked": "2026-10-18",
+    "regions": [
+     "koroska"
+    ]
+   },
+   "scbikes_gbike": {
+    "name": "Gorenjska.bike",
+    "membership": [
+     {
+      "id": "gorenjska-annual",
+      "cents": 2500,
+      "period": "year"
+     },
+     {
+      "id": "gorenjska-monthly",
+      "cents": 1000,
+      "period": "month"
+     },
+     {
+      "id": "gorenjska-3day",
+      "cents": 300,
+      "period": "day"
+     }
+    ],
+    "freeMinutes": 120,
+    "charges": [],
+    "maxMinutes": 120,
+    "resetOnReturn": false,
+    "note": "Members ride free up to 2 hours a day in total (3-day package: 840 minutes).",
+    "source": "Gorenjska.bike price list, valid from 30. 5. 2025",
+    "sourceUrl": "https://www.gorenjska.bike/documents/gorenjskabike/Dokumenti/Cenik-2025.pdf",
+    "checked": "2026-10-18",
+    "regions": [
+     "kranj"
+    ]
+   },
+   "bolt_359": {
+    "name": "Bolt",
+    "unlockCents": null,
+    "perMinuteCents": 15,
+    "note": "From 0.15 EUR a minute plus an unlock fee the page does not state; passes from 0.99 EUR a month (unlimited unlocks).",
+    "source": "Bolt scooters, Slovenia",
+    "sourceUrl": "https://bolt.eu/sl-si/scooters/",
+    "checked": "2026-10-18",
+    "regions": [
+     "ljubljana"
+    ]
+   }
   }
+ },
+ "transit": {
+  "about": "Single fares in cents. Systems by feed (routeId prefix). ijpp: integrated tariff for intercity buses (and bus + train on one ticket): baseCents up to the first step, stepCents per further started stepKm, over150Cents beyond 150 km. sz: SŽ train-only tickets by distance band [up to km, cents]; supplement on higher-rank trains. city: one fare, free changes within transferMinutes. city.operators: agencies of that system in other feeds (LPP lines in the IJPP feed); city.zones: fare by the furthest point from the centre.",
+  "ijpp": {
+   "baseCents": 150,
+   "stepKm": 5,
+   "stepCents": 50,
+   "over150Cents": 1650,
+   "source": "IJPP single fares from 1. 8. 2025 (Uredba, UL RS 56/2025), reported by Siol 28. 7. 2025",
+   "sourceUrl": "https://siol.net/novice/digisvet/adijo-zelo-ugodne-vikend-vozovnice-slovenskega-javnega-potniskega-prometa-668472/print",
+   "checked": "2026-10-18"
+  },
+  "sz": {
+   "bands": [
+    [
+     5,
+     140
+    ],
+    [
+     10,
+     180
+    ],
+    [
+     15,
+     230
+    ],
+    [
+     20,
+     280
+    ],
+    [
+     25,
+     320
+    ],
+    [
+     30,
+     360
+    ],
+    [
+     35,
+     410
+    ],
+    [
+     40,
+     450
+    ],
+    [
+     45,
+     500
+    ],
+    [
+     50,
+     550
+    ],
+    [
+     55,
+     580
+    ],
+    [
+     60,
+     630
+    ],
+    [
+     65,
+     670
+    ],
+    [
+     70,
+     720
+    ],
+    [
+     75,
+     770
+    ],
+    [
+     80,
+     800
+    ],
+    [
+     85,
+     850
+    ],
+    [
+     90,
+     890
+    ],
+    [
+     95,
+     940
+    ],
+    [
+     100,
+     990
+    ],
+    [
+     105,
+     1020
+    ],
+    [
+     110,
+     1070
+    ],
+    [
+     115,
+     1110
+    ],
+    [
+     120,
+     1160
+    ],
+    [
+     125,
+     1210
+    ],
+    [
+     130,
+     1240
+    ],
+    [
+     135,
+     1290
+    ],
+    [
+     140,
+     1330
+    ],
+    [
+     145,
+     1380
+    ],
+    [
+     150,
+     1430
+    ]
+   ],
+   "over150Cents": 1440,
+   "higherRank": [
+    "IC",
+    "ICS",
+    "EC",
+    "EN",
+    "MV"
+   ],
+   "supplementCents": 200,
+   "supplementOnTrainCents": 400,
+   "boughtOnTrainCents": 1200,
+   "source": "SŽ Potniška tarifa ST 700.04, cenik, valid from 1. 7. 2026",
+   "sourceUrl": "https://potniski.sz.si/wp-content/uploads/2026/07/PT-ST-700.04-veljavnost-01.07.2026-popravek-st.-2_.pdf",
+   "checked": "2026-10-18"
+  },
+  "city": {
+   "LPP": {
+    "name": "LPP",
+    "fareCents": 150,
+    "transferMinutes": 90,
+    "note": "Urbana: changes free within 90 min; a bank card pays each ride.",
+    "source": "LPP price list, valid from 1. 9. 2026",
+    "sourceUrl": "https://www.lpp.si/wp-content/uploads/2026/08/CENIK-VOZOVNIC-V-MESTNEM-IN-INTEGRIRANEM-POTNISKEM-PROMETU-1.-9.-2026_SLO.pdf",
+    "checked": "2026-10-18",
+    "operators": [
+     "IJPP:1118",
+     "LPP:lpp"
+    ],
+    "zones": {
+     "center": [
+      14.5058,
+      46.0514
+     ],
+     "steps": [
+      [
+       9,
+       150
+      ],
+      [
+       18,
+       250
+      ],
+      [
+       null,
+       350
+      ]
+     ],
+     "note": "Zones 1, 2 and 3 (1 = Ljubljana municipality) estimated by the ride's furthest point from the centre: within 9 km zone 1, 18 km two zones, beyond three."
+    }
+   },
+   "MARPROM": {
+    "name": "Marprom",
+    "fareCents": 150,
+    "transferMinutes": 75,
+    "source": "Marprom price list, valid from 1. 6. 2026",
+    "sourceUrl": "https://www.marprom.si/ceniki-in-vozovnice/mestni-promet/",
+    "checked": "2026-10-18"
+   },
+   "MOKranj": {
+    "name": "Kranj city buses",
+    "fareCents": 100,
+    "transferMinutes": 1440,
+    "note": "Day ticket (no cash; IJPP or CeKR card).",
+    "source": "Mestna občina Kranj, 4. 9. 2025",
+    "sourceUrl": "https://www.kranj.si/cena-dnevne-vozovnice-za-javni-promet-v-kranju-ostaja-1-evro",
+    "checked": "2026-10-18"
+   }
+  },
+  "cards": [
+   {
+    "id": "urbana-monthly",
+    "name": {
+     "sl": "Urbana, mesečna",
+     "en": "Urbana monthly"
+    },
+    "regions": [
+     "ljubljana"
+    ],
+    "eligibility": "all",
+    "period": "month",
+    "priceCents": 3700,
+    "covers": [
+     "LPP"
+    ],
+    "source": "LPP price list, valid from 1. 9. 2026",
+    "sourceUrl": "https://www.lpp.si/wp-content/uploads/2026/08/CENIK-VOZOVNIC-V-MESTNEM-IN-INTEGRIRANEM-POTNISKEM-PROMETU-1.-9.-2026_SLO.pdf"
+   },
+   {
+    "id": "urbana-annual",
+    "name": {
+     "sl": "Urbana, letna",
+     "en": "Urbana annual"
+    },
+    "regions": [
+     "ljubljana"
+    ],
+    "eligibility": "all",
+    "period": "year",
+    "priceCents": 36500,
+    "covers": [
+     "LPP"
+    ],
+    "source": "LPP price list, valid from 1. 9. 2026",
+    "sourceUrl": "https://www.lpp.si/wp-content/uploads/2026/08/CENIK-VOZOVNIC-V-MESTNEM-IN-INTEGRIRANEM-POTNISKEM-PROMETU-1.-9.-2026_SLO.pdf"
+   },
+   {
+    "id": "urbana-school",
+    "name": {
+     "sl": "Urbana, šolska",
+     "en": "Urbana, pupils and students"
+    },
+    "regions": [
+     "ljubljana"
+    ],
+    "eligibility": "student",
+    "period": "month",
+    "priceCents": 2000,
+    "covers": [
+     "LPP"
+    ],
+    "source": "LPP price list, valid from 1. 9. 2026",
+    "sourceUrl": "https://www.lpp.si/wp-content/uploads/2026/08/CENIK-VOZOVNIC-V-MESTNEM-IN-INTEGRIRANEM-POTNISKEM-PROMETU-1.-9.-2026_SLO.pdf"
+   },
+   {
+    "id": "ijpp-pass",
+    "name": {
+     "sl": "Mesečna ali letna vozovnica IJPP",
+     "en": "IJPP monthly or annual pass"
+    },
+    "regions": [],
+    "eligibility": "all",
+    "period": "month",
+    "priceCents": null,
+    "covers": [
+     "ijpp"
+    ],
+    "routeBound": true,
+    "note": "Valid on its own route; higher-rank trains need a supplement.",
+    "source": "SŽ Potniška tarifa ST 700.04, cenik, valid from 1. 7. 2026",
+    "sourceUrl": "https://potniski.sz.si/wp-content/uploads/2026/07/PT-ST-700.04-veljavnost-01.07.2026-popravek-st.-2_.pdf"
+   },
+   {
+    "id": "ijpp-pupil-student",
+    "name": {
+     "sl": "Subvencionirana dijaška ali študentska vozovnica",
+     "en": "Subsidised pupil or student pass"
+    },
+    "regions": [],
+    "eligibility": "student",
+    "period": "year",
+    "priceCents": 20000,
+    "covers": [
+     "ijpp"
+    ],
+    "routeBound": true,
+    "note": "City buses need their own supplement (LPP: 10 EUR a month).",
+    "source": "LPP price list, valid from 1. 9. 2026",
+    "sourceUrl": "https://www.lpp.si/wp-content/uploads/2026/08/CENIK-VOZOVNIC-V-MESTNEM-IN-INTEGRIRANEM-POTNISKEM-PROMETU-1.-9.-2026_SLO.pdf"
+   },
+   {
+    "id": "slovenia-free",
+    "name": {
+     "sl": "Letna vozovnica Slovenija (brezplačna)",
+     "en": "Free annual pass (Letna vozovnica Slovenija)"
+    },
+    "regions": [],
+    "eligibility": "senior",
+    "period": "year",
+    "priceCents": 0,
+    "note": "Pensioners and people over 65 who do not work, holders of the EU disability card, war veterans.",
+    "covers": [
+     "ijpp",
+     "LPP",
+     "MARPROM",
+     "MOKoper",
+     "MOKranj",
+     "MONM",
+     "MOMS",
+     "MOKrsko"
+    ],
+    "source": "LPP price list, valid from 1. 9. 2026; gov.si (towns covered)",
+    "sourceUrl": "https://www.gov.si/zbirke/storitve/vloga-za-izdajo-brezplacne-vozovnice-javnega-medkrajevnega-potniskega-prometa/"
+   },
+   {
+    "id": "marprom-monthly",
+    "name": {
+     "sl": "Marprom, mesečna",
+     "en": "Marprom monthly"
+    },
+    "regions": [
+     "maribor"
+    ],
+    "eligibility": "all",
+    "period": "month",
+    "priceCents": 3600,
+    "covers": [
+     "MARPROM"
+    ],
+    "source": "Marprom price list, valid from 1. 6. 2026",
+    "sourceUrl": "https://www.marprom.si/ceniki-in-vozovnice/mestni-promet/"
+   },
+   {
+    "id": "kranj-monthly",
+    "name": {
+     "sl": "Kranj, mesečna",
+     "en": "Kranj city buses, monthly"
+    },
+    "regions": [
+     "kranj"
+    ],
+    "eligibility": "all",
+    "period": "month",
+    "priceCents": 1000,
+    "covers": [
+     "MOKranj"
+    ],
+    "source": "Mestna občina Kranj, 4. 9. 2025",
+    "sourceUrl": "https://www.kranj.si/cena-dnevne-vozovnice-za-javni-promet-v-kranju-ostaja-1-evro"
+   }
+  ],
+  "regions": [
+   {
+    "id": "ljubljana",
+    "name": {
+     "sl": "Ljubljana",
+     "en": "Ljubljana"
+    },
+    "bbox": [
+     14.3,
+     45.95,
+     14.75,
+     46.18
+    ]
+   },
+   {
+    "id": "maribor",
+    "name": {
+     "sl": "Maribor",
+     "en": "Maribor"
+    },
+    "bbox": [
+     15.5,
+     46.45,
+     15.8,
+     46.65
+    ]
+   },
+   {
+    "id": "kranj",
+    "name": {
+     "sl": "Gorenjska",
+     "en": "Gorenjska"
+    },
+    "bbox": [
+     13.7,
+     46.15,
+     14.6,
+     46.55
+    ]
+   },
+   {
+    "id": "celje",
+    "name": {
+     "sl": "Celje in Savinjska",
+     "en": "Celje and Savinjska"
+    },
+    "bbox": [
+     14.9,
+     46.1,
+     15.6,
+     46.45
+    ]
+   },
+   {
+    "id": "obala",
+    "name": {
+     "sl": "Obala in Kras",
+     "en": "Coast and Karst"
+    },
+    "bbox": [
+     13.4,
+     45.42,
+     14.3,
+     45.85
+    ]
+   },
+   {
+    "id": "goriska",
+    "name": {
+     "sl": "Goriška",
+     "en": "Gorizia region"
+    },
+    "bbox": [
+     13.4,
+     45.85,
+     14.05,
+     46.2
+    ]
+   },
+   {
+    "id": "dolenjska",
+    "name": {
+     "sl": "Dolenjska in Bela krajina",
+     "en": "Dolenjska and Bela krajina"
+    },
+    "bbox": [
+     14.7,
+     45.45,
+     15.6,
+     46.0
+    ]
+   },
+   {
+    "id": "zasavje",
+    "name": {
+     "sl": "Zasavje in Posavje",
+     "en": "Zasavje and Posavje"
+    },
+    "bbox": [
+     14.75,
+     45.85,
+     15.7,
+     46.2
+    ]
+   },
+   {
+    "id": "koroska",
+    "name": {
+     "sl": "Koroška",
+     "en": "Koroška"
+    },
+    "bbox": [
+     14.7,
+     46.45,
+     15.3,
+     46.65
+    ]
+   },
+   {
+    "id": "pomurje",
+    "name": {
+     "sl": "Pomurje",
+     "en": "Pomurje"
+    },
+    "bbox": [
+     15.8,
+     46.4,
+     16.62,
+     46.88
+    ]
+   },
+   {
+    "id": "notranjska",
+    "name": {
+     "sl": "Notranjska",
+     "en": "Notranjska"
+    },
+    "bbox": [
+     14.05,
+     45.6,
+     14.6,
+     46.0
+    ]
+   }
+  ]
+ }
 }
