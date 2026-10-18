@@ -7,6 +7,7 @@ Responses use the `{data, meta}` envelope from `src/contracts/transit.ts`; error
 import json
 import logging
 import math
+import threading
 import time
 import uuid
 from datetime import date, datetime, timedelta
@@ -26,6 +27,13 @@ from .upstream import Cached, UpstreamError, otp
 logger = logging.getLogger(__name__)
 STOPS_PAGE = 4000
 ALERT_HORIZON = 3 * 86400
+# Planning waits seconds on OTP; with gunicorn's few threads per worker, unbounded plans could take them all and
+# stall every other request. At most PLAN_SLOTS plans per worker at once; one waits PLAN_WAIT s for a slot, then
+# gets a retryable 503 (spec 2026-10-18 A6). Expanding a pasted short link (up to a few hops) gets one slot.
+PLAN_SLOTS = 2
+PLAN_WAIT = 5.0
+_plan_slots = threading.BoundedSemaphore(PLAN_SLOTS)
+_expand_slots = threading.BoundedSemaphore(1)
 SLOVENIA = (13.3, 45.38, 16.65, 46.9)
 
 
@@ -37,6 +45,21 @@ class ApiError(Exception):
 
 def error_response(status, code, message, retryable=False):
     return JsonResponse({'error': {'code': code, 'message': message, 'retryable': retryable}, 'requestId': uuid.uuid4().hex[:12]}, status=status)
+
+
+def bounded(slots: threading.BoundedSemaphore):
+    """Runs the view only when one of `slots` is free within PLAN_WAIT s; else a retryable 503."""
+    def wrap(view):
+        @wraps(view)
+        def inner(request, *args, **kwargs):
+            if not slots.acquire(timeout=PLAN_WAIT):
+                raise ApiError(503, 'BUSY', 'Many trips are being planned right now. Please try again in a moment.', True)
+            try:
+                return view(request, *args, **kwargs)
+            finally:
+                slots.release()
+        return inner
+    return wrap
 
 
 def api(view):
@@ -260,7 +283,15 @@ def _linked_places(q: str, scope: str, limit: int, lang: str) -> list[dict]:
     """A pasted map link or coordinates: the pinned place, or with `stations` the stops nearest to it."""
     coords, name = maplinks.parse_coordinates(q), None
     if not coords:
-        url = maplinks.expand(q) if not q.lower().startswith('geo:') else q
+        url = q
+        if not q.lower().startswith('geo:'):
+            # One expansion at a time per worker: a short link costs a few requests to Google.
+            if not _expand_slots.acquire(timeout=2):
+                return []
+            try:
+                url = maplinks.expand(q)
+            finally:
+                _expand_slots.release()
         parsed = maplinks.parse_link(url) if url else None
         if not parsed:
             return []
@@ -383,6 +414,7 @@ def board(request, stop_id):
 @csrf_exempt
 @require_POST
 @api
+@bounded(_plan_slots)
 def journeys(request):
     try:
         body = json.loads(request.body or b'{}')

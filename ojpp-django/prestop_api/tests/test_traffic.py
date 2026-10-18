@@ -48,6 +48,17 @@ class TrafficGuardTests(SimpleTestCase):
         self.assertEqual(codes, [200] * 5 + [429] * 2)
         self.assertEqual(self.get(ip='198.51.100.2').status_code, 200)  # others are unaffected
 
+    def test_costly_endpoints_have_their_own_limit_per_client(self):
+        # Spec 2026-10-18 A6: planning is limited well below the overall rate.
+        with override_settings(PRESTOP_TRAFFIC_PER_MINUTE=100):
+            guard = traffic.TrafficGuardMiddleware(lambda request: JsonResponse({}))
+            guard.route_limits = (('/api/v1/journeys', 'plan', 3, 60),)
+            request = lambda ip='198.51.100.1', path='/api/v1/journeys': guard(self.factory.post(path, HTTP_CF_CONNECTING_IP=ip))
+            self.assertEqual([request().status_code for _ in range(5)], [200] * 3 + [429] * 2)
+            self.assertEqual(request(path='/api/v1/stops').status_code, 200)  # other requests go on
+            self.assertEqual(request(ip='198.51.100.2').status_code, 200)    # other clients too
+            self.assertEqual(error(request())['code'], 'RATE_LIMITED')
+
     def test_busy_flag_refuses_new_visitors_only(self):
         cookies = self.admitted()
         open(os.path.join(self.state, 'busy'), 'w').close()
@@ -101,3 +112,20 @@ class TrafficGuardTests(SimpleTestCase):
         open(os.path.join(self.state, 'stopped'), 'w').close()
         request = self.factory.get('/api/v1/stops', HTTP_CF_CONNECTING_IP='198.51.100.1')
         self.assertEqual(guard(request).status_code, 200)
+
+
+class PlanSlotTests(SimpleTestCase):
+    def test_plans_beyond_the_slots_get_a_retryable_503_instead_of_tying_up_the_worker(self):
+        # Spec 2026-10-18 A6: slow OTP plans must not take every gunicorn thread.
+        from prestop_api import views
+        request = RequestFactory().post('/api/v1/journeys', data='{}', content_type='application/json')
+        taken = [views._plan_slots.acquire(timeout=1) for _ in range(views.PLAN_SLOTS)]
+        try:
+            with mock.patch.object(views, 'PLAN_WAIT', 0.05):
+                response = views.journeys(request)
+        finally:
+            for _ in taken:
+                views._plan_slots.release()
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(error(response)['code'], 'BUSY')
+        self.assertTrue(error(response)['retryable'])

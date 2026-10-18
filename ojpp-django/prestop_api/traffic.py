@@ -12,7 +12,8 @@ data above 10 TB a month. The guard sheds load in three steps, cheapest check fi
    - more than PRESTOP_TRAFFIC_MAX_ACTIVE clients were seen in the last 15 minutes.
    "Existing" means the browser holds the signed `kg_admit` cookie, which the API sets
    on normal responses; Caddy checks the same cookie for the app's static files.
-3. Rate: a client sending more than PRESTOP_TRAFFIC_PER_MINUTE requests a minute gets 429.
+3. Rate: a client sending more than PRESTOP_TRAFFIC_PER_MINUTE requests a minute gets 429, and so does one
+   going over ROUTE_LIMITS on an endpoint that costs an upstream call or a database row (spec 2026-10-18 A6).
 
 Clients are counted by a salted hash of their IP (from PRESTOP_CLIENT_IP_HEADER, which
 Cloudflare sets), kept in Redis for at most two hours. Requests without that header come
@@ -37,6 +38,15 @@ COOKIE_SALT = 'prestop.traffic'
 COOKIE_AGE = 30 * 86400
 ACTIVE_WINDOW_MINUTES = 15
 DECISION_TTL = 5.0  # seconds a busy/not-busy decision is reused by this worker
+# (path prefix, group, requests, window in s) per client, on top of the overall rate: what a person never needs
+# more of, but a script could use to tie up the planner, flood the geocoders we borrow or fill a table. Several
+# people behind one mobile carrier's address share them, hence the headroom.
+ROUTE_LIMITS = (
+    ('/api/v1/journeys', 'plan', 60, 60),        # each is an OTP plan (seconds of upstream time)
+    ('/api/v1/places', 'search', 240, 60),       # Photon (fair use) and Pelias
+    ('/api/v1/statistics/', 'stats', 300, 60),   # database scans; daily counts ask OTP per route
+    ('/api/v1/push/', 'push', 120, 3600),        # subscriptions and reminders are database rows
+)
 
 MESSAGES = {
     'BUSY': ('KamGre is very busy right now. Please try again a bit later.',
@@ -67,6 +77,7 @@ class TrafficGuardMiddleware:
         self.per_minute = getattr(settings, 'PRESTOP_TRAFFIC_PER_MINUTE', 1200)
         self.max_active = getattr(settings, 'PRESTOP_TRAFFIC_MAX_ACTIVE', 3000)
         self.hourly_bytes = getattr(settings, 'PRESTOP_TRAFFIC_HOURLY_MB', 30000) * 1_000_000
+        self.route_limits = getattr(settings, 'PRESTOP_TRAFFIC_ROUTE_LIMITS', ROUTE_LIMITS)
         self.salt = settings.SECRET_KEY.encode()
         url = getattr(settings, 'PRESTOP_TRAFFIC_REDIS_URL', '') or settings.CACHES['default']['LOCATION']
         self.redis = redis.Redis.from_url(url, socket_timeout=0.25, socket_connect_timeout=0.25)
@@ -88,6 +99,9 @@ class TrafficGuardMiddleware:
             count = self._count(client)
             if count > self.per_minute:
                 return _error(request, 429, 'RATE_LIMITED', 60)
+            wait = self._route_limited(client, request.path)
+            if wait:
+                return _error(request, 429, 'RATE_LIMITED', wait)
             if not admitted and self._busy():
                 return _error(request, 503, 'BUSY', 900)
         except redis.RedisError as exc:
@@ -126,6 +140,15 @@ class TrafficGuardMiddleware:
                      .pfadd(active_key, client).expire(active_key, (ACTIVE_WINDOW_MINUTES + 1) * 60)
                      .execute())
         return count
+
+    def _route_limited(self, client, path):
+        """Seconds to wait when the client is over its limit for this kind of request (ROUTE_LIMITS), else 0."""
+        for prefix, group, limit, window in self.route_limits:
+            if path.startswith(prefix):
+                key = f'traffic:route:{group}:{client}:{int(time.time() // window)}'
+                count, _ = self.redis.pipeline(transaction=False).incr(key).expire(key, window * 2).execute()
+                return window if count > limit else 0
+        return 0
 
     def _busy(self):
         now = time.time()

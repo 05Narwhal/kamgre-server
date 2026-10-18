@@ -39,3 +39,16 @@ class MapLinkTests(SimpleTestCase):
         response = mock.Mock(status_code=302, headers={'Location': 'https://www.google.com/maps/place/Bled/@46.36,14.09,15z'})
         with mock.patch('prestop_api.maplinks.requests.get', return_value=response):
             self.assertEqual(maplinks.expand('https://maps.app.goo.gl/AbCd123'), 'https://www.google.com/maps/place/Bled/@46.36,14.09,15z')
+
+    def test_expand_only_follows_web_links_on_standard_ports_within_its_time(self):
+        # Spec 2026-10-18 A6: no other schemes or ports even on a Google host, and a few seconds at most.
+        response = mock.Mock(status_code=302, headers={'Location': 'https://maps.app.goo.gl:8443/next'})
+        with mock.patch('prestop_api.maplinks.requests.get', return_value=response) as get:
+            self.assertIsNone(maplinks.expand('https://maps.app.goo.gl/AbCd123'))
+            self.assertIsNone(maplinks.expand('ftp://maps.app.goo.gl/AbCd123'))
+            self.assertIsNone(maplinks.expand('https://x@maps.app.goo.gl/AbCd123'))
+        self.assertEqual(get.call_count, 1)
+        loop = mock.Mock(status_code=302, headers={'Location': 'https://maps.app.goo.gl/again'})
+        with mock.patch('prestop_api.maplinks.requests.get', return_value=loop) as get, mock.patch.object(maplinks, 'EXPAND_BUDGET', 0.6):
+            self.assertIsNone(maplinks.expand('https://maps.app.goo.gl/AbCd123'))
+        self.assertLessEqual(max(call.kwargs['timeout'][1] for call in get.call_args_list), 0.6)

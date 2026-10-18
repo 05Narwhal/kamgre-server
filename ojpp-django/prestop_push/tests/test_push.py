@@ -10,7 +10,7 @@ from prestop_push import watcher
 from prestop_push.models import PushSubscription, Watch
 
 NOW = datetime(2026, 10, 10, 8, 0, tzinfo=timezone.utc)
-SUB = {'endpoint': 'https://push.example/abc', 'keys': {'p256dh': 'BNc' + 'A' * 84, 'auth': 'x' * 22}, 'language': 'sl'}
+SUB = {'endpoint': 'https://fcm.googleapis.com/fcm/send/abc', 'keys': {'p256dh': 'BNc' + 'A' * 84, 'auth': 'x' * 22}, 'language': 'sl'}
 
 
 def trip(delay=0, canceled=False):
@@ -117,6 +117,23 @@ class PushApiTests(TestCase):
     def post(self, path, body):
         return self.client.post(path, json.dumps(body), content_type='application/json')
 
+    def test_only_browser_push_services_are_accepted(self):
+        # Spec 2026-10-18 A6: the server POSTs to the endpoint, so it must be a real push service, not any URL.
+        for endpoint in ('https://evil.example/x', 'https://127.0.0.1/x', 'https://169.254.169.254/latest', 'https://fcm.googleapis.com:6379/x',
+                         'https://fcm.googleapis.com.evil.example/x', 'https://user@fcm.googleapis.com/x', 'http://fcm.googleapis.com/x'):
+            r = self.post('/api/v1/push/subscriptions', {**SUB, 'endpoint': endpoint})
+            self.assertEqual(r.status_code, 422, endpoint)
+        for endpoint in ('https://fcm.googleapis.com/fcm/send/a', 'https://updates.push.services.mozilla.com/wpush/v2/a',
+                         'https://web.push.apple.com/a', 'https://wns2-db5p.notify.windows.com/w/?token=a'):
+            self.assertEqual(self.post('/api/v1/push/subscriptions', {**SUB, 'endpoint': endpoint}).status_code, 201, endpoint)
+
+    def test_a_stored_endpoint_off_the_push_services_is_never_sent_to(self):
+        from prestop_push import sender
+        sub = PushSubscription.objects.create(endpoint='https://evil.example/x', p256dh='BNc' + 'A' * 84, auth='x' * 22)
+        with mock.patch.object(sender, 'webpush') as webpush:
+            self.assertEqual(sender.send(sub, {'title': 't'}), 'gone')
+        webpush.assert_not_called()
+
     def test_rejects_a_non_https_endpoint(self):
         r = self.post('/api/v1/push/subscriptions', {**SUB, 'endpoint': 'http://push.example/abc'})
         self.assertEqual(r.status_code, 422)
@@ -133,7 +150,7 @@ class PushApiTests(TestCase):
         self.assertFalse(Watch.objects.exists())
 
     def test_watch_needs_a_known_subscription(self):
-        r = self.post('/api/v1/push/watches', {'endpoint': 'https://push.example/zzz', 'id': 'x', 'kind': 'journey', 'notifyAt': NOW.isoformat(),
+        r = self.post('/api/v1/push/watches', {'endpoint': 'https://fcm.googleapis.com/fcm/send/zzz', 'id': 'x', 'kind': 'journey', 'notifyAt': NOW.isoformat(),
                                                'title': 't', 'body': 'b', 'url': '/', 'tripIds': []})
         self.assertEqual(r.status_code, 404)
 
@@ -163,10 +180,10 @@ class PushApiTests(TestCase):
         self.post('/api/v1/push/subscriptions', SUB)
         self.post('/api/v1/push/watches', {'endpoint': SUB['endpoint'], 'id': 'board:x', 'kind': 'departure', 'notifyAt': NOW.isoformat(),
                                            'title': 't', 'body': 'b', 'url': '/', 'tripIds': []})
-        rotated = {**SUB, 'endpoint': 'https://push.example/new', 'previousEndpoint': SUB['endpoint']}
+        rotated = {**SUB, 'endpoint': 'https://fcm.googleapis.com/fcm/send/new', 'previousEndpoint': SUB['endpoint']}
         self.assertEqual(self.post('/api/v1/push/subscriptions', rotated).status_code, 201)
-        self.assertEqual(list(PushSubscription.objects.values_list('endpoint', flat=True)), ['https://push.example/new'])
-        self.assertEqual(Watch.objects.get().subscription.endpoint, 'https://push.example/new')
+        self.assertEqual(list(PushSubscription.objects.values_list('endpoint', flat=True)), ['https://fcm.googleapis.com/fcm/send/new'])
+        self.assertEqual(Watch.objects.get().subscription.endpoint, 'https://fcm.googleapis.com/fcm/send/new')
 
     def test_unsubscribe(self):
         self.post('/api/v1/push/subscriptions', SUB)

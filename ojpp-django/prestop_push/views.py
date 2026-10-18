@@ -35,8 +35,8 @@ def _body(request) -> dict:
 
 
 def _endpoint(value) -> str:
-    if not isinstance(value, str) or not value.startswith('https://') or len(value) > 1024:
-        raise ApiError(422, 'INVALID_ENDPOINT', 'endpoint must be an https:// push service URL')
+    if not isinstance(value, str) or len(value) > 1024 or not sender.allowed(value):
+        raise ApiError(422, 'INVALID_ENDPOINT', 'endpoint must be an https:// URL of a browser push service')
     return value
 
 

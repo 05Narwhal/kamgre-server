@@ -7,6 +7,10 @@
 	encode zstd gzip
 
 	handle /api/v1/* {
+		# The app's requests are small (a planned trip, a reminder, at most a few kB): refuse anything big unread.
+		request_body {
+			max_size 256KB
+		}
 		reverse_proxy 127.0.0.1:8066 {
 			header_up X-Forwarded-Proto https
 		}

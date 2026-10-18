@@ -6,6 +6,7 @@ links (`/place/Name/@lat,lng`, `!3d…!4d…` pins, `?q=`, `?query=`, `?ll=`). S
 every hop stays on a Google host, so the server never fetches an arbitrary URL.
 """
 import re
+import time
 from typing import Optional
 from urllib.parse import parse_qs, unquote_plus, urljoin, urlsplit
 
@@ -15,6 +16,7 @@ from .upstream import USER_AGENT
 
 SHORT_HOSTS = {'maps.app.goo.gl', 'goo.gl', 'g.co'}
 MAX_HOPS = 5
+EXPAND_BUDGET = 8.0  # s for all hops together
 _NUM = r'[-+]?\d{1,3}(?:\.\d+)?'
 _PAIR = re.compile(rf'^\s*\(?\s*({_NUM})\s*[,;\s]\s*({_NUM})\s*\)?\s*$')
 _DMS = re.compile(r'''(\d{1,3})\s*°\s*(?:(\d{1,2})\s*['′]\s*)?(?:(\d{1,2}(?:\.\d+)?)\s*(?:"|″|'')\s*)?([NSEW])''', re.I)
@@ -99,16 +101,25 @@ def parse_link(url: str) -> Optional[dict]:
 
 
 def expand(url: str, timeout=(3, 5)) -> Optional[str]:
-    """Follows a short link's redirects while they stay on Google hosts."""
+    """Follows a short link's redirects while they stay on Google hosts (http(s), standard ports, EXPAND_BUDGET s)."""
     current = url if '://' in url else f'https://{url}'
+    deadline = time.monotonic() + EXPAND_BUDGET
     for _ in range(MAX_HOPS):
-        host = urlsplit(current).hostname or ''
-        if not is_google_host(host):
-            return None
-        if (host.lower() not in SHORT_HOSTS) and '/maps' in urlsplit(current).path:
-            return current
         try:
-            resp = requests.get(current, allow_redirects=False, timeout=timeout, stream=True, headers={'User-Agent': USER_AGENT})
+            parts = urlsplit(current)
+            port = parts.port
+        except ValueError:
+            return None
+        host = parts.hostname or ''
+        if parts.scheme not in ('http', 'https') or port not in (None, 80, 443) or parts.username or not is_google_host(host):
+            return None
+        if (host.lower() not in SHORT_HOSTS) and '/maps' in parts.path:
+            return current
+        left = deadline - time.monotonic()
+        if left <= 0.5:
+            return None
+        try:
+            resp = requests.get(current, allow_redirects=False, timeout=(min(timeout[0], left), min(timeout[1], left)), stream=True, headers={'User-Agent': USER_AGENT})
             resp.close()
         except requests.RequestException:
             return None
