@@ -546,6 +546,43 @@ def _near(lat1: float, lon1: float, lat2: float, lon2: float, metres: float) -> 
     return dx * dx + dy * dy <= metres * metres
 
 
+STAND_RADIUS = 15  # m: stations of different networks this close stand at one place (one marker on the map)
+
+
+def _group_stands(stations: list[dict]) -> None:
+    """Gives the stations of different networks at one place a shared `groupId` (each keeps its own numbers).
+    Every two stations of a group are within STAND_RADIUS, so a chain of near ones never joins far ends; the
+    closest pairs are joined first. Ids stay the same while the stations do."""
+    # Cells at least STAND_RADIUS wide, so a station's neighbours are in the 3 x 3 cells around it: twice the degrees
+    # across, since a degree of longitude is at most half as long as one of latitude south of 60°N.
+    cell = STAND_RADIUS / 111_320
+    grid: dict[tuple[int, int], list[int]] = {}
+    for i, s in enumerate(stations):
+        grid.setdefault((int(s['latitude'] // cell), int(s['longitude'] // (2 * cell))), []).append(i)
+
+    def gap(a: dict, b: dict) -> float:
+        dy = (a['latitude'] - b['latitude']) * 111_320
+        dx = (a['longitude'] - b['longitude']) * 111_320 * math.cos(math.radians(a['latitude']))
+        return math.hypot(dx, dy)
+
+    pairs = []
+    for (y, x), members in grid.items():
+        near = [j for dy in (-1, 0, 1) for dx in (-1, 0, 1) for j in grid.get((y + dy, x + dx), ())]
+        pairs += [(d, i, j) for i in members for j in near if i < j and (d := gap(stations[i], stations[j])) <= STAND_RADIUS]
+    group = {i: {i} for i in range(len(stations))}
+    for _, i, j in sorted(pairs, key=lambda p: (p[0], stations[p[1]]['id'], stations[p[2]]['id'])):
+        if group[i] is group[j] or any(gap(stations[a], stations[b]) > STAND_RADIUS for a in group[i] for b in group[j]):
+            continue
+        joined = group[i] | group[j]
+        for k in joined:
+            group[k] = joined
+    for members in {id(g): g for g in group.values()}.values():
+        if len({stations[k]['providerId'].rpartition(':')[0] for k in members}) > 1:
+            name = 'stand:' + min(stations[k]['id'] for k in members)
+            for k in members:
+                stations[k]['groupId'] = name
+
+
 def build_rentals(stations: Iterable[dict], vehicles: Iterable[dict], now: Optional[float] = None) -> list[dict]:
     now = now or time.time()
     vehicles = list(vehicles)
@@ -574,6 +611,7 @@ def build_rentals(stations: Iterable[dict], vehicles: Iterable[dict], now: Optio
         if network in floating and 'docksAvailable' not in out[-1]:
             out[-1]['zone'] = True
             out[-1]['canReturn'] = out[-1]['canReturn'] or s.get('allowDropoff') is not False
+    _group_stands(out)
     # A vehicle standing in its system's parking zone is already in that zone's count (Bolt reports it twice).
     zones: dict[str, list[tuple[float, float]]] = {}
     for r in out:

@@ -149,6 +149,49 @@ class RentalTests(SimpleTestCase):
         self.assertNotIn('zone', dock)
         self.assertEqual(street['id'], 'bolt_359:out')
 
+    @staticmethod
+    def dock(station_id, network, north_m, east_m=0.0):
+        # A dock `north_m` / `east_m` metres from 46°N 14.5°E.
+        return {'stationId': station_id, 'network': network, 'name': station_id, 'lat': 46 + north_m / 111_320,
+                'lon': 14.5 + east_m / (111_320 * 0.69466), 'vehiclesAvailable': 3, 'spacesAvailable': 2, 'capacity': 5,
+                'allowPickupNow': True, 'allowDropoffNow': True}
+
+    def test_stations_of_different_networks_at_one_place_share_a_group(self):
+        # Kino Šiška: BicikeLJ, nextbike and a Bolt zone within 15 m of each other; each keeps its own numbers.
+        zone = {**self.dock('bolt_359:z1', 'bolt_359', 11.7), 'spacesAvailable': None, 'capacity': None, 'vehiclesAvailable': 0,
+                'availableSpaces': {'byType': [{'count': 5, 'vehicleType': {'formFactor': 'SCOOTER_STANDING'}}]}}
+        stations = [self.dock('21', 'jcdecaux_ljubljana', 0), self.dock('89891670', 'nextbike_cc', 0.3, 8.8), zone,
+                    self.dock('22', 'jcdecaux_ljubljana', 400)]
+        scooter = {'vehicleId': 'bolt_359:s1', 'lat': 46.01, 'lon': 14.5, 'vehicleType': {'formFactor': 'SCOOTER_STANDING'},
+                   'rentalNetwork': {'networkId': 'bolt_359'}}
+        bicikelj, nextbike, bolt, alone, street = mapping.build_rentals(stations, [scooter], NOW)
+        self.assertTrue(bolt.get('zone'))
+        self.assertEqual({bicikelj.get('groupId'), nextbike.get('groupId'), bolt.get('groupId')}, {'stand:bolt_359:z1'})
+        self.assertEqual((bicikelj['availableCount'], nextbike['docksAvailable']), (3, 2))
+        self.assertNotIn('groupId', alone)
+        self.assertNotIn('groupId', street)  # a free-floating vehicle is no stand
+
+    def test_one_networks_stations_alone_are_not_a_group(self):
+        a, b = mapping.build_rentals([self.dock('1', 'nextbike_cn', 0), self.dock('2', 'nextbike_cn', 6)], [], NOW)
+        self.assertNotIn('groupId', a)
+        self.assertNotIn('groupId', b)
+
+    def test_nothing_is_grouped_across_more_than_15_m(self):
+        # Linhartova: Bolt 9.5 m from nextbike, nextbike 10.5 m from BicikeLJ, but Bolt and BicikeLJ 20 m apart:
+        # the closest pair is one place, BicikeLJ stays on its own.
+        bolt, nextbike, bicikelj, far = mapping.build_rentals(
+            [self.dock('bolt_359:z', 'bolt_359', 0), self.dock('89889365', 'nextbike_cc', 9.5),
+             self.dock('44', 'jcdecaux_ljubljana', 20), self.dock('7', 'jcdecaux_ljubljana', 34.9)], [], NOW)
+        self.assertEqual(bolt['groupId'], nextbike['groupId'])
+        self.assertNotIn('groupId', bicikelj)
+        self.assertNotIn('groupId', far)
+        self.assertEqual(mapping.build_rentals([self.dock('a', 'nextbike_cc', 0), self.dock('b', 'jcdecaux_ljubljana', 15.5)], [], NOW)[0].get('groupId'), None)
+
+    def test_neighbours_east_and_west_are_found_wherever_they_stand(self):
+        for start in range(0, 30, 2):  # a degree of longitude is shorter than one of latitude
+            west, east = mapping.build_rentals([self.dock('a', 'nextbike_cc', 0, start), self.dock('b', 'jcdecaux_ljubljana', 0, start + 14.5)], [], NOW)
+            self.assertEqual((start, west.get('groupId')), (start, 'stand:jcdecaux_ljubljana:b'))
+
 
 class GeometryTests(SimpleTestCase):
     def test_polyline_decodes_to_lon_lat(self):
