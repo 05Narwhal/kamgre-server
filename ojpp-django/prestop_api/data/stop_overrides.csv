@@ -28,3 +28,5 @@ IJPP:1168304,stop,46.393829,16.203577,,,"Frankovci rail stop: OSM halt node 4224
 LPP:567980fa-7783-411d-9c67-55b44d753880,stop,,,IJPP:1167340,Aleja,"LPP's name for Aleja's pole on line 1 (3 m from IJPP Aleja, same direction); not a stop of its own (2026-10-14)"
 IJPP:1167336,stop,46.056129,14.502123,LPP:717dda7e-d793-4697-8f60-b64ee8b1edc4,,"Gosposvetska NW-bound IJPP pole: joins LPP's NW-bound pole (top, NE side); LPP's SE-bound pole stays alone on the SW side as the user asked (2026-10-15)"
 IJPP:1167386,stop,,,LPP:16578e36-c682-4083-bd29-4973445dc0fe,,"Gosposvetska SE-bound IJPP pole (IJPP has it beside the NW-bound LPP pole): one board with LPP's SE-bound pole (2026-10-15)"
+IJPP:1131251,stop,,,IJPP:1131250,,Tržič bus station: three bays 14-18 m apart are one station (user, spec 2026-10-19 A3)
+IJPP:1131252,stop,,,IJPP:1131250,,Tržič bus station: three bays 14-18 m apart are one station (user, spec 2026-10-19 A3)

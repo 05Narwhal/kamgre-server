@@ -170,3 +170,100 @@ class SearchTests(SimpleTestCase):
                     stop('IJPP:3', 'Celje Lava', north_of(46.01, 200), 14.0)]
         with mock.patch.object(sources.stops, 'get', return_value=mock.Mock(value={'list': district})):
             self.assertEqual([p['id'] for p in sources.search_stations('Celje Lava', 10)], ['IJPP:2', 'IJPP:3'])
+
+
+def way(*degrees: float) -> list[tuple[float, float]]:
+    """Directions of travel (degrees from north, busiest first) as stopgroups.directions gives them."""
+    import math
+    return [(round(math.sin(math.radians(d)), 2), round(math.cos(math.radians(d)), 2)) for d in degrees]
+
+
+def merged_ids(merged: list[dict]) -> list[list[str]]:
+    return sorted(sorted(s.get('memberIds') or [s['id']]) for s in merged)
+
+
+class NamedCasesTests(SimpleTestCase):
+    """The stops the user reported (spec 2026-10-19 A3), with the feeds' positions and directions of 2026-10-19."""
+
+    def test_kosmaceva_is_one_stop_per_side(self):
+        # IJPP's and LPP's eastbound poles are 20 m apart; their busiest ways differ (89° and 347°), but every way at
+        # one is a way at the other.
+        stops = [stop('IJPP:1167169', 'Kosmačeva', 46.100885, 14.460836), stop('IJPP:1167170', 'Kosmačeva', 46.100982, 14.461081),
+                 stop('LPP:d987', 'Kosmačeva', 46.100723, 14.460546), stop('LPP:fb77', 'Kosmačeva', 46.101002, 14.461034)]
+        ways = {'IJPP:1167169': way(89, 22), 'IJPP:1167170': way(213, 203), 'LPP:d987': way(212, 163), 'LPP:fb77': way(347, 103)}
+        merged, _ = stopgroups.merge(stops, ways=ways)
+        self.assertEqual(merged_ids(merged), [['IJPP:1167169', 'LPP:fb77'], ['IJPP:1167170', 'LPP:d987']])
+
+    def test_litostrojska_sits_at_a_pole_and_the_turning_loop_is_its_own_stop(self):
+        stops = [stop('IJPP:1167150', 'Litostrojska', 46.076794, 14.488728), stop('LPP:300f', 'LITOSTROJSKA', 46.077721, 14.488358),
+                 stop('LPP:9a48', 'Litostrojska', 46.076759, 14.488915), stop('IJPP:1167151', 'Litostrojska', 46.076783, 14.489016),
+                 stop('LPP:ac3a', 'Litostrojska', 46.076813, 14.488618)]
+        ways = {'IJPP:1167150': way(26), 'LPP:300f': way(338, 169), 'LPP:9a48': way(29, 353, 18), 'IJPP:1167151': way(209, 210, 29),
+                'LPP:ac3a': way(213, 207, 209, 183, 158)}
+        merged, _ = stopgroups.merge(stops, ways=ways)
+        self.assertEqual(merged_ids(merged), [['IJPP:1167150', 'LPP:9a48'], ['IJPP:1167151', 'LPP:ac3a'], ['LPP:300f']])
+        north = next(s for s in merged if 'LPP:9a48' in (s.get('memberIds') or []))
+        self.assertEqual((north['latitude'], north['longitude']), (46.076759, 14.488915))  # the LPP pole, not between two
+
+    def test_slovenija_avto_is_one_stop_per_side(self):
+        # The IJPP pole served both ways stands 3.6 m from the LPP northbound pole: one stop there, not a southbound
+        # marker on the northbound side.
+        stops = [stop('IJPP:1165667', 'Ljubljana Slovenija avto', 46.072988, 14.486411), stop('LPP:484b', 'Slovenija avto', 46.073196, 14.486220),
+                 stop('IJPP:1165669', 'Ljubljana Slovenija avto', 46.073882, 14.486591), stop('LPP:dfde', 'Slovenija avto', 46.073914, 14.486595)]
+        ways = {'IJPP:1165667': way(149, 145), 'LPP:484b': way(175, 147, 145, 104, 205), 'IJPP:1165669': way(173, 334, 357),
+                'LPP:dfde': way(29, 46, 57, 353, 331)}
+        merged, _ = stopgroups.merge(stops, ways=ways)
+        self.assertEqual(merged_ids(merged), [['IJPP:1165667', 'LPP:484b'], ['IJPP:1165669', 'LPP:dfde']])
+
+    def test_trzic_bus_station_is_one_station(self):
+        from prestop_api import stopfix
+        stops = [stop('IJPP:1131250', 'Tržič', 46.362263, 14.308901), stop('IJPP:1131251', 'Tržič', 46.362291, 14.308698),
+                 stop('IJPP:1131252', 'Tržič', 46.362150, 14.308822)]
+        ways = {'IJPP:1131250': way(230, 51), 'IJPP:1131251': way(244, 224), 'IJPP:1131252': way(65, 44)}
+        self.assertEqual(len(stopgroups.merge(stops, ways=ways)[0]), 3)  # the feed's three bays, served opposite ways
+        merged, _ = stopgroups.merge(stops, stopfix.read_overrides()['merge'], ways=ways)
+        self.assertEqual(merged_ids(merged), [['IJPP:1131250', 'IJPP:1131251', 'IJPP:1131252']])
+
+    def test_one_pole_in_two_feeds_is_one_stop_whatever_their_lines_do_next(self):
+        stops = [stop('IJPP:1121360', 'Zgornje Bitnje K', 46.221942, 14.339947), stop('MOKranj:103', 'Zgornje Bitnje K', 46.221940, 14.339950),
+                 stop('IJPP:1121361', 'Zgornje Bitnje K', 46.222059, 14.339611), stop('MOKranj:105', 'Zgornje Bitnje K', 46.222060, 14.339610)]
+        ways = {'IJPP:1121360': way(343), 'MOKranj:103': way(261), 'IJPP:1121361': way(161), 'MOKranj:105': way(85)}
+        merged, _ = stopgroups.merge(stops, ways=ways)
+        self.assertEqual(merged_ids(merged), [['IJPP:1121360', 'MOKranj:103'], ['IJPP:1121361', 'MOKranj:105']])
+
+    def test_two_poles_of_one_feed_both_served_both_ways_stay_apart_across_the_road(self):
+        stops = [stop('IJPP:1', 'Notranje Gorice mostiček', 46.0, 14.4), stop('IJPP:2', 'Notranje Gorice mostiček', north_of(46.0, 20), 14.4)]
+        merged, _ = stopgroups.merge(stops, ways={'IJPP:1': way(90, 270), 'IJPP:2': way(270, 90)})
+        self.assertEqual(len(merged), 2)
+
+
+class SideTests(SimpleTestCase):
+    """place_sides: Slovenia drives on the right, so the northbound stop is east of the southbound one."""
+
+    def pair(self, east_lon, west_lon):
+        north, south = stop('IJPP:n', 'Vas', 46.0, east_lon), stop('IJPP:s', 'Vas', 46.0, west_lon)
+        return [north, south], {'IJPP:n': way(0), 'IJPP:s': way(180)}
+
+    def test_poles_on_one_spot_move_apart_each_to_its_side(self):
+        markers, ways = self.pair(14.5, 14.5)
+        self.assertEqual(stopgroups.place_sides(markers, list(markers), ways), 2)
+        north, south = markers
+        self.assertGreater(north['longitude'], south['longitude'])
+        self.assertAlmostEqual(stopgroups.meters(north, south), 8, delta=0.5)  # 4 m each side of the middle
+        self.assertEqual((north['latitude'], south['latitude']), (46.0, 46.0))  # along the road they stay
+
+    def test_swapped_poles_change_sides_and_a_close_osm_pole_wins(self):
+        markers, ways = self.pair(14.4999, 14.5001)  # the northbound one ~15 m west of the southbound one
+        osm = [(46.00002, 14.50011)]  # a mapped pole 8.5 m east of the middle
+        stopgroups.place_sides(markers, list(markers), ways, osm=osm)
+        north, south = markers
+        self.assertEqual((north['latitude'], north['longitude']), osm[0])
+        self.assertLess(south['longitude'], 14.5)
+
+    def test_stops_on_their_own_sides_hand_placed_ones_and_far_namesakes_stay(self):
+        for markers, ways, fixed in [(*self.pair(14.5001, 14.4999), set()), (*self.pair(14.5, 14.5), {'IJPP:n'})]:
+            before = [dict(m) for m in markers]
+            self.assertEqual(stopgroups.place_sides(markers, list(markers), ways, fixed), 0)
+            self.assertEqual(markers, before)
+        far = [stop('IJPP:n', 'Vas', 46.0, 14.5), stop('IJPP:s', 'Vas', north_of(46.0, 90), 14.5)]
+        self.assertEqual(stopgroups.place_sides(far, list(far), {'IJPP:n': way(0), 'IJPP:s': way(180)}), 0)

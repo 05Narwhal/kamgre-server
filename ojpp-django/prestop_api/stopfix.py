@@ -152,6 +152,20 @@ def renamed(stop_id: Optional[str], name):
     return (tables()[0].get('names') or {}).get(stop_id) or name if stop_id else name
 
 
+OSM_STOPS = DATA / 'osm_bus_stops.json'
+_osm: dict = {'poles': None}
+
+
+def osm_poles() -> list[tuple[float, float]]:
+    """OpenStreetMap's bus stop poles (scripts/build-osm-points.py), read once; none when the file is missing."""
+    if _osm['poles'] is None:
+        try:
+            _osm['poles'] = [tuple(p) for p in json.loads(OSM_STOPS.read_text(encoding='utf-8'))['stops']]
+        except (OSError, ValueError, KeyError):
+            _osm['poles'] = []
+    return _osm['poles']
+
+
 def replacement_stops(station_ids: Iterable[str]) -> list[dict]:
     overrides, _ = tables()
     return [{**r, 'stationId': sid} for sid in station_ids for r in overrides['replacement'].get(sid, [])]
