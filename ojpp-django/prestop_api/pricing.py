@@ -24,7 +24,8 @@ TEXT = {
            'rideJoin': '{name}: membership needed (from {cents}), then the ride', 'rideUnknown': '{name}: price list incomplete',
            'note': "Estimate from the operators' price lists, checked {date}",
            'fuel': 'Fuel ≈ {amount} {unit} ({fuel})', 'defaultCar': 'an average petrol car, {per100} l/100 km', 'vignette': '7-day vignette',
-           'parking': 'parking {name}', 'parkingUnknown': 'parking {name} (fee unknown)', 'parkRide': 'Included in the P+R parking ticket',
+           'parking': 'parking {name}', 'parkingUnknown': 'parking {name} (fee unknown)', 'parkingFree': 'parking {name} (free)',
+           'parkingHour': 'parking {name}, first hour', 'parkRide': 'Included in the P+R parking ticket',
            'fuels': {'petrol': 'petrol', 'diesel': 'diesel', 'lpg': 'LPG, price unknown', 'electric': 'public charging, estimate'}},
     'sl': {'unknown': 'Cena ni znana', 'covered': 'Velja tvoja vozovnica: {card}', 'routeBound': 'Velja tvoja vozovnica, če je za to relacijo',
            'ijpp': 'Enotna vozovnica IJPP, {km} km', 'sz': 'Vozovnica SŽ, {km} km', 'szRank': 'Vozovnica SŽ, {km} km, z doplačilom za {rank}',
@@ -33,7 +34,8 @@ TEXT = {
            'rideJoin': '{name}: potrebna je naročnina (od {cents}), nato vožnja', 'rideUnknown': '{name}: cenik ni popoln',
            'note': 'Ocena po cenikih prevoznikov, preverjeno {date}',
            'fuel': 'Gorivo ≈ {amount} {unit} ({fuel})', 'defaultCar': 'povprečen bencinski avto, {per100} l/100 km', 'vignette': 'tedenska vinjeta',
-           'parking': 'parkiranje {name}', 'parkingUnknown': 'parkiranje {name} (cena ni znana)', 'parkRide': 'Vključeno v parkirni listek P+R',
+           'parking': 'parkiranje {name}', 'parkingUnknown': 'parkiranje {name} (cena ni znana)', 'parkingFree': 'parkiranje {name} (brezplačno)',
+           'parkingHour': 'parkiranje {name}, prva ura', 'parkRide': 'Vključeno v parkirni listek P+R',
            'fuels': {'petrol': 'bencin', 'diesel': 'dizel', 'lpg': 'avtoplin, cena ni znana', 'electric': 'javne polnilnice, ocena'}},
 }
 
@@ -144,7 +146,9 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             parts.append(text['vignette'])
         park = leg['car'].get('parking')
         if park:
-            parts.append((text['parking'] if park['feeCents'] is not None else text['parkingUnknown']).format(name=park['name']))
+            hourly = driving.parking_fee(park, rules)['basis'] == 'hourly'
+            key = 'parkingUnknown' if park['feeCents'] is None else 'parkingFree' if not park['feeCents'] else 'parkingHour' if hourly else 'parking'
+            parts.append(text[key].format(name=park['name']))
             known = driving.parking(park['name'], rules)
             if known and known.get('includesRides'):
                 included[known['system']] = [known['includesRides'], known]

@@ -16,6 +16,7 @@ from typing import Optional
 import requests
 
 from . import geometry
+from . import parking as car_parks
 from .upstream import Cached, UpstreamError, session
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,14 @@ def parking(name: str, rules: dict) -> Optional[dict]:
     return next((dict(v, name=k) for k, v in (rules.get('parking') or {}).items() if k.lower() in folded), None)
 
 
+def parking_fee(park: dict, rules: dict) -> dict:
+    """The fee of the car park a leg ends at (parking.fee): its P+R tariff, else what OpenStreetMap says of the car
+    park mapped there (fee=no: free; fee=yes in a city with a known tariff: one hour of it), else unknown."""
+    lat, lon = park.get('lat'), park.get('lon')
+    mapped = car_parks.at(lat, lon) if lat is not None and lon is not None else None
+    return car_parks.fee(park.get('name') or '', (mapped or {}).get('osmFee') or '', lat, lon, rules)
+
+
 def _load_fuel() -> dict:
     """The government's regulated prices (newest row of the gov.si CSV): {'petrol': €/l, 'diesel': €/l, 'valid': text}."""
     from .pricing import tariffs
@@ -116,9 +125,8 @@ def cost(car_leg: dict, car: dict, rules: dict, vignette_due: bool) -> tuple[Opt
         out['vignetteCents'] = rules['vignette']['weekCents']
         parts.append(out['vignetteCents'])
     if out.get('parking'):
-        known = parking(out['parking']['name'], rules)
-        cents = known['cents'] if known else None
-        out['parking'] = {**out['parking'], 'feeCents': cents, 'fee': 'unknown' if cents is None else 'paid' if cents else 'free'}
+        found = parking_fee(out['parking'], rules)
+        out['parking'] = {**out['parking'], 'feeCents': found['feeCents'], 'fee': found['fee']}
         parts.append(out['parking']['feeCents'])
     return (None if any(c is None for c in parts) else sum(parts)), out
 

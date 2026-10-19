@@ -885,6 +885,37 @@
     "checked": "2026-10-18",
     "note": "Two LPP rides included (lpt.si, P+R Dolgi most page)."
    }
-  }
+  },
+  "zones": [
+   {
+    "city": "Ljubljana",
+    "centre": [
+     46.0514,
+     14.506
+    ],
+    "source": "Javno podjetje Ljubljanska parkirišča in tržnice (LPT), price list valid from 12. 1. 2026",
+    "sourceUrl": "https://www.lpt.si/datoteke/cenik-za-parkiranje",
+    "checked": "2026-10-19",
+    "note": "Street parking Mon-Sun 6-22 (night flat 2 EUR). Zone areas are approximated by distance from Presernov trg; applied only to car parks OpenStreetMap marks fee=yes. One hour counted.",
+    "bands": [
+     {
+      "zone": "U-1",
+      "withinMeters": 900,
+      "centsPerHour": 170
+     },
+     {
+      "zone": "U-2",
+      "withinMeters": 2000,
+      "centsPerHour": 100
+     },
+     {
+      "zone": "U-3",
+      "withinMeters": 3500,
+      "centsPerHour": 70
+     }
+    ]
+   }
+  ],
+  "zonesNotPublished": "Maribor, Kranj, Celje, Koper, Novo mesto and Bled: no official tariff could be read on 2026-10-19; their paid car parks stay \"unknown\" (\"parking may not be free\"), never 0."
  }
 }
