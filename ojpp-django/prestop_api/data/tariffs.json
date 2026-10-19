@@ -36,7 +36,8 @@
     ],
     "maxMinutes": 1440,
     "resetOnReturn": true,
-    "waitSeconds": 300,
+    "waitSeconds": 0,
+    "waitSource": "User test 2026-10-19: a returned bike can be taken again at once and the free hour restarts (the Visit Ljubljana 5-minute line is wrong)",
     "source": "Visit Ljubljana (City of Ljubljana), BicikeLJ",
     "sourceUrl": "https://www.visitljubljana.com/sl/obiskovalci/informacije/promet-in-transport/bicikelj-samopostrezna-izposoja-koles",
     "checked": "2026-10-18",
@@ -479,6 +480,7 @@
   "cards": [
    {
     "id": "urbana-monthly",
+    "system": "urbana",
     "name": {
      "sl": "Urbana, mesečna",
      "en": "Urbana monthly"
@@ -497,6 +499,7 @@
    },
    {
     "id": "urbana-annual",
+    "system": "urbana",
     "name": {
      "sl": "Urbana, letna",
      "en": "Urbana annual"
@@ -515,6 +518,7 @@
    },
    {
     "id": "urbana-school",
+    "system": "urbana",
     "name": {
      "sl": "Urbana, šolska",
      "en": "Urbana, pupils and students"
@@ -533,6 +537,7 @@
    },
    {
     "id": "ijpp-pass",
+    "system": "ijpp",
     "name": {
      "sl": "Mesečna ali letna vozovnica IJPP",
      "en": "IJPP monthly or annual pass"
@@ -551,6 +556,7 @@
    },
    {
     "id": "ijpp-pupil-student",
+    "system": "ijpp",
     "name": {
      "sl": "Subvencionirana dijaška ali študentska vozovnica",
      "en": "Subsidised pupil or student pass"
@@ -569,6 +575,7 @@
    },
    {
     "id": "slovenia-free",
+    "system": "ijpp",
     "name": {
      "sl": "Letna vozovnica Slovenija (brezplačna)",
      "en": "Free annual pass (Letna vozovnica Slovenija)"
@@ -593,6 +600,7 @@
    },
    {
     "id": "marprom-monthly",
+    "system": "marprom",
     "name": {
      "sl": "Marprom, mesečna",
      "en": "Marprom monthly"
@@ -611,6 +619,7 @@
    },
    {
     "id": "kranj-monthly",
+    "system": "kranj",
     "name": {
      "sl": "Kranj, mesečna",
      "en": "Kranj city buses, monthly"

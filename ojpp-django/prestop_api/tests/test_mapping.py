@@ -287,15 +287,17 @@ class JourneyTests(SimpleTestCase):
         self.assertEqual(street['bicycle'], {'optimization': {'type': 'SAFE_STREETS'}})
         self.assertEqual(street['scooter'], {'optimization': {'type': 'SAFE_STREETS'}})
 
-    def test_price_fields_are_accepted_and_used_only_with_show_prices(self):
+    def test_price_fields_are_accepted_and_every_plan_is_priced(self):
         profile = {'cards': ['urbana-monthly', 'urbana-monthly'], 'bikeMemberships': ['jcdecaux_ljubljana'], 'scooterPasses': [],
                    'car': {'fuel': 'diesel', 'litresPer100km': 5.5, 'vignette': False}}
         req = self.request(modes=['walk', 'bus', 'car', 'carPark'], showPrices=True, costPreset='balanced', priceProfile=profile)
         self.assertEqual((req['showPrices'], req['costPreset']), (True, 'balanced'))
         self.assertEqual(req['priceProfile'], {**profile, 'cards': ['urbana-monthly']})
-        # Not asked for prices: today's order and nothing of the profile kept.
-        req = self.request(costPreset='cheapest', priceProfile=profile)
-        self.assertEqual((req['showPrices'], req['costPreset'], req['priceProfile']), (False, 'fastest', None))
+        # Every plan is priced (2026-10-19): without showPrices, or with it false, the profile and preset still count.
+        for overrides in ({}, {'showPrices': False}):
+            req = self.request(costPreset='cheapest', priceProfile=profile, **overrides)
+            self.assertEqual((req['showPrices'], req['costPreset'], req['priceProfile']['cards']), (True, 'cheapest', ['urbana-monthly']))
+        self.assertEqual((self.request()['costPreset'], self.request()['priceProfile']['cards']), ('fastest', []))
         # Car modes are accepted; until they are planned (A7) OTP is asked exactly as before.
         self.assertEqual(journeys.otp_variables(self.request(modes=['walk', 'bus', 'car', 'carPark'])), journeys.otp_variables(self.request(modes=['walk', 'bus'])))
 

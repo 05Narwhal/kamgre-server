@@ -57,7 +57,7 @@ def leg_car(leg: dict, coords: list) -> dict:
            'fuelLitres': None, 'fuelCents': None, 'motorway': motorway_km(coords) >= MOTORWAY_MIN_KM}
     parking = (end.get('vehicleParking') or {}).get('name')
     if parking:
-        out['parking'] = {'name': parking, 'feeCents': None, 'parkAndRide': 'P+R' in parking.upper().replace(' ', ''),
+        out['parking'] = {'name': parking, 'feeCents': None, 'fee': 'unknown', 'parkAndRide': 'P+R' in parking.upper().replace(' ', ''),
                           'lat': end.get('lat'), 'lon': end.get('lon')}
     return out
 
@@ -117,7 +117,8 @@ def cost(car_leg: dict, car: dict, rules: dict, vignette_due: bool) -> tuple[Opt
         parts.append(out['vignetteCents'])
     if out.get('parking'):
         known = parking(out['parking']['name'], rules)
-        out['parking'] = {**out['parking'], 'feeCents': known['cents'] if known else None}
+        cents = known['cents'] if known else None
+        out['parking'] = {**out['parking'], 'feeCents': cents, 'fee': 'unknown' if cents is None else 'paid' if cents else 'free'}
         parts.append(out['parking']['feeCents'])
     return (None if any(c is None for c in parts) else sum(parts)), out
 

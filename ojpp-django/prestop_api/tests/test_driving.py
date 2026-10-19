@@ -55,12 +55,14 @@ class CarCostTests(SimpleTestCase):
 
     def test_ljubljana_park_and_ride_includes_two_bus_rides(self):
         j = price(car_leg(15, parking='P+R Dolgi most'), bus(30), bus(50), bus(200))
-        self.assertEqual(j['legs'][0]['car']['parking']['feeCents'], 150)
+        self.assertEqual((j['legs'][0]['car']['parking']['feeCents'], j['legs'][0]['car']['parking']['fee']), (150, 'paid'))
         self.assertEqual([l['price']['amountCents'] for l in j['legs'][1:]], [0, 0, 150])
         self.assertEqual(j['legs'][1]['price']['basis'], 'Included in the P+R parking ticket')
 
     def test_an_unknown_car_park_makes_the_total_unknown(self):
-        self.assertIsNone(price(car_leg(15, parking='Parkirišče pri postaji'))['price']['totalCents'])
+        j = price(car_leg(15, parking='Parkirišče pri postaji'))
+        self.assertIsNone(j['price']['totalCents'])
+        self.assertEqual((j['legs'][0]['car']['parking']['feeCents'], j['legs'][0]['car']['parking']['fee']), (None, 'unknown'))
 
 
 class DriveComparisonTests(SimpleTestCase):

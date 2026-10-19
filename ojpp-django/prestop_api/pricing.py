@@ -251,18 +251,23 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
     return journey
 
 
+# Who may buy a card (catalog `subsidy`), from the tariff file's eligibility.
+SUBSIDY = {'all': 'none', 'pupil': 'pupil', 'student': 'student', 'senior': 'senior', 'disabled': 'other'}
+
+
 @lru_cache(maxsize=1)
 def catalog() -> dict:
-    """GET /pricing/catalog (contract pricingCatalogSchema): transit cards and bike memberships with their regions."""
+    """GET /pricing/catalog (contract pricingCatalogSchema): transit cards and bike memberships with their regions; system:
+    the ticket system each belongs to (onboarding asks one question per system), a bike membership's is its network."""
     data = tariffs()
-    cards = [{k: c[k] for k in ('id', 'name', 'regions', 'eligibility', 'period', 'priceCents', 'source', 'sourceUrl') if k in c} | {'kind': 'transit'}
-             for c in data['transit']['cards']]
+    cards = [{k: c[k] for k in ('id', 'name', 'system', 'regions', 'eligibility', 'period', 'priceCents', 'source', 'sourceUrl') if k in c}
+             | {'kind': 'transit', 'subsidy': SUBSIDY[c.get('eligibility', 'all')]} for c in data['transit']['cards']]
     for network, rule in data['sharing']['networks'].items():
         if not rule.get('membership'):
             continue
         yearly = next((m for m in rule['membership'] if m['period'] == 'year'), rule['membership'][0])
-        cards.append({'id': network, 'kind': 'bike', 'name': {'sl': rule['name'], 'en': rule['name']}, 'regions': rule.get('regions', []),
-                      'eligibility': 'all', 'period': yearly['period'], 'priceCents': yearly['cents'], 'networks': [network],
+        cards.append({'id': network, 'kind': 'bike', 'name': {'sl': rule['name'], 'en': rule['name']}, 'system': network, 'regions': rule.get('regions', []),
+                      'eligibility': 'all', 'subsidy': 'none', 'period': yearly['period'], 'priceCents': yearly['cents'], 'networks': [network],
                       'source': rule['source'], **({'sourceUrl': rule['sourceUrl']} if rule.get('sourceUrl') else {})})
     return {'checked': data['checked'], 'regions': data['transit']['regions'], 'cards': cards}
 

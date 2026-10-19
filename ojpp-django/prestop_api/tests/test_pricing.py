@@ -111,3 +111,8 @@ class CatalogTests(SimpleTestCase):
         self.assertEqual(by_id['urbana-monthly']['regions'], ['ljubljana'])
         self.assertEqual((by_id['jcdecaux_ljubljana']['kind'], by_id['jcdecaux_ljubljana']['priceCents']), ('bike', 300))
         self.assertIn('ljubljana', {r['id'] for r in data['regions']})
+        # One onboarding question per ticket system; who may buy each card.
+        self.assertEqual({c['system'] for c in data['cards'] if c['kind'] == 'transit'}, {'ijpp', 'urbana', 'marprom', 'kranj'})
+        self.assertEqual((by_id['ijpp-pupil-student']['system'], by_id['ijpp-pupil-student']['subsidy']), ('ijpp', 'student'))
+        self.assertEqual((by_id['urbana-monthly']['subsidy'], by_id['slovenia-free']['subsidy']), ('none', 'senior'))
+        self.assertEqual((by_id['jcdecaux_ljubljana']['system'], by_id['jcdecaux_ljubljana']['subsidy']), ('jcdecaux_ljubljana', 'none'))

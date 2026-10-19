@@ -1,6 +1,3 @@
-from contextlib import contextmanager
-from unittest import mock
-
 from django.test import SimpleTestCase
 
 from prestop_api import sharing
@@ -28,14 +25,6 @@ def journey(*legs) -> dict:
 
 def station(lon=14.5433, lat=46.0520, bikes=5, docks=5, sid='jcdecaux_ljubljana:7', name='Tivoli'):
     return {'id': sid, 'name': name, 'latitude': lat, 'longitude': lon, 'availableCount': bikes, 'docksAvailable': docks, 'canPickup': bikes > 0, 'canReturn': docks > 0}
-
-
-@contextmanager
-def no_wait():
-    """BicikeLJ as if a new bike could be taken at once (the real network makes riders wait 5 minutes)."""
-    real = sharing.rules()
-    with mock.patch.object(sharing, 'rules', return_value={**real, 'jcdecaux_ljubljana': {**real['jcdecaux_ljubljana'], 'waitSeconds': 0}}):
-        yield
 
 
 class RideCentsTests(SimpleTestCase):
@@ -68,16 +57,12 @@ class FreePeriodTests(SimpleTestCase):
         self.assertEqual(j['legs'][0]['rental']['freeUntil'], at(60))
         self.assertNotIn('swapAt', j['legs'][0]['rental'])
 
-    def test_a_90_minute_bicikelj_ride_says_when_the_free_hour_ends_but_the_5_minute_wait_rules_out_a_swap(self):
-        j = sharing.free_periods(journey(ride(90)), [station()])
-        self.assertEqual(len(j['legs']), 1)
-        self.assertEqual(j['legs'][0]['rental']['freeUntil'], at(60))
-        self.assertNotIn('swapAt', j['legs'][0]['rental'])
-        self.assertEqual(j['effectiveArrival'], at(90))
+    def test_bicikelj_has_no_wait_between_rentals(self):
+        # User test 2026-10-19: a returned bike is taken again at once (the Visit Ljubljana "5 min" line is wrong).
+        self.assertEqual(sharing.rules()['jcdecaux_ljubljana']['waitSeconds'], 0)
 
-    def test_without_a_wait_a_90_minute_ride_swaps_bikes_before_the_hour_and_stays_free(self):
-        with no_wait():
-            j = sharing.free_periods(journey(ride(90)), [station(), station(lon=14.47, sid='jcdecaux_ljubljana:8', name='Far')])
+    def test_a_90_minute_bicikelj_ride_swaps_bikes_before_the_hour_and_stays_free(self):
+        j = sharing.free_periods(journey(ride(90)), [station(), station(lon=14.47, sid='jcdecaux_ljubljana:8', name='Far')])
         first, second = j['legs']
         swap = first['rental']['swapAt']
         self.assertEqual((swap['stationId'], swap['name']), ('jcdecaux_ljubljana:7', 'Tivoli'))
@@ -93,7 +78,6 @@ class FreePeriodTests(SimpleTestCase):
         self.assertGreater(sharing.ride_cents(sharing.rules()['jcdecaux_ljubljana'], 90 * 60), 0)
 
     def test_no_swap_at_a_full_or_empty_station_or_one_too_far_from_the_ride(self):
-        self.enterContext(no_wait())
         for s in (station(docks=0), station(bikes=0), station(lat=46.06)):
             with self.subTest(station=s):
                 j = sharing.free_periods(journey(ride(90)), [s])
@@ -101,7 +85,6 @@ class FreePeriodTests(SimpleTestCase):
                 self.assertNotIn('swapAt', j['legs'][0]['rental'])
 
     def test_no_swap_when_it_would_miss_the_next_train(self):
-        self.enterContext(no_wait())
         train = {'id': 'leg:x-2', 'mode': 'rail', 'tripId': 'SZ:1', 'geometry': [], 'scheduledDeparture': at(91), 'effectiveDeparture': at(91),
                  'scheduledArrival': at(120), 'effectiveArrival': at(120)}
         j = sharing.free_periods(journey(ride(90), train), [station()])
@@ -109,7 +92,6 @@ class FreePeriodTests(SimpleTestCase):
         self.assertEqual(j['effectiveArrival'], at(120))
 
     def test_a_walk_after_the_ride_moves_with_the_swap(self):
-        self.enterContext(no_wait())
         walk = {'id': 'leg:x-2', 'mode': 'walk', 'tripId': None, 'geometry': [], 'scheduledDeparture': at(90), 'effectiveDeparture': at(90),
                 'scheduledArrival': at(95), 'effectiveArrival': at(95)}
         j = sharing.free_periods(journey(ride(90), walk), [station()])

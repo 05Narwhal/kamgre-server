@@ -155,7 +155,7 @@ def parse_request(body: dict, insane_enabled: bool) -> dict:
     max_transfers = body.get('maxTransfers')
     if max_transfers is not None and (not isinstance(max_transfers, int) or isinstance(max_transfers, bool) or not 0 <= max_transfers <= MAX_TRANSFERS_LIMIT):
         raise RequestError('INVALID_REQUEST', f'maxTransfers must be 0–{MAX_TRANSFERS_LIMIT}')
-    show_prices = body.get('showPrices', False)
+    show_prices = body.get('showPrices', True)
     if not isinstance(show_prices, bool):
         raise RequestError('INVALID_REQUEST', 'showPrices must be true or false')
     preset = body.get('costPreset', 'fastest')
@@ -169,8 +169,8 @@ def parse_request(body: dict, insane_enabled: bool) -> dict:
         'modes': set(modes), 'minTransferSeconds': min(0, slack) if risk == 'insane' else slack, 'riskMode': risk,
         'operators': list(dict.fromkeys(operators)), 'pageCursor': cursor, 'pageDirection': direction,
         'maxTransfers': max_transfers,
-        # Prices: without showPrices the profile and preset are not used (and today's order stays).
-        'showPrices': show_prices, 'costPreset': preset if show_prices else 'fastest', 'priceProfile': profile if show_prices else None,
+        # Every plan is priced (2026-10-19); showPrices is still accepted (and checked) but no longer turns prices off.
+        'showPrices': True, 'costPreset': preset, 'priceProfile': profile,
     }
 
 
