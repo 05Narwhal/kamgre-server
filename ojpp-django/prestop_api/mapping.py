@@ -519,8 +519,17 @@ ELECTRIC = {'ELECTRIC', 'ELECTRIC_ASSIST'}
 NO_LIMIT = 100_000  # floating networks report "unlimited" spaces as INT_MAX
 
 
-def _rack_details(s: dict) -> dict:
-    """Capacity, free docks, e-bikes and the operator's app links; unknown values are left out (never 0)."""
+def _electric_networks(stations: Iterable[dict]) -> set[str]:
+    """Networks whose fleet has an electric type, judged over all their stations: only these report e-bike counts."""
+    # Spaces too: with every e-bike out, OTP may still list e-bike spaces.
+    return {s.get('network') or s['stationId'].split(':')[0] for s in stations
+            if any((t.get('vehicleType') or {}).get('propulsionType') in ELECTRIC
+                   for key in ('availableVehicles', 'availableSpaces') for t in (s.get(key) or {}).get('byType') or [])}
+
+
+def _rack_details(s: dict, electric: bool = True) -> dict:
+    """Capacity, free docks, e-bikes and the operator's app links; unknown values are left out (never 0).
+    `ebikesAvailable` is left out too when the station's network has no e-bikes at all (BicikeLJ)."""
     out = {}
     count = lambda v: v if isinstance(v, int) and not isinstance(v, bool) and 0 <= v < NO_LIMIT else None
     if count(s.get('capacity')) is not None:
@@ -529,9 +538,9 @@ def _rack_details(s: dict) -> dict:
         out['docksAvailable'] = s['spacesAvailable']
     by_type = (s.get('availableVehicles') or {}).get('byType') or []
     typed = [t for t in by_type if (t.get('vehicleType') or {}).get('propulsionType')]
-    if typed:
+    if electric and typed:
         out['ebikesAvailable'] = sum(count(t.get('count')) or 0 for t in typed if t['vehicleType']['propulsionType'] in ELECTRIC)
-    elif s.get('vehiclesAvailable') == 0:
+    elif electric and s.get('vehiclesAvailable') == 0:
         out['ebikesAvailable'] = 0
     uris = {k: v for k, v in (s.get('rentalUris') or {}).items() if k in ('web', 'android', 'ios') and isinstance(v, str) and v.startswith('http')}
     if uris:
@@ -588,6 +597,8 @@ def _group_stands(stations: list[dict]) -> None:
 def build_rentals(stations: Iterable[dict], vehicles: Iterable[dict], now: Optional[float] = None) -> list[dict]:
     now = now or time.time()
     vehicles = list(vehicles)
+    stations = list(stations)
+    electric = _electric_networks(stations)
     # Networks with free-floating vehicles (Bolt): their stations without docks are parking zones where the
     # e-bikes and scooters are left, a system of their own rather than a dock.
     floating = {(v.get('rentalNetwork') or {}).get('networkId') or v.get('network') or v['vehicleId'].split(':')[0] for v in vehicles}
@@ -608,7 +619,7 @@ def build_rentals(stations: Iterable[dict], vehicles: Iterable[dict], now: Optio
             'canPickup': bool(s.get('allowPickupNow', s.get('allowPickup'))) and (s.get('vehiclesAvailable') or 0) > 0,
             'canReturn': bool(s.get('allowDropoffNow', s.get('allowDropoff'))),
             'updatedAt': iso(s.get('lastUpdated') or now),
-            **_rack_details(s),
+            **_rack_details(s, network in electric),
         })
         if network in floating and 'docksAvailable' not in out[-1]:
             out[-1]['zone'] = True

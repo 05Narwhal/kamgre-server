@@ -137,6 +137,20 @@ class RentalTests(SimpleTestCase):
                          [('jcdecaux_ljubljana:17', 'bike', 'jcdecaux_ljubljana:bike'), ('kvik:9', 'scooter', 'kvik:scooter')])
         self.assertEqual(mapping.provider_name('jcdecaux_ljubljana:bike'), 'BicikeLJ')
 
+    def test_a_network_without_e_bikes_has_no_e_bike_count_and_one_with_keeps_it_even_at_0(self):
+        def rack(station_id, network, types, free):
+            return {'stationId': station_id, 'network': network, 'name': station_id, 'lat': 46, 'lon': 14, 'vehiclesAvailable': free,
+                    'allowPickupNow': True, 'allowDropoffNow': True,
+                    'availableVehicles': {'byType': [{'count': n, 'vehicleType': {'formFactor': 'BICYCLE', 'propulsionType': p}} for p, n in types]}}
+        stations = [rack('1', 'jcdecaux_ljubljana', [('HUMAN', 4)], 4), rack('2', 'jcdecaux_ljubljana', [('HUMAN', 0)], 0),
+                    rack('3', 'jcdecaux_ljubljana', [], 0),
+                    rack('a', 'nextbike_cc', [('HUMAN', 2), ('ELECTRIC_ASSIST', 3)], 5), rack('b', 'nextbike_cc', [('HUMAN', 2)], 2),
+                    rack('c', 'nextbike_cc', [], 0)]
+        result = {r['id']: r for r in mapping.build_rentals(stations, [], NOW)}
+        for id_ in ('jcdecaux_ljubljana:1', 'jcdecaux_ljubljana:2', 'jcdecaux_ljubljana:3'):
+            self.assertNotIn('ebikesAvailable', result[id_])
+        self.assertEqual([result[f'nextbike_cc:{i}']['ebikesAvailable'] for i in 'abc'], [3, 0, 0])
+
     def test_a_free_floating_systems_stations_are_parking_zones(self):
         # Bolt: e-bikes and scooters left in zones, scooters also anywhere; a dock system's racks stay docks.
         stations = [{'stationId': 'bolt_359:z1', 'network': 'bolt_359', 'name': 'MOL - Situla', 'lat': 46, 'lon': 14, 'vehiclesAvailable': 0,

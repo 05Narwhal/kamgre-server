@@ -86,7 +86,9 @@ def normalize_status(station: dict, version: str, electric: Optional[set[str]]) 
     major = version.split('.')[0]
     bikes = _count(station.get('num_vehicles_available' if major == '3' else 'num_bikes_available'))
     by_type = station.get('vehicle_types_available')
-    if isinstance(by_type, list) and electric is not None and major in ('2', '3'):
+    if electric is not None and not electric and major in ('2', '3'):
+        ebikes = None  # the fleet has no e-bikes at all (BicikeLJ): no count rather than 0
+    elif isinstance(by_type, list) and electric is not None and major in ('2', '3'):
         ebikes = sum(_count(t.get('count')) or 0 for t in by_type if str(t.get('vehicle_type_id')) in electric)
     else:
         # v1 has no vehicle types; some operators add num_ebikes_available.

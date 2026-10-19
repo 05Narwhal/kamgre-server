@@ -60,6 +60,17 @@ class NormaliseTests(SimpleTestCase):
         })
         self.assertEqual(network['stations']['2002']['ebikes'], 0)
 
+    def test_a_fleet_without_electric_types_has_no_e_bike_count_not_0(self):
+        human_only = {'data': {'vehicle_types': [{'vehicle_type_id': '143', 'form_factor': 'bicycle', 'propulsion_type': 'human'}]}}
+        self.assertEqual(gbfs.electric_types(human_only), set())
+        station = {'station_id': '1', 'num_bikes_available': 5, 'vehicle_types_available': [{'vehicle_type_id': '143', 'count': 5}]}
+        self.assertIsNone(gbfs.normalize_status(station, '2.3', gbfs.electric_types(human_only))['ebikes'])
+        # Merged into OTP's rental of such a network, no e-bike key appears.
+        feeds = {'bicikelj': {'ok': True, 'version': '2.3', 'updated': 1791619200, 'stations': {'1': gbfs.normalize_status(station, '2.3', set())}}}
+        out = gbfs.merge({'id': 'bicikelj:1'}, 'bicikelj', '1', feeds, now=1791619300)
+        self.assertEqual(out['availableCount'], 5)
+        self.assertNotIn('ebikesAvailable', out)
+
     def test_v2_without_vehicle_types_leaves_e_bikes_unknown(self):
         station = load('v2', missing=('vehicle_types',))['stations']['2001']
         self.assertEqual(station['bikes'], 5)
