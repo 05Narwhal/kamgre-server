@@ -314,6 +314,104 @@ def fallback_search(kind: str, req: dict) -> Optional[dict]:
     return {**otp_variables(req), 'modes': {'direct': ['CAR_PARKING'], 'directOnly': True}, 'first': 1}
 
 
+PARK_SECONDS = 120     # s from stopping the car to walking off (drive + park + ride)
+DRIVE_TTL = 12 * 3600  # s a drive is reused: OTP drives without traffic, the same at any hour
+CAR_FREE_WALK = 1000   # m: a start in a car-free zone walks at most this far to a car park
+PARK_RIDES = 2         # connections asked for from each place to park
+WALK_DETOUR = 1.3      # a walk to a car park is this much longer than the straight line
+_drive_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _spot(place: dict) -> dict:
+    return {'label': place['name'], 'location': {'coordinate': {'latitude': place['latitude'], 'longitude': place['longitude']}}}
+
+
+def _retime(legs: list[dict], start: Optional[str] = None, end: Optional[str] = None) -> list[dict]:
+    """Raw OTP street legs moved in time to start at `start` or end at `end` (a drive is the same at any hour)."""
+    delta = _ts(start) - _ts(legs[0]['start']['scheduledTime']) if start else _ts(end) - _ts(legs[-1]['end']['scheduledTime'])
+    return [{**l, 'start': {'scheduledTime': _shift(l['start']['scheduledTime'], delta)}, 'end': {'scheduledTime': _shift(l['end']['scheduledTime'], delta)}} for l in legs]
+
+
+def _drive(req: dict, origin: dict, destination: dict, ask, tried: bool = False) -> Optional[list[dict]]:
+    """The raw legs of a drive (one OTP search, cached for DRIVE_TTL). From a start in a car-free zone (Prešernov trg:
+    OTP finds no drive) a walk to the nearest car park within CAR_FREE_WALK and the drive from there; `tried`: the
+    drive from the origin itself is known to find nothing."""
+    from . import parking
+    stamp = req['dateTime'].isoformat()
+    starts = [] if tried else [origin]
+    if (car_park := parking.nearest_drivable(origin, CAR_FREE_WALK)) and geometry.distance(
+            [origin['longitude'], origin['latitude']], [car_park['lon'], car_park['lat']]) > 30:
+        starts.append({'name': car_park['name'] or origin['name'], 'latitude': car_park['lat'], 'longitude': car_park['lon']})
+    for start in starts:
+        variables = {'origin': _spot(start), 'destination': _spot(destination), 'dateTime': {'earliestDeparture': stamp},
+                     'modes': {'direct': ['CAR'], 'directOnly': True}, 'first': 1}
+        key = json.dumps([round(start['latitude'], 4), round(start['longitude'], 4), round(destination['latitude'], 4), round(destination['longitude'], 4)])
+        answer = ask('drive', variables, key=key, cache=_drive_cache, ttl=DRIVE_TTL)
+        if answer is None:
+            return None
+        found = _edges(answer)
+        if not found:
+            continue
+        legs = found[0]['node']['legs']
+        if start is origin:
+            return legs
+        meters = geometry.distance([origin['longitude'], origin['latitude']], [start['longitude'], start['latitude']]) * WALK_DETOUR
+        first = legs[0]['start']['scheduledTime']
+        walk = {'mode': 'WALK', 'transitLeg': False, 'duration': meters / WALK_SPEED, 'distance': meters,
+                'start': {'scheduledTime': _shift(first, -meters / WALK_SPEED)}, 'end': {'scheduledTime': first},
+                'from': {'name': origin['name'], 'lat': origin['latitude'], 'lon': origin['longitude']},
+                'to': {'name': start['name'], 'lat': start['latitude'], 'lon': start['longitude']}}
+        return [walk, *legs]
+    return None
+
+
+def car_from_car_park(req: dict, ask) -> Optional[dict]:
+    """Driving all the way from a start in a car-free zone: walk to the nearest car park, drive from there."""
+    legs = _drive(req, req['origin'], req['destination'], ask, tried=True)
+    if not legs:
+        return None
+    stamp = req['dateTime'].isoformat()
+    legs = _retime(legs, end=stamp) if req['timeMode'] == 'arriveBy' else _retime(legs, start=stamp)
+    return {'planConnection': {'edges': [{'node': {'walkTime': round(legs[0]['duration']) if legs[0]['mode'] == 'WALK' else 0, 'legs': legs}}]}}
+
+
+def park_and_ride(req: dict, ask) -> Optional[list[dict]]:
+    """Drive + park + ride over parking.candidates (the best railway station and bus place on the way, with their car
+    parks): the drive there (cached for hours), then a search on from the car park, departing once the car is parked
+    (or arriving by the time asked), each ride joined to the drive, which ends PARK_SECONDS before it. None when there
+    is no such place (OTP's own car park search is used then)."""
+    from . import parking
+    from .sources import stops
+    try:
+        snap = stops.get().value
+    except UpstreamError:
+        return None
+    places = parking.candidates(req['origin'], req['destination'], snap['list'], snap['routes'])
+    if not places:
+        return None
+    # Car + transit alone (or with the car chip) still rides buses and trains.
+    modes = req['modes'] if req['modes'] & set(TRANSIT) else req['modes'] | set(TRANSIT)
+    out = []
+    for place in places:
+        park = place['parking']
+        spot = {'name': park['name'], 'latitude': park['lat'], 'longitude': park['lon']}
+        car = _drive(req, req['origin'], spot, ask)
+        if not car:
+            continue
+        driven = _ts(car[-1]['end']['scheduledTime']) - _ts(car[0]['start']['scheduledTime'])
+        when = req['dateTime'] if req['timeMode'] == 'arriveBy' else req['dateTime'] + timedelta(seconds=driven + PARK_SECONDS)
+        variables = {**otp_variables({**req, 'origin': spot, 'modes': modes, 'via': [], 'dateTime': when, 'pageCursor': None}), 'first': PARK_RIDES}
+        rides = ask('carPark', variables)
+        for edge in _edges(rides) if rides else []:
+            ride = edge['node']
+            if not any(l.get('transitLeg') for l in ride['legs']):
+                continue  # walking on from the car park is driving there and walking
+            legs = _retime(car, end=_shift(ride['legs'][0]['start']['scheduledTime'], -PARK_SECONDS))
+            legs[-1] = {**legs[-1], 'to': {**legs[-1]['to'], 'name': park['name'], 'lat': park['lat'], 'lon': park['lon'], 'vehicleParking': {'name': park['name']}}}
+            out.append({'node': {**ride, 'legs': [*legs, *ride['legs']]}})
+    return out
+
+
 def _leg_key(node: dict) -> str:
     return '|'.join(f"{l.get('mode')}:{(l.get('trip') or {}).get('gtfsId')}@{l['start']['scheduledTime']}" for l in node.get('legs') or [])
 
@@ -321,7 +419,8 @@ def _leg_key(node: dict) -> str:
 def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> dict:
     """The main search's answer with the connections of extra_searches added after OTP's own (repeats dropped).
     `budget`: OTP queries left for this request; a cached answer costs none. A failed extra search only loses its
-    connections."""
+    connections. Drive + park + ride parks at our own places (park_and_ride; 2 queries each, the drive cached for
+    hours), OTP's own car park search only when there is none."""
     searches = extra_searches(req)
     if not searches:
         return data
@@ -329,10 +428,10 @@ def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> 
     seen = {_leg_key(e['node']) for e in edges}
     left = [budget]
 
-    def ask(kind: str, variables: dict) -> Optional[dict]:
-        key = hashlib.sha1(json.dumps(variables, sort_keys=True).encode()).hexdigest()
-        hit = _extra_cache.get(key)
-        if hit and time.monotonic() - hit[0] < EXTRA_TTL:
+    def ask(kind: str, variables: dict, key: Optional[str] = None, cache: dict = _extra_cache, ttl: float = EXTRA_TTL) -> Optional[dict]:
+        key = key or hashlib.sha1(json.dumps(variables, sort_keys=True).encode()).hexdigest()
+        hit = cache.get(key)
+        if hit and time.monotonic() - hit[0] < ttl:
             return hit[1]
         if left[0] <= 0:
             return None
@@ -342,16 +441,21 @@ def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> 
         except UpstreamError as e:
             logger.info('Extra %s search failed: %r', kind, e)
             return None
-        _extra_cache[key] = (time.monotonic(), answer)
-        if len(_extra_cache) > 500:
-            for k, _ in sorted(_extra_cache.items(), key=lambda kv: kv[1][0])[:250]:
-                _extra_cache.pop(k, None)
+        cache[key] = (time.monotonic(), answer)
+        if len(cache) > 500:
+            for k, _ in sorted(cache.items(), key=lambda kv: kv[1][0])[:250]:
+                cache.pop(k, None)
         return answer
 
     for kind, variables in searches:
-        extra = ask(kind, variables)
+        if kind == 'carPark' and (parked := park_and_ride(req, ask)) is not None:
+            extra = {'planConnection': {'edges': parked}}
+        else:
+            extra = ask(kind, variables)
         if extra is not None and not _edges(extra) and (second := fallback_search(kind, req)):
             extra = ask(kind, second)
+        if kind == 'car' and extra is not None and not _edges(extra):
+            extra = car_from_car_park(req, ask) or extra
         if extra is None:
             continue
         for e in _edges(extra):

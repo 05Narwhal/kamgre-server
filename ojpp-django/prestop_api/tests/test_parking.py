@@ -93,3 +93,32 @@ class CarLegTests(SimpleTestCase):
             with mapped(*lots):
                 j = price(parked_at(*KRANJ))
             self.assertEqual((j['legs'][0]['car']['parking']['fee'], j['legs'][0]['price']['amountCents']), ('unknown', None))
+
+
+PODNART = (46.2939, 14.2585)  # the railway station; no car park is mapped beside it
+
+
+def stop(sid, name, at, modes, members=None):
+    return {'id': sid, 'name': name, 'latitude': at[0], 'longitude': at[1], 'modes': modes, **({'memberIds': members} if members else {})}
+
+
+class CandidateTests(SimpleTestCase):
+    """Where a drive + park + ride parks (spec 2026-10-19 A5b): Kropa → Ljubljana."""
+    origin, destination = {'latitude': KROPA[0], 'longitude': KROPA[1]}, {'latitude': PRESEREN[0], 'longitude': PRESEREN[1]}
+
+    def test_kropa_to_ljubljana_parks_at_podnart_station_or_a_city_park_and_ride(self):
+        stops = [stop('SZ:podnart', 'Podnart', PODNART, ['rail']),
+                 stop('SZ:lesce', 'Lesce-Bled', (46.3581, 14.1614), ['rail']),  # behind Kropa, off the way
+                 stop('LPP:sa', 'Ljubljana Slovenija avto', (46.0731, 14.4849), ['bus']),
+                 stop('IJPP:x', 'Kamna Gorica', (46.2900, 14.1900), ['bus']),  # no car park, one line
+                 stop('LPP:centre', 'Konzorcij', (46.0520, 14.5040), ['bus'])]
+        routes = {'SZ:podnart': {'SZ:gor'}, 'SZ:lesce': {'SZ:gor'}, 'LPP:sa': {'LPP:5', 'LPP:8', 'LPP:9', 'LPP:22'}, 'IJPP:x': {'IJPP:1'}, 'LPP:centre': {'LPP:5'}}
+        with mapped(lot(46.0733, 14.4851, 'Ljubljana Slovenija avto', fee='no', capacity=200)):
+            found = parking.candidates(self.origin, self.destination, stops, routes)
+        self.assertEqual([(c['kind'], c['stop']['name'], c['parking']['name']) for c in found],
+                         [('rail', 'Podnart', 'Podnart'), ('bus', 'Ljubljana Slovenija avto', 'Ljubljana Slovenija avto')])
+        self.assertEqual(found[0]['parking']['osmFee'], '')  # the station's own parking: may not be free
+
+    def test_the_corridor_takes_a_short_detour_not_a_long_one(self):
+        self.assertIsNotNone(parking._corridor(self.origin, self.destination, *PODNART))  # 3.2 km beside, 2 km longer
+        self.assertIsNone(parking._corridor(self.origin, self.destination, 46.3636, 14.3092))  # Tržič: 14 km longer
