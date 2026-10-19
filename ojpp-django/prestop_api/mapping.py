@@ -313,18 +313,26 @@ def _shows(vehicle_delay: Optional[int], delay: int) -> bool:
 UPDATE_AROUND = 3 * 3600  # s: a trip update sent this far from a run's times is about another day's run (trainlive.AROUND)
 
 
+def update_day(update: Optional[dict], begin: int, end: int) -> Optional[int]:
+    """Which run a trip update that names no start date is about, for the run from `begin` to `end` (its scheduled
+    times): 0 this one, -1 the run a day before, None OTP's placement stands (a start date, or sent at another time)."""
+    if not update or (update.get('trip') or {}).get('startDate'):
+        return None
+    sent = update.get('timestamp') or time.time()
+    if begin - 86400 - UPDATE_AROUND <= sent <= end - 86400 + UPDATE_AROUND:
+        return -1
+    return 0 if begin - UPDATE_AROUND <= sent <= end + UPDATE_AROUND else None
+
+
 def update_run(update: Optional[dict], stop_id: str, start: Optional[int], at: int, realtime: bool, effective: int) -> tuple[bool, int]:
     """OTP puts a trip update that names no start date on the trip's run of its own service day, so after midnight a
     train still out from yesterday had no live time and tonight's run of it had its delay (604 and IC 350, 20 Oct
     2026, 00:30). The update is about the run on its way when it was sent (`start`: the run's first departure, `at`:
     its time here): that run takes the update's delay here, and the run a day later has no live data from it."""
-    if not update or (update.get('trip') or {}).get('startDate'):
-        return realtime, effective
-    sent = update.get('timestamp') or time.time()
-    begin = at if start is None else start
-    if begin - 86400 - UPDATE_AROUND <= sent <= at - 86400 + UPDATE_AROUND:  # about this trip's run of the day before
+    about = update_day(update, at if start is None else start, at)
+    if about == -1:
         return False, at
-    if realtime or not begin - UPDATE_AROUND <= sent <= at + UPDATE_AROUND:
+    if realtime or about is None:
         return realtime, effective
     delay = next((update_delay(u) for u in update.get('updates') or [] if u.get('stopId') == stop_id and update_delay(u) is not None), None)
     return (True, at + delay) if delay is not None else (False, at)

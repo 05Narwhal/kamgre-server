@@ -356,6 +356,28 @@ class JourneyTests(SimpleTestCase):
         [j] = journeys.build_journeys(data, self.request(), [])
         self.assertEqual(j['legs'][0]['headsign'], 'Ljubljana Vižmarje')
 
+    def test_after_midnight_a_leg_takes_the_update_about_its_run(self):
+        """IC 350, 20 Oct 2026: OTP put the feed's +36 min (no start date) on tonight's run of the train instead of last
+        night's, still on its way."""
+        from datetime import datetime
+
+        def train(start, end, est=None):
+            raw = leg('RAIL', start, end, trip='IJPP:350', est=est)
+            raw['trip']['departureStoptime'] = {'scheduledDeparture': 22 * 3600 + 30 * 60}
+            return {'planConnection': {'edges': [{'node': {'walkTime': 0, 'legs': [raw]}}]}}
+        sent = int(datetime.fromisoformat('2026-10-09T00:40:00+02:00').timestamp())
+        updates = {'IJPP:350': {'trip': {'tripId': 'IJPP:350'}, 'timestamp': sent, 'updates': [
+            {'stopId': 'IJPP:a', 'departure': {'delay': 2160}}, {'stopId': 'IJPP:b', 'arrival': {'delay': 2100}}]}}
+        with mock.patch('prestop_api.trainlive.trip_updates', return_value=updates):
+            [last_night] = journeys.build_journeys(train('00:50:00', '01:04:00'), self.request(), [])
+            [tonight] = journeys.build_journeys(train('22:40:00', '23:00:00', est='23:16:00'), self.request(), [])
+        ride = last_night['legs'][0]
+        self.assertEqual((ride['effectiveDeparture'], ride['effectiveArrival'], ride['delaySeconds']),
+                         ('2026-10-09T01:26:00+02:00', '2026-10-09T01:39:00+02:00', 2160))
+        ride = tonight['legs'][0]
+        self.assertEqual((ride['effectiveDeparture'], ride['delaySeconds']), ('2026-10-09T22:40:00+02:00', None))
+        self.assertNotEqual(ride['predictionBasis'], 'live')
+
     def test_headsign_falls_back_to_trip_headsign_then_none(self):
         raw = leg('BUS', '10:00:00', '10:20:00', trip='LPP:1')
         raw['trip']['tripHeadsign'] = 'Črnuče'

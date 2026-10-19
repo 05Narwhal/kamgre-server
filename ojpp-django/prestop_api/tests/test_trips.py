@@ -115,6 +115,38 @@ class TripTests(SimpleTestCase):
         entry, query = self.overnight('12:00')
         self.assertEqual((entry['serviceDate'], query.call_count), (date(2026, 10, 14), 1))
 
+    def test_after_midnight_an_update_without_start_date_moves_last_nights_run(self):
+        """IC 350, 20 Oct 2026 01:10: OTP put the feed's +36 min (no start date) on tonight's run, so the trip view had
+        last night's, still on its way, by timetable and once its time had passed tonight's with the delay."""
+        from datetime import datetime
+
+        from prestop_api import supplement
+        now = datetime.fromisoformat('2026-10-14T00:30+02:00').timestamp()
+
+        def run(day):
+            t = otp_trip(day=supplement.day_start(day), realtime=day == date(2026, 10, 14))
+            for i, s in enumerate(t['stoptimesForDate']):
+                late = 1800 if s['realtime'] else 0
+                s.update(scheduledArrival=84600 + i * 1200, scheduledDeparture=84600 + i * 1200,
+                         realtimeArrival=84600 + i * 1200 + late, realtimeDeparture=84600 + i * 1200 + late)
+            return t
+        update = {'trip': {'tripId': 'LPP:t1'}, 'timestamp': int(now) - 120, 'updates': [{'stopId': 'LPP:s1', 'arrival': {'delay': 1800}}]}
+        query = mock.Mock(side_effect=lambda ids, day, static: {'LPP:t1': run(day)})
+        with mock.patch.object(trips, '_query_trips', query), mock.patch.object(trips.time, 'time', return_value=now), \
+                mock.patch('prestop_api.trainlive.trip_updates', return_value={'LPP:t1': update}):
+            entry = trips.load_trips(['LPP:t1'])['LPP:t1']
+        # Due 00:10, 30 minutes late: still on its way at 00:30, with its live times from its second stop on
+        self.assertEqual(entry['serviceDate'], date(2026, 10, 13))
+        trip = trips.build_trip(entry, {})
+        self.assertEqual([s['effectiveArrival'] for s in trip['stops']], [None, '2026-10-13T22:20:00Z', '2026-10-13T22:40:00Z'])
+        # Tonight's run has nothing live from it
+        tonight = trips._placed({'static': entry['static'], 'times': run(date(2026, 10, 14))['stoptimesForDate']}, update)
+        self.assertFalse(any(t['realtime'] for t in tonight['times']))
+        self.assertEqual(tonight['times'][2]['realtimeArrival'], 84600 + 2400)
+        # A start date leaves the update where OTP put it
+        dated = {**update, 'trip': {'tripId': 'LPP:t1', 'startDate': '20261014'}}
+        self.assertTrue(trips._placed({'static': entry['static'], 'times': run(date(2026, 10, 14))['stoptimesForDate']}, dated)['times'][2]['realtime'])
+
     def test_vehicle_carries_motion_hints(self):
         entity = {'vehicle': {'trip': {'tripId': 'LPP:t1'}, 'position': {'latitude': 46.05, 'longitude': 14.5, 'bearing': 90, 'speed': 7.2},
                               'timestamp': '1791540000', 'stopId': 'LPP:s1', 'currentStatus': 'STOPPED_AT', 'vehicle': {'id': 'LPP:v1', 'label': 'LJ 1'}}}

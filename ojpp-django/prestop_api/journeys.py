@@ -713,6 +713,32 @@ def _ts(value: str) -> float:
     return datetime.fromisoformat(value).timestamp()
 
 
+def _placed_leg(l: dict, updates: dict) -> dict:
+    """OTP's transit leg `l` with the live times of the trip update about its run (mapping.update_run): OTP puts one
+    that names no start date on the trip's run of its own day, so just after midnight last night's late train had
+    its timetable and tonight's run its delay."""
+    trip = l.get('trip') or {}
+    first = (trip.get('departureStoptime') or {}).get('scheduledDeparture')
+    update = updates.get(trip.get('gtfsId'))
+    if not update or not isinstance(first, int):
+        return l
+    start, end = _ts(l['start']['scheduledTime']), _ts(l['end']['scheduledTime'])
+    begin = int(datetime.fromtimestamp(start - first, LOCAL).replace(hour=0, minute=0, second=0).timestamp()) + first
+    about = mapping.update_day(update, begin, int(end))
+    if about == -1:
+        times = (None, None)
+    elif about != 0 or (l['start'].get('estimated') or {}).get('time'):
+        return l
+    else:
+        at_stop = {u.get('stopId'): mapping.believable(mapping.update_delay(u), False) for u in update.get('updates') or []}
+        board, alight = (at_stop.get((l[k].get('stop') or {}).get('gtfsId')) for k in ('from', 'to'))
+        if board is None:
+            return l
+        times = (start + board, end + (board if alight is None else alight))
+    return {**l, **{k: {**l[k], 'estimated': {'time': datetime.fromtimestamp(t, LOCAL).isoformat()} if t is not None else None}
+                    for k, t in zip(('start', 'end'), times)}}
+
+
 def _leg_mode(leg: dict) -> str:
     if leg.get('transitLeg'):
         return mapping.mode_of((leg.get('route') or {}).get('mode') or leg.get('mode'))
@@ -985,6 +1011,8 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
     deadline = time.monotonic() + ROAD_WAIT
     seen_bays: dict = {}  # station -> its PlatformSeen rows, read once per request
     from_town, to_town = town_stops(req['origin']), town_stops(req['destination'])
+    from . import trainlive
+    updates = trainlive.trip_updates()
     for edge in (data.get('planConnection') or {}).get('edges') or []:
         node = edge['node']
         raw = node.get('legs') or []
@@ -1003,6 +1031,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
         stray = len(raw) > 1 and ((from_town and not raw[0].get('transitLeg')) or (to_town and not raw[-1].get('transitLeg')))
         key = hashlib.sha1('|'.join(f'{(l.get("trip") or {}).get("gtfsId")}@{l["start"]["scheduledTime"]}' for l in raw).encode()).hexdigest()[:16]
         legs, meta = [], []
+        raw = [_placed_leg(l, updates) if l.get('transitLeg') else l for l in raw]
         for i, l in enumerate(raw):
             transit = bool(l.get('transitLeg'))
             start_est, end_est = (l['start'].get('estimated') or {}).get('time'), (l['end'].get('estimated') or {}).get('time')

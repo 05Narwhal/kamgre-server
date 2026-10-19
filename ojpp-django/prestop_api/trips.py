@@ -240,6 +240,8 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
         ids = [t for t in ids if t not in own]
         if not ids:
             return out
+    from . import trainlive
+    updates = trainlive.trip_updates()
     for candidate in (day, day - timedelta(days=1)):
         # The previous day is asked for trips that do not run today and, just after midnight, for all of them.
         earlier = candidate != day
@@ -271,12 +273,33 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
                     _times.put((trip_id, candidate), times)
                     runs[trip_id] = {'static': static, 'times': times, 'serviceDate': candidate}
         for trip_id, run in runs.items():
+            run = _placed(run, updates.get(trip_id))
             if trip_id not in out or _still_running(run['times'], now):
                 out[trip_id] = run
         if not overnight and (all(t in out for t in ids) or day != datetime.fromtimestamp(now, LJUBLJANA).date()):
             break
     _replacement_live(out)
     return out
+
+
+def _placed(run: dict, update: Optional[dict]) -> dict:
+    """`run` with the live times of the trip update about it (mapping.update_run): OTP puts one that names no start
+    date on the trip's run of its own day, so just after midnight last night's late train, still on its way, had
+    none and tonight's run had its delays (IC 350, 20 Oct 2026, 01:10)."""
+    times = run['times']
+    begin = times[0]['serviceDay'] + times[0]['scheduledDeparture']
+    about = mapping.update_day(update, begin, times[-1]['serviceDay'] + times[-1]['scheduledArrival'])
+    if about == -1:
+        return {**run, 'times': [{**t, 'realtime': False, 'realtimeArrival': t['scheduledArrival'], 'realtimeDeparture': t['scheduledDeparture']}
+                                 for t in times]}
+    if about != 0 or any(t.get('realtime') for t in times):
+        return run
+    from . import trainlive
+    at_stop = {u.get('stopId'): mapping.update_delay(u) for u in update.get('updates') or []}
+    stop_of = {s['position']: s['stopId'] for s in run['static']['stops']}
+    delays = trainlive.carried([mapping.believable(at_stop.get(stop_of.get(t['stopPosition'])), False) for t in times])
+    return {**run, 'times': [{**t, 'realtime': True, 'realtimeArrival': t['scheduledArrival'] + d, 'realtimeDeparture': t['scheduledDeparture'] + d}
+                             if d is not None else t for t, d in zip(times, delays)]}
 
 
 def _replacement_live(out: dict[str, dict]) -> None:
