@@ -605,13 +605,75 @@ def replacement_walks(legs: list[dict], meta: list[dict]) -> tuple[list[dict], l
     merged, merged_meta = [], []
     for leg, m in zip(out, out_meta):
         if merged and leg['mode'] == 'walk' and merged[-1]['mode'] == 'walk':
-            merged[-1] = {**merged[-1], 'destination': leg['destination'], 'geometry': [*merged[-1]['geometry'], *leg['geometry'][1:]],
-                          'scheduledArrival': leg['scheduledArrival'], 'effectiveArrival': leg['effectiveArrival']}
-            merged_meta[-1] = {**merged_meta[-1], 'duration': merged_meta[-1]['duration'] + m['duration']}
+            merged[-1], merged_meta[-1] = _joined_walk(merged[-1], merged_meta[-1], leg, m, ride_before=len(merged) > 1)
             continue
         merged.append(leg)
         merged_meta.append(m)
     return merged, merged_meta
+
+
+def _joined_walk(first: dict, first_meta: dict, second: dict, second_meta: dict, ride_before: bool) -> tuple[dict, dict]:
+    """Two walks meeting at a station as one. It goes straight to the replacement stop where the walk to the station
+    passes it (Podnart: the bus stop's walk went up to the station and our walk came back down 60 m to the stop
+    beside it), or from it where the walk on passes it. It lasts as long as the walking does: the wait for the bus
+    comes after it, not inside it (after a ride it starts when the ride ends, else it ends when the next one leaves;
+    joined end to end, a 2-minute walk read "1 h 39 min" while the replacement bus was an hour away)."""
+    a, b = first['geometry'], second['geometry']
+    seconds_a, seconds_b = first_meta['duration'], second_meta['duration']
+    coords = [*a, *b[1:]]
+    if second['id'].endswith('-to') and len(a) >= 2:  # station -> its replacement stop, after a walk to the station
+        stop = second['destination']
+        cum = geometry.cumulative(a)
+        along, off = geometry.project_stops(a, [{'lat': stop['latitude'], 'lon': stop['longitude']}])[0]
+        if cum[-1] and along + off < cum[-1] + geometry.distance(a[-1], b[-1]):
+            coords = [*geometry.slice_between(a, cum, 0, along), [stop['longitude'], stop['latitude']]]
+            seconds_a, seconds_b = seconds_a * along / cum[-1], off / WALK_SPEED
+    elif first['id'].endswith('-from') and len(b) >= 2:  # replacement stop -> station, then a walk on from the station
+        stop = first['origin']
+        cum = geometry.cumulative(b)
+        along, off = geometry.project_stops(b, [{'lat': stop['latitude'], 'lon': stop['longitude']}])[0]
+        if cum[-1] and off + cum[-1] - along < geometry.distance(a[0], a[-1]) + cum[-1]:
+            coords = [[stop['longitude'], stop['latitude']], *geometry.slice_between(b, cum, along, cum[-1])]
+            seconds_a, seconds_b = off / WALK_SPEED, seconds_b * (cum[-1] - along) / cum[-1]
+    seconds = seconds_a + seconds_b
+    times = {}
+    for kind in ('scheduled', 'effective'):
+        if ride_before:
+            start = first[f'{kind}Departure']
+            times.update({f'{kind}Departure': start, f'{kind}Arrival': _shift(start, seconds)})
+        else:
+            end = second[f'{kind}Arrival']
+            times.update({f'{kind}Departure': _shift(end, -seconds), f'{kind}Arrival': end})
+    return {**first, 'destination': second['destination'], 'geometry': coords, **times}, {**first_meta, 'duration': seconds}
+
+
+SNAP_METERS = 120     # a walk between two points this close ...
+SNAP_DETOUR = 3       # ... over a path this many times longer (and SNAP_EXTRA m more) is a bad link in OTP's street graph
+SNAP_EXTRA = 100
+SNAP_FACTOR = 1.4     # the snapped walk's length: the straight line and a little
+
+
+def sane_walks(legs: list[dict], meta: list[dict]) -> None:
+    """Walks OTP routes around a station's link in its street graph: Lesce-Bled's station and the Lesce ŽP stop in
+    front of it are 47 m apart, and OTP walked 298 m, down the road and back. A walk between points SNAP_METERS
+    apart over more than SNAP_DETOUR times that is drawn straight and timed as SNAP_FACTOR times it (rule of the
+    spec 2026-10-19 A2: a transfer walk over 3x the straight distance is a bug). Longer walks keep OTP's path."""
+    for n, (leg, m) in enumerate(zip(legs, meta)):
+        if leg['mode'] != 'walk' or len(leg['geometry']) < 2:
+            continue
+        ends = [[leg['origin']['longitude'], leg['origin']['latitude']], [leg['destination']['longitude'], leg['destination']['latitude']]]
+        straight, path = geometry.distance(*ends), geometry.cumulative(leg['geometry'])[-1]
+        if straight > SNAP_METERS or path < SNAP_DETOUR * straight or path - straight < SNAP_EXTRA:
+            continue
+        seconds = max(30.0, straight * SNAP_FACTOR / WALK_SPEED)
+        legs[n] = {**leg, 'geometry': ends}
+        if all(l['mode'] == 'walk' for l in legs[:n]):
+            for kind in ('scheduled', 'effective'):  # before the first ride: leave later, not wait longer
+                legs[n][f'{kind}Departure'] = _shift(leg[f'{kind}Arrival'], -seconds)
+        else:
+            for kind in ('scheduled', 'effective'):
+                legs[n][f'{kind}Arrival'] = _shift(leg[f'{kind}Departure'], seconds)
+        meta[n] = {**m, 'duration': seconds}
 
 
 def _when(end: dict) -> float:
@@ -792,7 +854,11 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             legs, meta = journey_legs.rewrite(legs, meta, plan_for, scheduled.road_shape_of)
             journey_legs.unreplaced_notices(legs, plan_for, by_id)
             journey_legs.name_replaced_trains(legs, plan_for)
+        walked = sum(m['duration'] for leg, m in zip(legs, meta) if leg['mode'] == 'walk')
         legs, meta = replacement_walks(legs, meta)
+        sane_walks(legs, meta)
+        # The walks added to replacement stops, joined or snapped (sane_walks) change how long the walking is.
+        walked = sum(m['duration'] for leg, m in zip(legs, meta) if leg['mode'] == 'walk') - walked
         for leg in legs:
             if leg['mode'] != 'walk':
                 leg.setdefault('predictedDelaySeconds', leg['delaySeconds'])
@@ -853,7 +919,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             'id': f'otp:{key}', 'legs': legs, 'alerts': [mapping.public_alert(a) for a in in_journey],
             'scheduledDeparture': legs[0]['scheduledDeparture'], 'scheduledArrival': legs[-1]['scheduledArrival'],
             'effectiveDeparture': legs[0]['effectiveDeparture'], 'effectiveArrival': legs[-1]['effectiveArrival'],
-            'walkSeconds': max(0, round((node.get('walkTime') or 0) - trimmed)), 'transferCount': sum(1 for t in transfers if not t.get('held')),
+            'walkSeconds': max(0, round((node.get('walkTime') or 0) - trimmed + walked)), 'transferCount': sum(1 for t in transfers if not t.get('held')),
             'transfers': transfers,
             'notices': notices[:3], 'freshness': 'live' if any(m['realtime'] for m in meta) else 'scheduled',
             '_stray': stray,
