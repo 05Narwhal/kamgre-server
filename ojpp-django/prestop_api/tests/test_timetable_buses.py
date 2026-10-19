@@ -596,7 +596,7 @@ class LineAndTripTests(SimpleTestCase):
     def test_a_trip_page_tells_where_the_bus_leaves_earlier_than_published(self):
         plan = MondayTests.next_day_plan()  # 20 October, notice 11198
         bus = next(b for b in plan['synthetic'] if b['route']['shortName'] == 'BUS 316')
-        with mock.patch.object(scheduled, 'synthetic_bus', return_value=bus), mock.patch.object(scheduled, '_road_shape', return_value=None):
+        with mock.patch.object(scheduled, 'synthetic_bus', return_value=(bus, plan)), mock.patch.object(scheduled, '_road_shape', return_value=None):
             entry = scheduled.synthetic_entry(bus['id'])
         podnart = next(s for s in entry['static']['stops'] if s['name'] == 'Podnart')
         self.assertIn('5 minut pred objavljenim voznim redom', podnart['note'])

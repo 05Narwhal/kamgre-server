@@ -15,7 +15,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
-from . import closures, geometry, leg_alerts, mapping, stopfix, sz
+from . import closures, geometry, leg_alerts, mapping, stopfix, sz, trainlive
 from . import replacement as replaced_by
 
 PlanFor = Callable[[float], Optional[dict]]
@@ -91,7 +91,8 @@ def _own_bay(piece: dict, stop: dict) -> dict:
     return piece
 
 
-def _bus_piece(leg: dict, bus: dict, train: dict, a: int, b: int, road: Callable[[list[dict]], Optional[dict]], suffix: str) -> Optional[dict]:
+def _bus_piece(leg: dict, bus: dict, train: dict, a: int, b: int, road: Callable[[list[dict]], Optional[dict]], suffix: str,
+               plan: Optional[dict] = None) -> Optional[dict]:
     """The bus between the train's stops `a` and `b`, or None when the bus does not call at both."""
     keys = [sz.station_key(s.get('name') or '') for s in bus['stops']]
     first, last = (sz.station_key(train['stops'][i].get('name') or '') for i in (a, b))
@@ -117,8 +118,20 @@ def _bus_piece(leg: dict, bus: dict, train: dict, a: int, b: int, road: Callable
         'replacement': True, 'replacesTrain': leg['routeName'],
         # Read by journeys.replacement_walks, then dropped: where the bus stops beside each station.
         '_boardAt': part[0], '_alightAt': part[-1],
+        **_live(plan, bus, ka, kb, like),
     }
     return _own_bay(piece, part[0])
+
+
+def _live(plan: Optional[dict], bus: dict, p: int, q: int, like: str) -> dict:
+    """A bus piece's live times (trainlive.py), as {'_live': {...}} for rewrite to put on once the journey is decided
+    on the timetable (a late bus must not make a change SŽ holds look missed), or {}."""
+    live = trainlive.live_bus(plan, bus) if plan else None
+    delay = next((d for d in (live['delays'][p], live['delays'][q]) if d is not None), None) if live else None
+    if delay is None:
+        return {}
+    return {'_live': {'effectiveDeparture': _stamp(live['departures'][p], like), 'effectiveArrival': _stamp(live['arrivals'][q], like),
+                      'delaySeconds': delay, 'delayProvenance': 'predicted'}}
 
 
 def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor,
@@ -162,7 +175,13 @@ def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor,
             out_meta.append({**m, 'held': held,
                              'duration': _ts(piece['effectiveArrival']) - _ts(piece['effectiveDeparture']),
                              'platform': m['platform'] if k == 0 else None})
-    return out, out_meta
+    # The buses' live delays, once the journey is decided (see _live).
+    return [_with_live(l) for l in out], out_meta
+
+
+def _with_live(leg: dict) -> dict:
+    live = leg.pop('_live', None)
+    return {**leg, **live} if live else leg
 
 
 def _shift(leg: dict, seconds: float) -> dict:
@@ -216,7 +235,7 @@ def timetable_ride(legs: list[dict], n: int, plan_for: PlanFor, road, m: Optiona
         q = keys.index(to, p + 1) if p is not None and to in keys[p + 1:] else None
         if q is None or (ready is not None and bus['departures'][p] < ready) or (deadline is not None and bus['arrivals'][q] > deadline):
             return []
-        return [_bus_ride(leg, bus, p, q, road, 'bus0')]
+        return [_bus_ride(leg, bus, p, q, road, 'bus0', plan)]
     if leg['mode'] != 'rail':
         return None
     train, crossed = replaced_by.stretches(plan, leg['tripId'], _ts(leg['scheduledDeparture']))
@@ -236,7 +255,7 @@ def timetable_ride(legs: list[dict], n: int, plan_for: PlanFor, road, m: Optiona
     pieces = []
     for kind, *where in path:
         suffix = f'{"t" if kind == "train" else "bus"}{len(pieces)}'
-        pieces.append(_train_piece(leg, train, *where, suffix) if kind == 'train' else _bus_ride(leg, *where, road, suffix))
+        pieces.append(_train_piece(leg, train, *where, suffix) if kind == 'train' else _bus_ride(leg, *where, road, suffix, plan))
     return pieces
 
 
@@ -287,7 +306,8 @@ def _fastest(train: dict, start: int, end: int, buses: list[dict], replaced: set
     return best[1]
 
 
-def _bus_ride(leg: dict, bus: dict, p: int, q: int, road: Callable[[list[dict]], Optional[dict]], suffix: str) -> dict:
+def _bus_ride(leg: dict, bus: dict, p: int, q: int, road: Callable[[list[dict]], Optional[dict]], suffix: str,
+              plan: Optional[dict] = None) -> dict:
     """A timetable bus from its call `p` to `q` (between the stations; journeys.replacement_walks adds the walks to
     where it stops beside them)."""
     stations = bus.get('stations') or bus['stops']
@@ -303,7 +323,7 @@ def _bus_ride(leg: dict, bus: dict, p: int, q: int, road: Callable[[list[dict]],
         'effectiveDeparture': _stamp(bus['departures'][p], like), 'effectiveArrival': _stamp(bus['arrivals'][q], like),
         'geometry': shape['coords'] if shape else [[s['lon'], s['lat']] for s in part], 'stopCount': q - p,
         'delaySeconds': None, 'delayProvenance': None, 'replacement': True,
-        '_boardAt': part[0], '_alightAt': part[-1],
+        '_boardAt': part[0], '_alightAt': part[-1], **_live(plan, bus, p, q, like),
     }
     piece.pop('replacesTrain', None)
     if name:
@@ -339,7 +359,7 @@ def _split(leg: dict, m: dict, plan_for: PlanFor, road) -> Optional[list[dict]]:
         if a >= b:
             continue
         bus = plan['by_id'].get(s['busTripId']) or replaced_by.run_near(plan, s['busTripId'], s['start'])
-        piece = _bus_piece(leg, bus, train, a, b, road, f'bus{len(pieces)}') if bus else None
+        piece = _bus_piece(leg, bus, train, a, b, road, f'bus{len(pieces)}', plan) if bus else None
         if not piece:
             return None
         if a > at:

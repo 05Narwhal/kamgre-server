@@ -262,7 +262,7 @@ def _load_vehicles():
     # Trains without a position feed (SŽ) are placed by their timetable, never instead of a live report.
     try:
         from . import scheduled
-        trains = scheduled.vehicles(skip_trips=frozenset(v['tripId'] for v in live if v.get('tripId')))
+        trains = scheduled.vehicles(skip_trips=frozenset(v['tripId'] for v in live if v.get('tripId')), updates=updates)
     except UpstreamError as e:
         logger.warning('Scheduled trains unavailable: %r', e)
         trains = []

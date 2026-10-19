@@ -133,7 +133,7 @@ def trip_update_index(entities: Iterable[dict]) -> dict[str, dict]:
     return index
 
 
-def _update_delay(update: dict) -> Optional[int]:
+def update_delay(update: dict) -> Optional[int]:
     for key in ('arrival', 'departure'):
         part = update.get(key) or {}
         if part.get('delay') is not None:
@@ -146,7 +146,7 @@ def confirms(trip_update: Optional[dict], stop_id: Optional[str], stop_sequence:
     the position confirms the update's delay there. Without it a vehicle on another trip can't be told apart."""
     updates = (trip_update or {}).get('updates') or []
     return any((stop_id and u.get('stopId') == stop_id) or (stop_sequence is not None and u.get('stopSequence') == stop_sequence)
-               for u in updates if _update_delay(u) is not None)
+               for u in updates if update_delay(u) is not None)
 
 
 def believable(delay: Optional[int], confirmed: bool) -> Optional[int]:
@@ -160,14 +160,14 @@ def current_delay(trip_update: Optional[dict], stop_id: Optional[str], stop_sequ
         return None
     updates = trip_update['updates']
     for u in updates:
-        if stop_id and u.get('stopId') == stop_id and _update_delay(u) is not None:
-            return _update_delay(u)
+        if stop_id and u.get('stopId') == stop_id and update_delay(u) is not None:
+            return update_delay(u)
     if stop_sequence is not None:
-        later = [u for u in updates if (u.get('stopSequence') or 0) >= stop_sequence and _update_delay(u) is not None]
+        later = [u for u in updates if (u.get('stopSequence') or 0) >= stop_sequence and update_delay(u) is not None]
         if later:
-            return _update_delay(min(later, key=lambda u: u.get('stopSequence') or 0))
-    known = [u for u in updates if _update_delay(u) is not None]
-    return _update_delay(known[-1]) if known else None
+            return update_delay(min(later, key=lambda u: u.get('stopSequence') or 0))
+    known = [u for u in updates if update_delay(u) is not None]
+    return update_delay(known[-1]) if known else None
 
 
 STAND_RADIUS = 12      # metres: reports this close together are the same place

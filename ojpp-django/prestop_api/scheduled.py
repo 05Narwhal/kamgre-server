@@ -17,7 +17,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from . import abroad, closures, geometry, mapping, roads, sz, sztimetables, tracks
+from . import abroad, closures, geometry, mapping, roads, sz, sztimetables, tracks, trainlive
 from . import replacement as replaced_by
 from .trips import service_day
 from .upstream import Cached, otp
@@ -245,24 +245,26 @@ def train_run(plan: dict, trip_id: str, when: float) -> Optional[dict]:
     return min(runs, key=lambda t: min(abs(x - when) for x in t['scheduledDepartures'] + t['scheduledArrivals']), default=None)
 
 
-def synthetic_bus(trip_id: str, wait: float = 8) -> Optional[dict]:
-    """A synthetic replacement bus by id, for its own service day."""
+def synthetic_bus(trip_id: str, wait: float = 8) -> tuple[Optional[dict], Optional[dict]]:
+    """A synthetic replacement bus by id, for its own service day, and that day's plan."""
     served = closures.synthetic_day(trip_id)
     today = service_day()
     if served is None or served in (today, today - timedelta(days=1)):
         snap = timetable.wait(wait)  # today's plan, which also holds yesterday's late trains
-        bus = _derive(snap.value)['by_id'].get(trip_id) if snap else None
+        plan = _derive(snap.value) if snap else None
+        bus = plan['by_id'].get(trip_id) if plan else None
         if bus or served is None:
-            return bus
+            return bus, plan
     plan = day_plan(served, wait)
-    return plan['by_id'].get(trip_id) if plan else None
+    return (plan['by_id'].get(trip_id) if plan else None), plan
 
 
 def synthetic_entry(trip_id: str) -> Optional[dict]:
     """A synthetic replacement bus in the form trips.load_trips returns ({static, times, serviceDate}), or None."""
-    bus = synthetic_bus(trip_id)
+    bus, plan = synthetic_bus(trip_id)
     if not bus:
         return None
+    bus = trainlive.live_bus(plan, bus)  # its live times, as on the map and boards
     shape = _road_shape(bus['stops'])
     coords = shape['coords'] if shape else [[s['lon'], s['lat']] for s in bus['stops']]
     distances = shape['distances'] if shape else [0.0] * len(bus['stops'])
@@ -364,7 +366,11 @@ def live_locate(trip: dict, shape: Optional[dict], report: dict, now: float) -> 
         return None
     shifted = {'arrivals': [t + report['delay'] for t in trip.get('scheduledArrivals') or trip['arrivals']],
                'departures': [t + report['delay'] for t in trip.get('scheduledDepartures') or trip['departures']]}
-    at = locate(shifted, shape, now)
+    return _held(trip, shape, report, locate(shifted, shape, now))
+
+
+def _held(trip: dict, shape: Optional[dict], report: dict, at: Optional[dict]) -> Optional[dict]:
+    """`at` kept between the station before the one SŽ reports the train heading to and that station."""
     key = sz.station_key(report.get('next') or '')
     nxt = next((i for i, s in enumerate(trip['stops']) if key and sz.station_key(s.get('name') or '') == key), None)
     if at is None:
@@ -381,11 +387,15 @@ def live_locate(trip: dict, shape: Optional[dict], report: dict, now: float) -> 
     return at
 
 
-def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), live: Optional[dict] = None) -> list[dict]:
+def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), live: Optional[dict] = None,
+             updates: Optional[dict] = None) -> list[dict]:
+    """Trains and SŽ replacement buses by their timetable, moved by their live delay (trainlive.py): SŽ's report
+    (`live`, by train number) or the GTFS-RT trip updates (`updates`, sources.trip_updates) of the train they run for."""
     now = now or time.time()
     trips = timetable.get().value
     shape_index = shapes.get().value
     live = sz.live.get(now) if live is None else live
+    updates = {} if updates is None else updates
     derived = _derive()
     replaced = derived['sections']
     suppressed = derived.get('suppressed') or {}  # the feed's buses a replacement timetable runs instead
@@ -393,34 +403,44 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
     for trip in trips + derived['synthetic']:
         if trip['id'] in skip_trips or trip['id'] in seen or trip['id'] in suppressed:
             continue
+        times = trip.get('scheduledDepartures') or trip['departures']
+        if not times[0] - BOARDING <= now <= times[-1] + ARRIVED + mapping.MAX_UNCONFIRMED_DELAY:
+            continue  # not on its way even when very late
         shape = shape_index.get(trip['pattern'])
         replacement = mapping.is_replacement(trip['route'])
+        run = trainlive.train_of(derived, trip) if replacement else trip
+        own = trainlive.of(derived, trip, updates, live) if run else None
+        number = sz.train_parts(mapping.route_name(run['route']))[1] if run else None
+        # SŽ's report of the number, when it is what moves this vehicle; `held` when it names this vehicle's next stop
+        # (the bus while it runs the train's stretch), not the stop of the vehicle before it
+        report = live.get(number) if own and own['source'] == 'sz' and number else None
+        held = report if report and own['reported'] is not None else None
+        names = {'stops': trip.get('stations') or trip['stops']}
+        timed = trainlive.applied(trip, own)
         if replacement:
             if not trip.get('synthetic'):  # the feed's bus calls at the station; it stops at the replacement stop
-                trip = {**trip, 'stops': closures.relocate(trip['stops'])}
-            shape = _road_shape(trip['stops'])
-            category, number = None, None
+                timed = {**timed, 'stops': closures.relocate(trip['stops'])}
+            shape = _road_shape(timed['stops'])
+            category = None
         else:
-            category, number = sz.train_parts(mapping.route_name(trip['route']))
-        report = live.get(number) if number else None
+            category = sz.train_parts(mapping.route_name(trip['route']))[0]
         sections = replaced_by.active(replaced.get(trip['id']), now, BOARDING)
-        if sections:
-            report = None  # SŽ reports the train's number while its replacement bus carries it
-        quality, delay = 'scheduled', None
-        at = live_locate(trip, shape, report, now) if report else None
-        if at:
-            quality, delay = 'inferred', report['delay']
-        else:
-            at = locate(trip, shape, now)
+        at = locate(timed, shape, now)
+        if held:
+            at = _held(names, shape, held, at)
         if not at or any(replaced_by.inside(s, at['stop']) for s in sections):
             continue
         seen.add(trip['id'])
-        i, stops = at['stop'], trip['stops']
-        if report and report.get('coords'):
+        quality = 'inferred' if report else 'scheduled'
+        delay = timed['delays'][at['stop']]
+        trip, i, stops = timed, at['stop'], timed['stops']
+        # Reported coordinates are the train's own: never the bus's (SŽ's coordinates of a replaced train were not
+        # checked), nor while a bus runs part of the train.
+        if held and held.get('coords') and not replacement and not sections:
             # Reported coordinates win; the bearing still comes from the railway.
             lat, lon = report['coords']
             bearing = geometry.bearing_at(shape['coords'], shape['cum'], at['distance']) if shape and at['distance'] is not None else None
-            quality, delay = 'observed', report.get('delay')
+            quality = 'observed'
         elif at['distance'] is not None:
             lon, lat = geometry.point_at(shape['coords'], shape['cum'], at['distance'])
             bearing = geometry.bearing_at(shape['coords'], shape['cum'], at['distance'])
@@ -441,17 +461,15 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             **({'comesFrom': ends[0]} if ends[0] else {}),
             'nextStop': stops[i].get('name'), 'nextStopId': stops[i]['gtfsId'],
             'bearing': round(bearing, 1) if bearing is not None else None,
-            'updatedAt': mapping.iso(report['at'] if report and quality != 'scheduled' else now),
-            'delaySeconds': delay if quality != 'scheduled' else trip['delays'][i],
+            'updatedAt': mapping.iso(report['at'] if report else now),
+            'delaySeconds': delay,
             'quality': quality, 'tripId': trip['id'],
-            'trainCategory': (report or {}).get('category') or category, 'trainNumber': number,
+            'trainCategory': (report or {}).get('category') or category, 'trainNumber': None if replacement else number,
             'speed': round(at['speed'], 2) if at['speed'] is not None and at['speed'] < 70 else None,
             'stopped': at['stopped'],
         })
-        if quality != 'scheduled':
-            out[-1]['delaySource'] = 'sz'
-        elif trip['delays'][i] is not None:
-            out[-1]['delaySource'] = 'gtfs-rt'
+        if delay is not None:
+            out[-1]['delaySource'] = own['source']
         if replacement:
             out[-1]['replacement'] = True
         else:  # the train's track at its next station (tracks.py)

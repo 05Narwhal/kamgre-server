@@ -275,7 +275,25 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
                 out[trip_id] = run
         if not overnight and (all(t in out for t in ids) or day != datetime.fromtimestamp(now, LJUBLJANA).date()):
             break
+    _replacement_live(out)
     return out
+
+
+def _replacement_live(out: dict[str, dict]) -> None:
+    """The feed's SŽ replacement buses with the live delay of the train they run for (trainlive.py), as on the map
+    and the boards: OTP has none for them."""
+    from . import replacement, scheduled, trainlive
+    for trip_id, run in out.items():
+        times = run['times']
+        if not run['static'].get('replacement') or run['static'].get('synthetic') or not times:
+            continue
+        start = times[0]['serviceDay'] + times[0]['scheduledDeparture']
+        plan = scheduled.plan_at(start)
+        bus = replacement.run_near(plan, trip_id, start) if plan else None
+        live = trainlive.of(plan, bus) if bus and len(bus['stops']) == len(times) else None
+        if live:
+            run['times'] = [{**t, 'realtime': True, 'realtimeArrival': t['scheduledArrival'] + d, 'realtimeDeparture': t['scheduledDeparture'] + d}
+                            if d is not None else t for t, d in zip(times, trainlive.carried(live['delays']))]
 
 
 def _load_own(ids: list[str], day: date, deadline: float, now: float) -> dict[str, dict]:

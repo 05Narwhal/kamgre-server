@@ -8,19 +8,21 @@ train would draw it on the closed track. A *replaced section* is the stretch a b
 for one train on one day, matched by number and by the train touching the bus's stations.
 
 While the bus runs that section:
-- the train ignores live reports (they describe the bus) and is not drawn between the
-  section's stations (it is shown again outside it, by its timetable);
+- live reports of the train's number at the section's stations move the bus, not the
+  train (trainlive.py); the train is not drawn between the section's stations (it is
+  shown again outside it);
 - the train's board rows inside the section become rows of the bus (board_rows), and a journey
   over the section rides the bus there (journey_legs.py).
 Each service day has its own sections (scheduled.day_plan): only the buses running that day
 and the notices in effect that day count.
 """
 import re
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Callable, Optional
 
-from . import abroad, mapping, sz
+from . import abroad, mapping, sz, trainlive
 
 LOCAL = ZoneInfo('Europe/Ljubljana')
 MATCH_WINDOW = 3 * 3600  # s: a train this far from the bus in time is another day's run
@@ -124,6 +126,12 @@ def stretches(plan: Optional[dict], trip_id: str, when: float) -> tuple[Optional
     train = run_near(plan, trip_id, when) if found else None
     if not train:
         return None, []
+    return train, crossed(plan, train)
+
+
+def crossed(plan: Optional[dict], train: dict) -> list[tuple[int, int, dict]]:
+    """The stretches of one run of a train (a plan's trip) a bus runs instead that day: [(a, b, section)], in order."""
+    found = (plan or {}).get('sections', {}).get(train['id']) or []
     last = len(train['stops']) - 1
     out = []
     for s in found:
@@ -134,7 +142,7 @@ def stretches(plan: Optional[dict], trip_id: str, when: float) -> tuple[Optional
         a, b = 0 if ia is None else ia, last if ib is None else ib
         if a < b:
             out.append((a, b, s))
-    return train, sorted(out, key=lambda x: x[0])
+    return sorted(out, key=lambda x: x[0])
 
 
 def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
@@ -172,6 +180,10 @@ def bus_row(entry: dict, bus: dict, kind: str, here: str) -> dict:
            'destination': ends[1 if leave else 0] or end.get('name') or entry['destination'], 'scheduledAt': mapping.iso(scheduled[k]),
            'effectiveAt': mapping.iso(live[k]) if bus['delays'][k] is not None else None,
            'replacement': True, 'replacesTrain': entry['routeName']}
+    if bus['delays'][k] is not None:  # its own live time (trainlive.py), not the train's
+        row.update(updatedAt=mapping.iso(time.time()), quality='predicted')
+    else:
+        row.update({k: None for k in ('updatedAt', 'quality') if k in entry})
     row.pop('replacedByBus', None)
     row.pop('comesFrom', None)
     if leave and ends[0]:
@@ -217,7 +229,7 @@ def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: 
         bus = plan['by_id'].get(hit['busTripId']) or run_near(plan, hit['busTripId'], hit['start'])
         if bus and bus.get('source') == 'timetable':
             continue  # its buses' own rows follow
-        out.append(bus_row(e, bus, kind, here) if bus else {**e, 'replacedByBus': True})
+        out.append(bus_row(e, trainlive.live_bus(plan, bus), kind, here) if bus else {**e, 'replacedByBus': True})
     times = [_epoch(e['scheduledAt']) for e in entries]
     start = min(times, default=None) if start is None else start
     end = max(times, default=None) if end is None else end
@@ -242,6 +254,7 @@ def timetable_rows(plan: dict, kind: str, stops: set[str], start: float, end: fl
     for bus in plan.get('synthetic') or []:
         if bus.get('source') != 'timetable':
             continue
+        live = None
         last = len(bus['stops']) - 1
         ends = abroad.scheduled_ends(bus)
         for k, stop in enumerate(bus['stops']):
@@ -251,11 +264,14 @@ def timetable_rows(plan: dict, kind: str, stops: set[str], start: float, end: fl
             at = bus['departures'][k] if leave else bus['arrivals'][k]
             if not start <= at <= end:
                 continue
+            live = live or trainlive.live_bus(plan, bus)
+            moved = (live['departures'] if leave else live['arrivals'])[k] if live['delays'][k] is not None else None
             row = {'id': f'{bus["id"]}@{bus.get("serviceDay")}/{k}', 'stopId': stop['gtfsId'], 'tripId': bus['id'],
                    'routeId': bus['route']['gtfsId'], 'operatorId': bus['route']['agency']['gtfsId'],
                    'routeName': mapping.route_name(bus['route']), 'mode': 'bus',
                    'destination': ends[1 if leave else 0] or (bus['stops'][-1] if leave else bus['stops'][0]).get('name') or '',
-                   'scheduledAt': mapping.iso(at), 'effectiveAt': None, 'updatedAt': None, 'quality': None, 'canceled': False,
+                   'scheduledAt': mapping.iso(at), 'effectiveAt': mapping.iso(moved) if moved is not None else None,
+                   'updatedAt': mapping.iso(time.time()) if moved is not None else None, 'quality': 'predicted' if moved is not None else None, 'canceled': False,
                    'platform': stop.get('bay') or None, 'alertIds': list(bus.get('alertIds') or []), 'replacement': True}
             if bus.get('trainName'):
                 row['replacesTrain'] = bus['trainName']
