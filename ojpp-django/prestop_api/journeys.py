@@ -472,12 +472,17 @@ def search(req: dict, query) -> dict:
     again over the whole day, so every connection that day counts, the nearest to the time first (OTP keeps the
     earliest departures, or the latest arrivals). A page of earlier or later connections keeps its cursor's window.
     `searchShift` (s, journey_legs.search_gain): OTP is asked that much earlier (departing) or later (arriving), for
-    trains whose replacement bus leaves later or arrives earlier than the train would; within_time drops the rest."""
+    trains whose replacement bus leaves later or arrives earlier than the train would; within_time drops the rest.
+    When that leaves less than a page (a city trip near the station fills OTP's page before the asked time), the
+    search at the asked time is made too and comes first: on 20 Oct Tivoli → Fužine at 08:00 was otherwise empty."""
     variables = otp_variables(req)
     shift = 0 if req.get('pageCursor') else round(req.get('searchShift') or 0)
+    shifted = None
     if shift:
         moved = req['dateTime'] + timedelta(seconds=shift if req['timeMode'] == 'arriveBy' else -shift)
-        variables['dateTime'] = {'latestArrival' if req['timeMode'] == 'arriveBy' else 'earliestDeparture': moved.isoformat()}
+        shifted = query(PLAN_Q, {**variables, 'dateTime': {'latestArrival' if req['timeMode'] == 'arriveBy' else 'earliestDeparture': moved.isoformat()}})
+        if _in_time(shifted, req) >= variables['first']:
+            return shifted
     data = query(PLAN_Q, variables)
     if req.get('pageCursor'):
         return data
@@ -485,7 +490,21 @@ def search(req: dict, query) -> dict:
     window = day_window(req)
     if used and window > used and len(_edges(data)) < variables['first']:
         data = query(PLAN_Q, {**variables, 'searchWindow': f'PT{window}S'})
-    return data
+    if shifted is None:
+        return data
+    edges = list(_edges(data))
+    seen = {_leg_key(e['node']) for e in edges}
+    edges += [e for e in _edges(shifted) if _leg_key(e['node']) not in seen]
+    return {**data, 'planConnection': {**(data.get('planConnection') or {}), 'edges': edges}}
+
+
+def _in_time(data: dict, req: dict) -> int:
+    """How many of OTP's connections keep to the asked time with their own times (within_time; a train its bus
+    replaces may still turn out to fit)."""
+    asked = req['dateTime'].timestamp()
+    if req['timeMode'] == 'arriveBy':
+        return sum(_when(e['node']['legs'][-1]['end']) <= asked + TIME_SLACK for e in _edges(data))
+    return sum(_when(e['node']['legs'][0]['start']) >= asked - TIME_SLACK for e in _edges(data))
 
 
 ROUND_TRIP_METERS = 300  # a destination this close to the start (with stops between) is a round trip

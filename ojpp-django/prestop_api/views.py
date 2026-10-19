@@ -432,6 +432,8 @@ def journeys(request):
 
     def counted(timeout):
         def query(q, v):
+            if asked[0] >= planner.MAX_OTP_QUERIES:
+                return {'planConnection': {'edges': [], 'pageInfo': {}, 'routingErrors': []}}  # budget spent: nothing more
             asked[0] += 1
             return otp().query(q, v, timeout=timeout)
         return query

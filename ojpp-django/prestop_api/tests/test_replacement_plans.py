@@ -61,8 +61,12 @@ class Ec38Tests(SimpleTestCase):
                          'operators': [], 'maxTransfers': None},
                         lambda q, v: asked.append(v) or {'planConnection': {'edges': [], 'pageInfo': {}}})
         self.assertEqual(asked[0]['dateTime'], {'latestArrival': '2026-10-19T06:51:00+02:00'})
+        self.assertEqual(asked[1]['dateTime'], {'latestArrival': '2026-10-19T06:40:00+02:00'})  # too few in time: as asked too
         # Far from any station a bus beats its train at, nothing moves.
         self.assertEqual(journey_legs.search_gain(self.plan, request(self.ec38, 'Jesenice', 'Ljubljana', '2026-10-19', '06:40', 'arriveBy')), 0)
+        # Nor for a trip the bus cannot be part of: from Kranjska Gora it would come from further away than Jesenice.
+        gora = {'name': 'Kranjska Gora', 'latitude': 46.4845, 'longitude': 13.7856}
+        self.assertEqual(journey_legs.search_gain(self.plan, {**req, 'origin': gora}), 0)
 
     def test_the_arrival_plan_keeps_the_bus_and_drops_what_the_wider_search_found_too_late(self):
         legs, _ = self.rewrite([leg_on(self.ec38, 'Ljubljana', 'Jesenice')], [META])

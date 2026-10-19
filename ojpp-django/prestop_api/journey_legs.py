@@ -11,6 +11,7 @@ a real bus has its own, and a journey whose bus would not connect is dropped: it
 (scheduled.day_plan) and read where the line view reads them (replacement.stretches), so a closure that ends on
 the 11th leaves the 12th's journeys alone, and a train the line view shows as its bus is never ridden.
 """
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
@@ -460,13 +461,18 @@ def search_gain(plan: Optional[dict], req: dict) -> float:
     """How far to move OTP's search time so it finds the trains a replacement timetable's bus makes work: OTP plans
     with the train's times, and the bus has its own. EC 38 on 19 Oct reaches Jesenice at 06:43 as a train, but its
     bus 38/1 at 06:32, so "arrive by 06:40" never saw it. Departing: how much later than its train a bus leaves a
-    station near the origin; arriving: how much earlier it reaches one near the destination. The journeys this widened
-    search finds outside the asked time are dropped again (journeys.within_time)."""
+    station near the origin; arriving: how much earlier it reaches one near the destination. A bus that takes the
+    rider nowhere nearer the destination from there (arriving: comes from nowhere nearer the origin) is not ridden, so a
+    city trip past Ljubljana station is not moved. The journeys this widened search finds outside the asked time are
+    dropped again (journeys.within_time)."""
     if not plan:
         return 0
     arriving = req['timeMode'] == 'arriveBy'
     place = req['destination'] if arriving else req['origin']
+    other = req['origin'] if arriving else req['destination']
     here, when = [place['longitude'], place['latitude']], req['dateTime'].timestamp()
+    there = [other['longitude'], other['latitude']]
+    away = lambda s: geometry.distance([s['lon'], s['lat']], there) if s.get('lat') is not None else math.inf
     best = 0.0
     for bus in plan.get('synthetic') or []:
         if bus.get('source') != 'timetable' or not bus.get('trainTripId'):
@@ -483,6 +489,8 @@ def search_gain(plan: Optional[dict], req: dict) -> float:
             if p == (0 if arriving else len(stations) - 1):
                 continue  # nobody rides a bus to where it starts, or from where it ends
             if i is None or s.get('lat') is None or geometry.distance([s['lon'], s['lat']], here) > GAIN_NEAR:
+                continue
+            if min(map(away, stations[:p] if arriving else stations[p + 1:]), default=math.inf) >= away(s):
                 continue
             gain = train['arrivals'][i] - bus['arrivals'][p] if arriving else bus['departures'][p] - train['departures'][i]
             best = max(best, gain)

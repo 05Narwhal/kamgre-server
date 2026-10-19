@@ -111,3 +111,23 @@ class DayWindowTests(SimpleTestCase):
         self.assertEqual(at('2026-10-09T10:00:00Z'), 16 * 3600)                      # UTC in, local day out
         self.assertEqual(journeys._seconds('PT1H10M'), 4200)
         self.assertEqual(journeys._seconds(None), 0)
+
+
+class ShiftedSearchTests(SimpleTestCase):
+    """A search moved for a replacement bus (searchShift) never costs the connections at the asked time."""
+
+    def test_a_city_trip_near_the_station_keeps_its_connections(self):
+        # 20 Oct, Tivoli → Fužine at 08:00: moved 49 min earlier, OTP's page was full of buses before 08:00 and the
+        # answer came back empty once those were dropped.
+        otp = FakeOtp(*(ride(f'{h:02d}:{m:02d}:00', f'{h:02d}:{m + 5:02d}:00', f'LPP:{h}{m:02d}') for h in (7, 8) for m in range(0, 55, 6)))
+        req = request(insane=False, dateTime='2026-10-09T08:00:00+02:00')
+        data = journeys.plan({**req, 'searchShift': 2940}, otp)
+        self.assertEqual([v['dateTime'] for v in otp.asked], [{'earliestDeparture': '2026-10-09T07:11:00+02:00'},
+                                                              {'earliestDeparture': '2026-10-09T08:00:00+02:00'}])
+        self.assertEqual(trips(data)[:5], ['LPP:800', 'LPP:806', 'LPP:812', 'LPP:818', 'LPP:824'])  # the asked time's first
+        self.assertEqual(len(journeys.within_time(journeys.build_journeys(data, {**req, 'searchShift': 2940}, []), {**req, 'searchShift': 2940})), 5)
+
+    def test_a_moved_search_with_a_page_in_time_is_one_request(self):
+        otp = FakeOtp(*(ride(f'10:{m:02d}:00', f'10:{m + 5:02d}:00', f'IJPP:{m}') for m in range(0, 50, 10)))
+        journeys.plan({**request(insane=False), 'searchShift': 600}, otp)
+        self.assertEqual(len(otp.asked), 1)
