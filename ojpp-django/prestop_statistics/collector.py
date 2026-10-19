@@ -79,7 +79,7 @@ def passed_stop_delays(updates: list[dict], schedule: dict, now: float) -> dict[
         if not sched:
             continue
         planned = sched['serviceDay'] + sched['scheduledArrival']
-        delay, absolute = mapping._update_delay(u), _abs_time(u)
+        delay, absolute = mapping.update_delay(u), _abs_time(u)
         if delay is None and absolute is not None:
             delay = absolute - planned
         if delay is None or abs(delay) > MAX_ABS_DELAY:
