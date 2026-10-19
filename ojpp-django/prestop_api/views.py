@@ -422,8 +422,12 @@ def journeys(request):
         raise ApiError(422, 'INVALID_REQUEST', 'Expected a JSON body')
     req = planner.parse_request(body, settings.PRESTOP_INSANE_MODE)
     from . import scheduled
-    # What replaces trains that day loads while OTP plans (another date's timetable takes a few seconds).
-    scheduled.plan_at(req['dateTime'].timestamp())
+    # What replaces trains that day (today's and tomorrow's are kept warm; another date's takes a few seconds once):
+    # OTP's time moves for the trains whose replacement bus has its own times (journey_legs.search_gain).
+    from . import journey_legs
+    day_plan = scheduled.plan_at(req['dateTime'].timestamp(), wait=6, cold=True)
+    if not req['pageCursor'] and (shift := journey_legs.search_gain(day_plan, req)):
+        req = {**req, 'searchShift': shift}
     asked = [0]  # OTP queries this request (shared rules: at most planner.MAX_OTP_QUERIES with the extra searches)
 
     def counted(timeout):
@@ -442,7 +446,11 @@ def journeys(request):
         alert_list = sources.alerts(language(request))
     except UpstreamError:
         alert_list = []
-    result = planner.build_journeys(data, req, alert_list, plan_for=lambda when: scheduled.plan_at(when, wait=6))
+    result = planner.build_journeys(data, req, alert_list, plan_for=lambda when: scheduled.plan_at(when, wait=6, cold=True))
+    result = planner.within_time(result, req)
+    # Short lines per leg: the train a bus replaces, a detour or moved stop on the leg's line.
+    from . import leg_alerts
+    result = leg_alerts.add_notices(result, alert_list, language(request))
     if any(leg.get('rental') for j in result for leg in j['legs']):
         from . import sharing
         # E-scooters walk where they may not ride (roads over 50 km/h without a cycle lane, ZPrCP 97.a).

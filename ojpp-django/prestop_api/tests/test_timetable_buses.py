@@ -322,9 +322,9 @@ class DayPlanTests(SimpleTestCase):
 
     def test_new_timetables_reach_todays_plan_in_the_background(self):
         trips = feed('20261014')
-        slot = self.derive({'key': None}, trips, None)
+        slot = self.derive({'key': None}, trips, sztimetables.Timetables({}, {}))  # an older read (the first one rebuilds at once)
         self.assertFalse([b for b in slot['synthetic'] if b.get('source') == 'timetable'])
-        # A request does not rebuild the plan for new timetables (the warmer does, warm.plans) ...
+        # A request does not rebuild the plan for newer timetables (the warmer does, warm.plans) ...
         self.derive(slot, trips, TABLES, defer_timetables=True)
         self.assertFalse([b for b in slot['synthetic'] if b.get('source') == 'timetable'])
         # ... but anything else that changed rebuilds it with them.

@@ -103,3 +103,52 @@ def match(leg: dict, stop_ids: set[str], stop_names: set[str], alerts: list[dict
             if sum(1 for side in sides if side & stop_names) >= 2:
                 out.append(a['id'])
     return out
+
+
+# ---------------------------------------------------------------- leg notices (contract legNoticeSchema)
+
+NOTICE_KINDS = ('replacement', 'closure', 'detour', 'stop-moved', 'disruption')
+MAX_NOTICES = 3       # per leg
+NOTICE_TEXT = 160     # characters of a notice's title kept
+_WORDS = {
+    'sl': {'bus': 'Avtobus namesto vlaka {train}', 'part': 'Avtobus namesto vlaka {train} na odseku {a} – {b}'},
+    'en': {'bus': 'Bus instead of train {train}', 'part': 'Bus instead of train {train} between {a} and {b}'},
+}
+
+
+def _short(text: str) -> str:
+    text = ' '.join((text or '').split())
+    return text if len(text) <= NOTICE_TEXT else text[:NOTICE_TEXT - 1].rstrip(' ,.;:-') + '…'
+
+
+def add_notices(journeys: list[dict], alerts: list[dict], lang: str) -> list[dict]:
+    """Each leg's short disruption lines (`notices`, besides alertIds): a replacement bus names the train it runs
+    instead of, and the stretch when the train runs the rest of the way; a detour, a moved stop or a closure on
+    the leg's line says so in the notice's own title. A train that runs anyway has none (its notice was dropped,
+    journey_legs.unreplaced_notices)."""
+    words = _WORDS.get(lang, _WORDS['en'])
+    by_id = {a['id']: a for a in alerts}
+    for journey in journeys:
+        trains = {l.get('routeName') for l in journey['legs'] if l['mode'] == 'rail'}
+        for leg in journey['legs']:
+            out: list[dict] = []
+            train = leg.get('replacesTrain')
+            if leg['mode'] == 'bus' and leg.get('replacement') and train:
+                text = words['part' if train in trains else 'bus'].format(train=train, a=leg['origin']['name'], b=leg['destination']['name'])
+                out.append({'kind': 'replacement', 'text': text})
+            for alert_id in leg.get('alertIds') or []:
+                alert = by_id.get(alert_id) or {}
+                kind = alert.get('kind')
+                if kind not in NOTICE_KINDS or (out and kind in ('replacement', 'closure') and leg.get('replacement')):
+                    continue  # the bus already says what it replaces
+                out.append({'kind': kind, 'text': _short(alert.get('title') or alert.get('message') or '')})
+            seen, notices = set(), []
+            for n in out:
+                if n['text'] and n['text'] not in seen:
+                    seen.add(n['text'])
+                    notices.append(n)
+            if notices:
+                leg['notices'] = notices[:MAX_NOTICES]
+            else:
+                leg.pop('notices', None)
+    return journeys

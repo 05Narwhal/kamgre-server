@@ -426,3 +426,43 @@ def _trains_by_bus(plan: dict) -> dict[str, str]:
 def _has_buses(alert: dict, buses: list[set[str]]) -> bool:
     sides = leg_alerts.title_sections(alert['title'])
     return len(sides) >= 2 and any(sum(1 for side in sides if side & names) >= 2 for names in buses)
+
+
+# ---------------------------------------------------------------- the search window around a timetable's buses
+
+GAIN_NEAR = 5000      # m: a station this close to where the journey starts (or ends) may be its first (or last) ride's
+GAIN_MAX = 3600       # s: at most this much wider
+GAIN_HOURS = 4 * 3600  # s: only buses this close to the asked time count
+
+
+def search_gain(plan: Optional[dict], req: dict) -> float:
+    """How far to move OTP's search time so it finds the trains a replacement timetable's bus makes work: OTP plans
+    with the train's times, and the bus has its own. EC 38 on 19 Oct reaches Jesenice at 06:43 as a train, but its
+    bus 38/1 at 06:32, so "arrive by 06:40" never saw it. Departing: how much later than its train a bus leaves a
+    station near the origin; arriving: how much earlier it reaches one near the destination. The journeys this widened
+    search finds outside the asked time are dropped again (journeys.within_time)."""
+    if not plan:
+        return 0
+    arriving = req['timeMode'] == 'arriveBy'
+    place = req['destination'] if arriving else req['origin']
+    here, when = [place['longitude'], place['latitude']], req['dateTime'].timestamp()
+    best = 0.0
+    for bus in plan.get('synthetic') or []:
+        if bus.get('source') != 'timetable' or not bus.get('trainTripId'):
+            continue
+        if min(abs(bus['departures'][0] - when), abs(bus['arrivals'][-1] - when)) > GAIN_HOURS:
+            continue
+        train = replaced_by.run_near(plan, bus['trainTripId'], bus['departures'][0])
+        if not train:
+            continue
+        index = {sz.station_key(s.get('name') or ''): i for i, s in enumerate(train['stops'])}
+        stations = bus.get('stations') or bus['stops']
+        for p, s in enumerate(stations):
+            i = index.get(sz.station_key(s.get('name') or ''))
+            if p == (0 if arriving else len(stations) - 1):
+                continue  # nobody rides a bus to where it starts, or from where it ends
+            if i is None or s.get('lat') is None or geometry.distance([s['lon'], s['lat']], here) > GAIN_NEAR:
+                continue
+            gain = train['arrivals'][i] - bus['arrivals'][p] if arriving else bus['departures'][p] - train['departures'][i]
+            best = max(best, gain)
+    return min(best, GAIN_MAX)

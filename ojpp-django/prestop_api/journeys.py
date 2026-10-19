@@ -366,8 +366,14 @@ def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> 
 def search(req: dict, query) -> dict:
     """OTP's connections for the request. Fewer than asked for, from a window shorter than the rest of the day: ask
     again over the whole day, so every connection that day counts, the nearest to the time first (OTP keeps the
-    earliest departures, or the latest arrivals). A page of earlier or later connections keeps its cursor's window."""
+    earliest departures, or the latest arrivals). A page of earlier or later connections keeps its cursor's window.
+    `searchShift` (s, journey_legs.search_gain): OTP is asked that much earlier (departing) or later (arriving), for
+    trains whose replacement bus leaves later or arrives earlier than the train would; within_time drops the rest."""
     variables = otp_variables(req)
+    shift = 0 if req.get('pageCursor') else round(req.get('searchShift') or 0)
+    if shift:
+        moved = req['dateTime'] + timedelta(seconds=shift if req['timeMode'] == 'arriveBy' else -shift)
+        variables['dateTime'] = {'latestArrival' if req['timeMode'] == 'arriveBy' else 'earliestDeparture': moved.isoformat()}
     data = query(PLAN_Q, variables)
     if req.get('pageCursor'):
         return data
@@ -651,6 +657,29 @@ def bet_on_delays(data: dict, req: dict, query, tries: int = 3) -> dict:
     if extra:
         data = {**data, 'planConnection': {**data['planConnection'], 'edges': edges + extra}}
     return data
+
+
+TIME_SLACK = 60  # s a journey may start before (or end after) the asked time, as OTP's own rounding does
+
+
+def within_time(journeys: list[dict], req: dict) -> list[dict]:
+    """The journeys that leave at or after the asked time (departing) or arrive by it (arriving), once replacement
+    buses ride with their own times: a bus leaving 20 minutes before its train cannot be caught by someone who
+    leaves at the train's time, and one arriving after the asked time is late. Only those with a replacement bus,
+    and every one when the search was widened (searchShift); pages of earlier or later connections are left as
+    they are (they lie outside the time on purpose)."""
+    if req.get('pageCursor'):
+        return journeys
+    widened = bool(req.get('searchShift'))
+    asked = req['dateTime'].timestamp()
+
+    def fits(j: dict) -> bool:
+        if not widened and not any(l.get('replacement') for l in j['legs']):
+            return True
+        if req['timeMode'] == 'arriveBy':
+            return _ts(j['effectiveArrival']) <= asked + TIME_SLACK
+        return _ts(j['effectiveDeparture']) >= asked - TIME_SLACK
+    return [j for j in journeys if fits(j)]
 
 
 def by_arrival(journeys: list[dict]) -> list[dict]:

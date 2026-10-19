@@ -141,8 +141,9 @@ _day_derived: dict[str, dict] = {}
 def _derive_into(slot: dict, trips: list[dict], defer_timetables: bool = False) -> dict:
     """Replaced sections and synthetic replacement buses for a timetable, the notices and SŽ's replacement
     timetables, recomputed only when one of them changes (see replacement.py, closures.py). With
-    `defer_timetables` (a request for today or tomorrow) new replacement timetables alone do not rebuild the
-    plan: the warmer does that in the background (warm.plans)."""
+    `defer_timetables` (a request for today or tomorrow) a newer version of the replacement timetables alone does
+    not rebuild the plan: the warmer does that in the background (warm.plans). Their first read after a restart
+    does: a plan guessed from the notices alone would show EC 38 (19 Oct) by train until the warmer came round."""
     loaded = closures.inputs()
     # The notices by content, the rest by identity (a reload is a new object).
     key = (trips, closures.notices_fingerprint(loaded[0]), *loaded[1:], sztimetables.current()) if loaded else (trips,)
@@ -150,7 +151,8 @@ def _derive_into(slot: dict, trips: list[dict], defer_timetables: bool = False) 
     same = lambda a, b: a == b if isinstance(a, int) else a is b  # noqa: E731
     if old is not None and len(old) == len(key):
         rest = len(key) - 1 if loaded else len(key)  # everything but the replacement timetables
-        if all(same(a, b) for a, b in zip(old[:rest], key[:rest])) and (not loaded or defer_timetables or same(old[-1], key[-1])):
+        deferred = defer_timetables and (old[-1] is not None or key[-1] is None)
+        if all(same(a, b) for a, b in zip(old[:rest], key[:rest])) and (not loaded or deferred or same(old[-1], key[-1])):
             return slot
     real = replaced_by.sections(trips)
     built = {'buses': [], 'suppressed': {}, 'decided': {}}
@@ -205,9 +207,17 @@ def day_plan(day: date, wait: float = 0, refresh: bool = False) -> Optional[dict
     trains and only the notices in effect that day, so a closure that ends on the 11th leaves the 12th's
     trains alone. None while the day's timetable is not loaded (after waiting up to `wait` s); today's never
     waits unless asked to. New replacement timetables rebuild today's and tomorrow's plans only with
-    `refresh` (the warmer's call), so no request waits on that."""
+    `refresh` (the warmer's call), so no request waits on that. Right after a restart a request that may wait
+    also waits (within `wait`) for the notices and reads the replacement timetables, so its plan is not one
+    without any replacement buses."""
+    deadline = time.time() + wait
     if closures.inputs() is None:
         closures.warm()
+        while wait and closures.inputs() is None and time.time() < deadline:
+            time.sleep(0.05)
+    if wait and sztimetables.current() is None:
+        sztimetables.load()  # reads the files at most once a minute; nothing when there are none
+    wait = max(0.0, deadline - time.time()) if wait else 0
     today = service_day()
     if day == today:
         snap = timetable.wait(wait) if wait else timetable.get_nowait()
@@ -218,12 +228,14 @@ def day_plan(day: date, wait: float = 0, refresh: bool = False) -> Optional[dict
     return _derive_into(slot, snap.value, defer_timetables=not refresh and day in (today, today + timedelta(days=1))) if snap else None
 
 
-def plan_at(when: float, wait: float = 0) -> Optional[dict]:
-    """The plan holding the trains running at `when`: today's also has yesterday's trains (after midnight)."""
+def plan_at(when: float, wait: float = 0, cold: bool = False) -> Optional[dict]:
+    """The plan holding the trains running at `when`: today's also has yesterday's trains (after midnight). Today's
+    never waits (it is loaded and kept warm, warm.py; a board must not wait), unless `cold`: a journey plan right
+    after a restart waits up to `wait` rather than ride trains that buses replace."""
     day = datetime.fromtimestamp(when, closures.LOCAL).date()
     today = service_day()
     if day in (today, today - timedelta(days=1)):
-        return day_plan(today)  # never waits: loaded and kept warm (warm.py)
+        return day_plan(today, wait if cold else 0)
     return day_plan(day, wait)
 
 
