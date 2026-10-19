@@ -815,16 +815,16 @@
   ]
  },
  "driving": {
-  "about": "Fuel in euros per litre (kWh for electric). The regulated prices are read daily from gov.si (fuel.csvUrl); fallback holds the last ones read. defaultCar: when the rider gave no car. parking: P+R sites by name, cents per 24 h; includesRides: city bus rides included (system).",
+  "about": "Fuel in euros per litre (kWh for electric). The regulated prices are read every 6 h from gov.si (fuel.csvUrl), one row per period (it lists the next one on the Monday before); a trip uses the newest period begun on its day. fallback holds the last rows read (fallbackChecked: when). defaultCar: when the rider gave no car. parking: P+R sites by name, cents per 24 h; includesRides: city bus rides included (system).",
   "fuel": {
    "csvUrl": "https://www.gov.si/teme/cene-naftnih-derivatov/element/162094/izvoz.csv",
    "source": "Regulated fuel prices, gov.si (outside motorways)",
    "sourceUrl": "https://www.gov.si/teme/cene-naftnih-derivatov/",
-   "fallback": {
-    "petrol": 1.742,
-    "diesel": 1.881,
-    "valid": "od 13. 10. do 19. 10. 2026"
-   },
+   "fallback": [
+    {"valid": "od 20. 10. do 26. 10. 2026", "petrol": 1.702, "diesel": 1.923},
+    {"valid": "od 13. 10. do 19. 10. 2026", "petrol": 1.742, "diesel": 1.881}
+   ],
+   "fallbackChecked": "2026-10-19",
    "note": "Motorway stations are not regulated and usually dearer."
   },
   "electric": {
@@ -836,8 +836,11 @@
    "checked": "2026-10-18"
   },
   "lpg": {
-   "eurPerLitre": null,
-   "note": "Not regulated and no official price published: price unknown."
+   "apiUrl": "https://goriva.si/api/v1/search/?format=json",
+   "source": "Station prices, goriva.si (government portal), median outside motorways",
+   "sourceUrl": "https://goriva.si/",
+   "about": "Not regulated. goriva.si (set up by the ministry MGRT in 2019, https://www.gov.si/novice/2020-09-28-spletna-aplikacija-goriva-si/) lists each station's prices, 25 a page; read once a day. The median of the stations with an LPG price, motorway service areas (\"AC\" in the name) left out; fewer than 20 such stations: price unknown. fallback: the last one read.",
+   "fallback": {"lpg": 1.016, "stations": 105, "checked": "2026-10-19"}
   },
   "defaultCar": {
    "fuel": "petrol",

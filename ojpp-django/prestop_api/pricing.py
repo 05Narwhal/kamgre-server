@@ -10,12 +10,14 @@ train only at SŽ's own tariff (plus the higher-rank supplement), otherwise the 
 """
 import json
 import math
-from datetime import datetime
+from datetime import date, datetime
 from functools import lru_cache
 from typing import Optional
 
 from . import driving, geometry, sharing
 
+REGULATED = ('petrol', 'diesel')  # fuels with a government price (gov.si); LPG: the usual station price (goriva.si)
+MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 TEXT = {
     'en': {'unknown': 'Price unknown', 'covered': 'Covered by your {card}', 'routeBound': 'Covered by your pass, if it is for this route',
            'ijpp': 'Integrated ticket (IJPP), {km} km', 'sz': 'SŽ train ticket, {km} km', 'szRank': 'SŽ train ticket, {km} km, with the {rank} supplement',
@@ -25,7 +27,9 @@ TEXT = {
            'scooter': '{name}: unlock {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name} with your {card}: {minutes} min × {perMinute}',
            'lowestRate': 'lowest rate',
            'note': "Estimate from the operators' price lists, checked {date}",
-           'fuel': 'Fuel ≈ {amount} {unit} ({fuel})', 'defaultCar': 'an average petrol car, {per100} l/100 km', 'vignette': '7-day vignette',
+           'fuel': 'Fuel ≈ {amount} {unit} ({fuel})', 'fuelPrice': '{perLitre} €/l from {date}',
+           'lpg': 'LPG, {perLitre} €/l, median of {stations} stations',
+           'defaultCar': 'an average petrol car, {per100} l/100 km', 'vignette': '7-day vignette',
            'parking': 'parking {name}', 'parkingUnknown': 'parking {name} (fee unknown)', 'parkingFree': 'parking {name} (free)',
            'parkingHour': 'parking {name}, first hour', 'parkRide': 'Included in the P+R parking ticket',
            'fuels': {'petrol': 'petrol', 'diesel': 'diesel', 'lpg': 'LPG, price unknown', 'electric': 'public charging, estimate'}},
@@ -37,7 +41,8 @@ TEXT = {
            'scooter': '{name}: odklep {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name}, velja tvoj paket {card}: {minutes} min × {perMinute}',
            'lowestRate': 'najnižja cena',
            'note': 'Ocena po cenikih prevoznikov, preverjeno {date}',
-           'fuel': 'Gorivo ≈ {amount} {unit} ({fuel})', 'defaultCar': 'povprečen bencinski avto, {per100} l/100 km', 'vignette': 'tedenska vinjeta',
+           'fuel': 'Gorivo ≈ {amount} {unit} ({fuel})', 'fuelPrice': '{perLitre} €/l od {date}',
+           'lpg': 'avtoplin, {perLitre} €/l, srednja cena {stations} črpalk', 'defaultCar': 'povprečen bencinski avto, {per100} l/100 km', 'vignette': 'tedenska vinjeta',
            'parking': 'parkiranje {name}', 'parkingUnknown': 'parkiranje {name} (cena ni znana)', 'parkingFree': 'parkiranje {name} (brezplačno)',
            'parkingHour': 'parkiranje {name}, prva ura', 'parkRide': 'Vključeno v parkirni listek P+R',
            'fuels': {'petrol': 'bencin', 'diesel': 'dizel', 'lpg': 'avtoplin, cena ni znana', 'electric': 'javne polnilnice, ocena'}},
@@ -55,6 +60,11 @@ def _ts(value: str) -> float:
 
 def _euro(cents: int) -> str:
     return f'{cents / 100:.2f} €'.replace('.', ',') if cents % 100 else f'{cents // 100} €'
+
+
+def _day(iso: str, language: str) -> str:
+    d = date.fromisoformat(iso)
+    return f'{d.day}. {d.month}.' if language == 'sl' else f'{d.day} {MONTHS[d.month - 1]}'
 
 
 def _name(card: dict, language: str) -> str:
@@ -140,10 +150,17 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             continue
         due = vignette_due and leg['car']['motorway']
         vignette_due = vignette_due and not due
-        cents, leg['car'] = driving.cost(leg['car'], car, rules, due)
+        day = datetime.fromtimestamp(_ts(leg['effectiveDeparture']), driving.LOCAL).date()
+        prices = driving.fuel(day) if car['fuel'] in REGULATED else driving.lpg() if car['fuel'] == 'lpg' else None
+        cents, leg['car'] = driving.cost(leg['car'], car, rules, due, prices)
         amount = leg['car'].get('energyKwh') if car['fuel'] == 'electric' else leg['car']['fuelLitres']
-        parts = [text['fuel'].format(amount=f'{amount:.1f}'.replace('.', ',') if language == 'sl' else f'{amount:.1f}',
-                                     unit='kWh' if car['fuel'] == 'electric' else 'l', fuel=text['fuels'][car['fuel']])]
+        number = lambda value, digits: f'{value:.{digits}f}'.replace('.', ',') if language == 'sl' else f'{value:.{digits}f}'
+        kind = text['fuels'][car['fuel']]
+        if prices and car['fuel'] == 'lpg':
+            kind = text['lpg'].format(perLitre=number(prices['lpg'], 3), stations=prices['stations'])
+        elif prices:
+            kind += ', ' + text['fuelPrice'].format(perLitre=number(prices[car['fuel']], 3), date=_day(prices['from'], language))
+        parts = [text['fuel'].format(amount=number(amount, 1), unit='kWh' if car['fuel'] == 'electric' else 'l', fuel=kind)]
         if not profile.get('car'):
             parts[0] += f" · {text['defaultCar'].format(per100=car['litresPer100km'])}"
         if due:
@@ -156,9 +173,10 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             known = driving.parking(park['name'], rules)
             if known and known.get('includesRides'):
                 included[known['system']] = [known['includesRides'], known]
-        source = {'source': rules['fuel']['source'], 'sourceUrl': rules['fuel']['sourceUrl']} if car['fuel'] != 'electric' else rules['electric']
+        source = rules['electric'] if car['fuel'] == 'electric' else rules['lpg'] if car['fuel'] == 'lpg' else rules['fuel']
+        checked = prices['checked'] if prices else source.get('checked') or datetime.now(driving.LOCAL).date().isoformat()
         leg['price'] = {'amountCents': cents, 'currency': 'EUR', 'basis': ' + '.join(parts), 'source': source['source'],
-                        'sourceUrl': source['sourceUrl'], 'checked': datetime.now().date().isoformat()}
+                        'sourceUrl': source['sourceUrl'], 'checked': checked}
 
     # Intercity tickets: consecutive IJPP legs (walks between them do not break a ticket).
     groups, current = [], []

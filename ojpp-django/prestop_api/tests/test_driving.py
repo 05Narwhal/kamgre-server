@@ -1,13 +1,19 @@
-from datetime import datetime, timezone
+import json
+from datetime import date, datetime, timezone
 from unittest import mock
 
 from django.test import SimpleTestCase
 
 from prestop_api import driving, journeys, mapping, pricing
 from prestop_api.tests.test_mapping import PLACE
+from prestop_api.upstream import Snapshot, UpstreamError
 
 START = datetime(2026, 10, 19, 6, 0, tzinfo=timezone.utc).timestamp()
-FUEL = {'petrol': 1.742, 'diesel': 1.881, 'valid': 'od 13. 10. do 19. 10. 2026'}
+FUEL = {'petrol': 1.742, 'diesel': 1.881, 'valid': 'od 13. 10. do 19. 10. 2026', 'from': '2026-10-13', 'to': '2026-10-19', 'checked': '2026-10-19'}
+# gov.si's CSV as read on Monday 2026-10-19, 18:50: the first row is tomorrow's.
+GOV_CSV = ('﻿"Datum veljavnosti ","Maloprodajna cena NMB 95 (evro/liter)","Maloprodajna cena dizel goriva (evro/liter)"\n'
+           '"od 20. 10. do 26. 10. 2026","1.702","1.923"\n"od 13. 10. do 19. 10. 2026","1.742","1.881"\n'
+           '"od 6. 10. do 12. 10. 2026","1.744","1.883"\n"od 29. 9. do 5. 10. 2026","1.76","1.929"\n')
 at = lambda m: mapping.iso(START + m * 60)
 
 
@@ -23,10 +29,25 @@ def bus(minute, feed='LPP'):
             'geometry': [[14.46, 46.04], [14.50, 46.05]], 'effectiveDeparture': at(minute), 'effectiveArrival': at(minute + 15)}
 
 
-def price(*legs, car=None):
+def price(*legs, car=None, lpg=None, language='en'):
     profile = {'cards': [], 'bikeMemberships': [], 'scooterPasses': [], **({'car': car} if car else {})}
-    with mock.patch.object(driving, 'fuel', return_value=FUEL):
-        return pricing.price_journey({'legs': list(legs)}, profile, 'en')
+    with mock.patch.object(driving, 'fuel', return_value=FUEL), mock.patch.object(driving, 'lpg', return_value=lpg):
+        return pricing.price_journey({'legs': list(legs)}, profile, language)
+
+
+def station(name, lpg, petrol=1.742):
+    return {'pk': 1, 'name': name, 'prices': {'95': petrol, 'dizel': 1.881, 'avtoplin-lpg': lpg}}
+
+
+def responses(*bodies):
+    """Mocked gov.si / goriva.si answers, one per request."""
+    out = []
+    for body in bodies:
+        resp = mock.MagicMock(status_code=200)
+        resp.__enter__.return_value = resp
+        resp.raw.read.return_value = (body if isinstance(body, str) else json.dumps(body)).encode('utf-8')
+        out.append(resp)
+    return out
 
 
 class CarCostTests(SimpleTestCase):
@@ -51,7 +72,15 @@ class CarCostTests(SimpleTestCase):
         self.assertEqual((e['legs'][0]['car']['energyKwh'], e['legs'][0]['price']['amountCents']), (18.0, 990))  # 18 kWh × 0.55 €
         self.assertIn('estimate', e['legs'][0]['price']['basis'])
         lpg = price(car_leg(100), car={'fuel': 'lpg', 'litresPer100km': 8.0, 'vignette': True})
-        self.assertIsNone(lpg['price']['totalCents'])
+        self.assertIsNone(lpg['price']['totalCents'])  # no LPG price known
+
+    def test_lpg_at_the_usual_station_price(self):
+        usual = {'lpg': 1.016, 'stations': 105, 'checked': '2026-10-19'}
+        j = price(car_leg(100), car={'fuel': 'lpg', 'litresPer100km': 8.0, 'vignette': True}, lpg=usual, language='sl')
+        leg = j['legs'][0]['price']
+        self.assertEqual((leg['amountCents'], j['price']['totalCents']), (813, 813))  # 8 l × 1.016 €
+        self.assertIn('avtoplin, 1,016 €/l, srednja cena 105 črpalk', leg['basis'])
+        self.assertEqual((leg['sourceUrl'], leg['checked']), ('https://goriva.si/', '2026-10-19'))
 
     def test_ljubljana_park_and_ride_includes_two_bus_rides(self):
         j = price(car_leg(15, parking='P+R Dolgi most'), bus(30), bus(50), bus(200))
@@ -63,6 +92,86 @@ class CarCostTests(SimpleTestCase):
         j = price(car_leg(15, parking='Parkirišče pri postaji'))
         self.assertIsNone(j['price']['totalCents'])
         self.assertEqual((j['legs'][0]['car']['parking']['feeCents'], j['legs'][0]['car']['parking']['fee']), (None, 'unknown'))
+
+
+class FuelPriceTests(SimpleTestCase):
+    def read(self, text=GOV_CSV, status=200):
+        resp, = responses(text)
+        resp.status_code = status
+        with mock.patch.object(driving, 'session') as session:
+            session.return_value.get.return_value = resp
+            return driving._load_fuel()
+
+    def on(self, day, rows=None, fetched=datetime(2026, 10, 19, 16, 50, tzinfo=timezone.utc)):
+        with mock.patch.object(driving.fuel_prices, 'get', return_value=Snapshot(rows or self.read(), fetched.timestamp())):
+            return driving.fuel(day)
+
+    def test_periods_carry_the_year_once_at_the_end(self):
+        self.assertEqual(driving.period('od 29. 9. do 5. 10. 2026'), (date(2026, 9, 29), date(2026, 10, 5)))
+        self.assertEqual(driving.period('od 10. 3. do 23. 3. 2026'), (date(2026, 3, 10), date(2026, 3, 23)))
+        self.assertEqual(driving.period('od 30. 12. do 5. 1. 2027'), (date(2026, 12, 30), date(2027, 1, 5)))
+        self.assertEqual(driving.period('od 30. 12. 2026 do 5. 1. 2027'), (date(2026, 12, 30), date(2027, 1, 5)))
+
+    def test_every_period_is_read_newest_first(self):
+        rows = self.read()
+        self.assertEqual([(r['from'], r['petrol'], r['diesel']) for r in rows][:2], [('2026-10-20', 1.702, 1.923), ('2026-10-13', 1.742, 1.881)])
+        self.assertEqual(len(rows), 4)
+
+    def test_today_uses_todays_prices_though_tomorrows_are_listed(self):
+        self.assertEqual((self.on(date(2026, 10, 19))['petrol'], self.on(date(2026, 10, 19))['from']), (1.742, '2026-10-13'))
+        self.assertEqual(self.on(date(2026, 10, 20))['diesel'], 1.923)  # a plan for Tuesday: the new prices
+        self.assertEqual(self.on(date(2026, 10, 29))['from'], '2026-10-20')  # not listed yet: the newest begun
+        self.assertEqual(self.on(date(2026, 10, 19))['checked'], '2026-10-19')  # the day gov.si was read
+
+    def test_a_bad_csv_or_no_gov_si_falls_back_to_the_tariff_file(self):
+        with self.assertRaises(UpstreamError):
+            self.read('<html>maintenance</html>')
+        with self.assertRaises(UpstreamError):
+            self.read(status=503)
+        with mock.patch.object(driving.fuel_prices, 'get', side_effect=UpstreamError('gov.si down')):
+            prices = driving.fuel(date(2026, 10, 19))
+        fallback = pricing.tariffs()['driving']['fuel']
+        self.assertEqual((prices['valid'], prices['checked']), ('od 13. 10. do 19. 10. 2026', fallback['fallbackChecked']))
+
+    def test_a_drive_says_the_price_per_litre_and_since_when(self):
+        rows = self.read()
+        with mock.patch.object(driving.fuel_prices, 'get', return_value=Snapshot(rows, datetime(2026, 10, 19, 16, 50, tzinfo=timezone.utc).timestamp())):
+            today = pricing.price_journey({'legs': [car_leg(20)]}, {}, 'en')['legs'][0]['price']  # 06:00 UTC on Monday 19 Oct
+            tomorrow = pricing.price_journey({'legs': [car_leg(20, minute=24 * 60)]}, {}, 'sl')['legs'][0]['price']
+        self.assertEqual(today['amountCents'], 227)  # 1.3 l × 1.742 €
+        self.assertIn('petrol, 1.742 €/l from 13 Oct', today['basis'])
+        self.assertEqual(today['checked'], '2026-10-19')
+        self.assertEqual(tomorrow['amountCents'], 222)  # 1.3 l × 1.702 €
+        self.assertIn('bencin, 1,702 €/l od 20. 10.', tomorrow['basis'])
+
+
+class LpgPriceTests(SimpleTestCase):
+    def read(self, *pages):
+        with mock.patch.object(driving, 'session') as session:
+            session.return_value.get.side_effect = responses(*pages)
+            out = driving._load_lpg()
+            return out, [c.args[0] for c in session.return_value.get.call_args_list]
+
+    def test_the_median_off_the_motorways_over_every_page(self):
+        first = {'next': 'https://goriva.si/api/v1/search/?format=json&page=2',
+                 'results': [station(f'PETROL KRANJ {i}', 0.99) for i in range(12)] + [station('PETROL ZALOKE AC - JUG', 1.076)] * 9}
+        second = {'next': None, 'results': [station(f'OMV CELJE {i}', 1.069) for i in range(10)] + [station('SHELL KOPER', None, petrol=0.001), station('X', 0.001)]}
+        usual, asked = self.read(first, second)
+        self.assertEqual(usual, {'lpg': 0.99, 'stations': 22})  # 12 × 0.99, 10 × 1.069; motorway, empty and bogus left out
+        self.assertEqual(asked, ['https://goriva.si/api/v1/search/?format=json', 'https://goriva.si/api/v1/search/?format=json&page=2'])
+
+    def test_few_stations_or_a_foreign_next_page_is_no_price(self):
+        with self.assertRaises(UpstreamError):
+            self.read({'next': 'https://elsewhere.example/page2', 'results': [station(f'S {i}', 1.0) for i in range(19)]})
+        with self.assertRaises(UpstreamError):
+            self.read('<html>maintenance</html>')
+
+    def test_never_waits_on_goriva_si_the_tariff_file_until_it_is_read(self):
+        with mock.patch.object(driving.lpg_prices, 'get_nowait', return_value=None):
+            self.assertEqual(driving.lpg(), pricing.tariffs()['driving']['lpg']['fallback'])
+        read = Snapshot({'lpg': 1.02, 'stations': 100}, datetime(2026, 10, 20, 4, 0, tzinfo=timezone.utc).timestamp())
+        with mock.patch.object(driving.lpg_prices, 'get_nowait', return_value=read):
+            self.assertEqual(driving.lpg(), {'lpg': 1.02, 'stations': 100, 'checked': '2026-10-20'})
 
 
 class DriveComparisonTests(SimpleTestCase):

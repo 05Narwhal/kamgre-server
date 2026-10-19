@@ -1,7 +1,8 @@
 """Driving: what a car leg uses (motorways, the car park it ends at) and what it costs (fuel, vignette, parking).
 
 Motorways and expressways need the DARS vignette; data/motorways.json marks them (scripts/build-no-scooter.py, from
-OpenStreetMap). Fuel: the government's regulated prices, read once a day (fuel_prices); parking and the vignette from the
+OpenStreetMap). Fuel: the government's regulated prices, read every 6 h (fuel_prices), and LPG's usual station price
+(lpg_prices, goriva.si, daily); parking and the vignette from the
 dated tariff file (data/tariffs.json `driving`).
 """
 import csv
@@ -9,9 +10,13 @@ import io
 import json
 import logging
 import math
+import re
+import statistics
+from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -21,6 +26,7 @@ from .upstream import Cached, UpstreamError, session
 
 logger = logging.getLogger(__name__)
 
+LOCAL = ZoneInfo('Europe/Ljubljana')
 MOTORWAYS = Path(__file__).resolve().parent / 'data' / 'motorways.json'
 MOTORWAY_SAMPLE = 50.0   # m between checked points along a drive
 MOTORWAY_MIN_KM = 2.0    # driven this far on vignette roads: the vignette is needed (shorter is a crossing or a parallel road)
@@ -77,8 +83,30 @@ def parking_fee(park: dict, rules: dict) -> dict:
     return car_parks.fee(park.get('name') or '', (mapped or {}).get('osmFee') or '', lat, lon, rules)
 
 
-def _load_fuel() -> dict:
-    """The government's regulated prices (newest row of the gov.si CSV): {'petrol': €/l, 'diesel': €/l, 'valid': text}."""
+PERIOD = re.compile(r'od\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})?\s*do\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})')
+FUEL_ROWS = 8  # periods kept from the CSV (newest first; it goes back years)
+
+
+def period(valid: str) -> tuple[date, date]:
+    """'od 29. 9. do 5. 10. 2026' as its first and last day; the year is written once, at the end, so a period over
+    New Year starts the year before."""
+    m = PERIOD.search(valid)
+    if not m:
+        raise ValueError(f'not a period: {valid!r}')
+    d1, m1, y1, d2, m2, y2 = m.groups()
+    end = date(int(y2), int(m2), int(d2))
+    start = date(int(y1 or y2), int(m1), int(d1))
+    return (start.replace(year=start.year - 1) if not y1 and start > end else start), end
+
+
+def fuel_row(valid: str, petrol, diesel) -> dict:
+    start, end = period(valid)
+    return {'petrol': float(petrol), 'diesel': float(diesel), 'valid': valid.strip(), 'from': start.isoformat(), 'to': end.isoformat()}
+
+
+def _load_fuel() -> list[dict]:
+    """The government's regulated prices, one row per period, newest first: [{'petrol': €/l, 'diesel': €/l, 'valid':
+    text, 'from', 'to'}]. gov.si lists the next period on the Monday before it starts."""
     from .pricing import tariffs
     url = tariffs()['driving']['fuel']['csvUrl']
     try:
@@ -88,38 +116,94 @@ def _load_fuel() -> dict:
             text = resp.raw.read(256 * 1024, decode_content=True).decode('utf-8-sig')
     except requests.RequestException as e:
         raise UpstreamError(f'{url}: {e.__class__.__name__}') from e
-    rows = list(csv.reader(io.StringIO(text)))
-    try:
-        valid, petrol, diesel = rows[1][:3]
-        return {'petrol': float(petrol), 'diesel': float(diesel), 'valid': valid.strip()}
-    except (IndexError, ValueError) as e:
-        raise UpstreamError(f'{url}: unexpected CSV') from e
+    rows = []
+    for row in list(csv.reader(io.StringIO(text)))[1:]:
+        try:
+            rows.append(fuel_row(*row[:3]))
+        except (TypeError, ValueError):
+            continue
+    if not rows:
+        raise UpstreamError(f'{url}: unexpected CSV')
+    return sorted(rows, key=lambda r: r['from'], reverse=True)[:FUEL_ROWS]
 
 
-fuel_prices = Cached(_load_fuel, ttl=24 * 3600, max_stale=21 * 24 * 3600, revalidate=6 * 3600)  # read once a day
+fuel_prices = Cached(_load_fuel, ttl=6 * 3600, max_stale=21 * 24 * 3600, revalidate=3600)  # read every 6 h
 
 
-def fuel() -> dict:
-    """Today's regulated prices, or the last ones in the tariff file when gov.si cannot be read."""
+def fuel(day: Optional[date] = None) -> dict:
+    """The regulated prices on a day (default today, in Slovenia): the newest period begun by then, so a plan for
+    tomorrow already uses the prices listed for it and one for today never does. Adds 'checked', the day they were
+    read; when gov.si cannot be read, the last ones kept in the tariff file."""
     from .pricing import tariffs
+    rules = tariffs()['driving']['fuel']
+    day = (day or datetime.now(LOCAL).date()).isoformat()
     try:
-        return fuel_prices.get().value
+        snap = fuel_prices.get()
+        rows, checked = snap.value, datetime.fromtimestamp(snap.fetched_at, LOCAL).date().isoformat()
     except UpstreamError as e:
         logger.info('Fuel prices unavailable: %r', e)
-        return tariffs()['driving']['fuel']['fallback']
+        rows, checked = [fuel_row(r['valid'], r['petrol'], r['diesel']) for r in rules['fallback']], rules['fallbackChecked']
+    begun = [r for r in rows if r['from'] <= day]
+    row = max(begun, key=lambda r: r['from']) if begun else min(rows, key=lambda r: r['from'])
+    return {**row, 'checked': checked}
 
 
-def cost(car_leg: dict, car: dict, rules: dict, vignette_due: bool) -> tuple[Optional[int], dict]:
-    """(cents, the leg's `car` with fuel, vignette and parking filled in) for one driven leg; cents None when a part is
-    unknown (LPG, an unknown car park)."""
+AC = re.compile(r'\bAC\b')  # goriva.si names motorway service areas "PETROL ZALOKE AC - JUG"
+LPG_MIN_STATIONS = 20       # fewer stations giving an LPG price: unknown
+LPG_PAGES = 40              # goriva.si pages of 25 stations (23 in Oct 2026)
+
+
+def _load_lpg() -> dict:
+    """The median LPG price at stations off the motorways, from goriva.si (the government's per-station prices; LPG is
+    not regulated): {'lpg': €/l, 'stations': how many gave one}."""
+    from .pricing import tariffs
+    url, prices = tariffs()['driving']['lpg']['apiUrl'], []
+    for _ in range(LPG_PAGES):
+        try:
+            with session().get(url, timeout=(5, 15), stream=True) as resp:
+                if resp.status_code != 200:
+                    raise UpstreamError(f'{url} returned HTTP {resp.status_code}')
+                page = json.loads(resp.raw.read(256 * 1024, decode_content=True))
+        except requests.RequestException as e:
+            raise UpstreamError(f'{url}: {e.__class__.__name__}') from e
+        except ValueError as e:
+            raise UpstreamError(f'{url}: not JSON') from e
+        for station in page.get('results') or []:
+            price = (station.get('prices') or {}).get('avtoplin-lpg')
+            if isinstance(price, (int, float)) and 0.4 <= price <= 2.5 and not AC.search(station.get('name') or ''):
+                prices.append(price)
+        url = page.get('next')
+        if not isinstance(url, str) or not url.startswith('https://goriva.si/'):
+            break
+    if len(prices) < LPG_MIN_STATIONS:
+        raise UpstreamError(f'goriva.si: LPG prices at {len(prices)} stations only')
+    return {'lpg': round(statistics.median(prices), 3), 'stations': len(prices)}
+
+
+lpg_prices = Cached(_load_lpg, ttl=24 * 3600, max_stale=21 * 24 * 3600, revalidate=6 * 3600)  # 23 pages: once a day
+
+
+def lpg() -> Optional[dict]:
+    """The usual LPG price {'lpg': €/l, 'stations', 'checked'}, never waiting on goriva.si: until it is read (or when it
+    cannot be), the last one kept in the tariff file; None when there is none."""
+    from .pricing import tariffs
+    snap = lpg_prices.get_nowait()
+    if snap is None:
+        return tariffs()['driving']['lpg'].get('fallback')
+    return {**snap.value, 'checked': datetime.fromtimestamp(snap.fetched_at, LOCAL).date().isoformat()}
+
+
+def cost(car_leg: dict, car: dict, rules: dict, vignette_due: bool, prices: Optional[dict] = None) -> tuple[Optional[int], dict]:
+    """(cents, the leg's `car` with fuel, vignette and parking filled in) for one driven leg at the fuel prices of its
+    day (fuel(), lpg()); cents None when a part is unknown (LPG without a price, an unknown car park)."""
     out = dict(car_leg)
     amount = fuel_amount(out['distanceMeters'], car['litresPer100km'])
     if car['fuel'] == 'electric':
         out.update(fuelLitres=None, energyKwh=amount, fuelCents=ceil_cents(amount * rules['electric']['eurPerKwh']))
-    elif car['fuel'] == 'lpg':
+    elif car['fuel'] == 'lpg' and not (prices or {}).get('lpg'):
         out.update(fuelLitres=amount, fuelCents=None)
     else:
-        out.update(fuelLitres=amount, fuelCents=ceil_cents(amount * fuel()[car['fuel']]))
+        out.update(fuelLitres=amount, fuelCents=ceil_cents(amount * (prices or fuel())[car['fuel']]))
     parts = [out['fuelCents']]
     if vignette_due:
         out['vignetteCents'] = rules['vignette']['weekCents']
