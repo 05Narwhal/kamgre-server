@@ -284,6 +284,8 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
             'stopped': stopped,
             'stoppedSince': iso(stopped_since) if stopped and stopped_since else None,
         })
+        if out[-1]['delaySeconds'] is not None:
+            out[-1]['delaySource'] = 'gtfs-rt'
         if is_replacement(route):  # an SŽ replacement bus with its own GPS: same look as the timetable-placed ones
             out[-1]['replacement'] = True
     return out

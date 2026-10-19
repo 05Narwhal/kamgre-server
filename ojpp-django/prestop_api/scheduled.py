@@ -17,7 +17,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from . import abroad, closures, geometry, mapping, roads, sz, sztimetables
+from . import abroad, closures, geometry, mapping, roads, sz, sztimetables, tracks
 from . import replacement as replaced_by
 from .trips import service_day
 from .upstream import Cached, otp
@@ -448,8 +448,16 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             'speed': round(at['speed'], 2) if at['speed'] is not None and at['speed'] < 70 else None,
             'stopped': at['stopped'],
         })
+        if quality != 'scheduled':
+            out[-1]['delaySource'] = 'sz'
+        elif trip['delays'][i] is not None:
+            out[-1]['delaySource'] = 'gtfs-rt'
         if replacement:
             out[-1]['replacement'] = True
+        else:  # the train's track at its next station (tracks.py)
+            track, usual = tracks.tracks.track(mapping.route_name(route), stops[i]['gtfsId'], (trip.get('scheduledDepartures') or trip['departures'])[i])
+            if track:
+                out[-1].update(nextPlatform=track, nextPlatformUsual=usual)
         if trip.get('alertIds'):
             out[-1]['alertIds'] = trip['alertIds']
     return out

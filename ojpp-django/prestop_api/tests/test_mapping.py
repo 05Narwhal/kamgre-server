@@ -26,11 +26,12 @@ class VehicleTests(SimpleTestCase):
         [v] = mapping.build_vehicles([position('LPP:t1', 'LPP:bus-1', stopId='LPP:s4')], updates,
                                      {'LPP:t1': {'routeId': 'LPP:r6', 'destination': 'Črnuče'}}, ROUTES, {'LPP:s4': 'Bavarski dvor'}, NOW)
         self.assertEqual((v['routeName'], v['destination'], v['nextStop'], v['delaySeconds']), ('6', 'Črnuče', 'Bavarski dvor', 120))
-        self.assertEqual((v['operatorId'], v['mode'], v['bearing']), ('LPP:lpp', 'bus', 10.0))
+        self.assertEqual((v['operatorId'], v['mode'], v['bearing'], v['delaySource']), ('LPP:lpp', 'bus', 10.0, 'gtfs-rt'))
 
     def test_unknown_delay_stays_null(self):
         [v] = mapping.build_vehicles([position('LPP:t1', 'LPP:bus-1')], {}, {'LPP:t1': {'routeId': 'LPP:r6'}}, ROUTES, {}, NOW)
         self.assertIsNone(v['delaySeconds'])
+        self.assertNotIn('delaySource', v)
 
     def test_stale_positions_are_dropped_and_bare_ids_qualified(self):
         stale = position('LPP:t1', 'LPP:old', stamp=NOW - 3600)

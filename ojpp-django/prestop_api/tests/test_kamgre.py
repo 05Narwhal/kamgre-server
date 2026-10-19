@@ -112,6 +112,15 @@ class SzLiveTests(SimpleTestCase):
         coords = [[14.5, 46.05], [14.6, 46.05]]
         shape = {'coords': coords, 'cum': geometry.cumulative(coords), 'distances': [0.0, 3850.0, 7700.0]}
         with mock.patch.object(scheduled.timetable, 'get', return_value=mock.Mock(value=[trip])), \
-                mock.patch.object(scheduled.shapes, 'get', return_value=mock.Mock(value={'p': shape})):
+                mock.patch.object(scheduled.shapes, 'get', return_value=mock.Mock(value={'p': shape})), \
+                mock.patch.object(scheduled.tracks.tracks, 'track', return_value=('3', True)) as track:
             [train] = scheduled.vehicles(self.T0 + 300, live={'2904': {'number': '2904', 'category': 'LPV', 'delay': 120, 'next': 'S1', 'coords': None, 'at': self.T0 + 290}})
+            [timetable] = scheduled.vehicles(self.T0 + 300, live={})
+            trip['delays'] = [60, 60, 60]  # OTP realtime from the feed
+            [realtime] = scheduled.vehicles(self.T0 + 300, live={})
         self.assertEqual((train['quality'], train['delaySeconds'], train['trainCategory'], train['trainNumber']), ('inferred', 120, 'LPV', '2904'))
+        # C0: where the delay comes from, and the track at the next station (S1, at its timetable departure).
+        self.assertEqual((train['delaySource'], train['nextPlatform'], train['nextPlatformUsual']), ('sz', '3', True))
+        track.assert_called_with('LPV 2904', 'IJPP:s1', self.T0 + 660)
+        self.assertEqual((timetable['quality'], timetable['delaySeconds'], 'delaySource' in timetable), ('scheduled', None, False))
+        self.assertEqual((realtime['quality'], realtime['delaySeconds'], realtime['delaySource']), ('scheduled', 60, 'gtfs-rt'))
