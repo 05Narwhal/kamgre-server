@@ -113,6 +113,7 @@ def watches(request):
     if not isinstance(trip_ids, list) or len(trip_ids) > MAX_TRIPS or not all(isinstance(t, str) and QUALIFIED.match(t) and len(t) <= 200 for t in trip_ids):
         raise ApiError(422, 'INVALID_WATCH', f'tripIds must be at most {MAX_TRIPS} feed-qualified ids')
     stop_id = _text(body, 'stopId', 200, required=False)
+    exit_stop_id = _text(body, 'exitStopId', 200, required=False)
     notify_at = _time(body, 'notifyAt')
     scheduled_at = _time(body, 'scheduledAt', required=False)
     ends_at = _time(body, 'endsAt', required=False)
@@ -120,7 +121,7 @@ def watches(request):
         raise ApiError(422, 'TOO_MANY_WATCHES', f'At most {MAX_WATCHES} reminders per device')
     Watch.objects.update_or_create(subscription=sub, client_id=client_id, defaults={
         'kind': kind, 'notify_at': notify_at, 'title': _text(body, 'title', 120), 'body': _text(body, 'body', 300), 'url': url,
-        'trip_ids': trip_ids, 'stop_id': stop_id, 'scheduled_at': scheduled_at,
+        'trip_ids': trip_ids, 'stop_id': stop_id, 'exit_stop_id': exit_stop_id, 'scheduled_at': scheduled_at,
         'expires_at': max(t for t in (ends_at, scheduled_at, notify_at) if t) + KEEP_AFTER,
         # A changed reminder starts over.
         'sent_reminder': False, 'last_delay': None, 'last_status': '', 'last_sent': None, 'journey_state': {},

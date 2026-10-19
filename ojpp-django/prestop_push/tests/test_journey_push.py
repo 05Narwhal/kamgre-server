@@ -1,4 +1,5 @@
-"""A5: a watched journey warns about a late later ride, a change at risk and a disruption on the way."""
+"""A5: a watched journey warns about a late later ride, a change at risk and a disruption on the way.
+B16: it also says when to get off and which change to make (line, time, bay or track), quietly and once."""
 import json
 from datetime import datetime, timedelta, timezone
 from unittest import mock
@@ -33,7 +34,7 @@ def trips(first_delay=None, second_delay=None):
     }
 
 
-class JourneyPushTests(TestCase):
+class JourneyBase(TestCase):
     def setUp(self):
         sub = PushSubscription.objects.create(endpoint=SUB['endpoint'], p256dh=SUB['keys']['p256dh'], auth=SUB['keys']['auth'], language='en')
         self.watch = Watch.objects.create(subscription=sub, client_id='journey:x', kind='journey', notify_at=NOW, title='Home → Kranj',
@@ -48,6 +49,8 @@ class JourneyPushTests(TestCase):
             watcher.tick(NOW + timedelta(minutes=minutes))
         return [json.loads(c.kwargs['data']) for c in push.call_args_list]
 
+
+class JourneyPushTests(JourneyBase):
     def test_the_rides_and_the_change_are_found(self):
         built = journey.rides(['LPP:t6', 'IJPP:rg1'], 'LPP:bd', trips())
         self.assertEqual([(r['trip']['id'], r['board'], r['alight']) for r in built], [('LPP:t6', 0, 1), ('IJPP:rg1', 0, None)])
@@ -65,8 +68,8 @@ class JourneyPushTests(TestCase):
         self.tick(1, trips(second_delay=0))
         [sent] = self.tick(2, trips(second_delay=240))
         self.assertIn('RG 1 is expected 4 min late', sent['body'])
-        self.assertEqual(self.tick(14, trips(second_delay=300)), [])  # 1 more minute: not worth a message
-        [sent] = self.tick(25, trips(second_delay=420))
+        self.assertEqual(self.tick(12, trips(second_delay=300)), [])  # 1 more minute: not worth a message
+        [sent] = self.tick(19, trips(second_delay=420))  # before the change is due (transfer heads-up)
         self.assertIn('7 min late', sent['body'])
 
     def test_a_disruption_on_the_route(self):
@@ -76,4 +79,76 @@ class JourneyPushTests(TestCase):
         self.tick(1, trips(), alerts=[other])
         [sent] = self.tick(2, trips(), alerts=[other, alert])
         self.assertEqual(sent['body'], 'Disruption on your way: Works between Ljubljana and Kranj')
-        self.assertEqual(self.tick(20, trips(), alerts=[other, alert]), [])  # told once
+        self.assertEqual(self.tick(19, trips(), alerts=[other, alert]), [])  # told once
+
+
+def long_trips(second_delay=None, track='3'):
+    """Bus 6 from Bavarski dvor (08:20) to Kolodvor (08:40), then train RG 1 from Ljubljana (08:46) on `track`, to Kranj (09:10)."""
+    found = trips(second_delay=second_delay)
+    found['LPP:t6']['stops'] = [stop('LPP:bd', 'Bavarski dvor', 46.050, 20), stop('LPP:kol', 'Kolodvor', 46.058, 40)]
+    found['IJPP:rg1'].update(mode='rail', stops=[{**stop('IJPP:lj', 'Ljubljana', 46.0584, 46, second_delay), 'platform': track},
+                                                 stop('IJPP:kr', 'Kranj', 46.24, 70, second_delay)])
+    return found
+
+
+class GetOffAndChangeTests(JourneyBase):
+    def test_the_change_is_announced_ahead_then_get_off_next_and_nothing_twice(self):
+        self.assertEqual(self.tick(1, long_trips()), [])  # the first look
+        self.assertEqual(self.tick(25, long_trips()), [])  # the bus is still 15 min from the change
+        [sent] = self.tick(31, long_trips())
+        self.assertEqual(sent['body'], 'Transfer at Kolodvor: RG 1 leaves 10:46 · Ljubljana, track 3')
+        self.assertTrue(sent['renotify'])
+        self.assertEqual(self.tick(32, long_trips()), [])  # nothing changed
+        [sent] = self.tick(36, long_trips())  # within the 10 min gap, but get off next is due now
+        self.assertEqual((sent['body'], sent['renotify']), ('Get off at Kolodvor next · RG 1 leaves 10:46 · Ljubljana, track 3', True))
+        self.assertEqual(self.tick(37, long_trips()), [])
+
+    def test_a_change_that_moves_updates_quietly_and_a_new_track_alerts_again(self):
+        self.tick(1, long_trips())
+        self.tick(31, long_trips())
+        self.tick(36, long_trips())
+        self.assertEqual(self.tick(40, long_trips(second_delay=60)), [])  # a minute: not worth a message
+        [sent] = self.tick(47, long_trips(second_delay=300))  # the bus is in; the train now leaves 10:51
+        self.assertEqual((sent['body'], sent['renotify']), ('Transfer at Kolodvor: RG 1 leaves 10:51 · Ljubljana, track 3', False))
+        [sent] = self.tick(48, long_trips(second_delay=300, track='5'))  # a new track does not wait for the 10 min gap
+        self.assertEqual((sent['body'], sent['renotify']), ('Transfer at Kolodvor: RG 1 leaves 10:51 · Ljubljana, track 5', True))
+
+    def test_the_unknown_track_is_left_out_and_a_usual_one_says_so(self):
+        self.tick(1, long_trips(track=None))
+        [sent] = self.tick(31, long_trips(track=None))
+        self.assertEqual(sent['body'], 'Transfer at Kolodvor: RG 1 leaves 10:46 · Ljubljana')
+        found = long_trips()
+        found['IJPP:rg1']['stops'][0]['platformUsual'] = True
+        [sent] = self.tick(42, found)
+        self.assertEqual(sent['body'], 'Transfer at Kolodvor: RG 1 leaves 10:46 · Ljubljana, usually track 3')
+
+    def test_a_risky_change_does_not_get_a_second_message_about_the_same_change(self):
+        late_bus = long_trips()
+        late_bus['LPP:t6']['stops'] = [stop('LPP:bd', 'Bavarski dvor', 46.050, 20, 300), stop('LPP:kol', 'Kolodvor', 46.058, 40, 300)]
+        self.tick(1, long_trips())
+        [sent] = self.tick(36, late_bus)  # the change is due, with a minute to spare
+        self.assertIn('at risk', sent['body'])
+        [sent] = self.tick(41, late_bus)
+        self.assertTrue(sent['body'].startswith('Get off at Kolodvor next'))
+        self.assertEqual(self.tick(47, late_bus), [])  # the change itself was told with the risk
+
+    def test_the_last_ride_gets_a_get_off_when_the_watch_knows_where_the_journey_ends(self):
+        self.watch.exit_stop_id = 'IJPP:kr'
+        self.watch.save()
+        self.assertEqual(self.tick(1, trips()), [])
+        [sent] = self.tick(20, trips())  # the bus leaves Bavarski dvor; the train has hours to go
+        self.assertNotIn('Kranj', sent['body'])
+        [sent] = self.tick(56, trips())
+        self.assertEqual(sent['body'], 'Get off at Kranj next')
+        self.assertEqual(self.tick(57, trips()), [])
+
+    def test_without_the_exit_stop_the_last_ride_stays_quiet(self):
+        self.tick(1, trips())
+        self.assertEqual(self.tick(56, trips()), [])
+
+    def test_slovene(self):
+        Watch.objects.update(exit_stop_id='IJPP:kr')
+        PushSubscription.objects.update(language='sl')
+        self.tick(1, long_trips())
+        [sent] = self.tick(31, long_trips())
+        self.assertEqual(sent['body'], 'Prestop na Kolodvor: RG 1 odpelje ob 10:46 · Ljubljana, tir 3')

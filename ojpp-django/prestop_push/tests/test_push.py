@@ -149,6 +149,16 @@ class PushApiTests(TestCase):
         self.assertEqual(r.status_code, 204)
         self.assertFalse(Watch.objects.exists())
 
+    def test_a_journey_watch_keeps_where_it_ends(self):
+        self.post('/api/v1/push/subscriptions', SUB)
+        watch = {'endpoint': SUB['endpoint'], 'id': 'journey:x', 'kind': 'journey', 'notifyAt': NOW.isoformat(), 'title': 't', 'body': 'b', 'url': '/',
+                 'tripIds': ['LPP:t1'], 'exitStopId': 'LPP:z'}
+        self.assertEqual(self.post('/api/v1/push/watches', watch).status_code, 201)
+        self.assertEqual(Watch.objects.get().exit_stop_id, 'LPP:z')
+        self.assertEqual(self.post('/api/v1/push/watches', {**watch, 'exitStopId': 'x' * 201}).status_code, 422)
+        self.assertEqual(self.post('/api/v1/push/watches', {k: v for k, v in watch.items() if k != 'exitStopId'}).status_code, 201)
+        self.assertEqual(Watch.objects.get().exit_stop_id, '')  # an older app: unknown
+
     def test_watch_needs_a_known_subscription(self):
         r = self.post('/api/v1/push/watches', {'endpoint': 'https://fcm.googleapis.com/fcm/send/zzz', 'id': 'x', 'kind': 'journey', 'notifyAt': NOW.isoformat(),
                                                'title': 't', 'body': 'b', 'url': '/', 'tripIds': []})

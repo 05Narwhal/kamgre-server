@@ -6,7 +6,8 @@ leaves the watched stop, the trip is checked on every tick and a change is pushe
 same tag, so it replaces the earlier notification: a cancellation (or its reversal) always,
 a delay change of at least 2 minutes at most once every 3 minutes (10 for a journey). The first look at a trip
 only records where it stands; the user already saw that in the app. A journey's later rides, changes and the
-disruptions on its way are watched too once its reminder went out (journey.py), at most one message per 10 minutes.
+disruptions on its way are watched too once its reminder went out (journey.py), at most one message per 10 minutes,
+except "get off next", which goes out when due.
 """
 import logging
 from datetime import datetime, timedelta
@@ -139,8 +140,10 @@ def tick(now: Optional[datetime] = None) -> int:
             current = journey.state(watch, trips, alerts, now.timestamp())
             if not watch.journey_state.get('seen'):
                 watch.journey_state = journey.baseline(current)
-            elif payload or not watch.last_sent or now - watch.last_sent >= JOURNEY_GAP:
-                found = journey.news(watch.journey_state, current, language)
+            else:
+                # Within the gap only "get off next" goes out (journey.news).
+                quiet = not (payload or not watch.last_sent or now - watch.last_sent >= JOURNEY_GAP)
+                found = journey.news(watch.journey_state, current, language, quiet)
                 if found and (not payload or found[1]):
                     body, urgent, told = found
                     payload = _payload(watch, body, 'update', urgent)
