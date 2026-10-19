@@ -77,6 +77,30 @@ class BoardTests(SimpleTestCase):
         self.assertTrue(canceled['canceled'])
         self.assertIsNone(canceled['effectiveAt'])
 
+    def test_an_update_without_start_date_moves_the_run_on_its_way(self):
+        """C8 (20 Oct 2026, 00:30): OTP put the delay of last night's 604, still out after midnight, on tonight's run
+        of it; the board showed the running train by timetable and tonight's with +2 min."""
+        yesterday = stoptime('IJPP:604', 'IJPP:x', 'IJPP:y', dep=24 * 3600 + 44 * 60)
+        tonight = stoptime('IJPP:604', 'IJPP:x', 'IJPP:y', dep=24 * 3600 + 44 * 60, rt=24 * 3600 + 46 * 60)
+        tonight['serviceDay'] += 86400
+        for st in (yesterday, tonight):
+            st['trip']['departureStoptime']['scheduledDeparture'] = 22 * 3600 + 50 * 60
+        sent = yesterday['serviceDay'] + 24 * 3600 + 32 * 60
+        updates = mapping.trip_update_index([{'tripUpdate': {'trip': {'tripId': 'IJPP:604'}, 'timestamp': sent, 'stopTimeUpdate': [
+            {'stopSequence': 9, 'stopId': 'IJPP:s', 'departure': {'delay': 120}}]}}])
+        out, later = mapping.build_board('IJPP:s', [yesterday, tonight], 'departure', [], updates=updates)
+        self.assertEqual((out['effectiveAt'], out['quality'], out['delaySource']), ('2026-10-09T22:46:00Z', 'predicted', 'gtfs-rt'))
+        self.assertEqual((later['effectiveAt'], later['quality'], 'delaySource' in later), (None, None, False))
+        # One sent long before the run (a feed that publishes ahead) is OTP's to place
+        updates['IJPP:604']['timestamp'] = tonight['serviceDay'] + 12 * 3600
+        out, later = mapping.build_board('IJPP:s', [yesterday, tonight], 'departure', [], updates=updates)
+        self.assertEqual((out['effectiveAt'], later['effectiveAt']), (None, '2026-10-10T22:46:00Z'))
+        # So is one naming its start date
+        updates['IJPP:604']['timestamp'] = sent
+        updates['IJPP:604']['trip']['startDate'] = '20261009'
+        out, later = mapping.build_board('IJPP:s', [yesterday, tonight], 'departure', [], updates=updates)
+        self.assertEqual((out['effectiveAt'], later['effectiveAt']), (None, '2026-10-10T22:46:00Z'))
+
     def test_route_alerts_flag_entries_inside_their_validity(self):
         departs = 1791496800 + 36000
         current = {'id': 'alert:now', 'stopIds': [], 'routeIds': ['IJPP:r1'], '_from': departs - 60, '_to': None}

@@ -310,12 +310,33 @@ def _shows(vehicle_delay: Optional[int], delay: int) -> bool:
     return vehicle_delay is not None and abs(vehicle_delay - delay) <= 1800
 
 
+UPDATE_AROUND = 3 * 3600  # s: a trip update sent this far from a run's times is about another day's run (trainlive.AROUND)
+
+
+def update_run(update: Optional[dict], stop_id: str, start: Optional[int], at: int, realtime: bool, effective: int) -> tuple[bool, int]:
+    """OTP puts a trip update that names no start date on the trip's run of its own service day, so after midnight a
+    train still out from yesterday had no live time and tonight's run of it had its delay (604 and IC 350, 20 Oct
+    2026, 00:30). The update is about the run on its way when it was sent (`start`: the run's first departure, `at`:
+    its time here): that run takes the update's delay here, and the run a day later has no live data from it."""
+    if not update or (update.get('trip') or {}).get('startDate'):
+        return realtime, effective
+    sent = update.get('timestamp') or time.time()
+    begin = at if start is None else start
+    if begin - 86400 - UPDATE_AROUND <= sent <= at - 86400 + UPDATE_AROUND:  # about this trip's run of the day before
+        return False, at
+    if realtime or not begin - UPDATE_AROUND <= sent <= at + UPDATE_AROUND:
+        return realtime, effective
+    delay = next((update_delay(u) for u in update.get('updates') or [] if u.get('stopId') == stop_id and update_delay(u) is not None), None)
+    return (True, at + delay) if delay is not None else (False, at)
+
+
 def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict],
-                live: Optional[dict[str, Optional[int]]] = None) -> list[dict]:
+                live: Optional[dict[str, Optional[int]]] = None, updates: Optional[dict] = None) -> list[dict]:
     """`live`: trip id -> the delay its vehicle shows (build_vehicles); a delay beyond MAX_UNCONFIRMED_DELAY stays on
-    the board only when the trip's vehicle shows it too, else the row has no live data."""
+    the board only when the trip's vehicle shows it too, else the row has no live data. `updates`: the trip updates
+    (trip_update_index), for the run each is about (update_run)."""
     from . import abroad, stopfix
-    live = live or {}
+    live, updates = live or {}, updates or {}
     out = []
     for st in stoptimes:
         trip = st.get('trip') or {}
@@ -332,6 +353,9 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         realtime = bool(st.get('realtime'))
         canceled = st.get('realtimeState') == 'CANCELED'
         effective = day + (st['realtimeArrival'] if kind == 'arrival' else st['realtimeDeparture'])
+        first_departure = (trip.get('departureStoptime') or {}).get('scheduledDeparture')
+        realtime, effective = update_run(updates.get(trip.get('gtfsId')), stop_id, day + first_departure if isinstance(first_departure, int) else None,
+                                         scheduled, realtime, effective)
         if realtime and believable(effective - scheduled, _shows(live.get((st.get('trip') or {}).get('gtfsId')), effective - scheduled)) is None:
             realtime, effective = False, scheduled
         end = ((trip.get('departureStoptime' if kind == 'arrival' else 'arrivalStoptime') or {}).get('stop') or {})

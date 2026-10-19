@@ -414,11 +414,18 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict]) -
         own = supplement.stoptimes(stop_id, start, _until_service_day_end(start), BOARD_MAX, updates)
         if own is not None:
             return mapping.build_board(stop_id, own, kind, alert_list, _live_delays())
-    data = otp().query(BOARD_Q, {'id': stop_id, 'start': start, 'range': _until_service_day_end(start), 'n': BOARD_MAX, 'omit': kind == 'departure'})
+    # In the small hours OTP has a late train still out from yesterday at its timetable (mapping.update_run), so it
+    # leaves it out once that time has passed here: the hours before are asked for too, and kept when still to come.
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    back = mapping.MAX_UNCONFIRMED_DELAY if datetime.fromtimestamp(start, ZoneInfo('Europe/Ljubljana')).hour < SERVICE_DAY_ENDS_HOUR else 0
+    data = otp().query(BOARD_Q, {'id': stop_id, 'start': start - back, 'range': _until_service_day_end(start) + back, 'n': BOARD_MAX, 'omit': kind == 'departure'})
     stop = data.get('stop')
     if stop is None:
         return None
-    return mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays())
+    from . import trainlive
+    rows = mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays(), trainlive.trip_updates())
+    return [r for r in rows if (r['effectiveAt'] or r['scheduledAt']) >= mapping.iso(start)] if back else rows
 
 
 def _live_delays() -> dict[str, Optional[int]]:
