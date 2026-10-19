@@ -471,7 +471,8 @@ def journeys(request):
     if req['showPrices']:
         # The rider's cards (request body only) price this answer and are dropped with it.
         from . import pricing
-        result = pricing.rank([pricing.price_journey(j, req['priceProfile'], language(request)) for j in result], req)
+        result = [pricing.price_journey(j, req['priceProfile'], language(request)) for j in result]
+        result = pricing.rank(pricing.member_rides(result, req), req)
     if not result and errors:
         codes = {e.get('code') for e in errors}
         if codes & {'OUTSIDE_BOUNDS', 'LOCATION_NOT_FOUND'}:

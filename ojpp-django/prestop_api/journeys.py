@@ -279,10 +279,28 @@ EXTRA_TTL = 300          # s an extra search's answer is reused
 _extra_cache: dict[str, tuple[float, dict]] = {}
 
 
+MEMBER_NEAR = 1000  # m: the rider's bike network is searched when one of its stations is this close to the start or end
+
+
+def member_networks(req: dict) -> list[str]:
+    """The rider's bike-share memberships with a station near the start or the end (all of them while the station list
+    is not loaded yet): a BicikeLJ member going from Kranj to Bled needs no search for one."""
+    members = (req.get('priceProfile') or {}).get('bikeMemberships') or []
+    from . import sources
+    snap = sources.rentals.peek()
+    if not members or not snap or not snap.value:
+        return members
+    ends = [[p['longitude'], p['latitude']] for p in (req['origin'], req['destination'])]
+    near = {s['id'].partition(':')[0] for s in snap.value if s['id'].partition(':')[0] in members
+            and any(geometry.distance([s['longitude'], s['latitude']], end) <= MEMBER_NEAR for end in ends)}
+    return [m for m in members if m in near]
+
+
 def extra_searches(req: dict) -> list[tuple[str, dict]]:
     """(kind, OTP variables) of the searches OTP cannot fold into the main one, most useful first, at most
     MAX_EXTRA_SEARCHES: driving all the way, drive + park + ride, scooters when bikes are asked for too, and the rider's
-    own bike networks when cheaper rides are wanted (BicikeLJ with a membership before a Nomago bike)."""
+    own bike networks where they have a station (BicikeLJ, its first hour free with a membership, before a Bolt bike),
+    with Bike off too: pricing.member_rides keeps those rides only when they compete."""
     if req.get('pageCursor'):
         return []
     base = otp_variables(req)
@@ -298,8 +316,7 @@ def extra_searches(req: dict) -> list[tuple[str, dict]]:
         out.append(('carPark', {**base, 'modes': {'transit': {'access': ['CAR_PARKING'], 'egress': ['WALK'], 'transfer': ['WALK'], 'transit': transit}}, 'first': 3}))
     if 'bike' in req['modes'] and 'scooter' in req['modes']:
         out.append(('scooter', {**base, 'modes': street(['WALK', 'SCOOTER_RENTAL'])}))
-    members = (req.get('priceProfile') or {}).get('bikeMemberships') or []
-    if 'bike' in req['modes'] and members and req.get('costPreset', 'fastest') != 'fastest':
+    if (req['modes'] & ({'bike'} | set(TRANSIT))) and (members := member_networks(req)):
         prefs = {**base['preferences'], 'street': {**base['preferences']['street'],
                                                    'bicycle': {**base['preferences']['street']['bicycle'], 'rental': {'allowedNetworks': sorted(members)}}}}
         out.append(('memberBikes', {**base, 'modes': street(['WALK', 'BICYCLE_RENTAL']), 'preferences': prefs}))

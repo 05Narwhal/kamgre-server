@@ -289,6 +289,38 @@ def is_drive(journey: dict) -> bool:
     return modes == {'car'}
 
 
+def _minutes(req: dict):
+    """Minutes a journey takes from the asked time: to its arrival, or arriving by a time, from its departure."""
+    asked = req['dateTime'].timestamp()
+    if req['timeMode'] == 'arriveBy':
+        return lambda j: (asked - _ts(j['effectiveDeparture'])) / 60
+    return lambda j: (_ts(j['effectiveArrival']) - asked) / 60
+
+
+MEMBER_SLOWER = 5    # min: with Bike off, a ride on the rider's own bike network stays this much behind the quickest other
+MEMBER_CHEAPER = 10  # min: ... or this much when it costs less than that one
+
+
+def member_rides(journeys: list[dict], req: dict) -> list[dict]:
+    """With Bike off, the rider's bike networks are searched too (journeys.extra_searches): their rides stay only when
+    they compete, at most MEMBER_SLOWER minutes behind the quickest journey without a shared bike, or MEMBER_CHEAPER
+    when cheaper than it (a BicikeLJ member's first hour is free; the bus is 1.30 €). With Bike on, every ride stays."""
+    if 'bike' in req['modes']:
+        return journeys
+    ridden = lambda j: any(l['mode'] == 'bike' and l.get('rental') for l in j['legs'])
+    others = [j for j in journeys if not ridden(j)]
+    if not others:
+        return journeys
+    minutes, total = _minutes(req), lambda j: (j.get('price') or {}).get('totalCents')
+    best = min(others, key=minutes)
+
+    def competes(j: dict) -> bool:
+        behind = minutes(j) - minutes(best)
+        cheaper = total(j) is not None and total(best) is not None and total(j) < total(best)
+        return behind <= MEMBER_SLOWER or (cheaper and behind <= MEMBER_CHEAPER)
+    return [j for j in journeys if not ridden(j) or competes(j)]
+
+
 def rank(journeys: list[dict], req: dict) -> list[dict]:
     """Journeys in the order of the rider's cost preset; `fastest` keeps the planner's own order untouched. Time is
     the arrival after the asked-for time (arrive-by: how early it leaves). An unknown price ranks as the dearest known
@@ -303,11 +335,7 @@ def rank(journeys: list[dict], req: dict) -> list[dict]:
     preset = req.get('costPreset', 'fastest')
     if preset == 'fastest' or len(journeys) < 2:
         return journeys
-    asked = req['dateTime'].timestamp()
-    if req['timeMode'] == 'arriveBy':
-        minutes = lambda j: (asked - _ts(j['effectiveDeparture'])) / 60
-    else:
-        minutes = lambda j: (_ts(j['effectiveArrival']) - asked) / 60
+    minutes = _minutes(req)
     known = [total(j) for j in journeys if total(j) is not None]
     cost = lambda j: total(j) if total(j) is not None else max(known, default=0)
     fastest = min(journeys, key=minutes)
