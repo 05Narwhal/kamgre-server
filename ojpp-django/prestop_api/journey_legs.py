@@ -5,10 +5,11 @@ stretch that day (a real "BUS 18969" the feed keeps the whole train beside, or a
 from an SŽ notice, see closures.py), a planned train leg over that stretch is split: the train up
 to the stretch, the bus along it (between its replacement stops, on the roads, with its own line
 and trip), the train after it. A synthetic bus keeps the train's times, so the journey still holds;
-a real bus has its own, and a leg whose bus would not connect is left as planned (its notice says
-why). The walks between a station and its replacement stop are added afterwards
+a real bus has its own, and a journey whose bus would not connect is dropped: it is never offered by the train
+(replaced). The walks between a station and its replacement stop are added afterwards
 (journeys.replacement_walks). Which stretches count is decided per service day
-(scheduled.day_plan), so a closure that ends on the 11th leaves the 12th's journeys alone.
+(scheduled.day_plan) and read where the line view reads them (replacement.stretches), so a closure that ends on
+the 11th leaves the 12th's journeys alone, and a train the line view shows as its bus is never ridden.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
@@ -119,10 +120,12 @@ def _bus_piece(leg: dict, bus: dict, train: dict, a: int, b: int, road: Callable
     return _own_bay(piece, part[0])
 
 
-def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor, road: Callable[[list[dict]], Optional[dict]]) -> tuple[list[dict], list[dict]]:
+def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor,
+            road: Callable[[list[dict]], Optional[dict]]) -> Optional[tuple[list[dict], list[dict]]]:
     """Train legs over a replaced stretch, split into train, bus and train (see the module notes). Where SŽ's
     replacement timetable runs buses with their own times (`timetable_ride`), the walks at the journey's start
-    or end move with them."""
+    or end move with them. None when a leg's train (or feed bus) does not run that day and no bus of the day
+    makes the journey: OTP planned it on the timetable it knows, the rider would wait for a train that is a bus."""
     out, out_meta = [], []
     shift_after = 0.0  # s the walks after a ride with its own times move by
     for n, (leg, m) in enumerate(zip(legs, meta)):
@@ -131,7 +134,7 @@ def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor, road: Callabl
             out_meta.append(m)
             continue
         shift_after = 0.0
-        timed = timetable_ride(legs, n, plan_for, road)
+        timed = timetable_ride(legs, n, plan_for, road, m)
         if timed is not None:
             pieces = timed
         else:
@@ -139,6 +142,8 @@ def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor, road: Callabl
             if pieces and not _connects(pieces, legs[n - 1] if n else None, legs[n + 1] if n + 1 < len(legs) else None):
                 pieces = None
         if not pieces:
+            if replaced(leg, m, plan_for):
+                return None
             out.append(leg)
             out_meta.append(m)
             continue
@@ -188,16 +193,16 @@ def _deadline(legs: list[dict], n: int) -> Optional[float]:
     return None
 
 
-def timetable_ride(legs: list[dict], n: int, plan_for: PlanFor, road) -> Optional[list[dict]]:
+def timetable_ride(legs: list[dict], n: int, plan_for: PlanFor, road, m: Optional[dict] = None) -> Optional[list[dict]]:
     """Leg `n` on the buses of SŽ's replacement timetable that day, or None when none concerns it. A train leg over
     a stretch they replace rides, from where it boards to where it alights, the bus or chain of the train's buses
     (and train stretches that still run) arriving first: Ljubljana - Jesenice on 318 is bus 318/1, Ljubljana -
     Lesce Bled 318/2; two buses change where they meet. A leg on a feed bus the timetable runs instead of rides
-    the timetable's bus. [] when no such ride makes the journey (the leg stays as planned: its notice says why)."""
+    the timetable's bus. [] when no such ride makes the journey (rewrite drops it)."""
     leg = legs[n]
     if not leg.get('tripId'):
         return None
-    plan = plan_for(_ts(leg['scheduledDeparture']))
+    plan = _plan_of(leg, m, plan_for)
     if not plan:
         return None
     ready, deadline = _ready(legs, n), _deadline(legs, n)
@@ -213,21 +218,17 @@ def timetable_ride(legs: list[dict], n: int, plan_for: PlanFor, road) -> Optiona
         return [_bus_ride(leg, bus, p, q, road, 'bus0')]
     if leg['mode'] != 'rail':
         return None
-    trip_sections = (plan.get('sections') or {}).get(leg['tripId']) or []
-    when = _ts(leg['scheduledDeparture'])
-    train = replaced_by.run_near(plan, leg['tripId'], when) if trip_sections else None
+    train, crossed = replaced_by.stretches(plan, leg['tripId'], _ts(leg['scheduledDeparture']))
     if not train:
         return None
     start = _index(train['stops'], leg['origin'])
     end = _index(train['stops'], leg['destination'], start if start is not None else -1)
     if start is None or end is None:
         return None
-    near = [s for s in trip_sections if s['fromIndex'] is not None and s['toIndex'] is not None and abs(s['start'] - when) <= 6 * 3600]
-    buses = {s['busTripId']: plan['by_id'].get(s['busTripId']) or replaced_by.run_near(plan, s['busTripId'], s['start']) for s in near}
-    if not any((b or {}).get('source') == 'timetable' for b in buses.values()) or \
-            not any(s['fromIndex'] < end and s['toIndex'] > start for s in near if (buses.get(s['busTripId']) or {}).get('source') == 'timetable'):
+    buses = {s['busTripId']: plan['by_id'].get(s['busTripId']) or replaced_by.run_near(plan, s['busTripId'], s['start']) for _, _, s in crossed}
+    if not any(a < end and b > start for a, b, s in crossed if (buses.get(s['busTripId']) or {}).get('source') == 'timetable'):
         return None
-    path = _fastest(train, start, end, [b for b in buses.values() if b], {i for s in near for i in range(s['fromIndex'], s['toIndex'])},
+    path = _fastest(train, start, end, [b for b in buses.values() if b], {i for a, b, _ in crossed for i in range(a, b)},
                     ready, deadline)
     if not path:
         return []
@@ -319,12 +320,8 @@ def _connects(pieces: list[dict], before: Optional[dict], after: Optional[dict])
 
 
 def _split(leg: dict, m: dict, plan_for: PlanFor, road) -> Optional[list[dict]]:
-    when = _ts(leg['scheduledDeparture'])
-    plan = plan_for(when)
-    trip_sections = (plan or {}).get('sections', {}).get(leg['tripId'])
-    if not trip_sections:
-        return None
-    train = replaced_by.run_near(plan, leg['tripId'], when)
+    plan = _plan_of(leg, m, plan_for)
+    train, stretches = replaced_by.stretches(plan, leg['tripId'], _ts(leg['scheduledDeparture']))
     if not train:
         return None
     start = _index(train['stops'], leg['origin'])
@@ -332,15 +329,12 @@ def _split(leg: dict, m: dict, plan_for: PlanFor, road) -> Optional[list[dict]]:
     if start is None or end is None:
         return None
     # The day's stretches this ride crosses, in order.
-    crossed = sorted((s for s in trip_sections if s['fromIndex'] is not None and s['toIndex'] is not None
-                      and s['fromIndex'] < end and s['toIndex'] > start
-                      and abs(s['start'] - train['departures'][max(s['fromIndex'], start)]) <= replaced_by.MATCH_WINDOW),
-                     key=lambda s: s['fromIndex'])
+    crossed = [(a, b, s) for a, b, s in stretches if a < end and b > start]
     if not crossed:
         return None
     pieces, at = [], start
-    for s in crossed:
-        a, b = max(s['fromIndex'], at), min(s['toIndex'], end)
+    for lo, hi, s in crossed:
+        a, b = max(lo, at), min(hi, end)
         if a >= b:
             continue
         bus = plan['by_id'].get(s['busTripId']) or replaced_by.run_near(plan, s['busTripId'], s['start'])
@@ -356,6 +350,33 @@ def _split(leg: dict, m: dict, plan_for: PlanFor, road) -> Optional[list[dict]]:
     if at < end:
         pieces.append(_train_piece(leg, train, at, end, f't{len(pieces)}'))
     return pieces
+
+
+def _plan_of(leg: dict, m: Optional[dict], plan_for: PlanFor) -> Optional[dict]:
+    """The plan of the service day the leg's trip runs on, as the line view reads it (from the trip's first
+    departure, views._with_replaced): a train still running after midnight is the day before's, not the calendar
+    day's. `m['tripStart']`: the trip's first departure, s after its service day's midnight."""
+    when = _ts(leg['scheduledDeparture'])
+    start = (m or {}).get('tripStart')
+    # A moment on the service day: its midnight plus however long the trip has run, plus a margin for DST days.
+    return plan_for(when - start + 6 * 3600 if isinstance(start, (int, float)) and start <= when else when)
+
+
+def replaced(leg: dict, m: Optional[dict], plan_for: PlanFor) -> bool:
+    """Whether a bus runs instead of this leg on its service day: a train leg crossing a stretch the day's plan
+    replaces (replacement.stretches, which the line view shows), or a feed bus a replacement timetable runs instead
+    of (the day's `suppressed`)."""
+    if not leg.get('tripId') or leg['mode'] not in ('rail', 'bus'):
+        return False
+    plan = _plan_of(leg, m, plan_for)
+    if leg.get('replacement'):
+        return leg['tripId'] in ((plan or {}).get('suppressed') or {})
+    if leg['mode'] != 'rail':
+        return False
+    train, stretches = replaced_by.stretches(plan, leg['tripId'], _ts(leg['scheduledDeparture']))
+    start = _index(train['stops'], leg['origin']) if train else None
+    end = _index(train['stops'], leg['destination'], start) if start is not None else None
+    return end is not None and any(a < end and b > start for a, b, _ in stretches)
 
 
 def unreplaced_notices(legs: list[dict], plan_for: PlanFor, alerts: dict[str, dict]) -> None:

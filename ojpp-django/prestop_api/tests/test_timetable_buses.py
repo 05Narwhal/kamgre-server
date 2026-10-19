@@ -538,12 +538,11 @@ class JourneyTests(SimpleTestCase):
         self.assertEqual(rides(legs), [('BUS 318/3', 'Kranj', '07:47', 'Jesenice', '08:32')])
         self.assertEqual((legs[0]['mode'], hhmm(legs[0]['effectiveArrival']), hhmm(legs[0]['effectiveDeparture'])), ('walk', '07:47', '07:42'))
 
-    def test_a_bus_that_left_before_the_rider_arrives_leaves_the_leg_as_planned(self):
+    def test_a_bus_that_left_before_the_rider_arrives_drops_the_journey(self):
         ride = leg_on(self.trips['RG 318'], 'Kranj', 'Jesenice')
         before = leg_on(self.trips['LPV 2442'], 'Ljubljana Stegne', 'Kranj')  # arrives in Kranj at 09:22
         before = {**before, 'effectiveArrival': ride['effectiveDeparture'], 'scheduledArrival': ride['scheduledDeparture']}
-        legs, _ = self.rewrite([before, ride], [META, META])
-        self.assertEqual([l['routeName'] for l in legs], ['LPV 2442', 'RG 318'])
+        self.assertIsNone(self.rewrite([before, ride], [META, META]))  # never RG 318 by train: buses run instead
 
     def test_two_buses_of_one_train_change_where_they_meet(self):
         # 318 without its direct bus, and 318/3 leaving Kranj before 318/2 comes but Lesce Bled after it.

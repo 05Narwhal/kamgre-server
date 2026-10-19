@@ -115,23 +115,39 @@ def section_at(trip_sections: Optional[list[dict]], i: int, when: float, kind: s
     return None
 
 
-def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
-    """A train trip's (trips.build_trip) stretches a bus runs instead that day: {'fromIndex', 'toIndex' (the bus's
-    first and last station in the trip's stops, None where the train does not call), 'busTripId', 'busName'}."""
-    found = (plan or {}).get('sections', {}).get(trip['id'])
-    if not found or not trip['stops']:
-        return []
-    when = _epoch(trip['stops'][0]['scheduledDeparture'])
-    train = run_near(plan, trip['id'], when)
+def stretches(plan: Optional[dict], trip_id: str, when: float) -> tuple[Optional[dict], list[tuple[int, int, dict]]]:
+    """The run of train `trip_id` around `when` in a day's plan, and the stretches of it a bus runs instead that day:
+    [(a, b, section)], indices in the run's stops, a < b, in order. An end of the bus the train does not call at is
+    the train's first or last stop (the bus runs from before the train starts, or past where it ends). The one
+    source for the line view (trip_sections) and journeys (journey_legs), so they never disagree."""
+    found = (plan or {}).get('sections', {}).get(trip_id)
+    train = run_near(plan, trip_id, when) if found else None
     if not train:
-        return []
-    keys, own = _keys(train), [sz.station_key(s['name']) for s in trip['stops']]
+        return None, []
+    last = len(train['stops']) - 1
     out = []
     for s in found:
         ia, ib = s['fromIndex'], s['toIndex']
         at = train['departures'][ia] if ia is not None else train['arrivals'][ib]
         if abs(at - (s['start'] if ia is not None else s['end'])) > MATCH_WINDOW:
             continue  # another day's run of the train
+        a, b = 0 if ia is None else ia, last if ib is None else ib
+        if a < b:
+            out.append((a, b, s))
+    return train, sorted(out, key=lambda x: x[0])
+
+
+def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
+    """A train trip's (trips.build_trip) stretches a bus runs instead that day: {'fromIndex', 'toIndex' (the bus's
+    first and last station in the trip's stops, None where the train does not call), 'busTripId', 'busName'}."""
+    if not trip['stops']:
+        return []
+    train, crossed = stretches(plan, trip['id'], _epoch(trip['stops'][0]['scheduledDeparture']))
+    if not train:
+        return []
+    keys, own = _keys(train), [sz.station_key(s['name']) for s in trip['stops']]
+    out = []
+    for _, _, s in crossed:
         bus = plan['by_id'].get(s['busTripId']) or run_near(plan, s['busTripId'], s['start'])
         ends = [keys[i] if i is not None else None for i in (s['fromIndex'], s['toIndex'])]
         a, b = (own.index(k) if k in own else None for k in ends)

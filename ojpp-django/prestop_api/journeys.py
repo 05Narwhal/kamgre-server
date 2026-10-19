@@ -851,7 +851,10 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
         predictions.annotate(legs, raw)
         if plan_for:
             from . import scheduled
-            legs, meta = journey_legs.rewrite(legs, meta, plan_for, scheduled.road_shape_of)
+            rewritten = journey_legs.rewrite(legs, meta, plan_for, scheduled.road_shape_of)
+            if rewritten is None:
+                continue  # a bus runs instead of one of its trains that day and cannot make this journey
+            legs, meta = rewritten
             journey_legs.unreplaced_notices(legs, plan_for, by_id)
             journey_legs.name_replaced_trains(legs, plan_for)
         walked = sum(m['duration'] for leg, m in zip(legs, meta) if leg['mode'] == 'walk')

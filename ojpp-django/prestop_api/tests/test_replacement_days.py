@@ -173,10 +173,33 @@ class JourneyTests(SimpleTestCase):
         legs, _ = journey_legs.rewrite([otp_leg(self.t, 0, 3)], [META], lambda when: plan_of([self.t], []), self.road)
         self.assertEqual([l['mode'] for l in legs], ['rail'])
 
-    def test_a_real_bus_that_would_not_connect_leaves_the_leg_as_planned(self):
+    def test_a_real_bus_that_would_not_connect_drops_the_journey(self):
+        # Never the train the bus runs instead of (Jesenice -> Ljubljana on LPV 2421 + 2419, 19 Oct 2026).
         late = train('b', 'BUS 24001', ['Ljubljana', 'Kranj', 'Jesenice'], start=T0 + 1800, mode='BUS')
         plan = plan_of([self.t, late], [])
         after = {**otp_leg(self.t, 0, 3), 'id': 'leg:x-2', 'mode': 'bus', 'tripId': 'X:other',
                  'effectiveDeparture': otp_leg(self.t, 0, 3)['effectiveArrival']}
-        legs, _ = journey_legs.rewrite([otp_leg(self.t, 0, 2), after], [META, META], lambda when: plan, self.road)
-        self.assertEqual([l['mode'] for l in legs], ['rail', 'bus'])
+        self.assertIsNone(journey_legs.rewrite([otp_leg(self.t, 0, 2), after], [META, META], lambda when: plan, self.road))
+        self.assertTrue(journey_legs.replaced(otp_leg(self.t, 0, 2), META, lambda when: plan))
+        self.assertFalse(journey_legs.replaced(otp_leg(self.t, 2, 3), META, lambda when: plan))
+
+    def test_the_planner_never_rides_a_stretch_the_line_view_shows_as_a_bus(self):
+        # The bus starts at Medvode, where this train does not call: the line view takes it from the train's start.
+        bus = train('b', 'BUS 24001', ['Medvode', 'Kranj', 'Jesenice'], mode='BUS')
+        plan = plan_of([self.t, bus], [])
+        trip = {'id': self.t['id'], 'stops': [{'name': s['name'], 'scheduledDeparture': mapping.iso(d)}
+                                              for s, d in zip(self.t['stops'], self.t['departures'])]}
+        self.assertEqual([(s['fromIndex'], s['toIndex']) for s in replacement.trip_sections(trip, plan)], [(None, 2)])
+        # Boarding at Ljubljana, where the bus does not call and the train does not run: no journey.
+        self.assertIsNone(journey_legs.rewrite([otp_leg(self.t, 0, 3)], [META], lambda when: plan, self.road))
+        legs, _ = journey_legs.rewrite([otp_leg(self.t, 1, 3)], [META], lambda when: plan, self.road)
+        self.assertEqual([(l['mode'], l['origin']['name'], l['destination']['name']) for l in legs],
+                         [('bus', 'Kranj', 'Jesenice'), ('rail', 'Jesenice', 'Bled Jezero')])
+
+    def test_a_train_after_midnight_is_read_on_its_own_service_day(self):
+        # The line view reads a trip on the day of its first departure; 00:30 on the 11th of a train that left at 23:50.
+        asked = []
+        leg = {'scheduledDeparture': datetime.fromtimestamp(DAY + 86400 + 1800, closures.LOCAL).isoformat()}
+        journey_legs._plan_of(leg, {'tripStart': 23 * 3600 + 50 * 60}, lambda when: asked.append(datetime.fromtimestamp(when, closures.LOCAL).date()))
+        journey_legs._plan_of(leg, {'tripStart': 1200}, lambda when: asked.append(datetime.fromtimestamp(when, closures.LOCAL).date()))
+        self.assertEqual(asked, [date(2026, 10, 10), date(2026, 10, 11)])
