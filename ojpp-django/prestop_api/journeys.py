@@ -4,7 +4,9 @@ import hashlib
 import json
 import logging
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -382,14 +384,25 @@ def _drive(req: dict, origin: dict, destination: dict, ask, tried: bool = False)
     return None
 
 
-def car_from_car_park(req: dict, ask) -> Optional[dict]:
-    """Driving all the way from a start in a car-free zone: walk to the nearest car park, drive from there."""
-    legs = _drive(req, req['origin'], req['destination'], ask, tried=True)
+def drive_all_the_way(req: dict, ask) -> Optional[dict]:
+    """Driving all the way, as a planConnection: the drive is the same at any hour, so it is asked once per pair of
+    places (cached for DRIVE_TTL) and moved to the time asked. From a start in a car-free zone it walks to the nearest
+    car park first (_drive); to a car-free place OTP parks at its nearest car park and walks (fallback_search, cached
+    the same way). None when OTP could not be asked."""
+    legs = _drive(req, req['origin'], req['destination'], ask)
     if not legs:
-        return None
+        o, d = req['origin'], req['destination']
+        key = json.dumps(['park', round(o['latitude'], 4), round(o['longitude'], 4), round(d['latitude'], 4), round(d['longitude'], 4)])
+        answer = ask('car', fallback_search('car', req), key=key, cache=_drive_cache, ttl=DRIVE_TTL)
+        if answer is None:
+            return None
+        found = _edges(answer)
+        if not found:
+            return {'planConnection': {'edges': []}}
+        legs = found[0]['node']['legs']
     stamp = req['dateTime'].isoformat()
     legs = _retime(legs, end=stamp) if req['timeMode'] == 'arriveBy' else _retime(legs, start=stamp)
-    return {'planConnection': {'edges': [{'node': {'walkTime': round(legs[0]['duration']) if legs[0]['mode'] == 'WALK' else 0, 'legs': legs}}]}}
+    return {'planConnection': {'edges': [{'node': {'walkTime': round(sum(l.get('duration') or 0 for l in legs if l['mode'] == 'WALK')), 'legs': legs}}]}}
 
 
 def park_and_ride(req: dict, ask) -> Optional[list[dict]]:
@@ -433,6 +446,15 @@ def _leg_key(node: dict) -> str:
     return '|'.join(f"{l.get('mode')}:{(l.get('trip') or {}).get('gtfsId')}@{l['start']['scheduledTime']}" for l in node.get('legs') or [])
 
 
+def _closing_db(fn, *args):
+    """fn(*args) in a pool thread, closing any database connection the thread opened (Django keeps one per thread)."""
+    from django.db import connections
+    try:
+        return fn(*args)
+    finally:
+        connections.close_all()
+
+
 def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> dict:
     """The main search's answer with the connections of extra_searches added after OTP's own (repeats dropped).
     `budget`: OTP queries left for this request; a cached answer costs none. A failed extra search only loses its
@@ -444,35 +466,42 @@ def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> 
     edges = list(_edges(data))
     seen = {_leg_key(e['node']) for e in edges}
     left = [budget]
+    lock = threading.Lock()  # the searches run side by side and share the budget
 
     def ask(kind: str, variables: dict, key: Optional[str] = None, cache: dict = _extra_cache, ttl: float = EXTRA_TTL) -> Optional[dict]:
         key = key or hashlib.sha1(json.dumps(variables, sort_keys=True).encode()).hexdigest()
-        hit = cache.get(key)
-        if hit and time.monotonic() - hit[0] < ttl:
-            return hit[1]
-        if left[0] <= 0:
-            return None
-        left[0] -= 1
+        with lock:
+            hit = cache.get(key)
+            if hit and time.monotonic() - hit[0] < ttl:
+                return hit[1]
+            if left[0] <= 0:
+                return None
+            left[0] -= 1
         try:
             answer = query(PLAN_Q, variables)
         except UpstreamError as e:
             logger.info('Extra %s search failed: %r', kind, e)
             return None
-        cache[key] = (time.monotonic(), answer)
-        if len(cache) > 500:
-            for k, _ in sorted(cache.items(), key=lambda kv: kv[1][0])[:250]:
-                cache.pop(k, None)
+        with lock:
+            cache[key] = (time.monotonic(), answer)
+            if len(cache) > 500:
+                for k, _ in sorted(cache.items(), key=lambda kv: kv[1][0])[:250]:
+                    cache.pop(k, None)
         return answer
 
-    for kind, variables in searches:
+    def run(kind: str, variables: dict) -> Optional[dict]:
+        if kind == 'car':  # one drive per pair of places, at any hour
+            return drive_all_the_way(req, ask)
         if kind == 'carPark' and (parked := park_and_ride(req, ask)) is not None:
-            extra = {'planConnection': {'edges': parked}}
-        else:
-            extra = ask(kind, variables)
-        if extra is not None and not _edges(extra) and (second := fallback_search(kind, req)):
-            extra = ask(kind, second)
-        if kind == 'car' and extra is not None and not _edges(extra):
-            extra = car_from_car_park(req, ask) or extra
+            return {'planConnection': {'edges': parked}}
+        return ask(kind, variables)
+
+    if len(searches) == 1:
+        found = [run(*searches[0])]
+    else:  # independent: side by side, their connections still in this order
+        with ThreadPoolExecutor(max_workers=len(searches), thread_name_prefix='extra-search') as pool:
+            found = list(pool.map(lambda s: _closing_db(run, *s), searches))
+    for extra in found:
         if extra is None:
             continue
         for e in _edges(extra):

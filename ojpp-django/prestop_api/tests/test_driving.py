@@ -202,16 +202,37 @@ class CarSearchTests(SimpleTestCase):
         def query(q, v):
             asked.append(v['modes'])
             return {'planConnection': {'edges': [] if v['modes'].get('direct') == ['CAR'] else [{'node': {'legs': [
-                {'mode': 'CAR', 'trip': None, 'start': {'scheduledTime': '08:00'}}, {'mode': 'WALK', 'trip': None, 'start': {'scheduledTime': '08:20'}}]}}]}}
+                {'mode': 'CAR', 'trip': None, 'start': {'scheduledTime': '2026-10-19T09:41:00+02:00'}, 'end': {'scheduledTime': '2026-10-19T10:01:00+02:00'}},
+                {'mode': 'WALK', 'trip': None, 'duration': 300, 'start': {'scheduledTime': '2026-10-19T10:01:00+02:00'}, 'end': {'scheduledTime': '2026-10-19T10:06:00+02:00'}}]}}]}}
         journeys._extra_cache.clear()
+        journeys._drive_cache.clear()
         req = self.request(modes=['walk', 'car'], dateTime='2026-10-19T07:41:00Z')
-        out = journeys.with_extras({'planConnection': {'edges': []}}, req, query, budget=2)
-        self.assertEqual([m['direct'] for m in asked], [['CAR'], ['CAR_PARKING']])
-        self.assertEqual(len(out['planConnection']['edges']), 1)
+        with mock.patch('prestop_api.parking.nearest_drivable', return_value=None):  # no car park near the start
+            out = journeys.with_extras({'planConnection': {'edges': []}}, req, query, budget=2)
+            self.assertEqual([m['direct'] for m in asked], [['CAR'], ['CAR_PARKING']])
+            self.assertEqual(len(out['planConnection']['edges']), 1)
+            journeys._drive_cache.clear()
+            asked.clear()
+            journeys.with_extras({'planConnection': {'edges': []}}, req, query, budget=1)  # no query left for the second try
+            self.assertEqual(len(asked), 1)
+
+    def test_a_drive_is_asked_once_per_pair_of_places_and_moved_to_the_time_asked(self):
+        asked = []
+
+        def query(q, v):
+            asked.append(v)
+            return {'planConnection': {'edges': [{'node': {'legs': [{'mode': 'CAR', 'duration': 1500,
+                    'start': {'scheduledTime': '2026-10-19T09:41:00+02:00'}, 'end': {'scheduledTime': '2026-10-19T10:06:00+02:00'}}]}}]}}
         journeys._extra_cache.clear()
-        asked.clear()
-        journeys.with_extras({'planConnection': {'edges': []}}, req, query, budget=1)  # no query left for the second try
-        self.assertEqual(len(asked), 1)
+        journeys._drive_cache.clear()
+        with mock.patch('prestop_api.parking.nearest_drivable', return_value=None):
+            first = journeys.with_extras({'planConnection': {'edges': []}}, self.request(modes=['walk', 'car'], dateTime='2026-10-19T07:41:00Z'), query)
+            later = journeys.with_extras({'planConnection': {'edges': []}}, self.request(modes=['walk', 'car'], dateTime='2026-10-19T07:42:00Z'), query)
+            by = journeys.with_extras({'planConnection': {'edges': []}}, self.request(modes=['walk', 'car'], dateTime='2026-10-19T09:00:00Z', timeMode='arriveBy'), query)
+        self.assertEqual(len(asked), 1)  # C2: a minute later, or arriving by a time, reuses the drive
+        leg = lambda out: out['planConnection']['edges'][0]['node']['legs'][0]
+        self.assertEqual((leg(first)['start']['scheduledTime'], leg(later)['start']['scheduledTime']), ('2026-10-19T09:41:00+02:00', '2026-10-19T09:42:00+02:00'))
+        self.assertEqual((leg(later)['end']['scheduledTime'], leg(by)['end']['scheduledTime']), ('2026-10-19T10:07:00+02:00', '2026-10-19T11:00:00+02:00'))
 
     def test_car_only_skips_the_main_search(self):
         asked = []
@@ -322,7 +343,7 @@ class ParkAndRideTests(SimpleTestCase):
             return {'planConnection': {'edges': [{'node': {'legs': legs}}] if found else []}}
         with mock.patch('prestop_api.parking.nearest_drivable', return_value=garage):
             out = journeys.with_extras({'planConnection': {'edges': []}}, req, behave)
-        self.assertEqual([v['modes']['direct'] for v in self.asked], [['CAR'], ['CAR_PARKING'], ['CAR']])
+        self.assertEqual([v['modes']['direct'] for v in self.asked], [['CAR'], ['CAR']])  # from the garage before OTP's car parks
         legs = out['planConnection']['edges'][0]['node']['legs']
         self.assertEqual([l['mode'] for l in legs], ['WALK', 'CAR'])
         self.assertEqual(legs[0]['start']['scheduledTime'], '2026-10-20T07:00:00+02:00')  # leaves home at the time asked
