@@ -54,14 +54,18 @@ def rules() -> dict[str, dict]:
     return json.loads(TARIFFS.read_text(encoding='utf-8'))['sharing']['networks']
 
 
-def ride_cents(rule: dict, seconds: float) -> Optional[int]:
+def ride_cents(rule: dict, seconds: float, held: Optional[dict] = None) -> Optional[int]:
     """What one rental of this length costs a member (data/tariffs.json `sharing.about`); None when the price list
-    does not say (an unknown unlock fee, charges past the free time, or longer than allowed)."""
+    does not say (an unknown unlock fee, charges past the free time, or longer than allowed). Scooters: `held` is a
+    pass the rider holds (one of the rule's `passes`), which can waive the unlock or lower the minute price."""
     minutes = seconds / 60
     if 'perMinuteCents' in rule:
-        if rule.get('unlockCents') is None or rule['perMinuteCents'] is None:
+        held = held or {}
+        unlock = 0 if held.get('freeUnlocks') else rule.get('unlockCents')
+        per_minute = held.get('perMinuteCents', rule['perMinuteCents'])
+        if unlock is None or per_minute is None:
             return None
-        return rule['unlockCents'] + rule['perMinuteCents'] * math.ceil(minutes)
+        return unlock + per_minute * math.ceil(minutes)
     if rule.get('freeMinutes') is None or minutes > (rule.get('maxMinutes') or math.inf):
         return None
     if minutes > rule['freeMinutes'] and not (rule.get('charges') or rule.get('every')):

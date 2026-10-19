@@ -2,7 +2,7 @@
  "about": "Prices for KamGre's estimates, read from the operators' published price lists. Every entry names its source and the day it was read. Amounts in euro cents incl. VAT. Not exact: the app always shows them as estimates.",
  "checked": "2026-10-18",
  "sharing": {
-  "about": "Per ride for a member: freeMinutes free, then charges once the ride passes each minute ([after, cents]), then every [after, step minutes, cents] per started step, capped at capCents; maxMinutes: longest rental allowed. resetOnReturn: a new rental starts a new free period (after waitSeconds). Scooters: unlockCents + perMinuteCents per started minute.",
+  "about": "Per ride for a member: freeMinutes free, then charges once the ride passes each minute ([after, cents]), then every [after, step minutes, cents] per started step, capped at capCents; maxMinutes: longest rental allowed. resetOnReturn: a new rental starts a new free period (after waitSeconds). Scooters: unlockCents + perMinuteCents per started minute (perMinuteFrom: the list gives the lowest rate); passes: what a pass the rider holds changes (freeUnlocks, perMinuteCents). formFactors: the vehicle kinds these prices are for (others in the network have no price).",
   "networks": {
    "jcdecaux_ljubljana": {
     "name": "BicikeLJ",
@@ -263,13 +263,44 @@
    },
    "bolt_359": {
     "name": "Bolt",
+    "formFactors": [
+     "scooter"
+    ],
     "unlockCents": null,
     "perMinuteCents": 15,
-    "note": "From 0.15 EUR a minute plus an unlock fee the page does not state; passes from 0.99 EUR a month (unlimited unlocks).",
+    "perMinuteFrom": true,
+    "passes": [
+     {
+      "id": "bolt-unlimited-unlocks",
+      "name": {
+       "sl": "Bolt, neomejeni odklepi",
+       "en": "Bolt unlimited unlocks"
+      },
+      "cents": 99,
+      "period": "month",
+      "freeUnlocks": true
+     }
+    ],
+    "note": "\"Od 0,15 € na minuto\" plus \"majhno pristojbino za odklep\" (a small unlock fee, no amount; the rate \"may vary depending on your location\"), so a ride without the pass has no price. Unlimited-unlocks subscription \"Od 0,99 € na mesec\" (no minutes included). Minute packages (\"Vozovnice\", weekly/monthly) have no published prices. E-bikes in the same network: no published price, so their rides have none. The 2022 launch prices (no unlock fee, 0.20 then 0.10 EUR a minute) are superseded.",
     "source": "Bolt scooters, Slovenia",
     "sourceUrl": "https://bolt.eu/sl-si/scooters/",
-    "checked": "2026-10-18",
+    "checked": "2026-10-19",
     "regions": [
+     "ljubljana"
+    ]
+   },
+   "kvik": {
+    "name": "Kvik",
+    "formFactors": [
+     "scooter"
+    ],
+    "unlockCents": null,
+    "perMinuteCents": null,
+    "note": "No published price list or operator page found (kvik.si is an unrelated electrical firm; Slovenian and English searches, app listings). Scooters seen in the OTP feed in Koper, Izola, Piran and Ljubljana.",
+    "source": "No published price list (searched 2026-10-19)",
+    "checked": "2026-10-19",
+    "regions": [
+     "obala",
      "ljubljana"
     ]
    }

@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.test import SimpleTestCase
 from django.test.client import Client
 
@@ -20,8 +22,8 @@ def walk(minute):
     return {'id': f'leg:w-{minute}', 'mode': 'walk', 'tripId': None, 'geometry': [], 'effectiveDeparture': at(minute), 'effectiveArrival': at(minute + 5)}
 
 
-def price(*legs, cards=(), bikes=(), language='en'):
-    j = pricing.price_journey({'legs': list(legs)}, {'cards': list(cards), 'bikeMemberships': list(bikes), 'scooterPasses': []}, language)
+def price(*legs, cards=(), bikes=(), passes=(), language='en'):
+    j = pricing.price_journey({'legs': list(legs)}, {'cards': list(cards), 'bikeMemberships': list(bikes), 'scooterPasses': list(passes)}, language)
     return [l.get('price', {}).get('amountCents', '-') for l in j['legs']], j['price']['totalCents'], j
 
 
@@ -83,8 +85,9 @@ class JourneyPriceTests(SimpleTestCase):
 
 
 class RentalPriceTests(SimpleTestCase):
-    def rental(self, network, minutes, mode='bike'):
-        r = leg('x', 0, mode=mode, minutes=minutes, rental={'network': network, 'operator': 'X', 'formFactor': 'bicycle'})
+    def rental(self, network, minutes, mode='bike', form=None):
+        form = form or ('scooter' if mode == 'scooter' else 'bicycle')
+        r = leg('x', 0, mode=mode, minutes=minutes, rental={'network': network, 'operator': 'X', 'formFactor': form})
         r['tripId'] = None
         return r
 
@@ -99,6 +102,31 @@ class RentalPriceTests(SimpleTestCase):
 
     def test_scooter_without_a_published_unlock_fee_has_no_price(self):
         self.assertEqual(price(self.rental('bolt_359', 10, mode='scooter'))[1], None)
+
+    def test_bolt_unlimited_unlocks_pass_prices_the_ride_by_its_minutes(self):
+        # Bolt: "Od 0,15 € na minuto" plus an unpublished unlock fee; the pass waives the unlock: 12 min × 0.15 = 1.80.
+        cents, total, j = price(self.rental('bolt_359', 12, mode='scooter'), passes=['bolt-unlimited-unlocks'])
+        self.assertEqual((cents, total), ([180], 180))
+        basis = j['legs'][0]['price']
+        self.assertEqual(basis['basis'], 'X with your Bolt unlimited unlocks: 12 min × 0,15 € (lowest rate)')
+        self.assertNotIn('coveredBy', basis)
+        self.assertIn('najnižja cena', price(self.rental('bolt_359', 12, mode='scooter'), passes=['bolt-unlimited-unlocks'], language='sl')[2]['legs'][0]['price']['basis'])
+
+    def test_bolt_e_bikes_and_kvik_have_no_published_price(self):
+        self.assertEqual(price(self.rental('bolt_359', 12, form='bicycle'), passes=['bolt-unlimited-unlocks'])[:2], ([None], None))
+        self.assertEqual(price(self.rental('kvik', 12, mode='scooter'))[:2], ([None], None))
+
+    def test_scooter_unlock_plus_every_started_minute_and_a_cheaper_pass(self):
+        rule = {'name': 'Demo', 'unlockCents': 100, 'perMinuteCents': 20, 'source': 'Demo list', 'formFactors': ['scooter'],
+                'passes': [{'id': 'demo-day', 'name': {'en': 'Demo day', 'sl': 'Demo dan'}, 'cents': 500, 'period': 'day', 'freeUnlocks': True, 'perMinuteCents': 15}]}
+        self.assertEqual(sharing.ride_cents(rule, 9.5 * 60), 100 + 20 * 10)
+        with mock.patch.object(sharing, 'rules', return_value={'demo': rule}):
+            cents, _, j = price(self.rental('demo', 10, mode='scooter'))
+            self.assertEqual((cents, j['legs'][0]['price']['basis']), ([300], 'X: unlock 1 € + 10 min × 0,20 €'))
+            self.assertEqual(price(self.rental('demo', 10, mode='scooter'), passes=['demo-day'])[0], [150])
+            # A pass that would cost more than paying as you go is not used.
+            rule['passes'][0].update(freeUnlocks=False, perMinuteCents=30)
+            self.assertEqual(price(self.rental('demo', 10, mode='scooter'), passes=['demo-day'])[0], [300])
 
 
 class CatalogTests(SimpleTestCase):
@@ -116,3 +144,6 @@ class CatalogTests(SimpleTestCase):
         self.assertEqual((by_id['ijpp-pupil-student']['system'], by_id['ijpp-pupil-student']['subsidy']), ('ijpp', 'student'))
         self.assertEqual((by_id['urbana-monthly']['subsidy'], by_id['slovenia-free']['subsidy']), ('none', 'senior'))
         self.assertEqual((by_id['jcdecaux_ljubljana']['system'], by_id['jcdecaux_ljubljana']['subsidy']), ('jcdecaux_ljubljana', 'none'))
+        bolt = by_id['bolt-unlimited-unlocks']
+        self.assertEqual((bolt['kind'], bolt['system'], bolt['networks'], bolt['period'], bolt['priceCents'], bolt['regions']),
+                         ('scooter', 'bolt_359', ['bolt_359'], 'month', 99, ['ljubljana']))

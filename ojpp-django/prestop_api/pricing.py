@@ -22,6 +22,8 @@ TEXT = {
            'supplement': '{rank} supplement', 'sameTicket': 'On the same ticket', 'city': '{name} single fare, changes free for {minutes} min',
            'cityDay': '{name} day ticket', 'cityChange': 'Free change on the same ticket', 'rideMember': '{name} with your membership',
            'rideJoin': '{name}: membership needed (from {cents}), then the ride', 'rideUnknown': '{name}: price list incomplete',
+           'scooter': '{name}: unlock {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name} with your {card}: {minutes} min × {perMinute}',
+           'lowestRate': 'lowest rate',
            'note': "Estimate from the operators' price lists, checked {date}",
            'fuel': 'Fuel ≈ {amount} {unit} ({fuel})', 'defaultCar': 'an average petrol car, {per100} l/100 km', 'vignette': '7-day vignette',
            'parking': 'parking {name}', 'parkingUnknown': 'parking {name} (fee unknown)', 'parkingFree': 'parking {name} (free)',
@@ -32,6 +34,8 @@ TEXT = {
            'supplement': 'Doplačilo za {rank}', 'sameTicket': 'Na isti vozovnici', 'city': '{name}, enkratna vožnja, prestopi brezplačni {minutes} min',
            'cityDay': '{name}, dnevna vozovnica', 'cityChange': 'Brezplačen prestop na isti vozovnici', 'rideMember': '{name} z naročnino',
            'rideJoin': '{name}: potrebna je naročnina (od {cents}), nato vožnja', 'rideUnknown': '{name}: cenik ni popoln',
+           'scooter': '{name}: odklep {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name}, velja tvoj paket {card}: {minutes} min × {perMinute}',
+           'lowestRate': 'najnižja cena',
            'note': 'Ocena po cenikih prevoznikov, preverjeno {date}',
            'fuel': 'Gorivo ≈ {amount} {unit} ({fuel})', 'defaultCar': 'povprečen bencinski avto, {per100} l/100 km', 'vignette': 'tedenska vinjeta',
            'parking': 'parkiranje {name}', 'parkingUnknown': 'parkiranje {name} (cena ni znana)', 'parkingFree': 'parkiranje {name} (brezplačno)',
@@ -229,19 +233,36 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
     # Shared bikes and scooters.
     networks = sharing.rules()
     members = set(profile.get('bikeMemberships') or [])
+    passes = set(profile.get('scooterPasses') or [])
     for leg in legs:
         rental = leg.get('rental')
         if not rental:
             continue
         rule = networks.get(rental['network'])
+        if rule and rental.get('formFactor') not in rule.get('formFactors', [rental.get('formFactor')]):
+            rule = None  # e.g. Bolt's e-bikes: only its scooter prices are published
         name = rental.get('operator') or rental['network']
         seconds = _ts(leg['effectiveArrival']) - _ts(leg['effectiveDeparture'])
         ride = sharing.ride_cents(rule, seconds) if rule else None
+        # A scooter pass the rider holds, when it makes this ride cheaper (or known: it may waive an unpublished unlock).
+        held = [(sharing.ride_cents(rule, seconds, p), p) for p in (rule or {}).get('passes') or [] if p['id'] in passes]
+        held = min(((c, p) for c, p in held if c is not None and (ride is None or c < ride)), key=lambda h: h[0], default=None)
+        minutes = math.ceil(seconds / 60)
+        lowest = f" ({text['lowestRate']})" if (rule or {}).get('perMinuteFrom') else ''
+        if held:
+            cents, card = held
+            put(leg, cents, text['ridePass'].format(name=name, card=_name(card, language), minutes=minutes,
+                                                    perMinute=_euro(card.get('perMinuteCents', rule['perMinuteCents']))) + lowest,
+                rule, **({'coveredBy': card['id']} if cents == 0 else {}))
+            continue
         if rule is None or ride is None:
             leg['price'] = {'amountCents': None, 'currency': 'EUR', 'basis': text['rideUnknown'].format(name=name),
                             'source': (rule or {}).get('source', '—'), 'checked': data['checked'], **({'sourceUrl': rule['sourceUrl']} if rule and rule.get('sourceUrl') else {})}
             continue
-        if 'perMinuteCents' in rule or rental['network'] in members or not rule.get('membership'):
+        if 'perMinuteCents' in rule:
+            put(leg, ride, text['scooter'].format(name=name, unlock=_euro(rule['unlockCents']), minutes=minutes, perMinute=_euro(rule['perMinuteCents'])) + lowest, rule)
+            continue
+        if rental['network'] in members or not rule.get('membership'):
             put(leg, ride, text['rideMember'].format(name=name), rule, **({'coveredBy': rental['network']} if ride == 0 and rental['network'] in members else {}))
             continue
         # Not a member: the cheapest way in, a starter pack whose minutes cover the ride or a membership plus the ride.
@@ -261,12 +282,17 @@ SUBSIDY = {'all': 'none', 'pupil': 'pupil', 'student': 'student', 'senior': 'sen
 
 @lru_cache(maxsize=1)
 def catalog() -> dict:
-    """GET /pricing/catalog (contract pricingCatalogSchema): transit cards and bike memberships with their regions; system:
-    the ticket system each belongs to (onboarding asks one question per system), a bike membership's is its network."""
+    """GET /pricing/catalog (contract pricingCatalogSchema): transit cards, bike memberships and scooter passes with their
+    regions; system: the ticket system each belongs to (onboarding asks one question per system), a bike membership's or
+    scooter pass's is its network."""
     data = tariffs()
     cards = [{k: c[k] for k in ('id', 'name', 'system', 'regions', 'eligibility', 'period', 'priceCents', 'source', 'sourceUrl') if k in c}
              | {'kind': 'transit', 'subsidy': SUBSIDY[c.get('eligibility', 'all')]} for c in data['transit']['cards']]
     for network, rule in data['sharing']['networks'].items():
+        for p in rule.get('passes') or []:
+            cards.append({'id': p['id'], 'kind': 'scooter', 'name': p['name'], 'system': network, 'regions': rule.get('regions', []),
+                          'eligibility': 'all', 'subsidy': 'none', 'period': p['period'], 'priceCents': p['cents'], 'networks': [network],
+                          'source': rule['source'], **({'sourceUrl': rule['sourceUrl']} if rule.get('sourceUrl') else {})})
         if not rule.get('membership'):
             continue
         yearly = next((m for m in rule['membership'] if m['period'] == 'year'), rule['membership'][0])
