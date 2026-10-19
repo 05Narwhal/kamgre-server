@@ -1,21 +1,20 @@
-"""Where a drive + park + ride parks, and what the car park costs (spec 2026-10-19 A5).
+"""Where a drive + park + ride parks, and what the car park costs (spec 2026-10-19 A5, C4).
 
 OTP's own CAR_PARKING search knows only a few car parks: from Kropa it always drove 22 km to a shopping centre in
 Kranj, never to Podnart's station (train) or Naklo (bus). Here the car parks come from OpenStreetMap
-(data/osm_parkings.json, scripts/build-osm-points.py) and `candidates` picks at most two places to park along the
-way: a railway station (the station's own parking when none is mapped: it may not be free), a bus station or main
-bus stop with a public car park, or a park and ride. journeys.with_extras drives there (a cached OTP drive) and
-rides on from there (one OTP search each), within the 4-query budget.
+(data/osm_parkings.json, scripts/build-osm-points.py; public ones only): journeys.park_and_ride lets OTP drive to any
+stop (its real drive and departures), and `place_at` says where the car parks there: the car park in walking distance
+with the least walk and fee, a railway station's own parking when none is mapped (it may not be free), none at a bus
+stop without one.
 
 Fees (`fee`): a P+R with a known tariff (tariffs.json driving.parking); OpenStreetMap fee=no: free; fee=yes in a city
 whose tariff is known (driving.zones: Ljubljana's LPT zones, by distance from the centre, an estimate): that city's
 hourly price, one hour counted; anything else unknown ("parking may not be free"), never €0.
 """
 import json
-import math
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
 from . import geometry
 
@@ -26,17 +25,11 @@ STATION_PARKING = 400  # m: a railway station's
 AT = 80                # m: a car stopping this close to a mapped car park parks there
 MIN_DRIVE = 1500       # m (straight): nearer than this, walk
 MAX_DRIVE = 45_000     # m (straight): drive at most this far before riding on
-ALONG = (0.04, 0.92)   # share of the way to the destination a place to park may lie at
-# m the way through it may be longer than the straight way: max(4 km, 15 % of it). Podnart, 3.2 km beside the line
-# from Kropa to Ljubljana but on the way to it (+2 km), is in; a station behind or far beside the way is not.
-DETOUR_EXTRA = (4000, 0.15)
-DETOUR = 1.3           # roads are this much longer than the straight line
-SPEED = {'car': 60, 'rail': 60, 'bus': 35}  # km/h, for choosing only
-CAR_WEIGHT = 1.5       # a minute driven counts this much against one ridden (fuel, parking, the wheel)
-WAIT = {'rail': 15, 'bus': 30}  # min of waiting at one line; a bus place with n lines waits 30 / n (at least 5)
-CHANGE = 15            # min more when no line there also stops near the destination
-DESTINATION_STOPS = 1000  # m: the stops a line reaching the destination stops at
-MAIN_STOP_ROUTES = 4   # a bus stop served by this many lines is a main one
+MIN_TRIP = 8000        # m (straight): a shorter trip has no drive + park + ride (11 of them for 5 km across Ljubljana)
+DETOUR = 1.3           # roads and paths are this much longer than the straight line
+WALK_SPEED = 1.2       # m/s from the car to the stop
+# A car park's fee counted as minutes more walking: a park and ride or free one none, an unknown fee some, a paid one more.
+FEE_MINUTES = {'free': 0, 'unknown': 3, 'paid': 6}
 
 
 @lru_cache(maxsize=1)
@@ -89,59 +82,29 @@ def fee(name: str, osm_fee: str, lat: float, lon: float, rules: dict) -> dict:
     return {'fee': 'unknown', 'feeCents': None, 'basis': None, 'tariff': None}
 
 
-def _corridor(origin: dict, destination: dict, lat: float, lon: float) -> Optional[tuple[float, float, float]]:
-    """(metres along the straight way, metres off it, its length) of a point, when it lies in the corridor."""
-    a, b, p = [origin['longitude'], origin['latitude']], [destination['longitude'], destination['latitude']], [lon, lat]
-    length = geometry.distance(a, b)
-    if not length:
-        return None
-    kx = 111_320 * math.cos(math.radians(a[1]))
-    ux, uy = (b[0] - a[0]) * kx / length, (b[1] - a[1]) * 110_574 / length
-    px, py = (p[0] - a[0]) * kx, (p[1] - a[1]) * 110_574
-    along, off = px * ux + py * uy, abs(px * uy - py * ux)
-    extra = geometry.distance(a, p) + geometry.distance(p, b) - length
-    if not ALONG[0] * length <= along <= ALONG[1] * length or extra > max(DETOUR_EXTRA[0], DETOUR_EXTRA[1] * length):
-        return None
-    return along, off, length
+def _walk_and_fee(stop: dict, park: dict) -> float:
+    """Minutes a car park costs a rider of that stop: the walk, and its fee as minutes more (FEE_MINUTES)."""
+    walk = geometry.distance([stop['longitude'], stop['latitude']], [park['lon'], park['lat']]) * DETOUR / WALK_SPEED / 60
+    fee = 'free' if park['parkRide'] or park['osmFee'] == 'no' else 'paid' if park['osmFee'] == 'yes' else 'unknown'
+    return walk + FEE_MINUTES[fee]
 
 
-def candidates(origin: dict, destination: dict, stops: Iterable[dict], routes: dict, limit: int = 2) -> list[dict]:
-    """At most `limit` places to park and ride on from, between the origin and the destination: the best railway
-    station first, then the best bus place (a bus station, a main bus stop or a park and ride), by a rough time: the
-    drive (weighed CAR_WEIGHT), the ride on, the wait (fewer lines, longer) and a change when no line there reaches
-    the destination. Each: {'kind': 'rail'|'bus', 'stop' (the station), 'parking' {name, lat, lon, osmFee}}."""
-    stops = list(stops)
-    end = [destination['longitude'], destination['latitude']]
-    lines_of = lambda s: set().union(*(routes.get(i, set()) for i in s.get('memberIds') or [s['id']]))
-    reaching = set().union(*(lines_of(s) for s in stops
-                             if abs(s['latitude'] - end[1]) < 0.02 and geometry.distance(end, [s['longitude'], s['latitude']]) <= DESTINATION_STOPS))
-    best: dict[str, tuple[float, dict]] = {}
-    for s in stops:
-        modes = s.get('modes') or []
-        kind = 'rail' if 'rail' in modes else 'bus' if 'bus' in modes else None
-        if not kind:
-            continue
-        if not _corridor(origin, destination, s['latitude'], s['longitude']):
-            continue
-        straight = geometry.distance([origin['longitude'], origin['latitude']], [s['longitude'], s['latitude']])
-        if not MIN_DRIVE <= straight <= MAX_DRIVE:
-            continue
-        here = lines_of(s)
-        lines = len(here)
-        main = kind == 'rail' or lines >= MAIN_STOP_ROUTES or ' AP' in f" {s['name']}" or 'avtobusna postaja' in s['name'].lower()
-        parks = near(s['latitude'], s['longitude'], STATION_PARKING if kind == 'rail' else STOP_PARKING)
-        if not parks and kind == 'bus':
-            continue
-        if not main and not (parks and parks[0]['parkRide']):
-            continue
-        park = parks[0] if parks else {'lat': s['latitude'], 'lon': s['longitude'], 'name': '', 'osmFee': '', 'parkRide': False}
-        ride = geometry.distance([s['longitude'], s['latitude']], end)
-        minutes = (straight * DETOUR / 1000 / SPEED['car'] * 60 * CAR_WEIGHT + ride * DETOUR / 1000 / SPEED[kind] * 60
-                   + (WAIT['rail'] if kind == 'rail' else max(5.0, WAIT['bus'] / max(1, lines))) + (0 if here & reaching else CHANGE))
-        if kind not in best or minutes < best[kind][0]:
-            best[kind] = (minutes, {'kind': kind, 'stop': s, 'parking': {**park, 'name': park['name'] or s['name']}})
-    ranked = sorted(best.values(), key=lambda m: (m[1]['kind'] != 'rail', m[0]))
-    return [c for _, c in ranked][:limit]
+def stop_parking(stop: dict, parks: list[dict]) -> Optional[dict]:
+    """Of the car parks near a stop, the one its riders park at: the least walk and fee (_walk_and_fee), the bigger
+    one when even. Only public car parks are in the data (no private, customers-only or permit ones)."""
+    return min(parks, key=lambda p: (round(_walk_and_fee(stop, p), 1), -p['capacity']), default=None)
+
+
+def place_at(stop: dict, kind: str) -> Optional[dict]:
+    """A stop as a place to park and ride on from: {'kind', 'stop', 'parking'} with its car park (stop_parking within
+    STATION_PARKING of a railway station, STOP_PARKING of a bus stop), or a railway station's own parking when none
+    is mapped (it may not be free); None for a bus stop without a car park."""
+    parks = near(stop['latitude'], stop['longitude'], STATION_PARKING if kind == 'rail' else STOP_PARKING)
+    park = stop_parking(stop, parks)
+    if not park and kind != 'rail':
+        return None
+    park = park or {'lat': stop['latitude'], 'lon': stop['longitude'], 'name': '', 'osmFee': '', 'parkRide': False, 'capacity': 0}
+    return {'kind': kind, 'stop': stop, 'parking': {**park, 'name': park['name'] or stop['name']}}
 
 
 def nearest_drivable(place: dict, radius: float = 1000) -> Optional[dict]:

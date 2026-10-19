@@ -312,10 +312,7 @@ def extra_searches(req: dict) -> list[tuple[str, dict]]:
     if 'car' in req['modes'] and not req['via']:
         out.append(('car', drive(['CAR'])))
     if 'carPark' in req['modes']:
-        # Drive to a car park OTP knows (OSM park_ride / station car parks), then ride; buses and trains even when
-        # only Car + transit is chosen.
-        transit = base['modes'].get('transit', {}).get('transit') or [{'mode': m} for key in ('bus', 'rail') for m in TRANSIT[key]]
-        out.append(('carPark', {**base, 'modes': {'transit': {'access': ['CAR_PARKING'], 'egress': ['WALK'], 'transfer': ['WALK'], 'transit': transit}}, 'first': 3}))
+        out.append(('carPark', {}))  # park_and_ride makes its own searches
     if 'bike' in req['modes'] and 'scooter' in req['modes']:
         out.append(('scooter', {**base, 'modes': street(['WALK', 'SCOOTER_RENTAL'])}))
     if (req['modes'] & ({'bike'} | set(TRANSIT))) and (members := member_networks(req)):
@@ -336,7 +333,13 @@ def fallback_search(kind: str, req: dict) -> Optional[dict]:
 PARK_SECONDS = 120     # s from stopping the car to walking off (drive + park + ride)
 DRIVE_TTL = 12 * 3600  # s a drive is reused: OTP drives without traffic, the same at any hour
 CAR_FREE_WALK = 1000   # m: a start in a car-free zone walks at most this far to a car park
-PARK_RIDES = 2         # connections asked for from each place to park
+PARK_RIDES = 10        # connections asked for: OTP drives to a stop and rides on (those that only walk and ride are dropped)
+PARK_CAR_RELUCTANCE = 1.0  # a minute driven weighs as much as a minute ridden (OTP's default, 2, left the drive out of most answers)
+PARK_LEAD = 240        # s a departing search starts after the time asked: parking and the walk to the stop come before the ride
+# OTP's own window (40-70 min) often held no train at midday (Bled 11:20: none to drive to); two hours cost little more.
+PARK_WINDOW = 'PT2H'
+PARK_KEEP = 4          # drive + park + ride connections kept, taking turns between the places they park at
+TOWN_SPEED = 7         # m/s from where OTP stops the car to the car park
 WALK_DETOUR = 1.3      # a walk to a car park is this much longer than the straight line
 _drive_cache: dict[str, tuple[float, dict]] = {}
 
@@ -405,41 +408,95 @@ def drive_all_the_way(req: dict, ask) -> Optional[dict]:
     return {'planConnection': {'edges': [{'node': {'walkTime': round(sum(l.get('duration') or 0 for l in legs if l['mode'] == 'WALK')), 'legs': legs}}]}}
 
 
-def park_and_ride(req: dict, ask) -> Optional[list[dict]]:
-    """Drive + park + ride over parking.candidates (the best railway station and bus place on the way, with their car
-    parks): the drive there (cached for hours), then a search on from the car park, departing once the car is parked
-    (or arriving by the time asked), each ride joined to the drive, which ends PARK_SECONDS before it. None when there
-    is no such place (OTP's own car park search is used then)."""
+def park_and_ride(req: dict, ask, spare: int = 2) -> list[dict]:
+    """Drive + park + ride. OTP drives to a stop and rides on (CAR_DROP_OFF access), weighing every stop's real drive
+    and departures at once, in two searches side by side: by bus or train, and by train only (left to itself OTP
+    seldom drives past a bus stop to a station with a faster train: Kropa → Podnart), the first alone when the budget
+    has `spare` queries for only one. A stop it drives to counts when the car can park there (_dropped_off); each
+    connection then parks (_parked), and at most PARK_KEEP are kept, taking turns between the places. Until spec
+    2026-10-19 C4 each place cost a drive and a search of the 4-query budget, so a cold plan tried one place, picked by
+    a straight-line guess. A trip shorter than parking.MIN_TRIP has none."""
     from . import parking
-    from .sources import stops
-    try:
-        snap = stops.get().value
-    except UpstreamError:
-        return None
-    places = parking.candidates(req['origin'], req['destination'], snap['list'], snap['routes'])
-    if not places:
-        return None
+    o, d = req['origin'], req['destination']
+    if geometry.distance([o['longitude'], o['latitude']], [d['longitude'], d['latitude']]) < parking.MIN_TRIP:
+        return []
     # Car + transit alone (or with the car chip) still rides buses and trains.
     modes = req['modes'] if req['modes'] & set(TRANSIT) else req['modes'] | set(TRANSIT)
-    out = []
-    for place in places:
-        park = place['parking']
-        spot = {'name': park['name'], 'latitude': park['lat'], 'longitude': park['lon']}
-        car = _drive(req, req['origin'], spot, ask)
-        if not car:
-            continue
-        driven = _ts(car[-1]['end']['scheduledTime']) - _ts(car[0]['start']['scheduledTime'])
-        when = req['dateTime'] if req['timeMode'] == 'arriveBy' else req['dateTime'] + timedelta(seconds=driven + PARK_SECONDS)
-        variables = {**otp_variables({**req, 'origin': spot, 'modes': modes, 'via': [], 'dateTime': when, 'pageCursor': None}), 'first': PARK_RIDES}
-        rides = ask('carPark', variables)
-        for edge in _edges(rides) if rides else []:
-            ride = edge['node']
-            if not any(l.get('transitLeg') for l in ride['legs']):
-                continue  # walking on from the car park is driving there and walking
-            legs = _retime(car, end=_shift(ride['legs'][0]['start']['scheduledTime'], -PARK_SECONDS))
-            legs[-1] = {**legs[-1], 'to': {**legs[-1]['to'], 'name': park['name'], 'lat': park['lat'], 'lon': park['lon'], 'vehicleParking': {'name': park['name']}}}
-            out.append({'node': {**ride, 'legs': [*legs, *ride['legs']]}})
+    when = req['dateTime'] if req['timeMode'] == 'arriveBy' else req['dateTime'] + timedelta(seconds=PARK_LEAD)
+
+    def variables(modes: set) -> dict:
+        v = otp_variables({**req, 'modes': modes, 'via': [], 'dateTime': when, 'pageCursor': None})
+        # OTP drives to a stop only together with walking ("CAR_PICKUP needs to be combined with WALK").
+        v['modes'] = {**v['modes'], 'transit': {**v['modes']['transit'], 'access': ['WALK', 'CAR_DROP_OFF']}}
+        v['preferences'] = {**v['preferences'], 'street': {**v['preferences']['street'], 'car': {'reluctance': PARK_CAR_RELUCTANCE}}}
+        return {**v, 'first': PARK_RIDES, 'searchWindow': PARK_WINDOW}
+    searches = [variables(modes)]
+    if {'bus', 'rail'} <= modes and spare > 1:
+        searches.append(variables(modes - {'bus'}))  # trains, and the buses that replace them
+    with ThreadPoolExecutor(max_workers=len(searches), thread_name_prefix='park-search') as pool:
+        answers = list(pool.map(lambda v: _closing_db(ask, 'carPark', v), searches))
+    places: dict[str, Optional[dict]] = {}  # stop -> its place to park, None where the car cannot park
+    by_place: dict[int, list[dict]] = {}
+    seen = set()
+    for answer in answers:
+        for node, k, place in _dropped_off(answer, places, req):
+            if (key := _leg_key(node)) not in seen:
+                seen.add(key)
+                by_place.setdefault(id(place), []).append(_parked(node, k, place))
+    turns, out = list(by_place.values()), []
+    while turns and len(out) < PARK_KEEP:
+        out += [t.pop(0) for t in turns][:PARK_KEEP - len(out)]
+        turns = [t for t in turns if t]
     return out
+
+
+def _dropped_off(answer: Optional[dict], places: dict, req: dict) -> list[tuple[dict, int, dict]]:
+    """(connection, index of its first ride, place) of a drop-off search's connections that drive to a stop where the
+    car can park: MIN_DRIVE to MAX_DRIVE from the origin, with a public car park in walking distance, or a railway
+    station (parking.place_at). Those that walk to their first stop are plain public transport. `places` keeps each
+    stop's place for the next answer."""
+    from . import parking
+    origin = [req['origin']['longitude'], req['origin']['latitude']]
+    out = []
+    for edge in _edges(answer) if answer else []:
+        legs = edge['node']['legs']
+        k = next((i for i, l in enumerate(legs) if l.get('transitLeg')), None)
+        if not k or not any(l['mode'] == 'CAR' for l in legs[:k]):
+            continue
+        board = legs[k]['from']
+        stop_id = (board.get('stop') or {}).get('gtfsId')
+        if stop_id not in places:
+            stop = {'id': stop_id, 'name': board['name'], 'latitude': board['lat'], 'longitude': board['lon']}
+            far = geometry.distance(origin, [board['lon'], board['lat']])
+            places[stop_id] = parking.place_at(stop, 'rail' if legs[k]['mode'] == 'RAIL' else 'bus') if parking.MIN_DRIVE <= far <= parking.MAX_DRIVE else None
+        if places[stop_id]:
+            out.append((edge['node'], k, places[stop_id]))
+    return out
+
+
+def _parked(node: dict, k: int, place: dict) -> dict:
+    """A drop-off connection that parks: OTP's drive to the stop carries on to the place's car park (at TOWN_SPEED),
+    PARK_SECONDS before a walk from there reaches the stop when OTP's own walk did."""
+    from . import parking
+    legs = node['legs']
+    park, board = place['parking'], legs[k]['from']
+    reach = legs[k - 1]['end']['scheduledTime']
+    meters = geometry.distance([park['lon'], park['lat']], [board['lon'], board['lat']]) * WALK_DETOUR
+    walk = {'mode': 'WALK', 'transitLeg': False, 'duration': meters / WALK_SPEED, 'distance': meters,
+            'start': {'scheduledTime': _shift(reach, -meters / WALK_SPEED)}, 'end': {'scheduledTime': reach},
+            'from': {'name': park['name'], 'lat': park['lat'], 'lon': park['lon']}, 'to': board}
+    last = max(i for i in range(k) if legs[i]['mode'] == 'CAR')
+    car = legs[last]
+    stopped, there = [car['to']['lon'], car['to']['lat']], [park['lon'], park['lat']]
+    extra = geometry.distance(stopped, there) * parking.DETOUR
+    line = mapping.decode_polyline((car.get('legGeometry') or {}).get('points') or '') or [[car['from']['lon'], car['from']['lat']], stopped]
+    car = {**car, 'duration': (car.get('duration') or 0) + extra / TOWN_SPEED, 'distance': (car.get('distance') or 0) + extra,
+           'end': {'scheduledTime': _shift(car['end']['scheduledTime'], extra / TOWN_SPEED)},
+           'legGeometry': {'points': mapping.encode_polyline([*line, there])},
+           'to': {**car['to'], 'name': park['name'], 'lat': park['lat'], 'lon': park['lon'], 'vehicleParking': {'name': park['name']}}}
+    drive = _retime([*legs[:last], car], end=_shift(walk['start']['scheduledTime'], -PARK_SECONDS))
+    out = [*drive, walk, *legs[k:]]
+    return {'node': {**node, 'walkTime': round(sum(l.get('duration') or 0 for l in out if l['mode'] == 'WALK')), 'legs': out}}
 
 
 def _leg_key(node: dict) -> str:
@@ -458,8 +515,8 @@ def _closing_db(fn, *args):
 def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> dict:
     """The main search's answer with the connections of extra_searches added after OTP's own (repeats dropped).
     `budget`: OTP queries left for this request; a cached answer costs none. A failed extra search only loses its
-    connections. Drive + park + ride parks at our own places (park_and_ride; 2 queries each, the drive cached for
-    hours), OTP's own car park search only when there is none."""
+    connections. Drive + park + ride is park_and_ride's own two searches (OTP's own car park search knows few car
+    parks)."""
     searches = extra_searches(req)
     if not searches:
         return data
@@ -492,8 +549,8 @@ def with_extras(data: dict, req: dict, query, budget: int = MAX_OTP_QUERIES) -> 
     def run(kind: str, variables: dict) -> Optional[dict]:
         if kind == 'car':  # one drive per pair of places, at any hour
             return drive_all_the_way(req, ask)
-        if kind == 'carPark' and (parked := park_and_ride(req, ask)) is not None:
-            return {'planConnection': {'edges': parked}}
+        if kind == 'carPark':
+            return {'planConnection': {'edges': park_and_ride(req, ask, spare=left[0])}}
         return ask(kind, variables)
 
     if len(searches) == 1:

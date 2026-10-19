@@ -192,9 +192,7 @@ class CarSearchTests(SimpleTestCase):
     def test_drive_and_park_and_ride_are_the_extra_searches(self):
         searches = dict(journeys.extra_searches(self.request()))
         self.assertEqual(searches['car']['modes'], {'direct': ['CAR'], 'directOnly': True})
-        park = searches['carPark']['modes']['transit']
-        self.assertEqual((park['access'], park['egress']), (['CAR_PARKING'], ['WALK']))
-        self.assertIn({'mode': 'RAIL'}, park['transit'])  # Car + transit alone still rides buses and trains
+        self.assertEqual(searches['carPark'], {})  # park_and_ride makes its own (ParkAndRideTests)
 
     def test_a_drive_to_a_car_free_place_parks_and_walks_within_the_query_budget(self):
         asked = []
@@ -256,9 +254,12 @@ class CarSearchTests(SimpleTestCase):
 
 
 class ParkAndRideTests(SimpleTestCase):
-    """Drive + park + ride at our own places (journeys.park_and_ride, spec 2026-10-19 A5b)."""
-    PODNART = {'kind': 'rail', 'stop': {'name': 'Podnart'}, 'parking': {'name': 'Podnart', 'lat': 46.2939, 'lon': 14.2585, 'osmFee': ''}}
-    CITY = {'kind': 'bus', 'stop': {'name': 'Slovenija avto'}, 'parking': {'name': 'Slovenija avto', 'lat': 46.0733, 'lon': 14.4851, 'osmFee': 'no'}}
+    """Drive + park + ride (journeys.park_and_ride, spec 2026-10-19 C4): OTP drives to any stop, the car parks there."""
+    KROPA = {'name': 'Kropa', 'latitude': 46.2905, 'longitude': 14.2066}
+    LJUBLJANA = {'name': 'Ljubljana', 'latitude': 46.0503, 'longitude': 14.5039}
+    PODNART = {'name': 'Podnart', 'lat': 46.2939, 'lon': 14.2585, 'stop': {'gtfsId': 'IJPP:podnart'}}
+    NAKLO = {'name': 'Naklo', 'lat': 46.2740, 'lon': 14.3170, 'stop': {'gtfsId': 'IJPP:naklo'}}
+    LOT = {'lat': 46.2948, 'lon': 14.2585, 'name': 'P Podnart', 'osmFee': 'no', 'parkRide': False, 'capacity': 40}  # 100 m north of the station
 
     def setUp(self):
         journeys._extra_cache.clear()
@@ -266,71 +267,84 @@ class ParkAndRideTests(SimpleTestCase):
         self.asked = []
 
     def request(self, **overrides):
-        body = {'origin': {**PLACE, 'name': 'Kropa'}, 'destination': {**PLACE, 'name': 'Ljubljana', 'latitude': 46.05}, 'via': [],
-                'dateTime': '2026-10-20T07:00:00+02:00', 'timeMode': 'departAt', 'minTransferSeconds': 180,
-                'modes': ['walk', 'bus', 'rail', 'carPark'], 'riskMode': 'normal', **overrides}
+        body = {'origin': self.KROPA, 'destination': self.LJUBLJANA, 'via': [], 'dateTime': '2026-10-20T07:00:00+02:00', 'timeMode': 'departAt',
+                'minTransferSeconds': 180, 'modes': ['walk', 'bus', 'rail', 'carPark'], 'riskMode': 'normal', **overrides}
         return journeys.parse_request(body, insane_enabled=False)
 
-    def query(self, q, v, drive_found=True, walk_only=False):
-        self.asked.append(v)
-        if v['modes'].get('direct') == ['CAR']:
-            legs = [{'mode': 'CAR', 'duration': 720, 'start': {'scheduledTime': '2026-10-20T07:00:00+02:00'}, 'end': {'scheduledTime': '2026-10-20T07:12:00+02:00'},
-                     'to': {'name': 'x', 'lat': v['destination']['location']['coordinate']['latitude'], 'lon': v['destination']['location']['coordinate']['longitude']}}]
-            return {'planConnection': {'edges': [{'node': {'legs': legs}}] if drive_found else []}}
-        walk = {'mode': 'WALK', 'transitLeg': False, 'start': {'scheduledTime': '2026-10-20T07:20:00+02:00'}, 'end': {'scheduledTime': '2026-10-20T07:23:00+02:00'}}
-        rail = {'mode': 'RAIL', 'transitLeg': True, 'trip': {'gtfsId': 'SZ:2409'}, 'start': {'scheduledTime': '2026-10-20T07:23:00+02:00'}, 'end': {'scheduledTime': '2026-10-20T08:00:00+02:00'}}
-        return {'planConnection': {'edges': [{'node': {'legs': [walk] if walk_only else [walk, rail]}}]}}
+    @staticmethod
+    def leg(mode, start, end, src, dst, **extra):
+        return {'mode': mode, 'transitLeg': mode in ('RAIL', 'BUS'), 'start': {'scheduledTime': f'2026-10-20T{start}:00+02:00'},
+                'end': {'scheduledTime': f'2026-10-20T{end}:00+02:00'}, 'from': src, 'to': dst, **extra}
 
-    def run_extras(self, req, places, budget=4, **behaviour):
-        with mock.patch('prestop_api.parking.candidates', return_value=places), \
-                mock.patch('prestop_api.sources.stops') as stops:
-            stops.get.return_value.value = {'list': [], 'routes': {}}
-            return journeys.with_extras({'planConnection': {'edges': []}}, req, lambda q, v: self.query(q, v, **behaviour), budget=budget)
+    def dropped_off(self, stop, depart, mode='RAIL'):
+        """OTP's drop-off connection: driven to the road beside `stop`, a walk to it and the ride at `depart` (HH:MM)."""
+        road = {'name': 'road', 'lat': stop['lat'] - 0.0003, 'lon': stop['lon']}
+        h, m = map(int, depart.split(':'))
+        drive_start, drive_end = f'{h:02}:{m - 15:02}', f'{h:02}:{m - 3:02}'
+        return {'node': {'legs': [
+            self.leg('CAR', drive_start, drive_end, {'name': 'Kropa', 'lat': 46.2905, 'lon': 14.2066}, road, duration=720, distance=9000,
+                     legGeometry={'points': mapping.encode_polyline([[14.2066, 46.2905], [road['lon'], road['lat']]])}),
+            self.leg('WALK', drive_end, f'{h:02}:{m - 1:02}', road, stop, duration=120),
+            self.leg(mode, f'{h:02}:{m:02}', '08:00', stop, {'name': 'Ljubljana', 'lat': 46.0581, 'lon': 14.5109}, trip={'gtfsId': f'T{depart}'})]}}
 
-    def test_drives_to_the_station_parks_and_rides_on(self):
-        out = self.run_extras(self.request(), [self.PODNART])
+    def run_extras(self, req, edges, budget=4):
+        def query(q, v):
+            self.asked.append(v)
+            return {'planConnection': {'edges': edges(v) if callable(edges) else edges}}
+        with mock.patch('prestop_api.parking.near', side_effect=lambda lat, lon, r: [self.LOT] if abs(lat - self.LOT['lat']) < 0.002 else []):
+            return journeys.with_extras({'planConnection': {'edges': []}}, req, query, budget=budget)
+
+    def test_otp_drives_to_a_stop_and_the_car_parks_at_its_car_park(self):
+        out = self.run_extras(self.request(), [self.dropped_off(self.PODNART, '07:30')])
         legs = out['planConnection']['edges'][0]['node']['legs']
         self.assertEqual([l['mode'] for l in legs], ['CAR', 'WALK', 'RAIL'])
-        # Parked two minutes before walking off; the drive keeps its 12 minutes.
-        self.assertEqual((legs[0]['start']['scheduledTime'], legs[0]['end']['scheduledTime']), ('2026-10-20T07:06:00+02:00', '2026-10-20T07:18:00+02:00'))
-        self.assertEqual((legs[0]['to']['vehicleParking'], legs[0]['to']['lat']), ({'name': 'Podnart'}, 46.2939))
-        ride = self.asked[1]
-        self.assertEqual(ride['dateTime'], {'earliestDeparture': '2026-10-20T07:14:00+02:00'})  # 07:00 + 12 min drive + 2 min to park
-        self.assertEqual(ride['origin']['location']['coordinate'], {'latitude': 46.2939, 'longitude': 14.2585})  # from the car park
+        car, walk = legs[0], legs[1]
+        self.assertEqual((car['to']['name'], car['to']['vehicleParking']), ('P Podnart', {'name': 'P Podnart'}))
+        self.assertEqual(mapping.decode_polyline(car['legGeometry']['points'])[-1], [14.2585, 46.2948])  # driven on to the car park
+        # The walk from the car park (100 m x 1.3 at 1.2 m/s) reaches the stop when OTP's walk did; parked 2 min before.
+        self.assertEqual((walk['from']['name'], walk['to']['name'], walk['end']['scheduledTime']), ('P Podnart', 'Podnart', '2026-10-20T07:29:00+02:00'))
+        self.assertAlmostEqual(journeys._ts(walk['start']['scheduledTime']) - journeys._ts(car['end']['scheduledTime']), journeys.PARK_SECONDS)
+        self.assertGreater(car['duration'], 720)  # the stretch from the road to the car park
 
-    def test_arriving_by_a_time_rides_to_it_and_drives_before(self):
-        self.run_extras(self.request(timeMode='arriveBy', dateTime='2026-10-20T08:10:00+02:00'), [self.PODNART])
-        self.assertEqual(self.asked[1]['dateTime'], {'latestArrival': '2026-10-20T08:10:00+02:00'})
-
-    def test_two_places_within_the_query_budget_and_drives_cached_for_hours(self):
-        out = self.run_extras(self.request(), [self.PODNART, self.CITY], budget=2)
-        self.assertEqual((len(self.asked), len(out['planConnection']['edges'])), (2, 1))  # the second place: no query left
-        self.asked.clear()
-        self.run_extras(self.request(dateTime='2026-10-20T09:00:00+02:00'), [self.PODNART, self.CITY], budget=3)
-        # Two hours later: the drive to Podnart is reused, its ride and the second place are asked.
-        self.assertEqual([v['modes'].get('direct') for v in self.asked], [['WALK'], ['CAR'], ['WALK']])
-
-    def test_no_place_on_the_way_falls_back_to_otps_car_parks(self):
+    def test_buses_and_trains_and_trains_alone_are_searched_side_by_side(self):
         self.run_extras(self.request(), [])
-        self.assertEqual(self.asked[0]['modes']['transit']['access'], ['CAR_PARKING'])
+        self.assertEqual(len(self.asked), 2)
+        for v in self.asked:
+            self.assertEqual((v['modes']['transit']['access'], v['searchWindow'], v['preferences']['street']['car']), (['WALK', 'CAR_DROP_OFF'], 'PT2H', {'reluctance': 1.0}))
+            self.assertEqual(v['dateTime'], {'earliestDeparture': '2026-10-20T07:04:00+02:00'})  # parking and the walk come first
+        modes = [{t['mode'] for t in v['modes']['transit']['transit']} for v in self.asked]
+        self.assertTrue({'BUS', 'RAIL'} <= modes[0] and 'RAIL' in modes[1])
+        self.assertNotIn('filters', self.asked[0]['preferences']['transit'])
+        self.assertTrue(self.asked[1]['preferences']['transit']['filters'])  # buses only of the railway (its replacement buses)
 
-    def test_walking_on_from_the_car_park_is_not_a_park_and_ride(self):
-        out = self.run_extras(self.request(), [self.PODNART], walk_only=True)
-        self.assertEqual(out['planConnection']['edges'], [])
+    def test_car_and_transit_alone_still_rides_and_one_query_to_spare_asks_once(self):
+        journeys.park_and_ride(self.request(modes=['walk', 'car', 'carPark']), lambda kind, v: self.asked.append(v), spare=1)
+        self.assertEqual(len(self.asked), 1)
+        self.assertTrue({'BUS', 'RAIL'} <= {t['mode'] for t in self.asked[0]['modes']['transit']['transit']})
 
-    def test_a_start_in_a_car_free_zone_walks_to_the_nearest_car_park_first(self):
-        garage = {'name': 'Garažna hiša Kongresni trg', 'lat': 46.0005, 'lon': 14.5040}
-        drives = iter([False, True])  # from Prešernov trg: no drive; from the garage: one
-        behave = lambda q, v: self.query(q, v, drive_found=next(drives)) if v['modes'].get('direct') == ['CAR'] else self.query(q, v)
-        with mock.patch('prestop_api.parking.nearest_drivable', return_value=garage), \
-                mock.patch('prestop_api.parking.candidates', return_value=[self.PODNART]), mock.patch('prestop_api.sources.stops') as stops:
-            stops.get.return_value.value = {'list': [], 'routes': {}}
-            out = journeys.with_extras({'planConnection': {'edges': []}}, self.request(), behave)
-        legs = out['planConnection']['edges'][0]['node']['legs']
-        self.assertEqual([l['mode'] for l in legs], ['WALK', 'CAR', 'WALK', 'RAIL'])
-        self.assertEqual(legs[0]['to']['name'], garage['name'])
-        self.assertEqual(legs[0]['end']['scheduledTime'], legs[1]['start']['scheduledTime'])
-        self.assertEqual(self.asked[1]['origin']['location']['coordinate'], {'latitude': 46.0005, 'longitude': 14.5040})
+    def test_arriving_by_a_time_asks_for_it(self):
+        self.run_extras(self.request(timeMode='arriveBy', dateTime='2026-10-20T08:10:00+02:00'), [])
+        self.assertEqual(self.asked[0]['dateTime'], {'latestArrival': '2026-10-20T08:10:00+02:00'})
+
+    def test_walking_to_the_first_stop_or_no_car_park_there_is_no_park_and_ride(self):
+        walked = {'node': {'legs': [self.leg('WALK', '07:00', '07:10', {'name': 'Kropa', 'lat': 46.2905, 'lon': 14.2066}, self.PODNART),
+                                    self.leg('RAIL', '07:30', '08:00', self.PODNART, {'name': 'Ljubljana', 'lat': 46.0581, 'lon': 14.5109})]}}
+        near = {'name': 'Kropa/Rad.', 'lat': 46.2930, 'lon': 14.2066, 'stop': {'gtfsId': 'IJPP:kropa'}}  # 280 m from the start: walk
+        out = self.run_extras(self.request(), [walked, self.dropped_off(self.NAKLO, '07:40', 'BUS'), self.dropped_off(near, '07:20', 'BUS')])
+        self.assertEqual(out['planConnection']['edges'], [])  # Naklo: no car park mapped there
+
+    def test_a_short_trip_has_no_park_and_ride(self):
+        self.run_extras(self.request(destination={'name': 'Kamna Gorica', 'latitude': 46.3000, 'longitude': 14.2700}), [])  # 5 km
+        self.assertEqual(self.asked, [])
+
+    def test_places_take_turns_up_to_park_keep(self):
+        naklo_lot = {**self.LOT, 'lat': 46.2741, 'lon': 14.3170, 'name': 'P Naklo'}
+        lots = lambda lat, lon, r: [self.LOT] if abs(lat - self.LOT['lat']) < 0.002 else [naklo_lot] if abs(lat - naklo_lot['lat']) < 0.002 else []
+        edges = [self.dropped_off(self.PODNART, t) for t in ('07:30', '07:40', '07:50')] + [self.dropped_off(self.NAKLO, t, 'BUS') for t in ('07:35', '07:45')]
+        with mock.patch('prestop_api.parking.near', side_effect=lots):
+            out = journeys.with_extras({'planConnection': {'edges': []}}, self.request(modes=['walk', 'bus', 'carPark']), lambda q, v: {'planConnection': {'edges': edges}})
+        firsts = [e['node']['legs'][2]['trip']['gtfsId'] for e in out['planConnection']['edges']]
+        self.assertEqual(firsts, ['T07:30', 'T07:35', 'T07:40', 'T07:45'])  # Podnart, Naklo, Podnart, Naklo; the third Podnart one left out
 
     def test_driving_all_the_way_from_a_car_free_zone_starts_at_a_car_park(self):
         garage = {'name': 'Garažna hiša Kongresni trg', 'lat': 46.0005, 'lon': 14.5040}

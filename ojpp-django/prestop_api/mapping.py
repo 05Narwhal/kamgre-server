@@ -671,6 +671,21 @@ def decode_polyline(points: str, precision: int = 5) -> list[list[float]]:
     return coords
 
 
+def encode_polyline(coords: list, precision: int = 5) -> str:
+    """[[lon, lat], ...] -> Google encoded polyline (decode_polyline's inverse)."""
+    out, last, factor = [], (0, 0), 10 ** precision
+    for lon, lat in coords:
+        here = (round(lat * factor), round(lon * factor))
+        for value in (here[0] - last[0], here[1] - last[1]):
+            value = ~(value << 1) if value < 0 else value << 1
+            while value >= 0x20:
+                out.append(chr((0x20 | (value & 0x1f)) + 63))
+                value >>= 5
+            out.append(chr(value + 63))
+        last = here
+    return ''.join(out)
+
+
 def thin(coords: list, limit: int = 400) -> list:
     if len(coords) <= limit:
         return coords
