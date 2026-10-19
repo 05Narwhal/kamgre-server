@@ -11,6 +11,10 @@ from typing import Any, Iterable, Optional
 
 RAIL_MODES = {'RAIL', 'TRAM', 'SUBWAY', 'MONORAIL', 'FUNICULAR', 'CABLE_CAR', 'GONDOLA'}
 MAX_VEHICLE_AGE = 15 * 60
+# A delay this large (s, late or early) is believed only when the vehicle's own report confirms it: a bus still
+# reporting the trip it finished hours ago (N0127, 19 Oct: its 07:05 run "+208 min" at 10:39) or matched to another
+# run of its line (A6103 "+159 min") is shown as having no live data instead.
+MAX_UNCONFIRMED_DELAY = 120 * 60
 QUALIFIED = re.compile(r'^[^:]+:.+$')
 FALLBACK_URLS = {'IJPP:1161': 'https://potniski.sz.si/', 'LPP': 'https://www.lpp.si/', 'MARPROM': 'https://www.marprom.si/'}
 
@@ -137,6 +141,19 @@ def _update_delay(update: dict) -> Optional[int]:
     return None
 
 
+def confirms(trip_update: Optional[dict], stop_id: Optional[str], stop_sequence: Optional[int]) -> bool:
+    """The vehicle's report names where it is on the trip (its current or next stop, which the trip update covers):
+    the position confirms the update's delay there. Without it a vehicle on another trip can't be told apart."""
+    updates = (trip_update or {}).get('updates') or []
+    return any((stop_id and u.get('stopId') == stop_id) or (stop_sequence is not None and u.get('stopSequence') == stop_sequence)
+               for u in updates if _update_delay(u) is not None)
+
+
+def believable(delay: Optional[int], confirmed: bool) -> Optional[int]:
+    """`delay`, or None ("no live data") when it is beyond MAX_UNCONFIRMED_DELAY and nothing confirms it."""
+    return None if delay is not None and abs(delay) > MAX_UNCONFIRMED_DELAY and not confirmed else delay
+
+
 def current_delay(trip_update: Optional[dict], stop_id: Optional[str], stop_sequence: Optional[int]) -> Optional[int]:
     """Delay at the vehicle's current/next stop, else the nearest following update."""
     if not trip_update:
@@ -256,7 +273,8 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
             'nextStop': stop_names.get(stop_id) if stop_id else None,
             'bearing': float(bearing) % 360 if isinstance(bearing, (int, float)) else None,
             'updatedAt': iso(stamp),
-            'delaySeconds': current_delay(trip_updates.get(trip_id), stop_id, v.get('currentStopSequence')),
+            'delaySeconds': believable(current_delay(trip_updates.get(trip_id), stop_id, v.get('currentStopSequence')),
+                                       confirms(trip_updates.get(trip_id), stop_id, v.get('currentStopSequence'))),
             'quality': 'observed',
             # Motion hints: the client predicts the position between reports along the trip's shape.
             # Some feeds send bare prefixes (Marprom: "MARPROM:"); only well-formed ids are passed on.
@@ -285,8 +303,17 @@ def is_replacement(route: dict) -> bool:
     return agency in REPLACEMENT_AGENCIES and (route.get('mode') in ('BUS', 'COACH') or name.startswith('BUS '))
 
 
-def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict]) -> list[dict]:
+def _shows(vehicle_delay: Optional[int], delay: int) -> bool:
+    """The trip's vehicle shows about this delay itself (within half an hour)."""
+    return vehicle_delay is not None and abs(vehicle_delay - delay) <= 1800
+
+
+def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict],
+                live: Optional[dict[str, Optional[int]]] = None) -> list[dict]:
+    """`live`: trip id -> the delay its vehicle shows (build_vehicles); a delay beyond MAX_UNCONFIRMED_DELAY stays on
+    the board only when the trip's vehicle shows it too, else the row has no live data."""
     from . import abroad, stopfix
+    live = live or {}
     out = []
     for st in stoptimes:
         trip = st.get('trip') or {}
@@ -303,6 +330,8 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         realtime = bool(st.get('realtime'))
         canceled = st.get('realtimeState') == 'CANCELED'
         effective = day + (st['realtimeArrival'] if kind == 'arrival' else st['realtimeDeparture'])
+        if realtime and believable(effective - scheduled, _shows(live.get((st.get('trip') or {}).get('gtfsId')), effective - scheduled)) is None:
+            realtime, effective = False, scheduled
         end = ((trip.get('departureStoptime' if kind == 'arrival' else 'arrivalStoptime') or {}).get('stop') or {})
         other_end = stopfix.renamed(end.get('gtfsId'), end.get('name'))
         if abroad.is_abroad_stop(other_end):

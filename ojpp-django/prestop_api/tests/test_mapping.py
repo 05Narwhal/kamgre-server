@@ -345,3 +345,41 @@ class VehicleHistoryTests(SimpleTestCase):
         history = mapping.MotionHistory()
         history.observe('v', 100, 46.05, 14.5, now=100)
         self.assertEqual(history.observe('v', 500, 46.05, 14.5, now=500), [(500, 46.05, 14.5)])
+
+
+class ImplausibleDelayTests(SimpleTestCase):
+    """Spec 2026-10-19 A4: N0127 (IJPP:425272, its 07:05 run) still reported that trip at 10:39 on 19 Oct, and the
+    feed's delay grew with the clock to +208 min at its last stops; its reports named no stop."""
+
+    UPDATE = {'tripUpdate': {'trip': {'tripId': 'IJPP:425272', 'startDate': '20261019', 'scheduleRelationship': 'SCHEDULED'}, 'stopTimeUpdate': [
+        {'stopSequence': 1, 'arrival': {'delay': 3840}, 'departure': {'delay': 3840}},
+        {'stopSequence': 4, 'arrival': {'delay': 3780}, 'departure': {'delay': 3780}},
+        {'stopSequence': 15, 'stopId': 'IJPP:15', 'arrival': {'delay': 12480}, 'departure': {'delay': 12480}},
+        {'stopSequence': 16, 'stopId': 'IJPP:16', 'arrival': {'delay': 12480}, 'departure': {'delay': 12480}}]}}
+    ROUTES = {'IJPP:n0127': {'gtfsId': 'IJPP:n0127', 'shortName': 'N0127', 'mode': 'BUS', 'agencyId': 'IJPP:1119'}}
+
+    def vehicle(self, **report):
+        updates = mapping.trip_update_index([self.UPDATE])
+        [v] = mapping.build_vehicles([position('IJPP:425272', 'IJPP:1301363', **report)], updates,
+                                     {'IJPP:425272': {'routeId': 'IJPP:n0127'}}, self.ROUTES, {}, NOW)
+        return v
+
+    def test_a_delay_over_two_hours_without_a_confirming_report_is_no_live_data(self):
+        self.assertIsNone(self.vehicle()['delaySeconds'])
+
+    def test_the_vehicle_naming_its_stop_on_the_trip_confirms_it(self):
+        self.assertEqual(self.vehicle(stopId='IJPP:16')['delaySeconds'], 12480)
+        self.assertEqual(self.vehicle(currentStopSequence=15)['delaySeconds'], 12480)
+
+    def test_ordinary_delays_need_no_confirmation(self):
+        self.assertEqual(mapping.believable(3840, confirmed=False), 3840)
+        self.assertIsNone(mapping.believable(-7300, confirmed=False))  # 2 hours early: another run of the line
+
+    def test_a_board_row_two_hours_late_needs_its_vehicle_to_show_it(self):
+        row = stoptime('IJPP:425272', 'IJPP:x', 'IJPP:y', dep=26880, rt=26880 + 12480)
+        [alone] = mapping.build_board('IJPP:s', [row], 'departure', [])
+        self.assertEqual((alone['effectiveAt'], alone['quality']), (None, None))
+        [shown] = mapping.build_board('IJPP:s', [row], 'departure', [], live={'IJPP:425272': 12400})
+        self.assertEqual(shown['quality'], 'predicted')
+        late = stoptime('IJPP:a', 'IJPP:x', 'IJPP:y', dep=26880, rt=26880 + 1800)
+        self.assertEqual(mapping.build_board('IJPP:s', [late], 'departure', [])[0]['quality'], 'predicted')

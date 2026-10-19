@@ -413,12 +413,18 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict]) -
         updates = trip_updates.get().value if _safe(trip_updates) else {}
         own = supplement.stoptimes(stop_id, start, _until_service_day_end(start), BOARD_MAX, updates)
         if own is not None:
-            return mapping.build_board(stop_id, own, kind, alert_list)
+            return mapping.build_board(stop_id, own, kind, alert_list, _live_delays())
     data = otp().query(BOARD_Q, {'id': stop_id, 'start': start, 'range': _until_service_day_end(start), 'n': BOARD_MAX, 'omit': kind == 'departure'})
     stop = data.get('stop')
     if stop is None:
         return None
-    return mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list)
+    return mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays())
+
+
+def _live_delays() -> dict[str, Optional[int]]:
+    """Trip id -> the delay its vehicle shows now (what confirms a very large delay on a board)."""
+    snap = vehicles.peek()
+    return {v['tripId']: v.get('delaySeconds') for v in (snap.value if snap else []) if v.get('tripId')}
 
 
 BOARD_TTL = 15.0     # s a board is reused: realtime reaches OTP every 10-30 s, and the app polls each board
