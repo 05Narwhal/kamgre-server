@@ -79,6 +79,7 @@ class WholeTrainByBusTests(SimpleTestCase):
         self.assertEqual(list(shown), [BUS['id']])  # the train is not drawn on the stretch its bus runs
         v = shown[BUS['id']]
         self.assertEqual((v['delaySeconds'], v['delaySource'], v['quality'], v['nextStop']), (300, 'gtfs-rt', 'scheduled', 'Lesce-Bled AP'))
+        self.assertEqual(v['replacesTrain'], 'LPV 2428')  # the sheet names the train it runs for
         self.assertFalse(v['stopped'])  # by the timetable it would stand at Lesce-Bled now; it is 5 min behind
 
     def test_a_bus_is_never_early_by_a_train_delay(self):
@@ -105,7 +106,7 @@ class WholeTrainByBusTests(SimpleTestCase):
             piece = journey_legs._with_live(journey_legs._bus_ride(leg, BUS, 3, 4, lambda stops: None, 'bus0', plan))
         at = mapping.iso(T0 + 2700 + 300)
         self.assertEqual(v['delaySeconds'], 300)
-        self.assertEqual((row['scheduledAt'], row['effectiveAt'], row['quality']), (mapping.iso(T0 + 2700), at, 'predicted'))
+        self.assertEqual((row['scheduledAt'], row['effectiveAt'], row['quality'], row['delaySource']), (mapping.iso(T0 + 2700), at, 'predicted', 'gtfs-rt'))
         self.assertEqual(entry['times'][3]['realtimeDeparture'] - entry['times'][3]['scheduledDeparture'], 300)
         self.assertTrue(entry['times'][3]['realtime'])
         self.assertEqual((piece['delaySeconds'], journey_legs._ts(piece['effectiveDeparture']), piece['delayProvenance']), (300, T0 + 3000, 'predicted'))
@@ -168,6 +169,9 @@ class NoLiveDataTests(SimpleTestCase):
     def test_no_report_keeps_the_timetable(self):
         v = run_map(plan_of([TRAIN], [BUS]), [TRAIN], T0 + 2800)[BUS['id']]
         self.assertEqual((v['quality'], v['delaySeconds'], 'delaySource' in v), ('scheduled', None, False))
+        self.assertEqual(v['replacesTrain'], 'LPV 2428')
+        [row] = replacement.timetable_rows(plan_of([TRAIN], [BUS]), 'departure', {'IJPP:bus-Lesce-Bled'}, T0, T0 + 4000, {}, merged=False)
+        self.assertEqual((row['effectiveAt'], 'delaySource' in row), (None, False))
         self.assertEqual(v['nextStop'], 'Jesenice AP')  # by its timetable it has left Lesce-Bled
 
     def test_a_stale_report_is_no_live_data(self):

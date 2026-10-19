@@ -73,6 +73,7 @@ class BoardTests(SimpleTestCase):
             stoptime('IJPP:3', 'IJPP:x', 'IJPP:y', rt=36000, state='CANCELED')], 'departure', [])
         self.assertEqual((live['scheduledAt'], live['effectiveAt'], live['quality']), ('2026-10-09T08:00:00Z', '2026-10-09T08:05:00Z', 'predicted'))
         self.assertEqual((planned['effectiveAt'], planned['quality'], planned['platform']), (None, None, '3'))
+        self.assertEqual((live['delaySource'], 'delaySource' in planned, 'delaySource' in canceled), ('gtfs-rt', False, False))
         self.assertTrue(canceled['canceled'])
         self.assertIsNone(canceled['effectiveAt'])
 

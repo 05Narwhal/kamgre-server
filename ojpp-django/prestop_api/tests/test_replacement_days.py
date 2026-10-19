@@ -46,8 +46,11 @@ class BoardTests(SimpleTestCase):
     def test_a_replaced_train_shows_as_its_bus_with_the_buses_line_and_end(self):
         [bus] = synthesize([self.t], [self.closed])
         plan = plan_of([self.t], [bus])
-        [shown] = replacement.board_rows([row(self.t, 0)], 'departure', NAMES, lambda when: plan)
+        # The train's own live time (OTP) is not the bus's: the bus's row has no live source of its own
+        live = {**row(self.t, 0), 'effectiveAt': mapping.iso(self.t['departures'][0] + 120), 'quality': 'predicted', 'delaySource': 'gtfs-rt'}
+        [shown] = replacement.board_rows([live], 'departure', NAMES, lambda when: plan)
         self.assertEqual((shown['routeName'], shown['mode'], shown['tripId'], shown['routeId']), ('BUS 2400', 'bus', bus['id'], 'IJPP:sub-r-r-a'))
+        self.assertEqual((shown['effectiveAt'], shown['quality'], 'delaySource' in shown), (None, None, False))
         self.assertEqual((shown['destination'], shown['replacesTrain'], shown['replacement']), ('Jesenice', 'LPV 2400', True))
         # From the end of the closed stretch the train runs as usual.
         [after] = replacement.board_rows([row(self.t, 2)], 'departure', NAMES, lambda when: plan)

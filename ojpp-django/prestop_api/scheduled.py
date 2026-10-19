@@ -472,6 +472,10 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             out[-1]['delaySource'] = own['source']
         if replacement:
             out[-1]['replacement'] = True
+            # The train it runs for ("LPV 1896"), as its line and board rows name it
+            train = mapping.route_name(run['route']) if run else trip.get('trainName')
+            if train:
+                out[-1]['replacesTrain'] = train
         else:  # the train's track at its next station (tracks.py)
             track, usual = tracks.tracks.track(mapping.route_name(route), stops[i]['gtfsId'], (trip.get('scheduledDepartures') or trip['departures'])[i])
             if track:

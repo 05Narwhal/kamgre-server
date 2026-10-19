@@ -355,6 +355,7 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
             'effectiveAt': iso(effective) if realtime and not canceled else None,
             'updatedAt': iso(time.time()) if realtime else None,
             'quality': 'predicted' if realtime else None,
+            **({'delaySource': 'gtfs-rt'} if realtime and not canceled else {}),  # OTP's realtime is the GTFS-RT feed's
             'canceled': canceled,
             'platform': (st.get('stop') or {}).get('platformCode') or None,
             'alertIds': [a['id'] for a in alerts if (stop_id in a['stopIds'] or route_id in a['routeIds']) and alert_active(a, scheduled)],
