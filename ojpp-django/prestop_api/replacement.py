@@ -145,6 +145,19 @@ def crossed(plan: Optional[dict], train: dict) -> list[tuple[int, int, dict]]:
     return sorted(out, key=lambda x: x[0])
 
 
+def beyond(plan: Optional[dict], train: dict) -> tuple[Optional[dict], Optional[dict]]:
+    """The sections of one run of a train whose bus runs only before its first station or only on from its last one,
+    where the feed splits the train (ICS 14: BUS 14006 Ljubljana – Celje, then the train Celje – Maribor): (before,
+    after). No stretch of the train is replaced (crossed leaves them out), but the bus runs for that train."""
+    found = (plan or {}).get('sections', {}).get(train['id']) or []
+    last = len(train['stops']) - 1
+    before = next((s for s in found if s['fromIndex'] is None and s['toIndex'] == 0
+                   and abs(train['arrivals'][0] - s['end']) <= MATCH_WINDOW), None)
+    after = next((s for s in found if s['toIndex'] is None and s['fromIndex'] == last
+                  and abs(train['departures'][last] - s['start']) <= MATCH_WINDOW), None)
+    return before, after
+
+
 def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
     """A train trip's (trips.build_trip) stretches a bus runs instead that day: {'fromIndex', 'toIndex' (the bus's
     first and last station in the trip's stops, None where the train does not call), 'busTripId', 'busName'}."""
@@ -196,6 +209,29 @@ def bus_row(entry: dict, bus: dict, kind: str, here: str) -> dict:
     return row
 
 
+def feed_bus_row(entry: dict, plan: dict, kind: str) -> dict:
+    """The board row of a feed's own replacement bus (BUS 31006): the train it runs for and, as on the map and its
+    trip view, that train's live delay (trainlive.py; OTP has none for the bus)."""
+    at = _epoch(entry['scheduledAt'])
+    bus = run_near(plan, entry['tripId'], at)
+    if not bus:
+        return entry
+    leave = kind == 'departure'
+    times = (bus.get('scheduledDepartures') if leave else bus.get('scheduledArrivals')) or (bus['departures'] if leave else bus['arrivals'])
+    k = next((k for k, s in enumerate(bus['stops']) if s['gtfsId'] == entry['stopId'] and abs(times[k] - at) < 60), None)
+    if k is None:
+        return entry
+    row = dict(entry)
+    train = trainlive.train_of(plan, bus)
+    if train:
+        row['replacesTrain'] = mapping.route_name(train['route'])
+    live = trainlive.live_bus(plan, bus)
+    if entry.get('effectiveAt') is None and live['delays'][k] is not None:
+        row.update(effectiveAt=mapping.iso((live['departures'] if leave else live['arrivals'])[k]),
+                   updatedAt=mapping.iso(time.time()), quality='predicted', delaySource=live['delaySource'])
+    return row
+
+
 def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: Callable[[float], Optional[dict]],
                stop_ids: Optional[list[str]] = None, start: Optional[float] = None, end: Optional[float] = None) -> list[dict]:
     """Rows of trains that a bus replaces at this station become that bus's rows (BUS 1896 to Logatec, its
@@ -225,7 +261,7 @@ def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: 
         keys = _keys(train) if train else []
         hit = section_at(trip_sections, keys.index(here), _epoch(e['scheduledAt']), kind) if here in keys else None
         if not hit:
-            out.append(e)
+            out.append(feed_bus_row(e, plan, kind) if plan and e['mode'] == 'bus' and e.get('replacement') else e)
             continue
         if hit['busTripId'] in listed:
             continue

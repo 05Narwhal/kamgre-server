@@ -101,6 +101,12 @@ def parts(plan: dict, run: dict) -> list[tuple[dict, list[tuple[int, int]], bool
         covered = max(covered, b)
     if covered < last or not crossed:
         out.append((run, [(j, j) for j in range(covered, last + 1)], True))
+    # A bus on from where the feed ends the train (BUS 31006 after ICS 31 at Celje) leaves when the train is in. One
+    # before where it starts (BUS 14006) has nothing reported: the train's updates are about the train.
+    after = replaced_by.beyond(plan, run)[1]
+    bus = after and (by_id.get(after['busTripId']) or replaced_by.run_near(plan, after['busTripId'], after['start']))
+    if bus:
+        out.append((bus, _pairs(bus, run, last, last), True))
     return out
 
 
@@ -143,7 +149,7 @@ def train_of(plan: dict, bus: dict) -> Optional[dict]:
         for s in sections:
             if s['busTripId'] == bus['id']:
                 run = replaced_by.run_near(plan, train_id, s['start'])
-                if run and any(x[2] is s for x in replaced_by.crossed(plan, run)):
+                if run and (any(x[2] is s for x in replaced_by.crossed(plan, run)) or any(x is s for x in replaced_by.beyond(plan, run))):
                     return run
     return None
 

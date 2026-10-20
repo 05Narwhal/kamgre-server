@@ -48,6 +48,15 @@ def update(train, at_station, delay, stamp=T0):
     return {train['id']: {'updates': [{'stopId': f'IJPP:{at_station}', 'departure': {'delay': delay}}], 'timestamp': stamp, 'trip': {}}}
 
 
+def board_row(t, k):
+    """OTP's board row of trip `t` leaving its stop `k`, by the timetable."""
+    return {'id': f'{t["id"]}@{t["serviceDay"]}/{k}', 'stopId': t['stops'][k]['gtfsId'], 'tripId': t['id'], 'routeId': t['route']['gtfsId'],
+            'operatorId': SZ['gtfsId'], 'routeName': t['route']['shortName'], 'mode': t['route']['mode'].lower(),
+            'destination': t['stops'][-1]['name'], 'scheduledAt': mapping.iso(t['departures'][k]), 'effectiveAt': None,
+            'updatedAt': None, 'quality': None, 'canceled': False, 'platform': None, 'alertIds': [],
+            **({'replacement': True} if t['route']['mode'] == 'BUS' else {})}
+
+
 def shape_for(t):
     coords = [[s['lon'], s['lat']] for s in t['stops']]
     return {'coords': coords, 'cum': geometry.cumulative(coords), 'distances': geometry.cumulative(coords), 'stops': t['stops'],
@@ -152,6 +161,37 @@ class PartlyReplacedTests(SimpleTestCase):
         self.assertNotEqual((v['latitude'], v['longitude']), (46.05, 14.29))
         after = run_map(plan, [train, bus], T0 + 2400, live={'1896': {**report['1896'], 'at': T0 + 2390}})
         self.assertEqual((after['IJPP:1896']['delaySeconds'], after['IJPP:1896']['nextStop']), (900, 'Lesce-Bled'))
+
+    def test_a_bus_on_from_where_the_feed_ends_the_train_names_it_and_takes_its_delay(self):
+        # ICS 31 on 20 Oct 2026: the feed's train runs Maribor - Celje only, BUS 31006 on from Celje to Ljubljana.
+        train = trip('31', 'ICS 31', NAMES[:3], [T0, T0 + 600, T0 + 1200])
+        bus = trip('bus', 'BUS 31006', NAMES[2:], [T0 + 1500, T0 + 2400, T0 + 3300], mode='BUS')
+        plan = plan_of([train, bus])
+        feed = update(train, 'Kranj', 600)
+        # Due at Podnart T0+1200 + 10 min = T0+1800: the bus leaves 5 min late.
+        self.assertEqual(trainlive.carried(trainlive.of(plan, bus, feed, {})['delays']), [300, 300, 300])
+        v = run_map(plan, [train, bus], T0 + 2000, updates=feed)['IJPP:bus']
+        self.assertEqual((v['replacesTrain'], v['delaySeconds'], v['delaySource']), ('ICS 31', 300, 'gtfs-rt'))
+        # Its own row on a board (OTP has no live time for it) shows the same.
+        with mock.patch.object(trainlive, 'trip_updates', return_value=feed):
+            [row] = replacement.board_rows([board_row(bus, 1)], 'departure', {'IJPP:Lesce-Bled': 'Lesce-Bled'}, lambda when: plan)
+        self.assertEqual((row['effectiveAt'], row['quality'], row['delaySource'], row['replacesTrain']),
+                         (mapping.iso(T0 + 2700), 'predicted', 'gtfs-rt', 'ICS 31'))
+
+    def test_a_bus_before_where_the_feed_starts_the_train_names_it_and_keeps_its_timetable(self):
+        # ICS 14: BUS 14006 Ljubljana - Celje, then the train on to Maribor. Its updates are the train's, not the bus's.
+        bus = trip('bus', 'BUS 14006', NAMES[:3], [T0, T0 + 900, T0 + 1800], mode='BUS')
+        train = trip('14', 'ICS 14', NAMES[2:], [T0 + 2100, T0 + 2700, T0 + 3300])
+        plan = plan_of([train, bus])
+        feed = update(train, 'Podnart', 300)
+        self.assertIsNone(trainlive.of(plan, bus, feed, {}))
+        v = run_map(plan, [train, bus], T0 + 1000, updates=feed)['IJPP:bus']
+        self.assertEqual((v['replacesTrain'], v['delaySeconds']), ('ICS 14', None))
+        self.assertNotIn('delaySource', v)
+        with mock.patch.object(trainlive, 'trip_updates', return_value=feed):
+            [row] = replacement.board_rows([board_row(bus, 1)], 'departure', {'IJPP:Kranj': 'Kranj'}, lambda when: plan)
+        self.assertEqual((row['effectiveAt'], row['replacesTrain']), (None, 'ICS 14'))
+        self.assertNotIn('delaySource', row)
 
     def test_a_notice_bus_has_the_train_timetable_and_its_delay(self):
         from prestop_api import closures
