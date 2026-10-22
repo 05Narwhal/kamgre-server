@@ -386,12 +386,15 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
     derived = _derive()
     replaced = derived['sections']
     suppressed = derived.get('suppressed') or {}  # the feed's buses a replacement timetable runs instead
-    out, seen = [], set()
+    out, seen = [], {(mapping.route_name(t['route']), (t.get('scheduledDepartures') or t['departures'])[0]) for t in trips
+                     if t['id'] in skip_trips and not mapping.is_replacement(t['route'])}
     for trip in trips + derived['synthetic']:
         times = trip.get('scheduledDepartures') or trip['departures']
         if not times[0] - BOARDING <= now <= times[-1] + ARRIVED + mapping.MAX_UNCONFIRMED_DELAY:
             continue  # not on its way even when very late
-        if trip['id'] in skip_trips or trip['id'] in seen or trip['id'] in suppressed:
+        # A train number runs once: the feed can list it on two routes (LP 4208, 23 Oct 2026), one train on the map.
+        train_run = None if mapping.is_replacement(trip['route']) else (mapping.route_name(trip['route']), times[0])
+        if trip['id'] in skip_trips or trip['id'] in seen or train_run in seen or trip['id'] in suppressed:
             coverage.note(drops, 'has a live vehicle' if trip['id'] in skip_trips else 'run by a replacement timetable' if trip['id'] in suppressed else 'listed twice', trip)
             continue
         shape = shape_index.get(trip['pattern'])
@@ -419,7 +422,7 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
         if not at or any(replaced_by.inside(s, at['stop']) for s in sections):
             coverage.note(drops, 'not on its way by its times' if not at else 'a bus runs this stretch', trip)
             continue
-        seen.add(trip['id'])
+        seen.update({trip['id'], train_run} - {None})
         quality = 'inferred' if report else 'scheduled'
         delay = timed['delays'][at['stop']]
         trip, i, stops = timed, at['stop'], timed['stops']

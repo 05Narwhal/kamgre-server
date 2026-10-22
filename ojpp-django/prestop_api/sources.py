@@ -605,7 +605,12 @@ def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[l
         alert_list = []
     members = stop_group(stop_id, wait=True)
     if len(members) == 1:
-        return _capped(_with_live_platforms(_member_board(stop_id, kind, start, alert_list, drops), stop_id, kind, start, drops), drops)
+        own, runs = _member_board(stop_id, kind, start, alert_list, drops), {}
+        if own:  # one feed: its own second bus stays, a train it lists twice is one (mapping.copy_of)
+            copies = [e for e in own if mapping.copy_of(e, runs) is not None]
+            coverage.note(drops, 'same run from another stop or feed', *copies)
+            own = [e for e in own if not any(e is c for c in copies)]
+        return _capped(_with_live_platforms(own, stop_id, kind, start, drops), drops)
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(4, len(members))) as pool:
         boards = list(pool.map(lambda m: _member_board(m, kind, start, alert_list, drops), members))

@@ -604,10 +604,12 @@ def copy_of(row: dict, runs: dict) -> Optional[dict]:
     A run (line, scheduled time, destination) listed by two feeds is one bus (LPP's suburban lines are IJPP's too),
     and one trip at two stops of a group in one minute is one row. A feed's own trips are each a bus: A6196 runs
     twice at 13:10 (D3: two vehicles drove the two trips, as every such pair recorded on 2026-10-22, 82 of 82), so
-    a row repeats another feed's only while that feed lists at least as many."""
+    a row repeats another feed's only while that feed lists at least as many. A train number runs once, so a train is
+    one row however many trips list it (LP 4208 on two routes of one feed, 23 Oct 2026)."""
     trip = row.get('tripId') or row.get('id') or ''
     by_feed = runs.setdefault((row.get('routeName'), row.get('scheduledAt'), fold(row.get('destination') or '')), {})
-    same = next((r for rows in by_feed.values() for r in rows if row.get('tripId') and r.get('tripId') == row['tripId']), None)
+    same = next((r for rows in by_feed.values() for r in rows
+                 if (row.get('tripId') and r.get('tripId') == row['tripId']) or (row.get('mode') == 'rail' and r.get('mode') == 'rail')), None)
     if same is not None:
         return same
     mine = by_feed.setdefault(trip.split(':', 1)[0], [])

@@ -149,6 +149,28 @@ class MemberNameTests(SimpleTestCase):
             items = sources._board('IJPP:1', 'departure', 0, 'sl')
         self.assertEqual(sorted(i['tripId'] for i in items), ['IJPP:455744', 'IJPP:455745', 'IJPP:5', 'IJPP:77'])
 
+    def test_a_train_the_feed_lists_twice_is_one_row(self):
+        """A train number runs once: LP 4208 Nova Gorica 07:28 – Jesenice is in the feed on two routes (IJPP:456511 on
+        IJPP:64515, IJPP:476680 on IJPP:66421, the same times; 23 Oct 2026), and D3's second-bus rule listed it twice."""
+        def row(trip, mode='rail', line='LP 4208'):
+            return {'id': f'{trip}@20261023/1', 'tripId': trip, 'stopId': 'IJPP:1', 'routeName': line, 'mode': mode,
+                    'scheduledAt': '2026-10-23T05:28:00Z', 'destination': 'Jesenice'}
+        boards = {'IJPP:1': [row('IJPP:456511'), row('IJPP:476680'), row('IJPP:8', 'bus', 'A1'), row('IJPP:9', 'bus', 'A1')], 'IJPP:2': []}
+        with mock.patch.object(sources, 'stop_group', return_value=['IJPP:1', 'IJPP:2']), \
+                mock.patch.object(sources, 'alerts', return_value=[]), \
+                mock.patch.object(sources, '_member_board', side_effect=lambda m, *a: boards[m]), \
+                mock.patch.object(sources, 'stop_names', return_value={}), \
+                mock.patch.object(sources, '_with_live_platforms', side_effect=lambda entries, *a, **k: entries):
+            items = sources._board('IJPP:1', 'departure', 0, 'sl')
+        self.assertEqual(sorted(i['tripId'] for i in items), ['IJPP:456511', 'IJPP:8', 'IJPP:9'])
+        # A station merged with nothing (Most na Soči) as well.
+        with mock.patch.object(sources, 'stop_group', return_value=['IJPP:1']), \
+                mock.patch.object(sources, 'alerts', return_value=[]), \
+                mock.patch.object(sources, '_member_board', side_effect=lambda m, *a: boards[m]), \
+                mock.patch.object(sources, '_with_live_platforms', side_effect=lambda entries, *a, **k: entries):
+            items = sources._board('IJPP:1', 'departure', 0, 'sl')
+        self.assertEqual(sorted(i['tripId'] for i in items), ['IJPP:456511', 'IJPP:8', 'IJPP:9'])
+
     def test_a_board_asked_for_before_the_stop_index_is_built_waits_for_it(self):
         """D3: for ~20 s after a start (warm.py builds the stop index after the timetable) a merged stop's board
         listed its head stop only; a board waits for the index, other callers still never wait."""

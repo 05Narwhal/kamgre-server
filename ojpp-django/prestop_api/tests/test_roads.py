@@ -247,6 +247,20 @@ class ScheduledTrainTests(SimpleTestCase):
         self.assertAlmostEqual(train['bearing'], 90, delta=1)
         self.assertIsNone(train['delaySeconds'])
 
+    def test_a_train_the_feed_lists_on_two_routes_is_one_train(self):
+        """LP 4208 is in the feed twice with the same times (IJPP:456511, IJPP:476680; 23 Oct 2026): one train."""
+        trip = {**self.TRIP, 'id': 'IJPP:t1', 'pattern': 'p', 'headsign': None, 'delays': [None, None, None],
+                'route': {'gtfsId': 'IJPP:r1', 'shortName': 'LP 4208', 'agency': {'gtfsId': 'IJPP:1161'}},
+                'stops': [{'gtfsId': f'IJPP:s{i}', 'name': f'S{i}', 'lat': 46.05, 'lon': 14.5 + i * 0.05} for i in range(3)]}
+        twin = {**trip, 'id': 'IJPP:t2', 'route': {**trip['route'], 'gtfsId': 'IJPP:r2'}}
+        coords = [[14.5, 46.05], [14.6, 46.05]]
+        shape = {'coords': coords, 'cum': geometry.cumulative(coords), 'distances': [0.0, 3850.0, 7700.0]}
+        with mock.patch.object(scheduled.timetable, 'get', return_value=mock.Mock(value=[trip, twin])), \
+                mock.patch.object(scheduled.shapes, 'get', return_value=mock.Mock(value={'p': shape})):
+            self.assertEqual([v['tripId'] for v in scheduled.vehicles(self.T0 + 300)], ['IJPP:t1'])
+            # The one with a live position is the train; its twin stays off the map too.
+            self.assertEqual([v['tripId'] for v in scheduled.vehicles(self.T0 + 300, skip_trips=frozenset({'IJPP:t1'}))], [])
+
 
 # Ljubljana Tivolska -> Ljubljana AP as IJPP draws it (trip IJPP:466576, line 47): east along Masarykova, a turn,
 # back west 340 m, then a jump to the station. Simplified onto the test street.
