@@ -9,6 +9,7 @@ declare -A CPU_PREV
 NET_PREV=""
 STAT_PREV=""
 T_PREV=0
+TZ_LOCAL=Europe/Ljubljana # every clock and date on screen is in Slovenian time
 
 cpu_ns() { systemctl show -p CPUUsageNSec --value "$1" 2>/dev/null | sed 's/[^0-9]//g'; }
 mem_mb() { local m; m=$(systemctl show -p MemoryCurrent --value "$1" 2>/dev/null); [[ $m =~ ^[0-9]+$ ]] && echo $((m / 1048576)) || echo -; }
@@ -33,10 +34,10 @@ dot() { case $1 in active) printf '%s●%s' "$G" "$N" ;; activating|reloading) p
 # the last KEEP_DAYS open the feed, and the nightly job then learns it. Keep the numbers below in step with stays.py.
 LEARN_T=0; LEARN_OUT=""
 learning() {
-  local tz=Europe/Ljubljana today elapsed labels="" i rows
-  today=$(TZ=$tz date +%F)
-  elapsed=$(( $(date +%s) - $(TZ=$tz date -d "$today 00:00" +%s) ))
-  for i in $(seq 0 8); do labels+="$(TZ=$tz date -d "$today +$i day" '+%a %-d %b')|"; done
+  local today elapsed labels="" i rows
+  today=$(TZ=$TZ_LOCAL date +%F)
+  elapsed=$(( $(date +%s) - $(TZ=$TZ_LOCAL date -d "$today 00:00" +%s) ))
+  for i in $(seq 0 8); do labels+="$(TZ=$TZ_LOCAL date -d "$today +$i day" '+%a %-d %b')|"; done
   local conn=() v
   for v in h:POSTGRES_HOST p:POSTGRES_PORT U:POSTGRES_USER d:POSTGRES_DB; do [ -n "$(envval "${v#*:}")" ] && conn+=("-${v%%:*}" "$(envval "${v#*:}")"); done
   rows=$(cd /tmp && runuser -u prestop -- env PGCONNECT_TIMEOUT=3 PGPASSWORD="$(envval POSTGRES_PASSWORD)" psql -XAtq -F'|' -v ON_ERROR_STOP=1 "${conn[@]}" -c "
@@ -46,7 +47,7 @@ learning() {
       union all select 'l', '$today'::date - max(learned_on), '', 0 from prestop_statistics_staydeparture having count(*) > 0
       union all select 'c', sum(misses), level, sum(hits) from prestop_statistics_staycheck where day >= '$today'::date - 14 group by level" 2>/tmp/prestop-top-learn.err) \
     || { printf 'Learning %sunavailable%s  %s\n' "$R" "$N" "$(grep -m1 . /tmp/prestop-top-learn.err | cut -c1-70)"; return; }
-  awk -F'|' -v labels="$labels" -v elapsed="$elapsed" -v hour="$(TZ=$tz date +%-H)" -v G="$G" -v Y="$Y" -v R="$R" -v D="$D" -v N="$N" '
+  awk -F'|' -v labels="$labels" -v elapsed="$elapsed" -v hour="$(TZ=$TZ_LOCAL date +%-H)" -v G="$G" -v Y="$Y" -v R="$R" -v D="$D" -v N="$N" '
     $1 == "d" { if ($3 == "*") col[$2] = $4; else { fs[$3, $2] = $4; feeds[$3] = 1 } }
     $1 == "s" { split($3, a, " "); lv[a[1], a[2]] = $4 }
     $1 == "l" { learned = $2 + 0; has_learned = 1 }
@@ -88,7 +89,7 @@ FRAME=$(mktemp); tput civis; tput rmam
 trap 'tput smam; tput cnorm; rm -f "$FRAME"; echo; exit' INT TERM EXIT
 clear
 draw() {
-    printf '%sKamGre server%s   %s   %sq quits · %ss%s\n\n' "$B" "$N" "$(date '+%H:%M:%S')" "$D" "$INTERVAL" "$N"
+    printf '%sKamGre server%s   %s   %sq quits · %ss%s\n\n' "$B" "$N" "$(TZ=$TZ_LOCAL date '+%H:%M:%S')" "$D" "$INTERVAL" "$N"
     printf '%s  %-12s %6s %8s%s\n' "$D" SERVICE CPU MEM "$N"
     for s in "${SERVICES[@]}"; do
       u=$s; [[ $s == postgresql && -n $PG ]] && u=$PG
