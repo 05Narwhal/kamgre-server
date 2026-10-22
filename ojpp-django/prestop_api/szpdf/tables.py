@@ -139,7 +139,7 @@ def _column(grid, k, header, fn_row, stations, additional_legend, connecting) ->
     if mark and mark not in footnotes:
         footnotes.append(mark)
 
-    calls, times = [], []
+    calls = []
     for s in stations:
         values = {}
         for role in ('arr', 'dep'):

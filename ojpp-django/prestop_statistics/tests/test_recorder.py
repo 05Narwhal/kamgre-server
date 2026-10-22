@@ -5,7 +5,7 @@ from django.test import TestCase
 from prestop_statistics import blocks
 from prestop_statistics.models import RecorderDay, VehicleGap, VehicleTrip
 from prestop_statistics.tests.test_blocks import FakeSchedules
-from prestop_statistics.tests.test_statistics import DAY, NOW, schedule
+from prestop_statistics.tests.test_statistics import NOW, schedule
 
 H = 3600
 TERMINUS = (46.05, 14.50)

@@ -12,9 +12,13 @@ import re
 import shutil
 import subprocess
 import tempfile
+from typing import TYPE_CHECKING
 
 from .layout import Cell, Column
 from .tables import row_kind
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = logging.getLogger(__name__)
 

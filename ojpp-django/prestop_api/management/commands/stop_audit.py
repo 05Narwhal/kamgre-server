@@ -19,7 +19,7 @@ OFF_ROAD_METERS = 25
 
 def audit(snap: dict, snaps: dict, placed: dict) -> dict:
     """`placed`: stops placed by hand (stop_overrides.csv), not counted as off the road."""
-    built, merged, ways, groups = snap['all'], snap['list'], snap['directions'], snap['groups']
+    built, merged, ways = snap['all'], snap['list'], snap['directions']
     by_id = {s['id']: s for s in built}
 
     def way(marker: dict):

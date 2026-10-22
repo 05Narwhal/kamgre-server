@@ -1,5 +1,5 @@
 """Which vehicle runs which trip: recording from the vehicle feed (learning is in test_stays)."""
-from datetime import date, datetime, timedelta, timezone as tz
+from datetime import date, timedelta
 
 from django.test import TestCase
 from django.utils import timezone
