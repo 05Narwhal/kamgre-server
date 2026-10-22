@@ -3,16 +3,36 @@ the API returns. The pipeline notes each item it leaves out (`note`, with the fi
 the functions below compare and tally. `manage.py coverage_audit` gathers the data and prints the tables.
 
 Board rows and vehicles are matched by trip id; a row of the same line at the same time under another feed's
-trip id (LPP's suburban lines are in the IJPP feed too) counts as shown, as a copy."""
+trip id (LPP's suburban lines are in the IJPP feed too) counts as shown, as a copy.
+
+D6: the collector runs the audit against its own server for a few fixed stops (`Sampler`) and keeps the counts, no
+ids, for /health (`latest`) and `server:top`."""
+import io
+import logging
 import os
 import sys
-from typing import Iterable, Optional
+import threading
+import time
+from typing import Callable, Iterable, Optional
+
+log = logging.getLogger(__name__)
 
 EXAMPLES = 10
 COPY_SECONDS = 60  # s: a row of the same line this close to the expected time is the same run under another feed's id
 SHOWN = ('shown', 'shown as copy')
 # Train rows a replacement bus stands for, and the feed's buses a replacement timetable runs instead of (replacement.py).
 REPLACED = ('shown as its replacement bus', 'replaced by a bus on the board', 'run by a replacement timetable')
+GONE = 'left before its board was read'
+# Left out rightly: nothing to draw, a copy or a bus standing between runs (D4), outside the service area; a run OTP
+# lacks there (upstream, D3), or a board of the other kind for that call. /health counts any other reason as unexplained.
+EXPLAINED = (GONE, 'gone before the board starts', 'no trip id', 'no trip id, a drawn vehicle', 'no trip id, no run fits',
+             'no trip id, two on one run', 'no position', 'stale', 'same vehicle twice', 'abroad', 'outside the map area',
+             'trip not in OTP (upstream)', 'trip not running that day in OTP (upstream)', 'OTP has the trip, not at this stop',
+             'starts here', 'ends here', 'no setting down', 'no picking up')
+SAMPLE_STOPS = 'Kranj AP,Radovljica,Trzin Ind. cona,Polhov Gradec'  # where buses were reported missing (spec D2)
+SAMPLE_EVERY = 15 * 60  # s between the collector's samples (warm: ~40 s, ~14 s CPU, most of it the boards' replacement-bus plan)
+FIRST_SAMPLE = 120      # s after the collector starts: the API warms up first
+CACHE_KEY = 'prestop:coverage'
 
 
 def note(drops: Optional[list], reason: str, *items) -> None:
@@ -208,3 +228,90 @@ def table(title: str, rows: list[dict], ok: tuple = SHOWN) -> list[str]:
     for (status, at), ids in sorted(examples.items(), key=lambda kv: -by_status[kv[0][0]]):
         lines.append(f'   - {status} ({at or "?"}): ' + ', '.join(ids))
     return lines
+
+
+# ---------------------------------------------------------------- /health (D6)
+
+def health_block(map_rows: Optional[list], board_rows: Optional[list], twice: Optional[list], stops: int, minutes: int, now: float) -> dict:
+    """Counts only, from the audit's rows (None: that check did not run): the feed's vehicles drawn or left out by
+    reason; the runs due at the stops shown or not by reason; and how many of those, plus runs listed twice, no
+    EXPLAINED reason covers."""
+    from .mapping import iso
+
+    def counts(rows, ok):
+        out: dict = {}
+        for r in rows:
+            if r['status'] not in ok:
+                out[r['status']] = out.get(r['status'], 0) + 1
+        return out, sum(n for s, n in out.items() if s not in EXPLAINED)
+    block: dict = {'sampledAt': iso(now), 'map': None, 'boards': None}
+    if map_rows is not None:
+        dropped, odd = counts(map_rows, SHOWN)
+        block['map'] = {'inFeed': len(map_rows), 'drawn': len(map_rows) - sum(dropped.values()), 'dropped': dropped, 'unexplained': odd}
+    if board_rows is not None:
+        missed, odd = counts(board_rows, SHOWN + REPLACED)
+        block['boards'] = {'stops': stops, 'minutes': minutes, 'checked': len(board_rows), 'shown': len(board_rows) - sum(missed.values()),
+                           'notShown': missed, 'twice': len(twice or []), 'unexplained': odd + len(twice or [])}
+    block['unexplained'] = sum((block[k] or {}).get('unexplained', 0) for k in ('map', 'boards'))
+    return block
+
+
+def health_line(block: dict) -> str:
+    """One line for the collector's log (`server:top` prints the same from /health)."""
+    parts = []
+    if block.get('map'):
+        parts.append(f'map {block["map"]["drawn"]}/{block["map"]["inFeed"]} drawn')
+    if block.get('boards'):
+        b = block['boards']
+        parts.append(f'boards {b["shown"]}/{b["checked"]} shown at {b["stops"]} stops, {b["minutes"]} min')
+    return ' · '.join(parts + [f'{block["unexplained"]} unexplained'])
+
+
+def save(block: dict) -> None:
+    from django.core.cache import cache
+    cache.set(CACHE_KEY, block, 3 * SAMPLE_EVERY)  # a sampler that stopped leaves /health without the block
+
+
+def latest() -> Optional[dict]:
+    """The collector's last sample, or None: none in the last 3 periods, or the cache is down (/health answers anyway)."""
+    from django.core.cache import cache
+    try:
+        return cache.get(CACHE_KEY)
+    except Exception as e:
+        log.warning('coverage: cache unavailable: %r', e)
+        return None
+
+
+def run_sample() -> None:
+    """The audit against this server for SAMPLE_STOPS, saved for /health; its tables with their ids are dropped, the
+    log gets the counts."""
+    from django.core.management import call_command
+    from django.db import connection
+    try:
+        call_command('coverage_audit', against='local', stops=SAMPLE_STOPS, sample=0, checks='map,live,timetable', save=True, stdout=io.StringIO())
+        block = latest()
+        if block:
+            log.info('coverage: %s', health_line(block))
+    except Exception as e:  # never let the sample stop the collector
+        log.warning('coverage sample failed: %r', e)
+    finally:
+        connection.close()  # this thread's own
+
+
+class Sampler:
+    """The collector's coverage sample: `poll` each loop starts `run` in a thread of its own (the polls keep their
+    pace) `first` s after the start and every `every` s after, one at a time."""
+
+    def __init__(self, first: float = FIRST_SAMPLE, every: float = SAMPLE_EVERY, run: Callable[[], None] = run_sample, now: Optional[float] = None):
+        self.every, self.run = every, run
+        self.next = (time.monotonic() if now is None else now) + first
+        self.thread: Optional[threading.Thread] = None
+
+    def poll(self, now: Optional[float] = None) -> bool:
+        now = time.monotonic() if now is None else now
+        if now < self.next or (self.thread and self.thread.is_alive()):
+            return False
+        self.next = now + self.every
+        self.thread = threading.Thread(target=self.run, name='coverage sample', daemon=True)
+        self.thread.start()
+        return True

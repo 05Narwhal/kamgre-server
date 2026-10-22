@@ -4,6 +4,7 @@
     manage.py coverage_audit --against prod           # against api.kamgre.si (GETs only)
     manage.py coverage_audit --stops 'Kropa,IJPP:123' --minutes 90
     manage.py coverage_audit --replay-days 3          # trips the collector recorded on past days, through the boards
+    manage.py coverage_audit --stops ... --save       # also keep the counts (no ids) for /health (the collector's sample, D6)
 
 Checks, each a table by reason and by feed with up to coverage.EXAMPLES examples per reason:
 - map: every entity of the combined GTFS-RT vehicle feed, every SŽ live report and every timetable train on its
@@ -36,8 +37,8 @@ LOCAL = ZoneInfo('Europe/Ljubljana')
 WORKERS = 4
 LEAD = 300        # s: live runs are checked at stops at least this far ahead (the audit takes minutes)
 MAX_PAGES = 12    # boards read per stop, going on as the app does
-TARGET_LAG = 15   # s between the two reads of the target's vehicles
-GONE = 'left before its board was read'
+TARGET_LAG = 15   # s between reads of the target's vehicles
+TARGET_READS = 5  # reads at most (a minute) while a vehicle built here is not yet in the target's
 STOPTIMES_Q = '''query($id: String!, $date: String!) { stop(id: $id) {
   stoptimesForServiceDate(date: $date, omitNonPickups: false, omitCanceled: false) {
     pattern { route { gtfsId shortName longName mode } }
@@ -59,13 +60,17 @@ class Command(BaseCommand):
         parser.add_argument('--seed', type=int, default=22)
         parser.add_argument('--replay-days', type=int, default=0)
         parser.add_argument('--checks', default='map,live,timetable', help='any of map, live, timetable, replay')
+        parser.add_argument('--save', action='store_true', help='keep the counts for /health (against local only)')
 
     def handle(self, *args, **opts):
         self.base = TARGETS[opts['against']]
         self.now = int(time.time())
         self.horizon = max(5, opts['minutes']) * 60
         self.read_at: dict = {}
+        self.results: dict = {}
         checks = set(opts['checks'].split(',')) | ({'replay'} if opts['replay_days'] else set())
+        if opts['save'] and opts['against'] != 'local':
+            raise CommandError('--save keeps the counts of this server only (--against local)')
         try:
             self._get('/health')
         except Exception as e:
@@ -84,6 +89,11 @@ class Command(BaseCommand):
             self._timetable(picked)
         if 'replay' in checks:
             self._replay(stops, members, opts['replay_days'], rng)
+        if opts['save']:
+            boards = None if 'live' not in checks and 'timetable' not in checks else self.results.get('live', []) + self.results.get('timetable', [])
+            block = coverage.health_block(self.results.get('map'), boards, self.results.get('twice'), len(picked), self.horizon // 60, self.now)
+            coverage.save(block)
+            self.stdout.write('saved for /health: ' + coverage.health_line(block))
         self.stdout.write(f'took {int(time.time()) - self.now} s')
 
     # ------------------------------------------------------------ helpers
@@ -182,13 +192,11 @@ class Command(BaseCommand):
     def _map(self):
         drops: list = []
         box = {'bbox': ','.join(str(v) for v in views.SLOVENIA)}
+        # A fresh feed (seconds old) that the build reads too: an old one is served while a background refresh runs,
+        # and a refresh landing later would make its new vehicles look lost (the collector's runs, D6).
+        feed = sources.positions._refresh(force=True)
         here = sources._load_vehicles(drops)
-        target = self._get('/vehicles', box) or []
-        # The target refreshes the feed on its own clock: a vehicle new in the feed is counted once it has caught up.
-        time.sleep(TARGET_LAG)
-        target += self._get('/vehicles', box) or []
-        target_ids = {v['id'] for v in target}
-        entities = sources.positions.peek().value
+        entities = feed.value
         by_id = {mapping.entity_vehicle_id(e): e for e in entities}
         kept = set()
         for v in here:
@@ -196,7 +204,16 @@ class Command(BaseCommand):
                 coverage.note(drops, 'outside the map area', by_id[v['id']])
             else:
                 kept.add(v['id'])
-        rows = coverage.map_rows(entities, drops, kept, target_ids, mapping.entity_vehicle_id)
+        # The target refreshes on its own clock (its feed and vehicles each served up to ~35 s old while refreshing):
+        # a vehicle new in the feed counts once it has caught up, read again until then, TARGET_READS reads at most.
+        target = self._get('/vehicles', box) or []
+        for _ in range(TARGET_READS - 1):
+            if not (kept & set(by_id)) - {v['id'] for v in target}:
+                break
+            time.sleep(TARGET_LAG)
+            target += self._get('/vehicles', box) or []
+        target_ids = {v['id'] for v in target}
+        rows = self.results['map'] = coverage.map_rows(entities, drops, kept, target_ids, mapping.entity_vehicle_id)
         self._print('Map: GTFS-RT vehicles', rows)
         # Timetable trains and replacement buses on their way, and SŽ's own reports (by train number).
         trains = [{'feed': coverage.feed(d['item']['id']), 'status': d['reason'], 'at': d['at'], 'example': d['item']['id']}
@@ -268,12 +285,13 @@ class Command(BaseCommand):
                 # Its live time (as last known) before the board was read: then, or by the board's own note (an early bus that went)
                 when = coverage.time_at(latest.get(w['tripId']), w['stopId']) or w['at']
                 if status == 'gone before the board starts' or (status not in coverage.SHOWN and when and when < self.read_at[(w['stopId'], kind)] + 60):
-                    status, at = GONE, ''
+                    status, at = coverage.GONE, ''
                 if status == 'not returned by OTP for the board':
                     status = w['otp'] = self._otp_reason(w['tripId'], w['stopId'], day) if (infos.get(w['tripId']) or {}).get('routeId') else 'trip not in OTP (upstream)'
             rows.append({'feed': coverage.feed(w['tripId']), 'status': status, 'at': at,
                          'example': f'{w["tripId"]}@{w["stopId"]}' + (f' {datetime.fromtimestamp(w["at"], LOCAL):%H:%M}' if w['at'] else '')})
-        self._print(f'Boards from live: {len(at_stops)} at the stops + {len(chosen) - len(at_stops)} of {len(others)} elsewhere', rows, coverage.SHOWN + coverage.REPLACED + (GONE,))
+        self.results['live'] = rows
+        self._print(f'Boards from live: {len(at_stops)} at the stops + {len(chosen) - len(at_stops)} of {len(others)} elsewhere', rows, coverage.SHOWN + coverage.REPLACED + (coverage.GONE,))
 
     # ------------------------------------------------------------ boards from the timetable
 
@@ -313,7 +331,7 @@ class Command(BaseCommand):
                 seen.add((w['tripId'], w['at']))
                 status, at = coverage.board_status(w, target, here, drops)
                 if status not in coverage.SHOWN and w['at'] < self.read_at[(s['id'], 'departure')] + 60:
-                    status, at = GONE, ''
+                    status, at = coverage.GONE, ''
                 if status == 'not returned by OTP for the board':
                     status = self._otp_reason(w['tripId'], w['stopId'], w['day'])
                 rows.append({'feed': coverage.feed(w['tripId']), 'status': status, 'at': at,
@@ -321,7 +339,8 @@ class Command(BaseCommand):
             for a, b in coverage.duplicates(target or []):
                 doubles.append({'feed': coverage.feed(b.get('tripId')), 'status': 'listed twice', 'at': 'target API',
                                 'example': f'{a.get("routeName")} {a.get("scheduledAt")} {a.get("tripId")} + {b.get("tripId")}@{s["name"]}'})
-        self._print(f'Boards from timetable: next {self.horizon // 60} min at {len(picked)} stops', rows, coverage.SHOWN + coverage.REPLACED + (GONE,))
+        self.results['timetable'], self.results['twice'] = rows, doubles
+        self._print(f'Boards from timetable: next {self.horizon // 60} min at {len(picked)} stops', rows, coverage.SHOWN + coverage.REPLACED + (coverage.GONE,))
         self._print('Boards: the same run twice', doubles, ok=())
 
     # ------------------------------------------------------------ replay of recorded days

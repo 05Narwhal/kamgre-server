@@ -130,9 +130,14 @@ draw() {
       printf 'Users    %s  %s in 15 min / %s  %snow %s · 5 min %s%s\n' "$(bar $((a15 * 100 / MAX_ACTIVE)))" "$a15" "$MAX_ACTIVE" "$D" \
         "$(redis-cli -u "$REDIS_URL" --no-auth-warning PFCOUNT "${k1[@]}")" "$(redis-cli -u "$REDIS_URL" --no-auth-warning PFCOUNT "${k5[@]}")" "$N"
     else printf 'Users    %sunavailable%s\n' "$R" "$N"; fi
-    health=$(curl -fsS -o /tmp/prestop-top-health -w '%{time_total}' --max-time 5 http://127.0.0.1:8066/api/v1/health 2>/dev/null) \
-      && printf 'Health   %s ms  %s\n' "$(awk -v t="$health" 'BEGIN { printf "%d", t * 1000 }')" "$(jq -r '"api \(.api) · db \(.database) · collector \(.collector.status // "?")" + (if .collector.updatedAt then " (\(now - (.collector.updatedAt | sub("\\.[0-9]+"; "") | fromdateiso8601) | floor)s ago)" else "" end)' /tmp/prestop-top-health 2>&1 | head -1)" \
-      || printf 'Health   %sunavailable%s\n' "$R" "$N"
+    if health=$(curl -fsS -o /tmp/prestop-top-health -w '%{time_total}' --max-time 5 http://127.0.0.1:8066/api/v1/health 2>/dev/null); then
+      printf 'Health   %s ms  %s\n' "$(awk -v t="$health" 'BEGIN { printf "%d", t * 1000 }')" "$(jq -r '"api \(.api) · db \(.database) · collector \(.collector.status // "?")" + (if .collector.updatedAt then " (\(now - (.collector.updatedAt | sub("\\.[0-9]+"; "") | fromdateiso8601) | floor)s ago)" else "" end)' /tmp/prestop-top-health 2>&1 | head -1)"
+      # Buses the app leaves out: the collector's sample every 15 min (prestop_api/coverage.py); details: `yarn coverage`
+      printf 'Coverage %s\n' "$(jq -r --arg Y "$Y" --arg D "$D" --arg N "$N" '.coverage as $c | if $c == null then "\($D)no sample in the last 45 min\($N)" else
+        ([if $c.map then "map \($c.map.drawn)/\($c.map.inFeed) drawn" else empty end, if $c.boards then "boards \($c.boards.shown)/\($c.boards.checked) shown at \($c.boards.stops) stops" else empty end]
+          + ["\($c.unexplained) unexplained"] | join(" · ")) as $t
+        | (if $c.unexplained > 0 then "\($Y)\($t)\($N)" else $t end) + " \($D)(\((now - ($c.sampledAt | sub("\\.[0-9]+"; "") | fromdateiso8601)) / 60 | floor) min ago)\($N)" end' /tmp/prestop-top-health 2>&1 | head -1)"
+    else printf 'Health   %sunavailable%s\n' "$R" "$N"; fi
     echo; printf '%s\n' "$LEARN_OUT"
 }
 while true; do

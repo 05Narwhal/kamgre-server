@@ -123,6 +123,14 @@ class FacadeTests(TestCase):
         self.assertEqual((response.status_code, response.json()['database']), (200, 'ready'))
         self.assertIsNone(response.json()['maintenance'])
 
+    def test_health_carries_the_collectors_last_coverage_sample(self):
+        from prestop_api import coverage
+        with mock.patch.object(coverage, 'latest', return_value=None):
+            self.assertIsNone(self.client.get('/api/v1/health').json()['coverage'])
+        block = {'sampledAt': '2026-10-22T19:30:00Z', 'map': None, 'boards': None, 'unexplained': 0}
+        with mock.patch.object(coverage, 'latest', return_value=block):
+            self.assertEqual(self.client.get('/api/v1/health').json()['coverage'], block)
+
     def test_health_reports_the_maintenance_flag(self):
         import json
         import tempfile

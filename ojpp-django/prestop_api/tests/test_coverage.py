@@ -1,6 +1,12 @@
 """The coverage audit (spec 2026-10-22 D2): drop notes name the line that left an item out, and the checks tell a
-shown run, a copy under another feed's id, and a dropped one apart."""
-from django.test import SimpleTestCase
+shown run, a copy under another feed's id, and a dropped one apart. D6: the collector's sample of it for /health."""
+import io
+import json
+import threading
+from unittest import mock
+
+from django.core.management import CommandError, call_command
+from django.test import SimpleTestCase, override_settings
 
 from prestop_api import coverage, mapping, replacement
 
@@ -159,3 +165,120 @@ class TableTests(SimpleTestCase):
         lines = coverage.table('Map', rows)
         self.assertEqual(lines[0], '== Map: 3 checked, 2 not shown')
         self.assertIn('   - stale (mapping.py:9): b, c', lines)
+
+
+def row(status):
+    return {'feed': 'IJPP', 'status': status, 'at': 'mapping.py:444', 'example': 'IJPP:478070@IJPP:1165083'}
+
+
+class HealthTests(SimpleTestCase):
+    """D6: /health's coverage block from the collector's sample. Counts only; a bus left out for a reason that is
+    neither by design nor upstream's counts as unexplained, and so does a run listed twice."""
+
+    def test_counts_by_reason_and_what_is_unexplained(self):
+        map_rows = [row('shown')] * 3 + [row('stale'), row('no trip id, no run fits'), row('failed contract')]
+        boards = [row('shown'), row('shown as copy'), row('shown as its replacement bus'), row(coverage.GONE),
+                  row('trip not in OTP (upstream)'), row('not returned by OTP for the board')]
+        block = coverage.health_block(map_rows, boards, [row('listed twice')], stops=7, minutes=60, now=NOW)
+        self.assertEqual(block['map'], {'inFeed': 6, 'drawn': 3, 'unexplained': 1,
+                                        'dropped': {'stale': 1, 'no trip id, no run fits': 1, 'failed contract': 1}})
+        self.assertEqual(block['boards'], {'stops': 7, 'minutes': 60, 'checked': 6, 'shown': 3, 'twice': 1, 'unexplained': 2,
+                                           'notShown': {coverage.GONE: 1, 'trip not in OTP (upstream)': 1, 'not returned by OTP for the board': 1}})
+        self.assertEqual((block['unexplained'], block['sampledAt']), (3, mapping.iso(NOW)))
+        self.assertNotIn('IJPP:', json.dumps(block))
+        self.assertEqual(coverage.health_line(block), 'map 3/6 drawn · boards 3/6 shown at 7 stops, 60 min · 3 unexplained')
+
+    def test_a_check_left_out_has_no_counts(self):
+        block = coverage.health_block([row('shown')], None, None, stops=0, minutes=60, now=NOW)
+        self.assertEqual((block['boards'], block['unexplained']), (None, 0))
+        self.assertEqual(coverage.health_line(block), 'map 1/1 drawn · 0 unexplained')
+
+    @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'coverage-test'}})
+    def test_the_last_sample_is_kept_for_health(self):
+        self.assertIsNone(coverage.latest())
+        coverage.save({'unexplained': 0})
+        self.assertEqual(coverage.latest(), {'unexplained': 0})
+
+    @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': 'redis://127.0.0.1:1/0'}})
+    def test_health_answers_while_the_cache_is_down(self):
+        self.assertIsNone(coverage.latest())
+
+    def test_only_this_servers_own_sample_is_saved(self):
+        with self.assertRaises(CommandError):
+            call_command('coverage_audit', against='prod', save=True, stdout=io.StringIO())
+
+
+@override_settings(PRESTOP_SZ_LIVE_URL='')
+class MapCheckTests(SimpleTestCase):
+    """The audit's map check run soon after another (the collector's samples): the feed cache answers with its old
+    copy while it refreshes in the background, and the target serves its vehicles up to a minute old."""
+    FEEDS = [[entity('IJPP:1', 'V1')], [entity('IJPP:1', 'V1'), entity('IJPP:2', 'V2')],
+             [entity('IJPP:1', 'V1'), entity('IJPP:2', 'V2'), entity('IJPP:3', 'V3')]]
+
+    def run_map(self, target_reads):
+        import time as clock
+        from prestop_api import sources
+        from prestop_api.management.commands.coverage_audit import Command
+        from prestop_api.upstream import Cached, Snapshot
+        positions = Cached(lambda: self.FEEDS[1], ttl=5, max_stale=120, revalidate=30)
+        positions._snap = Snapshot(self.FEEDS[0], clock.time() - 20)  # inside the serve-old-and-refresh window
+        positions._refresh_in_background = lambda: None
+
+        def build(drops):
+            return [{'id': mapping.entity_vehicle_id(e), 'quality': 'observed', 'latitude': 46.05, 'longitude': 14.5, 'mode': 'bus'}
+                    for e in positions.get().value]
+
+        def background_refresh_lands(_seconds):
+            positions._snap = Snapshot(self.FEEDS[2], clock.time())
+        command = Command(stdout=io.StringIO())
+        command.results = {}
+        reads = [[{'id': mapping.entity_vehicle_id(e), 'mode': 'bus'} for e in feed] for feed in target_reads]
+        with mock.patch.object(sources, 'positions', positions), mock.patch.object(sources, '_load_vehicles', build), \
+                mock.patch.object(command, '_get', side_effect=reads + [reads[-1]] * 9) as get, \
+                mock.patch('prestop_api.management.commands.coverage_audit.time.sleep', background_refresh_lands):
+            command._map()
+        return [r['status'] for r in command.results['map']], get.call_count
+
+    def test_rows_come_from_the_feed_the_vehicles_were_built_from(self):
+        """A refresh landing while the target was read made the new vehicles look lost ('other')."""
+        self.assertEqual(self.run_map([self.FEEDS[0], self.FEEDS[2]]), (['shown', 'shown'], 2))
+
+    def test_the_target_is_read_again_until_it_has_caught_up(self):
+        self.assertEqual(self.run_map([self.FEEDS[1]]), (['shown', 'shown'], 1))
+        from prestop_api.management.commands.coverage_audit import TARGET_READS
+        self.assertEqual(self.run_map([self.FEEDS[0]]), (['shown', 'missing on target'], TARGET_READS))
+
+
+class SamplerTests(SimpleTestCase):
+    def test_samples_on_its_schedule_one_at_a_time(self):
+        started, gate = [], threading.Event()
+
+        def run():
+            started.append(1)
+            gate.wait(5)
+        sampler = coverage.Sampler(first=120, every=900, run=run, now=0)
+        self.assertFalse(sampler.poll(now=60))  # the API warms up first
+        self.assertTrue(sampler.poll(now=120))
+        self.assertFalse(sampler.poll(now=1200))  # still running: never two at once
+        gate.set()
+        sampler.thread.join(5)
+        self.assertTrue(sampler.poll(now=1200))
+        sampler.thread.join(5)
+        self.assertFalse(sampler.poll(now=1300))  # the next one `every` s after this one
+        self.assertEqual(len(started), 2)
+
+    def test_a_sample_audits_this_server_and_logs_counts_only(self):
+        block = coverage.health_block([row('shown'), row('stale')], [row('shown')], [], stops=7, minutes=60, now=NOW)
+        with mock.patch('django.core.management.call_command') as call, mock.patch.object(coverage, 'latest', return_value=block), \
+                self.assertLogs('prestop_api.coverage', 'INFO') as logs:
+            coverage.run_sample()
+        name, options = call.call_args.args[0], call.call_args.kwargs
+        self.assertEqual((name, options['against'], options['save'], options['sample']), ('coverage_audit', 'local', True, 0))
+        self.assertEqual(options['stops'], coverage.SAMPLE_STOPS)
+        self.assertEqual(options['checks'], 'map,live,timetable')
+        self.assertEqual(logs.output, ['INFO:prestop_api.coverage:coverage: map 1/2 drawn · boards 1/1 shown at 7 stops, 60 min · 0 unexplained'])
+
+    def test_a_failed_sample_is_logged_not_raised(self):
+        with mock.patch('django.core.management.call_command', side_effect=CommandError('does not answer')), \
+                self.assertLogs('prestop_api.coverage', 'WARNING'):
+            coverage.run_sample()

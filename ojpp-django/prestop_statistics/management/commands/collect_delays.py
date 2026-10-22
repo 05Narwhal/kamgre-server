@@ -4,7 +4,7 @@ import time
 from django.conf import settings
 from django.core.management import BaseCommand
 
-from prestop_api import analytics, detected, platforms
+from prestop_api import analytics, coverage, detected, platforms
 from prestop_api.upstream import UpstreamError, get_json
 from prestop_statistics import blocks, dwell, learned, stays
 from prestop_statistics.collector import ScheduleCache, collect_once
@@ -23,6 +23,7 @@ class Command(BaseCommand):
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(message)s')
         schedules = ScheduleCache()
         dwells = dwell.DwellTracker()
+        sampler = coverage.Sampler()
         backoff = interval
         while True:
             started = time.monotonic()
@@ -70,6 +71,11 @@ class Command(BaseCommand):
                     logger.info('usage days saved: %s', saved)
             except Exception as e:  # never let the counts stop the delay collector
                 logger.warning('usage counts failed: %r', e)
+            try:
+                # Every 15 min, in a thread of its own: the buses the map and a few boards leave out, counted for /health.
+                sampler.poll()
+            except Exception as e:  # never let the sample stop the delay collector
+                logger.warning('coverage sample failed: %r', e)
             if once:
                 return
             # Until the next poll, read the vehicle positions every dwell.POLL s: a 20 s dwell needs more than one
