@@ -334,6 +334,19 @@ class DayPlanTests(SimpleTestCase):
         self.derive(slot, trips, TABLES)
         self.assertTrue([b for b in slot['synthetic'] if b.get('source') == 'timetable'])
 
+    def test_notice_points_that_never_loaded_do_not_rebuild_the_plan_every_time(self):
+        # D8: with modra.ninja down since the start, each call made a new {} for them: every board and every warmer
+        # round rebuilt the plan (2-3 s).
+        snap = lambda value: mock.Mock(value=value)  # noqa: E731
+        alerts, patterns, stops = snap([]), snap([]), snap([])
+        with mock.patch.object(sources.alerts_raw, 'peek', return_value=alerts), \
+                mock.patch.object(closures.bus_patterns, 'peek', return_value=patterns), \
+                mock.patch.object(closures.points, 'peek', return_value=None), \
+                mock.patch.object(sources.stops, 'peek', return_value=stops):
+            first, again = closures.inputs(), closures.inputs()
+        self.assertEqual(first[2], {})
+        self.assertIs(first[2], again[2])
+
     def test_the_warmer_reads_new_timetables_and_rebuilds_todays_and_tomorrows_plans(self):
         today = datetime(2026, 10, 14).date()
         with mock.patch.object(sztimetables, 'load') as load, mock.patch.object(scheduled, 'day_plan') as day_plan,                 mock.patch.object(scheduled, 'service_day', return_value=today):

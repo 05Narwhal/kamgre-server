@@ -849,7 +849,10 @@ def inputs():
     snaps = [sources.alerts_raw.peek(), bus_patterns.peek(), points.peek(), sources.stops.peek()]
     if any(s is None for s in snaps[:2]) or snaps[3] is None:
         return None
-    return snaps[0].value, snaps[1].value, snaps[2].value if snaps[2] else {}, snaps[3].value
+    return snaps[0].value, snaps[1].value, snaps[2].value if snaps[2] else _NO_POINTS, snaps[3].value
+
+
+_NO_POINTS: dict = {}  # notice points not loaded (yet): always this one object, or each call rebuilds the plan
 
 
 def build(trips: list[dict], real: dict[str, list[dict]], loaded, tables: Optional[sztimetables.Timetables] = None) -> dict:
