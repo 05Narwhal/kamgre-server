@@ -102,9 +102,15 @@ def stop_directions(stop_id: str) -> list[tuple[float, float]]:
     return ((snap.value.get('directions') or {}).get(stop_id) or []) if snap else []
 
 
-def stop_group(stop_id: str) -> list[str]:
-    """Every stop id that is the same physical stop as `stop_id` (just itself if none)."""
+def stop_group(stop_id: str, wait: bool = False) -> list[str]:
+    """Every stop id that is the same physical stop as `stop_id` (just itself if none). `wait`: with no stop
+    index yet (~20 s after a start), wait for it instead of answering for this one stop (a board would miss the others)."""
     snap = stops.peek()
+    if snap is None and wait:
+        try:
+            snap = stops.get()
+        except UpstreamError as e:
+            logger.warning('Stop groups unavailable: %r', e)
     return (snap.value.get('groups') or {}).get(stop_id, [stop_id]) if snap else [stop_id]
 
 
@@ -577,7 +583,7 @@ def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[l
         alert_list = alerts(language)
     except UpstreamError:
         alert_list = []
-    members = stop_group(stop_id)
+    members = stop_group(stop_id, wait=True)
     if len(members) == 1:
         return _capped(_with_live_platforms(_member_board(stop_id, kind, start, alert_list, drops), stop_id, kind, start, drops), drops)
     from concurrent.futures import ThreadPoolExecutor

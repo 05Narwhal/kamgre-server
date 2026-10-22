@@ -149,6 +149,19 @@ class MemberNameTests(SimpleTestCase):
             items = sources._board('IJPP:1', 'departure', 0, 'sl')
         self.assertEqual(sorted(i['tripId'] for i in items), ['IJPP:455744', 'IJPP:455745', 'IJPP:5', 'IJPP:77'])
 
+    def test_a_board_asked_for_before_the_stop_index_is_built_waits_for_it(self):
+        """D3: for ~20 s after a start (warm.py builds the stop index after the timetable) a merged stop's board
+        listed its head stop only; a board waits for the index, other callers still never wait."""
+        from prestop_api.upstream import Cached
+        index = Cached(lambda: {'groups': {'IJPP:1': ['IJPP:1', 'LPP:1']}}, ttl=3600, max_stale=3600)
+        with mock.patch.object(sources, 'stops', index):
+            self.assertEqual(sources.stop_group('IJPP:1'), ['IJPP:1'])
+            self.assertIsNone(index.peek())
+            self.assertEqual(sources.stop_group('IJPP:1', wait=True), ['IJPP:1', 'LPP:1'])
+        failing = Cached(mock.Mock(side_effect=RuntimeError('OTP down')), ttl=3600, max_stale=3600)
+        with mock.patch.object(sources, 'stops', failing), self.assertLogs('prestop_api.sources', 'WARNING'):
+            self.assertEqual(sources.stop_group('IJPP:1', wait=True), ['IJPP:1'])
+
 
 class SearchTests(SimpleTestCase):
     """Search shows one result per place: namesakes far apart (Radovljica's bus stop, 340 m from its station) are two."""
