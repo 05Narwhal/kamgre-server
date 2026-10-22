@@ -261,11 +261,13 @@ class Command(BaseCommand):
                 status, at = 'stop not in our stop index', 'sources._load_stops'
             else:
                 status, at = w['status']
-                if status == 'ends here':
-                    status, at = coverage.board_status(w, *boards[(w['stopId'], 'arrival')])
+                kind = 'departure'
+                if status == 'ends here':  # read in a second pass, minutes later: by then the bus may have come
+                    kind = 'arrival'
+                    status, at = coverage.board_status(w, *boards[(w['stopId'], kind)])
                 # Its live time (as last known) before the board was read: then, or by the board's own note (an early bus that went)
                 when = coverage.time_at(latest.get(w['tripId']), w['stopId']) or w['at']
-                if status == 'gone before the board starts' or (status not in coverage.SHOWN and when and when < self.read_at[(w['stopId'], 'departure')] + 60):
+                if status == 'gone before the board starts' or (status not in coverage.SHOWN and when and when < self.read_at[(w['stopId'], kind)] + 60):
                     status, at = GONE, ''
                 if status == 'not returned by OTP for the board':
                     status = w['otp'] = self._otp_reason(w['tripId'], w['stopId'], day) if (infos.get(w['tripId']) or {}).get('routeId') else 'trip not in OTP (upstream)'
