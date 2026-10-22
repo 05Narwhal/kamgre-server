@@ -42,3 +42,25 @@ class BoardWindowTests(SimpleTestCase):
             # By day OTP has each train's live time on its run: nothing more is asked for
             sources._member_board('IJPP:s', 'departure', at('2026-10-20 10:00'), [])
             self.assertEqual(otp.query.call_args[0][1]['start'], at('2026-10-20 10:00'))
+
+    def test_a_late_run_otp_has_no_live_time_for_stays_until_it_leaves(self):
+        """D3: A6295 (IJPP:463770) at Kranj AP, 13:30 and +19 min in the feed, which OTP left out: at 13:42 OTP no
+        longer listed it, so the board lost a bus still in its bay (reported: a bus to Bled at Kranj, then it came)."""
+        from unittest import mock
+        from prestop_api import mapping
+        from prestop_api.tests.test_mapping import stoptime
+        day, here = at('2026-10-22 00:00'), 'IJPP:1121238'
+
+        def row(trip, dep):
+            st = stoptime(trip, here, 'IJPP:y', dep=at(dep) - day)
+            return {**st, 'serviceDay': day}
+        updates = mapping.trip_update_index([{'tripUpdate': {'trip': {'tripId': 'IJPP:463770', 'startDate': '20261022'}, 'stopTimeUpdate': [
+            {'stopSequence': 1, 'stopId': here, 'departure': {'delay': 1149, 'time': str(at('2026-10-22 13:30') + 1149)}}]}}])
+        otp = mock.Mock()
+        otp.query.return_value = {'stop': {'stoptimesWithoutPatterns': [
+            row('IJPP:463770', '2026-10-22 13:30'), row('IJPP:gone', '2026-10-22 13:35'), row('IJPP:next', '2026-10-22 13:50')]}}
+        with mock.patch.object(sources, 'otp', return_value=otp), mock.patch('prestop_api.trainlive.trip_updates', return_value=updates):
+            board = sources._member_board(here, 'departure', at('2026-10-22 13:42'), [])
+            self.assertEqual(otp.query.call_args[0][1]['start'], at('2026-10-22 13:42') - 1149)
+            self.assertEqual([(r['tripId'], r['effectiveAt']) for r in board],
+                             [('IJPP:463770', '2026-10-22T11:49:09Z'), ('IJPP:next', None)])

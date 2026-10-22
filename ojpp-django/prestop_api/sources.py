@@ -46,7 +46,7 @@ BOARD_Q = '''query($id: String!, $start: Long, $range: Int, $n: Int, $omit: Bool
       serviceDay scheduledArrival scheduledDeparture realtimeArrival realtimeDeparture realtime realtimeState
       headsign stopPosition pickupType dropoffType stop { platformCode }
       trip { gtfsId tripHeadsign route { gtfsId shortName longName mode agency { gtfsId } }
-        departureStoptime { scheduledDeparture stop { gtfsId name } } arrivalStoptime { stop { gtfsId name } } } } } }'''
+        departureStoptime { stopPosition scheduledDeparture stop { gtfsId name } } arrivalStoptime { stopPosition stop { gtfsId name } } } } } }'''
 TRIP_FIELDS = 'gtfsId directionId tripHeadsign route { gtfsId } arrivalStoptime { stop { name } }'
 
 
@@ -417,19 +417,32 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict], d
             return mapping.build_board(stop_id, own, kind, alert_list, _live_delays(), drops=drops)
     # In the small hours OTP has a late train still out from yesterday at its timetable (mapping.update_run), so it
     # leaves it out once that time has passed here: the hours before are asked for too, and kept when still to come.
+    # So is a run whose trip update OTP left out (mapping.update_day), by as much as the feed has a run late here.
     from datetime import datetime
     from zoneinfo import ZoneInfo
+    from . import trainlive
+    updates = trainlive.trip_updates()
     back = mapping.MAX_UNCONFIRMED_DELAY if datetime.fromtimestamp(start, ZoneInfo('Europe/Ljubljana')).hour < SERVICE_DAY_ENDS_HOUR else 0
+    back = max(back, min(mapping.MAX_UNCONFIRMED_DELAY, max((d for at, d in _late_by_stop(updates).get(stop_id, []) if at is None or at >= start), default=0)))
     data = otp().query(BOARD_Q, {'id': stop_id, 'start': start - back, 'range': _until_service_day_end(start) + back, 'n': BOARD_MAX, 'omit': kind == 'departure'})
     stop = data.get('stop')
     if stop is None:
         return None
-    from . import trainlive
-    rows = mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays(), trainlive.trip_updates(), drops)
+    rows = mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays(), updates, drops)
     if not back:
         return rows
     coverage.note(drops, 'gone before the board starts', *(r for r in rows if (r['effectiveAt'] or r['scheduledAt']) < mapping.iso(start)))
     return [r for r in rows if (r['effectiveAt'] or r['scheduledAt']) >= mapping.iso(start)]
+
+
+_late: tuple = (None, {})  # the trip updates last indexed, and their index (mapping.late_by_stop)
+
+
+def _late_by_stop(updates: dict) -> dict:
+    global _late
+    if _late[0] is not updates:
+        _late = (updates, mapping.late_by_stop(updates))
+    return _late[1]
 
 
 def _live_delays() -> dict[str, Optional[int]]:

@@ -94,6 +94,17 @@ class BoardTests(SimpleTestCase):
                                    stoptime('Z:c', NOW - day + 180, pickup='NONE'), stoptime('Z:d', NOW - day + 7200)]}]
         self.assertEqual([r['tripId'] for r in coverage.timetable_departures(patterns, 'Z:5', NOW, NOW + 3600)], ['Z:a'])
 
+    def test_a_run_that_starts_and_ends_at_the_stop_leaves_from_its_first_call(self):
+        day = NOW - NOW % 86400
+        calls = [stoptime('Z:loop', NOW - day + 60, last='Z:5'), stoptime('Z:loop', NOW - day + 1800, last='Z:5')]
+        for st, position in zip(calls, (1, 9)):
+            st['stopPosition'] = position
+            st['trip']['departureStoptime'].update(stop={'gtfsId': 'Z:5'}, stopPosition=1)
+            st['trip']['arrivalStoptime']['stopPosition'] = 9
+        patterns = [{'pattern': {'route': {'gtfsId': 'Z:R', 'shortName': '51'}}, 'stoptimes': calls}]
+        self.assertEqual([r['at'] for r in coverage.timetable_departures(patterns, 'Z:5', NOW, NOW + 3600)], [NOW + 60])
+        self.assertEqual([r['at'] for r in coverage.timetable_departures(patterns, 'Z:5', NOW, NOW + 3600, 'arrival')], [NOW + 1800])
+
     def test_the_same_run_twice_is_found(self):
         at = mapping.iso(NOW)
         rows = [{'id': 'IJPP:1@1/1', 'tripId': 'IJPP:1', 'routeName': '51', 'scheduledAt': at, 'destination': 'Polhov Gradec'},

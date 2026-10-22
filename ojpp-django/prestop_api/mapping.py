@@ -326,29 +326,62 @@ def _shows(vehicle_delay: Optional[int], delay: int) -> bool:
 UPDATE_AROUND = 3 * 3600  # s: a trip update sent this far from a run's times is about another day's run (trainlive.AROUND)
 
 
-def update_day(update: Optional[dict], begin: int, end: int) -> Optional[int]:
-    """Which run a trip update that names no start date is about, for the run from `begin` to `end` (its scheduled
-    times): 0 this one, -1 the run a day before, None OTP's placement stands (a start date, or sent at another time)."""
-    if not update or (update.get('trip') or {}).get('startDate'):
+def update_day(update: Optional[dict], begin: int, end: int, day: Optional[int] = None) -> Optional[int]:
+    """Which run a trip update is about, for the run from `begin` to `end` (its scheduled times) of service day `day`
+    (OTP's serviceDay; else `begin`'s): 0 this one, -1 the run a day before, None OTP's placement stands (another
+    day's, or sent at another time). Callers take the update only where OTP has no live times of its own: one naming
+    this run's start date is about it, yet OTP left some out (D3, 22 Oct 2026: A6295 +19 min, LPP 25, N0128)."""
+    if not update:
         return None
+    named = (update.get('trip') or {}).get('startDate')
+    if named:
+        from zoneinfo import ZoneInfo
+        when = begin if day is None else day + 12 * 3600  # serviceDay is noon less 12 h, also when the clocks change
+        return 0 if named == datetime.fromtimestamp(when, ZoneInfo('Europe/Ljubljana')).strftime('%Y%m%d') else None
     sent = update.get('timestamp') or time.time()
     if begin - 86400 - UPDATE_AROUND <= sent <= end - 86400 + UPDATE_AROUND:
         return -1
     return 0 if begin - UPDATE_AROUND <= sent <= end + UPDATE_AROUND else None
 
 
-def update_run(update: Optional[dict], stop_id: str, start: Optional[int], at: int, realtime: bool, effective: int) -> tuple[bool, int]:
+def update_run(update: Optional[dict], stop_id: str, start: Optional[int], at: int, realtime: bool, effective: int,
+               day: Optional[int] = None, position: Optional[int] = None) -> tuple[bool, int]:
     """OTP puts a trip update that names no start date on the trip's run of its own service day, so after midnight a
     train still out from yesterday had no live time and tonight's run of it had its delay (604 and IC 350, 20 Oct
     2026, 00:30). The update is about the run on its way when it was sent (`start`: the run's first departure, `at`:
-    its time here): that run takes the update's delay here, and the run a day later has no live data from it."""
-    about = update_day(update, at if start is None else start, at)
+    its time here, `day`: its service day): that run takes the update's delay here (at call `position`, when the trip
+    calls here twice), and the run a day later has no live data from it."""
+    about = update_day(update, at if start is None else start, at, day)
     if about == -1:
         return False, at
     if realtime or about is None:
         return realtime, effective
-    delay = next((update_delay(u) for u in update.get('updates') or [] if u.get('stopId') == stop_id and update_delay(u) is not None), None)
-    return (True, at + delay) if delay is not None else (False, at)
+    calls = [u for u in update.get('updates') or [] if u.get('stopId') == stop_id and update_delay(u) is not None]
+    call = next((u for u in calls if u.get('stopSequence') == position), calls[0] if calls else None)
+    return (True, at + update_delay(call)) if call else (False, at)
+
+
+def late_by_stop(updates: dict) -> dict[str, list[tuple[Optional[int], int]]]:
+    """Stop id -> (live time or None, delay) of each trip update that has a run late there. OTP lists a run by its
+    live time, or by its timetable when it left the run's update out (update_day): a board asks for that much earlier."""
+    out: dict[str, list] = {}
+    for update in updates.values():
+        for u in update.get('updates') or []:
+            delay = update_delay(u)
+            if u.get('stopId') and delay and delay > 0:
+                at = (u.get('departure') or {}).get('time') or (u.get('arrival') or {}).get('time')
+                out.setdefault(u['stopId'], []).append((int(at) if at else None, delay))
+    return out
+
+
+def is_trip_end(st: dict, stop_id: str, end: str) -> bool:
+    """Whether this call at `stop_id` is its trip's first (`end` 'departureStoptime') or last ('arrivalStoptime') call.
+    The stop alone doesn't tell: a trip that starts and ends at one stop calls there twice (D3: A6385 at Radovljica,
+    calls 1 and 16), so the call's position decides when both are known."""
+    call = (st.get('trip') or {}).get(end) or {}
+    if (call.get('stop') or {}).get('gtfsId') != stop_id:
+        return False
+    return call.get('stopPosition') is None or st.get('stopPosition') is None or call['stopPosition'] == st['stopPosition']
 
 
 def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict],
@@ -362,14 +395,13 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
     for st in stoptimes:
         trip = st.get('trip') or {}
         route = trip.get('route') or {}
-        first = ((trip.get('departureStoptime') or {}).get('stop') or {}).get('gtfsId')
-        last = ((trip.get('arrivalStoptime') or {}).get('stop') or {}).get('gtfsId')
         # Arrivals skip trips that start here; departures skip trips that end here.
-        if kind == 'arrival' and (first == stop_id or st.get('dropoffType') == 'NONE'):
-            coverage.note(drops, 'starts here' if first == stop_id else 'no setting down', st)
+        starts, ends = is_trip_end(st, stop_id, 'departureStoptime'), is_trip_end(st, stop_id, 'arrivalStoptime')
+        if kind == 'arrival' and (starts or st.get('dropoffType') == 'NONE'):
+            coverage.note(drops, 'starts here' if starts else 'no setting down', st)
             continue
-        if kind == 'departure' and (last == stop_id or st.get('pickupType') == 'NONE'):
-            coverage.note(drops, 'ends here' if last == stop_id else 'no picking up', st)
+        if kind == 'departure' and (ends or st.get('pickupType') == 'NONE'):
+            coverage.note(drops, 'ends here' if ends else 'no picking up', st)
             continue
         day = st['serviceDay']
         scheduled = day + (st['scheduledArrival'] if kind == 'arrival' else st['scheduledDeparture'])
@@ -378,12 +410,14 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         effective = day + (st['realtimeArrival'] if kind == 'arrival' else st['realtimeDeparture'])
         first_departure = (trip.get('departureStoptime') or {}).get('scheduledDeparture')
         realtime, effective = update_run(updates.get(trip.get('gtfsId')), stop_id, day + first_departure if isinstance(first_departure, int) else None,
-                                         scheduled, realtime, effective)
+                                         scheduled, realtime, effective, day, st.get('stopPosition'))
         if realtime and believable(effective - scheduled, _shows(live.get((st.get('trip') or {}).get('gtfsId')), effective - scheduled)) is None:
             realtime, effective = False, scheduled
         end = ((trip.get('departureStoptime' if kind == 'arrival' else 'arrivalStoptime') or {}).get('stop') or {})
         other_end = stopfix.renamed(end.get('gtfsId'), end.get('name'))
-        if abroad.is_abroad_stop(other_end):
+        if end.get('gtfsId') == stop_id:  # a loop: its own stop says nothing about where it goes, its headsign does
+            other_end = st.get('headsign') or trip.get('tripHeadsign') or other_end
+        elif abroad.is_abroad_stop(other_end):
             other_end = abroad.place(other_end)
         elif mode_of(route.get('mode')) == 'rail':  # an international train: its real end abroad
             ends = abroad.train_ends(route_name(route), *((other_end, None) if kind == 'arrival' else (None, other_end)))

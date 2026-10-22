@@ -724,7 +724,7 @@ def _placed_leg(l: dict, updates: dict) -> dict:
         return l
     start, end = _ts(l['start']['scheduledTime']), _ts(l['end']['scheduledTime'])
     begin = int(datetime.fromtimestamp(start - first, LOCAL).replace(hour=0, minute=0, second=0).timestamp()) + first
-    about = mapping.update_day(update, begin, int(end))
+    about = mapping.update_day(update, begin, int(end), begin - first)
     if about == -1:
         times = (None, None)
     elif about != 0 or (l['start'].get('estimated') or {}).get('time'):

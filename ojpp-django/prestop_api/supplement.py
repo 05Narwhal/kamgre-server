@@ -377,8 +377,9 @@ def stoptimes(stop_id: str, start: int, span: int, limit: int, updates: dict) ->
                         'pickupType': 'NONE' if s['pickup'] else 'SCHEDULED', 'dropoffType': 'NONE' if s['dropoff'] else 'SCHEDULED',
                         'stop': {'platformCode': None},
                         'trip': {'gtfsId': tid, 'tripHeadsign': t['headsign'], 'route': route,
-                                 'departureStoptime': {'stop': _stop(feed, t['stops'][0]['stopId']), 'scheduledDeparture': t['stops'][0]['departure']},
-                                 'arrivalStoptime': {'stop': _stop(feed, t['stops'][-1]['stopId'])}}})
+                                 'departureStoptime': {'stop': _stop(feed, t['stops'][0]['stopId']), 'scheduledDeparture': t['stops'][0]['departure'],
+                                                       'stopPosition': t['stops'][0]['sequence']},
+                                 'arrivalStoptime': {'stop': _stop(feed, t['stops'][-1]['stopId']), 'stopPosition': t['stops'][-1]['sequence']}}})
     out.sort(key=lambda st: st['serviceDay'] + st['scheduledDeparture'])
     return out[:limit]
 

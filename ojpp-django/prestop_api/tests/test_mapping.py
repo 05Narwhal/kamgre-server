@@ -67,6 +67,52 @@ class BoardTests(SimpleTestCase):
         self.assertEqual([e['tripId'] for e in arrivals], ['IJPP:a', 'IJPP:ends'])
         self.assertEqual(arrivals[0]['destination'], 'Ljubljana')  # arrivals show where the trip comes from
 
+    def test_an_update_otp_left_out_gives_its_run_the_live_time(self):
+        """D3: OTP had A6295 (IJPP:463770, Kranj AP 13:30) with no live time, though the feed's update for that day said
+        +19 min; the board showed it by timetable (and dropped it at 13:30, sources._member_board)."""
+        st = stoptime('IJPP:463770', 'IJPP:1121238', 'IJPP:y', dep=13 * 3600 + 30 * 60)
+        st['trip']['departureStoptime'].update(scheduledDeparture=13 * 3600 + 30 * 60, stopPosition=1)
+        update = {'trip': {'tripId': 'IJPP:463770', 'startDate': '20261009'},
+                  'stopTimeUpdate': [{'stopSequence': 1, 'stopId': 'IJPP:1121238', 'departure': {'delay': 1149}}]}
+        [row] = mapping.build_board('IJPP:1121238', [st], 'departure', [], updates=mapping.trip_update_index([{'tripUpdate': update}]))
+        self.assertEqual((row['effectiveAt'], row['quality'], row['delaySource']), ('2026-10-09T11:49:09Z', 'predicted', 'gtfs-rt'))
+        # An update about another day's run says nothing of this one
+        update['trip']['startDate'] = '20261008'
+        [row] = mapping.build_board('IJPP:1121238', [st], 'departure', [], updates=mapping.trip_update_index([{'tripUpdate': update}]))
+        self.assertIsNone(row['effectiveAt'])
+        # OTP's own live time stands when it has one
+        update['trip']['startDate'] = '20261009'
+        [row] = mapping.build_board('IJPP:1121238', [stoptime('IJPP:463770', 'IJPP:1121238', 'IJPP:y', dep=48600, rt=48660)], 'departure', [],
+                                    updates=mapping.trip_update_index([{'tripUpdate': update}]))
+        self.assertEqual(row['effectiveAt'], '2026-10-09T11:31:00Z')
+
+    def test_an_update_naming_a_start_date_is_about_that_service_day_s_run(self):
+        day = 1791496800  # 2026-10-09 00:00 in Ljubljana
+        self.assertEqual(mapping.update_day({'trip': {'startDate': '20261009'}}, day + 48600, day + 52200, day), 0)
+        self.assertIsNone(mapping.update_day({'trip': {'startDate': '20261008'}}, day + 48600, day + 52200, day))
+        # A run that leaves after midnight still belongs to the day it is timetabled under
+        self.assertEqual(mapping.update_day({'trip': {'startDate': '20261009'}}, day + 88200, day + 90000, day), 0)
+
+    def test_late_updates_are_indexed_by_stop(self):
+        updates = mapping.trip_update_index([{'tripUpdate': {'trip': {'tripId': 'IJPP:1'}, 'stopTimeUpdate': [
+            {'stopId': 'IJPP:a', 'departure': {'delay': 1149, 'time': '1792669749'}},
+            {'stopId': 'IJPP:b', 'arrival': {'delay': 900}}, {'stopId': 'IJPP:c', 'departure': {'delay': -60, 'time': '1792669800'}}]}}])
+        self.assertEqual(mapping.late_by_stop(updates), {'IJPP:a': [(1792669749, 1149)], 'IJPP:b': [(None, 900)]})
+
+    def test_a_trip_that_starts_and_ends_here_leaves_from_its_first_call_and_arrives_at_its_last(self):
+        """D3: A6385 (IJPP:457777) leaves Radovljica as call 1 and is back as call 16; both boards there left it out."""
+        here = 'IJPP:1129160'
+        calls = [stoptime('IJPP:457777', here, here, dep=34800), stoptime('IJPP:457777', here, here, dep=37740)]
+        for st, position in zip(calls, (1, 16)):
+            st.update(stopPosition=position, headsign='Radovljica - Sebenje/Bledu - Radovljica')
+            st['trip']['departureStoptime'].update(stopPosition=1, stop={'gtfsId': here, 'name': 'Radovljica'})
+            st['trip']['arrivalStoptime'].update(stopPosition=16, stop={'gtfsId': here, 'name': 'Radovljica'})
+        [out] = mapping.build_board(here, calls, 'departure', [])
+        [back] = mapping.build_board(here, calls, 'arrival', [])
+        self.assertEqual((out['scheduledAt'], back['scheduledAt']), ('2026-10-09T07:40:00Z', '2026-10-09T08:29:00Z'))
+        # Its own stop as destination says nothing: the headsign does
+        self.assertEqual(out['destination'], 'Radovljica - Sebenje/Bledu - Radovljica')
+
     def test_realtime_scheduled_and_canceled_entries(self):
         live, planned, canceled = mapping.build_board('IJPP:s', [
             stoptime('IJPP:1', 'IJPP:x', 'IJPP:y', rt=36300), stoptime('IJPP:2', 'IJPP:x', 'IJPP:y'),
@@ -95,9 +141,13 @@ class BoardTests(SimpleTestCase):
         updates['IJPP:604']['timestamp'] = tonight['serviceDay'] + 12 * 3600
         out, later = mapping.build_board('IJPP:s', [yesterday, tonight], 'departure', [], updates=updates)
         self.assertEqual((out['effectiveAt'], later['effectiveAt']), (None, '2026-10-10T22:46:00Z'))
-        # So is one naming its start date
+        # One naming its start date is about that day's run, which takes it where OTP has no live time (D3);
+        # OTP's own live times stand
         updates['IJPP:604']['timestamp'] = sent
         updates['IJPP:604']['trip']['startDate'] = '20261009'
+        out, later = mapping.build_board('IJPP:s', [yesterday, tonight], 'departure', [], updates=updates)
+        self.assertEqual((out['effectiveAt'], later['effectiveAt']), ('2026-10-09T22:46:00Z', '2026-10-10T22:46:00Z'))
+        updates['IJPP:604']['trip']['startDate'] = '20261008'
         out, later = mapping.build_board('IJPP:s', [yesterday, tonight], 'departure', [], updates=updates)
         self.assertEqual((out['effectiveAt'], later['effectiveAt']), (None, '2026-10-10T22:46:00Z'))
 

@@ -108,17 +108,15 @@ def find_on_board(rows: Iterable[dict], trip_id: str, route_name: Optional[str],
 def timetable_departures(patterns: Iterable[dict], stop_id: str, start: int, end: int, kind: str = 'departure') -> list[dict]:
     """The runs OTP's timetable (`stop.stoptimesForServiceDate`) has at `stop_id` from `start` to `end`, as
     {'tripId', 'routeId', 'routeName', 'at'}: picking up (setting down) there, not ending (starting) there."""
-    from .mapping import route_name
+    from .mapping import is_trip_end, route_name
     out = []
     for p in patterns:
         route = (p.get('pattern') or {}).get('route') or {}
         for st in p.get('stoptimes') or []:
             trip = st.get('trip') or {}
-            first = ((trip.get('departureStoptime') or {}).get('stop') or {}).get('gtfsId')
-            last = ((trip.get('arrivalStoptime') or {}).get('stop') or {}).get('gtfsId')
-            if kind == 'departure' and (last == stop_id or st.get('pickupType') == 'NONE'):
+            if kind == 'departure' and (is_trip_end(st, stop_id, 'arrivalStoptime') or st.get('pickupType') == 'NONE'):
                 continue
-            if kind == 'arrival' and (first == stop_id or st.get('dropoffType') == 'NONE'):
+            if kind == 'arrival' and (is_trip_end(st, stop_id, 'departureStoptime') or st.get('dropoffType') == 'NONE'):
                 continue
             at = st['serviceDay'] + st['scheduledDeparture' if kind == 'departure' else 'scheduledArrival']
             if start <= at <= end:

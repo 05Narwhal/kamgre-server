@@ -40,8 +40,8 @@ GONE = 'left before its board was read'
 STOPTIMES_Q = '''query($id: String!, $date: String!) { stop(id: $id) {
   stoptimesForServiceDate(date: $date, omitNonPickups: false, omitCanceled: false) {
     pattern { route { gtfsId shortName longName mode } }
-    stoptimes { serviceDay scheduledArrival scheduledDeparture pickupType dropoffType
-      trip { gtfsId departureStoptime { stop { gtfsId } } arrivalStoptime { stop { gtfsId } } } } } } }'''
+    stoptimes { serviceDay scheduledArrival scheduledDeparture stopPosition pickupType dropoffType
+      trip { gtfsId departureStoptime { stopPosition stop { gtfsId } } arrivalStoptime { stopPosition stop { gtfsId } } } } } } }'''
 TRIP_DAY_Q = '''query($id: String!, $date: String!) { trip(id: $id) { gtfsId route { gtfsId shortName longName mode }
   stoptimesForDate(serviceDate: $date) { serviceDay scheduledDeparture pickupType stop { gtfsId } } } }'''
 
@@ -238,7 +238,8 @@ class Command(BaseCommand):
                 status, at = w['status']
                 if status == 'ends here':
                     status, at = coverage.board_status(w, *boards[(w['stopId'], 'arrival')])
-                if status not in coverage.SHOWN and w['at'] and w['at'] < self.read_at[(w['stopId'], 'departure')] + 60:
+                # Its live time before the board was read: then, or by the board's own note (an early bus that went)
+                if status == 'gone before the board starts' or (status not in coverage.SHOWN and w['at'] and w['at'] < self.read_at[(w['stopId'], 'departure')] + 60):
                     status, at = GONE, ''
                 if status == 'not returned by OTP for the board':
                     status = w['otp'] = self._otp_reason(w['tripId'], w['stopId'], day) if (infos.get(w['tripId']) or {}).get('routeId') else 'trip not in OTP (upstream)'

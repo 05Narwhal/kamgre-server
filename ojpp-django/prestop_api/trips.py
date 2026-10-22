@@ -288,7 +288,7 @@ def _placed(run: dict, update: Optional[dict]) -> dict:
     none and tonight's run had its delays (IC 350, 20 Oct 2026, 01:10)."""
     times = run['times']
     begin = times[0]['serviceDay'] + times[0]['scheduledDeparture']
-    about = mapping.update_day(update, begin, times[-1]['serviceDay'] + times[-1]['scheduledArrival'])
+    about = mapping.update_day(update, begin, times[-1]['serviceDay'] + times[-1]['scheduledArrival'], times[0]['serviceDay'])
     if about == -1:
         return {**run, 'times': [{**t, 'realtime': False, 'realtimeArrival': t['scheduledArrival'], 'realtimeDeparture': t['scheduledDeparture']}
                                  for t in times]}
