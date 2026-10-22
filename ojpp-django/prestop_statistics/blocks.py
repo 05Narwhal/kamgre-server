@@ -30,6 +30,8 @@ STILL_METERS = 60      # m: moving less than this between polls is standing stil
 IDLE_SECONDS = 10 * 60  # s stood still in one spot: an idle spot (depots are learned from these)
 MAX_OPEN = 20 * 3600   # s: a gap open longer than this (no next trip seen) is closed without one
 POLL_CREDIT = 180      # s: polls further apart than this count only this much (the collector polls every 60 s)
+ON_RUN_AHEAD = 2 * 3600  # s: a vehicle is on a run from this long before it sets off (naming its next run early)...
+ON_RUN_AFTER = 3 * 3600  # s: ...to this long after its timetable end (late, or still naming it at the terminus)
 _pruned: dict = {'day': None}
 
 
@@ -38,6 +40,16 @@ _pruned: dict = {'day': None}
 def _span(schedule: dict) -> tuple[int, int]:
     times = schedule['bySequence'].values()
     return min(s['scheduledDeparture'] for s in times), max(s['scheduledArrival'] for s in times)
+
+
+def _on_run(schedule: dict, now: float) -> bool:
+    """Whether a vehicle naming this run now can be on it. Murska Sobota's buses name today's run with tomorrow's
+    date (22 Oct 2026); buses name tomorrow's first run the evening before (19 Oct 2026, 12 h ahead)."""
+    if not schedule['bySequence']:
+        return False
+    start, end = _span(schedule)
+    day = next(iter(schedule['bySequence'].values()))['serviceDay']
+    return day + start - ON_RUN_AHEAD <= now <= day + end + ON_RUN_AFTER
 
 
 def _ordered(schedule: dict) -> list[dict]:
@@ -187,15 +199,19 @@ def record(schedules, positions: list[dict], updates: dict, now: Optional[float]
         seen[trip_id] = (mapping.qualify(vehicle, feed), trip, v, at)
     keys = [(t, d) for t, (_, trip, _, _) in seen.items() for d in _service_days(trip, now)]
     found = schedules.get_many(keys)
+    # A run named with a date it cannot be on now: today's or last night's run of the trip, if one fits.
+    off = {t for t, (_, trip, _, _) in seen.items() if (s := found.get((t, trip.get('startDate')))) and not _on_run(s, now)}
+    found.update(schedules.get_many([(t, d) for t in off for d in _service_days({}, now)]))
     rows = {}
     gaps: list[VehicleGap] = []
     for trip_id, (vehicle_id, trip, v, at) in seen.items():
-        for day in _service_days(trip, now):
-            schedule = found.get((trip_id, day))
-            if schedule:
-                break
-        else:
+        days = _service_days(trip, now) + (_service_days({}, now) if trip_id in off else [])
+        day = next((d for d in days if found.get((trip_id, d)) and _on_run(found[(trip_id, d)], now)), None)
+        if day is None:
+            if any(found.get((trip_id, d)) for d in days):  # names a run it is not on (yet): between trips
+                between[vehicle_id] = at
             continue
+        schedule = found[(trip_id, day)]
         start, end = _span(schedule)
         delay = mapping.current_delay(updates.get(trip_id), v.get('stopId'), v.get('currentStopSequence'))
         first = min(schedule['bySequence']) if schedule['bySequence'] else None

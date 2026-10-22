@@ -44,6 +44,22 @@ class RecordTests(TestCase):
         blocks.record(FakeSchedules(found), [position], updates, now=NOW + 60)
         self.assertEqual(VehicleTrip.objects.get().end_delay, 300)
 
+    def test_a_run_is_recorded_on_the_day_the_vehicle_can_be_on_it(self):
+        def on(days):
+            s = schedule()
+            return {**s, 'bySequence': {k: {**v, 'serviceDay': DAY + days * 24 * H} for k, v in s['bySequence'].items()}}
+        found = {('IJPP:t1', '20261009'): on(0), ('IJPP:t1', '20261010'): on(1), ('IJPP:t1', '20261008'): on(-1)}
+        # Murska Sobota's buses name today's run (09:10-10:00, seen at 10:00) with tomorrow's date (22 Oct 2026).
+        position = {'vehicle': {'trip': {'tripId': 'IJPP:t1', 'startDate': '20261010'}, 'vehicle': {'id': '1234'}, 'timestamp': str(NOW - 20)}}
+        blocks.record(FakeSchedules(found), [position], {}, now=NOW)
+        self.assertEqual(list(VehicleTrip.objects.values_list('service_date', flat=True)), [TODAY])
+        # A bus names tomorrow's 09:10 run at 21:00: not on it yet (between trips).
+        VehicleTrip.objects.all().delete()
+        late = NOW + 11 * H
+        position['vehicle']['timestamp'] = str(late - 20)
+        counts = blocks.record(FakeSchedules(found), [position], {}, now=late)
+        self.assertEqual((counts['vehicles'], counts['between'], VehicleTrip.objects.count()), (0, 1, 0))
+
     def test_rows_older_than_eight_weeks_are_pruned_once_a_day(self):
         run(TODAY - timedelta(days=57), 'IJPP:old', 'IJPP:v', 'IJPP:r', 0, 60)
         run(TODAY - timedelta(days=55), 'IJPP:kept', 'IJPP:v', 'IJPP:r', 0, 60)
