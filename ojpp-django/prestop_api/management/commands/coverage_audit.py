@@ -253,6 +253,8 @@ class Command(BaseCommand):
         # A run at its last stop is on the arrivals board.
         boards.update(self._boards(sorted({(w['stopId'], 'arrival') for w in chosen if w.get('status', ('',))[0] == 'ends here'})))
         day = (datetime.fromtimestamp(self.now, LOCAL) - timedelta(hours=sources.SERVICE_DAY_ENDS_HOUR)).strftime('%Y%m%d')
+        # The feed moves on while the boards are read (minutes): a bus can pass early in between (Kranj 4, 2.5 min).
+        latest = sources.trip_updates.get().value
         rows = []
         for w in chosen:
             if w['stopId'] not in names:
@@ -261,8 +263,9 @@ class Command(BaseCommand):
                 status, at = w['status']
                 if status == 'ends here':
                     status, at = coverage.board_status(w, *boards[(w['stopId'], 'arrival')])
-                # Its live time before the board was read: then, or by the board's own note (an early bus that went)
-                if status == 'gone before the board starts' or (status not in coverage.SHOWN and w['at'] and w['at'] < self.read_at[(w['stopId'], 'departure')] + 60):
+                # Its live time (as last known) before the board was read: then, or by the board's own note (an early bus that went)
+                when = coverage.time_at(latest.get(w['tripId']), w['stopId']) or w['at']
+                if status == 'gone before the board starts' or (status not in coverage.SHOWN and when and when < self.read_at[(w['stopId'], 'departure')] + 60):
                     status, at = GONE, ''
                 if status == 'not returned by OTP for the board':
                     status = w['otp'] = self._otp_reason(w['tripId'], w['stopId'], day) if (infos.get(w['tripId']) or {}).get('routeId') else 'trip not in OTP (upstream)'

@@ -131,6 +131,14 @@ class BoardTests(SimpleTestCase):
                               {'stopId': 'S5', 'departure': {'time': NOW + 300}}]}
         self.assertEqual(coverage.upcoming(update, NOW, 3600), [('S3', NOW + 120, 120), ('S4', NOW + 240, None)])
 
+    def test_a_runs_latest_time_at_a_stop(self):
+        """D3: the audit's last word on whether a bus had passed when the board was read (Kranj 4 passed 2.5 min early)."""
+        update = {'updates': [{'stopId': 'S1', 'departure': {'time': str(NOW - 152)}}, {'stopId': 'S2', 'arrival': {'time': NOW + 60}}]}
+        self.assertEqual(coverage.time_at(update, 'S1'), NOW - 152)
+        self.assertEqual(coverage.time_at(update, 'S2'), NOW + 60)
+        self.assertIsNone(coverage.time_at(update, 'S9'))
+        self.assertIsNone(coverage.time_at(None, 'S1'))
+
 
 class TableTests(SimpleTestCase):
     def test_tally_by_reason_and_feed_with_examples(self):

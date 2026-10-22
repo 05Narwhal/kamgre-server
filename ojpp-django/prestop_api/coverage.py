@@ -76,6 +76,14 @@ def stop_time(update: dict) -> Optional[int]:
     return None
 
 
+def time_at(update: Optional[dict], stop_id: str) -> Optional[int]:
+    """The update's time at `stop_id` (None: it gives none)."""
+    for u in (update or {}).get('updates') or []:
+        if u.get('stopId') == stop_id:
+            return stop_time(u)
+    return None
+
+
 def upcoming(update: dict, now: float, horizon: int, count: int = 2) -> list[tuple[str, int, Optional[int]]]:
     """(stop id, time, delay) of the next `count` stops a trip update gives times for, from now to `horizon` s ahead."""
     from .mapping import update_delay
