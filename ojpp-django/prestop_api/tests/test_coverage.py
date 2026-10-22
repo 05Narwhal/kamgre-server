@@ -68,6 +68,14 @@ class MapRowsTests(SimpleTestCase):
         rows = coverage.map_rows([a, b, c], drops, kept={'IJPP:A', 'IJPP:B'}, target={'IJPP:A'}, key=mapping.entity_vehicle_id)
         self.assertEqual([(r['feed'], r['status']) for r in rows], [('IJPP', 'shown'), ('IJPP', 'missing on target'), ('?', 'no trip id')])
 
+    def test_a_bus_without_a_trip_the_target_draws_is_shown(self):
+        """D4: the target matched its run from the path it followed (mapping.LooseVehicles); the audit's own process
+        has followed it for a minute only."""
+        loose = entity(None, 'IJPP:1302152')
+        drops = [{'reason': 'no trip id, no run fits', 'at': 'mapping.py:1', 'item': loose}]
+        rows = coverage.map_rows([loose], drops, kept=set(), target={'IJPP:1302152'}, key=mapping.entity_vehicle_id)
+        self.assertEqual([(r['feed'], r['status']) for r in rows], [('IJPP', 'shown')])
+
 
 class BoardTests(SimpleTestCase):
     ROWS = [{'tripId': 'LPP:9', 'routeName': '51', 'scheduledAt': mapping.iso(NOW + 600), 'id': 'LPP:9@0/3', 'destination': 'Polhov Gradec'}]

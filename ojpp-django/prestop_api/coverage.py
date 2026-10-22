@@ -52,7 +52,9 @@ def map_rows(entities: Iterable[dict], drops: list, kept: set, target: Optional[
     for e in entities:
         vid, trip = key(e), trip_of(e)
         d = noted.get(id(e))
-        if d:
+        if d and target is not None and vid in target:
+            status, at = 'shown', ''  # the target drew it (a bus without a trip it has followed longer than this run)
+        elif d:
             status, at = d['reason'], d['at']
         elif vid in kept:
             status, at = ('shown', '') if target is None or vid in target else ('missing on target', 'target API')

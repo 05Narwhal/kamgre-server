@@ -232,6 +232,7 @@ def _with_old_ids(index: dict) -> dict:
             run, calls = found
             index[run] = {**update, 'trip': {**update['trip'], 'tripId': run}, 'oldId': trip_id,
                           'updates': [_against(u, calls[u['stopSequence']]) for u in update['updates'] if u.get('stopSequence') in calls]}
+            update['runId'] = run  # its vehicle on the map is on OTP's run (mapping.entity_trip)
     return index
 
 
@@ -320,6 +321,7 @@ def infer_trip(update: Optional[dict], index: dict, route_index: dict) -> dict:
 
 # Recent reports per vehicle: a vehicle reporting the same place for a while is standing.
 motion_history = mapping.MotionHistory()
+loose_vehicles = mapping.LooseVehicles()
 
 
 def _load_vehicles(drops: Optional[list] = None):
@@ -329,7 +331,7 @@ def _load_vehicles(drops: Optional[list] = None):
     route_index = routes.get().value
     if not stops.peek():
         _safe(stops)
-    trip_ids = [((e.get('vehicle') or {}).get('trip') or {}).get('tripId') for e in pos.value]
+    trip_ids = [mapping.entity_trip(e, updates) for e in pos.value]
     own = {t for t in trip_ids if t and supplement.owns(t)}
     infos = trip_info.get_many([t for t in trip_ids if t and t not in own])
     infos.update({t: info for t in own if (info := supplement.trip_info(t))})
@@ -341,6 +343,18 @@ def _load_vehicles(drops: Optional[list] = None):
             if guess:
                 infos[t] = {**(infos.get(t) or {}), **{k: v for k, v in guess.items() if v}}
     live = mapping.build_vehicles(pos.value, updates, infos, route_index, stop_names(), history=motion_history, drops=drops)
+    # Vehicles the feed sends without a trip: on the map with the run of the operators' own timetables they are seen
+    # to run (mapping.LooseVehicles), marked inferred; one that is a drawn vehicle under another id stays off.
+    now = time.time()
+    loose = [e for e in pos.value if not mapping.entity_trip(e, updates)]
+    for e, run_id, delay, stop_id in loose_vehicles.assign(loose, [v['tripId'] for v in live if v.get('tripId')], motion_history,
+                                                           lambda: supplement.running(now), now, drops):
+        placed = {**e, 'vehicle': {**e['vehicle'], 'trip': {'tripId': run_id}, 'stopId': stop_id}}
+        for v in mapping.build_vehicles([placed], updates, {run_id: supplement.trip_info(run_id)}, route_index, stop_names(), now, motion_history):
+            v['quality'] = 'inferred'
+            if v['delaySeconds'] is None:
+                v['delaySeconds'] = delay
+            live.append(v)
     from . import sz
     for v in live:
         if v['mode'] == 'rail':
@@ -352,7 +366,11 @@ def _load_vehicles(drops: Optional[list] = None):
     except UpstreamError as e:
         logger.warning('Scheduled trains unavailable: %r', e)
         trains = []
-    return live + trains
+    broken = [v for v in trains if not mapping.fits_contract(v)]
+    if broken:
+        logger.warning('Timetable vehicles left out, they break the contract: %s', ', '.join(str(v.get('id')) for v in broken[:5]))
+        coverage.note(drops, 'failed contract', *broken)
+    return live + [v for v in trains if mapping.fits_contract(v)]
 
 
 vehicles = Cached(_load_vehicles, ttl=4, max_stale=120, revalidate=30)

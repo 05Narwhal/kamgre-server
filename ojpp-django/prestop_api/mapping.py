@@ -213,8 +213,9 @@ def motion_state(history: list[tuple[float, float, float]], speed: Optional[floa
 class MotionHistory:
     """Each vehicle's last few distinct reports, for `motion_state`."""
 
-    def __init__(self, size: int = 6):
+    def __init__(self, size: int = 6, age: float = HISTORY_AGE):
         self.size = size
+        self.age = age
         self._reports: dict[str, deque] = {}
         self._swept = 0.0
 
@@ -222,20 +223,192 @@ class MotionHistory:
         reports = self._reports.setdefault(vehicle_id, deque(maxlen=self.size))
         if not reports or stamp > reports[-1][0]:
             reports.append((stamp, lat, lon))
-        while reports and reports[0][0] < now - HISTORY_AGE:
+        while reports and reports[0][0] < now - self.age:
             reports.popleft()
-        if now - self._swept > HISTORY_AGE:
+        if now - self._swept > self.age:
             self._swept = now
-            self._reports = {k: v for k, v in self._reports.items() if v and v[-1][0] >= now - HISTORY_AGE}
+            self._reports = {k: v for k, v in self._reports.items() if v and v[-1][0] >= now - self.age}
             self._reports.setdefault(vehicle_id, reports)
         return list(reports)
 
+    def recent(self, vehicle_id: str) -> list[tuple[float, float, float]]:
+        return list(self._reports.get(vehicle_id) or ())
+
+    def last(self) -> dict[str, tuple[float, float, float]]:
+        """Each vehicle's latest report."""
+        return {k: v[-1] for k, v in self._reports.items() if v}
+
 
 def entity_vehicle_id(entity: dict) -> Optional[str]:
-    """The id a feed entity's vehicle gets on the map (None: it names no trip)."""
+    """The id a feed entity's vehicle gets on the map (None: neither a trip nor its own id names its feed)."""
     v = entity.get('vehicle') or {}
     trip_id = (v.get('trip') or {}).get('tripId')
-    return qualify((v.get('vehicle') or {}).get('id') or entity.get('id') or trip_id, trip_id.split(':', 1)[0]) if trip_id else None
+    raw = (v.get('vehicle') or {}).get('id') or entity.get('id') or trip_id
+    if trip_id:
+        return qualify(raw, trip_id.split(':', 1)[0])
+    return raw if raw and QUALIFIED.match(raw) else None
+
+
+# A vehicle the feed sends without a trip (Kranj city buses through the IJPP feed: IJPP:1302152 ran line 5 18:10 stop
+# by stop, 3-4.5 min late, 22 Oct) is drawn on the run whose stops its path passed with one delay.
+RUN_NEAR = 60          # m: a stop this close to the path between two reports was passed
+RUN_STOPS = 3          # stops passed, at least
+RUN_SPREAD = 240       # s: their delays agree within this
+RUN_DELAY = 10 * 60    # s: and lie this close to the timetable
+RUN_CLEAR = 5 * 60     # s: another run fitting as well must be this much further off, else it is unclear which
+RUN_AFTER_END = 5 * 60  # s after its last stop (with the delay) a vehicle is no longer on that run
+
+
+def _passes(track: list, lat: float, lon: float) -> list[float]:
+    """When the path `track` [(epoch, lat, lon)] came within RUN_NEAR of a point: per stretch between two reports, the
+    time at its closest approach."""
+    from .geometry import KY, _kx
+    kx = _kx(lat)
+    pts = [(t, (lo - lon) * kx, (la - lat) * KY) for t, la, lo in track]
+    out = []
+    for (ta, ax, ay), (tb, bx, by) in zip(pts, pts[1:] or pts):
+        dx, dy = bx - ax, by - ay
+        f = 0.0 if dx == dy == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / (dx * dx + dy * dy)))
+        if math.hypot(ax + dx * f, ay + dy * f) <= RUN_NEAR:
+            out.append(ta + (tb - ta) * f)
+    return out
+
+
+COPY_NEAR = 200  # m: a vehicle without a trip this close to a drawn one at each of its last reports is that one
+
+
+def _position_at(track: list, t: float, slack: float = 10) -> Optional[tuple[float, float]]:
+    """Where the path `track` [(epoch, lat, lon)] was at `t`: between two reports by time, or a report `slack` s away."""
+    for (ta, la, lo), (tb, lb, lob) in zip(track, track[1:]):
+        if ta <= t <= tb:
+            f = (t - ta) / (tb - ta) if tb > ta else 0.0
+            return la + (lb - la) * f, lo + (lob - lo) * f
+    near = min(track, key=lambda p: abs(p[0] - t), default=None)
+    return (near[1], near[2]) if near and abs(near[0] - t) <= slack else None
+
+
+def same_path(track: list, reports: list) -> Optional[bool]:
+    """Whether a vehicle without a trip is another vehicle under another feed's id: Kranj city buses report through
+    MOKranj with their run and through IJPP without (IJPP:1302158 = MOKranj:KRJN601, 3-160 m apart, 22 Oct). True when
+    its path `track` was within COPY_NEAR of the other at each of its `reports` [(epoch, lat, lon)] (at least 3
+    compared), False when it was further at one, None when too few reports fall within its path."""
+    from .geometry import KY, _kx
+    compared = 0
+    for t, la, lo in reports:
+        at = _position_at(track, t)
+        if at is None:
+            continue
+        if math.hypot((at[1] - lo) * _kx(la), (at[0] - la) * KY) > COPY_NEAR:
+            return False
+        compared += 1
+    return True if compared >= 3 else None
+
+
+def match_run(track: list, runs: list[dict], now: float) -> Optional[tuple[str, int, int]]:
+    """(run id, delay s, index of its next stop) of the run a vehicle without a trip is on, from its recent path
+    `track` [(epoch, lat, lon)], oldest first; `runs` [{'id', 'stops': [(lat, lon, scheduled epoch)]}]. A run fits when
+    the path passed RUN_STOPS of its stops with delays within RUN_SPREAD of each other (in time order: a loop's stops
+    count on the pass that fits) and the vehicle is not past its end. Only one run may fit clearly; None otherwise.
+    The next stop follows the last one passed (on a loop the app needs it to place the bus on the right pass)."""
+    fits = []
+    for r in runs:
+        seen = sorted((t - at, i) for i, (la, lo, at) in enumerate(r['stops']) for t in _passes(track, la, lo))
+        best: tuple = ()
+        for k, (low, _) in enumerate(seen):
+            window = [(d, i) for d, i in seen[k:] if d - low <= RUN_SPREAD]
+            stops = {i for _, i in window}
+            if len(stops) > len(best[0] if best else ()):
+                best = (stops, sorted(d for d, _ in window)[len(window) // 2])
+        if not best or len(best[0]) < RUN_STOPS or abs(best[1]) > RUN_DELAY or now > r['stops'][-1][2] + best[1] + RUN_AFTER_END:
+            continue
+        nxt = max(best[0]) + 1
+        while nxt < len(r['stops']) - 1 and r['stops'][nxt][2] + best[1] < track[-1][0]:
+            nxt += 1  # passed since, by the timetable and its delay
+        fits.append((-len(best[0]), abs(best[1]), r['id'], int(round(best[1])), min(nxt, len(r['stops']) - 1)))
+    fits.sort()
+    if not fits or (len(fits) > 1 and fits[1][0] == fits[0][0] and fits[1][1] - fits[0][1] < RUN_CLEAR):
+        return None
+    return fits[0][2], fits[0][3], fits[0][4]
+
+
+class LooseVehicles:
+    """Vehicles the feed sends without a trip, followed across feed updates: which of them is a drawn vehicle under
+    another id (same_path) and which runs a run nobody else reports (match_run). Kranj city buses on 22 Oct 18:31-18:52:
+    IJPP:1302158 and IJPP:1300652 were MOKranj:KRJN601 and KRKF884; 1302152 ran line 5, 1301556 line 7 from 18:40."""
+    TRACK = 20 * 60   # s of path kept per vehicle
+    STICK = 10 * 60   # s a copy stays one while too few reports compare
+    TAKEN = 20 * 60   # s a run stays another vehicle's after it last reported it (it may have just ended it)
+    AROUND = 2000     # m: drawn vehicles further than this from it are not compared
+
+    def __init__(self):
+        self.tracks = MotionHistory(size=80, age=self.TRACK)
+        self.copies: dict[str, tuple[str, float]] = {}  # vehicle id -> (the drawn vehicle it is, when last seen so)
+        self.taken: dict[str, float] = {}
+
+    def assign(self, entities: list[dict], drawn_runs: Iterable[str], drawn: MotionHistory, runs, now: float,
+               drops: Optional[list] = None) -> list[tuple[dict, str, int, Optional[str]]]:
+        """(entity, run id, delay s, next stop id) for each of `entities` (no trip, fresh position) found on a run of `runs()` (called
+        only when needed) that no drawn vehicle runs: `drawn_runs` this update, `drawn` their recent reports. The
+        others' 'no trip id' notes (build_vehicles) get the reason they stay off the map."""
+        from . import coverage
+        from .geometry import KY, _kx
+        for run_id in drawn_runs:
+            self.taken[run_id] = now
+        self.taken = {k: t for k, t in self.taken.items() if t >= now - self.TAKEN}
+        last = drawn.last()
+        found: dict[int, tuple] = {}
+        reasons: dict[int, str] = {}
+        candidates = None
+        for e in entities:
+            vehicle_id, v = entity_vehicle_id(e), e.get('vehicle') or {}
+            pos = v.get('position') or {}
+            if not vehicle_id or pos.get('latitude') is None or pos.get('longitude') is None or now - int(v.get('timestamp') or 0) > MAX_VEHICLE_AGE:
+                continue
+            lat, lon = pos['latitude'], pos['longitude']
+            track = self.tracks.observe(vehicle_id, int(v.get('timestamp') or 0), lat, lon, now)
+            kx = _kx(lat)
+            near = [k for k, (_, la, lo) in last.items() if k != vehicle_id and math.hypot((lo - lon) * kx, (la - lat) * KY) <= self.AROUND]
+            verdicts = {k: same_path(track, drawn.recent(k)) for k in near}
+            was = self.copies.get(vehicle_id)
+            other = next((k for k, same in verdicts.items() if same), None)
+            if other is None and was and was[1] >= now - self.STICK and verdicts.get(was[0]) is None:
+                other = was[0]  # too few of its reports fall within this path yet: still that one
+            if other is not None:
+                self.copies[vehicle_id] = (other, now if verdicts.get(other) else was[1])
+                reasons[id(e)] = 'no trip id, a drawn vehicle'
+                continue
+            self.copies.pop(vehicle_id, None)
+            if candidates is None:
+                candidates = [r for r in runs() if r['id'] not in self.taken]
+            match = match_run(track, candidates, now)
+            if match:
+                run_id, delay, nxt = match
+                stop_ids = next(r for r in candidates if r['id'] == run_id).get('stopIds') or []
+                found[id(e)] = (e, run_id, delay, stop_ids[nxt] if nxt < len(stop_ids) else None)
+            else:
+                reasons[id(e)] = 'no trip id, no run fits'
+        per_run = Counter(found_run[1] for found_run in found.values())
+        out = []
+        for key, placed in found.items():
+            if per_run[placed[1]] == 1:
+                out.append(placed)
+            else:
+                reasons[key] = 'no trip id, two on one run'
+        if drops is not None:
+            placed = {id(p[0]) for p in out}
+            kept = [d for d in drops if id(d['item']) not in placed and id(d['item']) not in reasons]
+            drops[:] = kept
+            for e in entities:
+                if id(e) in reasons:
+                    coverage.note(drops, reasons[id(e)], e)
+        return out
+
+
+def entity_trip(entity: dict, trip_updates: dict) -> Optional[str]:
+    """The run a feed entity's vehicle is on: OTP's trip id where the feed names the run by an older timetable
+    version's id (sources._with_old_ids: LPP 12D buses as IJPP:479040), else the feed's own."""
+    trip_id = ((entity.get('vehicle') or {}).get('trip') or {}).get('tripId')
+    return (trip_updates.get(trip_id) or {}).get('runId') or trip_id if trip_id else trip_id
 
 
 def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, routes: dict, stop_names: dict,
@@ -244,11 +417,25 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
     from . import abroad, coverage
     now = now or time.time()
     out = []
-    seen = set()
+    positions = list(positions)
+
+    def rank(e: dict) -> tuple:
+        """Which report of a vehicle sent twice is drawn: one that can be (position, fresh), naming a well-formed run we
+        know, the newest. Marprom sends a bus once with a bare trip id ("MARPROM:") and once with its run."""
+        v = e.get('vehicle') or {}
+        trip_id, pos = entity_trip(e, trip_updates) or '', v.get('position') or {}
+        stamp = int(v.get('timestamp') or 0)
+        return (pos.get('latitude') is not None and pos.get('longitude') is not None and now - stamp <= MAX_VEHICLE_AGE,
+                bool(QUALIFIED.match(trip_id)), trip_id in trips, stamp)
+    best: dict[str, dict] = {}
+    for e in positions:
+        vehicle_id = entity_vehicle_id(e)
+        if vehicle_id is not None and (vehicle_id not in best or rank(e) > rank(best[vehicle_id])):
+            best[vehicle_id] = e
     for e in positions:
         v = e.get('vehicle') or {}
         trip = v.get('trip') or {}
-        trip_id, pos = trip.get('tripId'), v.get('position') or {}
+        trip_id, pos = entity_trip(e, trip_updates), v.get('position') or {}
         if not trip_id or pos.get('latitude') is None or pos.get('longitude') is None:
             coverage.note(drops, 'no trip id' if not trip_id else 'no position', e)
             continue
@@ -265,10 +452,9 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
             continue
         descriptor = v.get('vehicle') or {}
         vehicle_id = entity_vehicle_id(e)
-        if vehicle_id in seen:
+        if best[vehicle_id] is not e:
             coverage.note(drops, 'same vehicle twice', e)
             continue
-        seen.add(vehicle_id)
         bearing = pos.get('bearing')
         speed = pos.get('speed')
         speed = float(speed) if isinstance(speed, (int, float)) and 0 <= speed < 70 else None
@@ -305,7 +491,32 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
             out[-1]['delaySource'] = 'gtfs-rt'
         if is_replacement(route):  # an SŽ replacement bus with its own GPS: same look as the timetable-placed ones
             out[-1]['replacement'] = True
+        if not fits_contract(out[-1]):
+            out.pop()
+            coverage.note(drops, 'failed contract', e)
     return out
+
+
+VEHICLE_MODES = ('walk', 'bus', 'rail', 'bike', 'scooter', 'car')
+
+
+def fits_contract(v: dict) -> bool:
+    """The hard rules of the app's vehicle contract (src/contracts/transit.ts `vehicleSchema`). A vehicle breaking one
+    is left out here (and by the app), never the whole answer: one bad field used to empty the map."""
+    def number(x, low, high):
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and low <= x <= high
+
+    def qualified(x):
+        return isinstance(x, str) and bool(QUALIFIED.match(x))
+    return (all(qualified(v.get(k)) for k in ('id', 'operatorId', 'routeId'))
+            and all(v.get(k) is None or qualified(v[k]) for k in ('tripId', 'nextStopId'))
+            and all(isinstance(v.get(k), str) for k in ('name', 'routeName', 'destination', 'updatedAt'))
+            and (v.get('nextStop') is None or isinstance(v['nextStop'], str))
+            and number(v.get('latitude'), -90, 90) and number(v.get('longitude'), -180, 180)
+            and v.get('mode') in VEHICLE_MODES
+            and (v.get('bearing') is None or number(v['bearing'], 0, 360))
+            and (v.get('delaySeconds') is None or number(v['delaySeconds'], -math.inf, math.inf))
+            and (v.get('speed') is None or number(v['speed'], 0, math.inf)))
 
 
 # ---------------------------------------------------------------- boards

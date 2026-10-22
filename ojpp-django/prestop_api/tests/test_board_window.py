@@ -179,6 +179,7 @@ class OldTripIdTests(SimpleTestCase):
             index = sources._with_old_ids(index)
         run = index['IJPP:480671']
         self.assertEqual((run['trip']['tripId'], run['oldId']), ('IJPP:480671', 'IJPP:445124'))
+        self.assertEqual(index['IJPP:445124']['runId'], 'IJPP:480671')  # its vehicle is drawn on OTP's run (D4)
         self.assertEqual([mapping.update_delay(u) for u in run['updates']], [0, -11, -48])
         self.assertEqual(mapping.update_delay(index['IJPP:445124']['updates'][1]), 253)  # the feed's own stays as sent
         # OTP's run at the second stop now leaves at the live time

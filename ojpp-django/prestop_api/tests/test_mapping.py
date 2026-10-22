@@ -40,6 +40,134 @@ class VehicleTests(SimpleTestCase):
         self.assertEqual([v['id'] for v in result], ['MARPROM:472'])
         self.assertEqual(result[0]['routeId'], 'MARPROM:73')
 
+    def test_a_vehicle_sent_twice_keeps_the_report_naming_its_trip(self):
+        """D4: Marprom sends bus 489 twice, first with a bare trip id ("MARPROM:"): the copy with its run wins."""
+        bare = position('MARPROM:', '489', route='MARPROM:73')
+        named = position('MARPROM:113450', '489', stamp=NOW - 25, route='MARPROM:73')
+        [v] = mapping.build_vehicles([bare, named], {}, {'MARPROM:113450': {'routeId': 'MARPROM:73', 'destination': 'Tezno'}}, ROUTES, {}, NOW)
+        self.assertEqual((v['tripId'], v['destination']), ('MARPROM:113450', 'Tezno'))
+        # A copy with no position or an old report never wins over one that can be drawn.
+        stale = position('MARPROM:113450', '489', stamp=NOW - 3600, route='MARPROM:73')
+        [v] = mapping.build_vehicles([stale, bare], {}, {}, ROUTES, {}, NOW)
+        self.assertEqual(v['updatedAt'], mapping.iso(NOW - 20))
+
+    def test_a_vehicle_named_by_an_older_timetables_trip_id_is_on_otps_run(self):
+        """D4: LPP 12D buses report IJPP:479040, which OTP knows as another id; sources._with_old_ids found the run."""
+        updates = mapping.trip_update_index([{'tripUpdate': {'trip': {'tripId': 'LPP:old'}, 'stopTimeUpdate': [
+            {'stopSequence': 4, 'stopId': 'LPP:s4', 'arrival': {'delay': 400}}]}}])
+        updates['LPP:t1'] = {**updates['LPP:old'], 'trip': {'tripId': 'LPP:t1'}, 'oldId': 'LPP:old',
+                             'updates': [{'stopSequence': 4, 'stopId': 'LPP:s4', 'arrival': {'delay': 90}}]}
+        updates['LPP:old']['runId'] = 'LPP:t1'
+        [v] = mapping.build_vehicles([position('LPP:old', 'LPP:bus-1', stopId='LPP:s4')], updates,
+                                     {'LPP:t1': {'routeId': 'LPP:r6', 'destination': 'Železna'}}, ROUTES, {}, NOW)
+        self.assertEqual((v['tripId'], v['destination'], v['delaySeconds']), ('LPP:t1', 'Železna', 90))
+
+    def test_a_vehicle_breaking_the_contract_is_left_out_alone(self):
+        """D4: the app rejected a whole answer for one bad field; the server leaves out only that vehicle."""
+        bad = position('MARPROM:101750', 'MARPROM:', route='MARPROM:73')  # no vehicle number after the feed prefix
+        drops = []
+        result = mapping.build_vehicles([bad, position('LPP:t1', 'LPP:bus-1')], {}, {'LPP:t1': {'routeId': 'LPP:r6'}}, ROUTES, {}, NOW, drops=drops)
+        self.assertEqual([v['id'] for v in result], ['LPP:bus-1'])
+        self.assertEqual([d['reason'] for d in drops], ['failed contract'])
+        self.assertTrue(mapping.fits_contract(result[0]))
+        for field, value in [('latitude', float('nan')), ('bearing', 361.0), ('routeId', 'LPP:'), ('mode', 'tram'), ('tripId', 'x'), ('name', None)]:
+            self.assertFalse(mapping.fits_contract({**result[0], field: value}), field)
+
+
+def run(run_id, start, stops=6, step=120, lat=46.20, back=False):
+    """A run north along a street, a stop every ~550 m and `step` s (`back`: the same stops south again after)."""
+    calls = [(lat + 0.005 * i, 14.36, start + step * i) for i in range(stops)]
+    if back:
+        calls += [(la, lo, calls[-1][2] + step * (i + 1)) for i, (la, lo, _) in enumerate(reversed(calls[:-1]))]
+    return {'id': run_id, 'stops': calls}
+
+
+def path(r, delay, since, until, every=30):
+    """Reports every `every` s of a bus driving run `r` `delay` s late (straight between its stops)."""
+    out = []
+    for t in range(since, until + 1, every):
+        at = t - delay
+        calls = r['stops']
+        if at <= calls[0][2]:
+            out.append((t, calls[0][0], calls[0][1]))
+            continue
+        for a, b in zip(calls, calls[1:]):
+            if a[2] <= at <= b[2]:
+                f = (at - a[2]) / (b[2] - a[2])
+                out.append((t, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f))
+                break
+        else:
+            out.append((t, calls[-1][0], calls[-1][1]))
+    return out
+
+
+class RunMatchTests(SimpleTestCase):
+    """D4: buses the feed sends without a trip (Kranj city line 5, IJPP:1302152, 22 Oct 18:31-18:46) are matched to the
+    run of the operator's timetable whose stops they pass in order with one delay."""
+    T = NOW - NOW % 3600
+
+    def test_a_bus_passing_a_runs_stops_with_one_delay_is_on_that_run(self):
+        a, b = run('K:a', self.T), run('K:b', self.T + 1800)  # the same line half an hour later
+        track = path(a, 200, self.T + 300, self.T + 700)
+        self.assertEqual(mapping.match_run(track, [b, a], self.T + 700), ('K:a', 200, 5))  # passed stops 1-4: next is 5
+
+    def test_a_loop_matches_by_its_second_pass(self):
+        """Line 5 starts and ends at Kranj Globus: a bus seen only on the way back is still on that run."""
+        loop = run('K:loop', self.T, back=True)
+        track = path(loop, 240, self.T + 900, self.T + 1300)
+        self.assertEqual(mapping.match_run(track, [loop], self.T + 1300), ('K:loop', 240, 9))  # the way back's stop 1, not the first pass's
+
+    def test_a_standing_or_unclear_bus_stays_unmatched(self):
+        a = run('K:a', self.T)
+        standing = [(self.T + i * 30, a['stops'][2][0], a['stops'][2][1]) for i in range(20)]
+        self.assertIsNone(mapping.match_run(standing, [a], self.T + 600))  # one stop is no run
+        # Two runs four minutes apart on the same stops: either could be it.
+        twin = run('K:twin', self.T + 240)
+        self.assertIsNone(mapping.match_run(path(a, 120, self.T + 300, self.T + 700), [a, twin], self.T + 700))
+        # Far behind its timetable, or long past the run's end: not on it.
+        self.assertIsNone(mapping.match_run(path(a, 900, self.T + 900, self.T + 1500), [a], self.T + 1500))
+        self.assertIsNone(mapping.match_run(path(a, 0, self.T, self.T + 600), [a], self.T + 600 + mapping.RUN_AFTER_END + 60))
+
+
+class LooseVehicleTests(SimpleTestCase):
+    """D4: a bus without a trip is drawn on the run it is seen to run, never as a second copy of a drawn bus."""
+    T = NOW - NOW % 3600
+
+    def feed(self, loose, vehicle_id, at):
+        t, lat, lon = next(p for p in reversed(loose) if p[0] <= at)
+        return {'id': vehicle_id, 'vehicle': {'trip': {}, 'vehicle': {'id': vehicle_id}, 'timestamp': str(t), 'position': {'latitude': lat, 'longitude': lon}}}
+
+    def replay(self, runs, buses, drawn_buses=(), taken=()):
+        """Feeds every 30 s; `buses` {id: path} without a trip, `drawn_buses` {id: path} drawn with one. Placed runs per bus."""
+        loose, drawn, placed = mapping.LooseVehicles(), mapping.MotionHistory(), {}
+        for at in range(self.T + 300, self.T + 900, 30):
+            for vid, track in dict(drawn_buses).items():
+                t, lat, lon = next(p for p in reversed(track) if p[0] <= at)
+                drawn.observe(vid, t, lat, lon, at)
+            entities = [self.feed(track, vid, at) for vid, track in buses.items()]
+            drops = [{'reason': 'no trip id', 'at': 'mapping.py:1', 'item': e} for e in entities]
+            for e, run_id, *_ in loose.assign(entities, taken, drawn, lambda: runs, at, drops):
+                placed.setdefault(e['id'], set()).add(run_id)
+            self.assertTrue(all(d['reason'].startswith('no trip id, ') for d in drops))
+        return placed
+
+    def test_a_bus_on_a_run_nobody_reports_is_placed_on_it(self):
+        a = run('K:a', self.T)
+        self.assertEqual(self.replay([a], {'IJPP:1': path(a, 60, self.T, self.T + 900)}), {'IJPP:1': {'K:a'}})
+
+    def test_a_copy_of_a_drawn_bus_is_never_placed(self):
+        """IJPP:1302158 followed MOKranj:KRJN601: when that one's run changed, the copy fitted the other run."""
+        a, b = run('K:a', self.T), run('K:b', self.T + 30)
+        bus = path(b, 0, self.T, self.T + 900)
+        twin = [(t + 7, lat + 0.0004, lon) for t, lat, lon in bus]  # the same bus through the other feed: 45 m off, 7 s later
+        self.assertEqual(self.replay([a, b], {'IJPP:copy': twin}, drawn_buses={'MOKranj:bus': bus}, taken=['K:a']), {})
+
+    def test_a_run_another_vehicle_reports_or_two_buses_fit_is_left_alone(self):
+        a = run('K:a', self.T)
+        self.assertEqual(self.replay([a], {'IJPP:1': path(a, 60, self.T, self.T + 900)}, taken=['K:a']), {})
+        other = [(t, lat, lon + 0.0004) for t, lat, lon in path(a, 60, self.T, self.T + 900)]  # 30 m beside it: which one?
+        self.assertEqual(self.replay([a], {'IJPP:1': path(a, 60, self.T, self.T + 900), 'IJPP:2': other}), {})
+
 
 def stoptime(trip, first, last, dep=36000, rt=None, state='SCHEDULED'):
     return {'serviceDay': 1791496800, 'scheduledArrival': dep, 'scheduledDeparture': dep,

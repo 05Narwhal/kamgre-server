@@ -407,3 +407,17 @@ def stoptimes(stop_id: str, start: int, span: int, limit: int, updates: dict) ->
     out.sort(key=lambda st: st['serviceDay'] + st['scheduledDeparture'])
     return out[:limit]
 
+
+def running(now: float, margin: int = 1800) -> list[dict]:
+    """Runs of these timetables on the road around `now` (from `margin` s before their first departure to as long after
+    their last arrival), as mapping.match_run takes them: {'id', 'stops': [(lat, lon, scheduled epoch)], 'stopIds'}."""
+    out = []
+    today = datetime.fromtimestamp(now, LOCAL).date()
+    for feed in _feeds().values():
+        for day in (today - timedelta(days=1), today):
+            base = day_start(day)
+            for t in feed['trips'].values():
+                if base + t['stops'][0]['departure'] - margin <= now <= base + t['stops'][-1]['arrival'] + margin and runs(feed, t['serviceId'], day):
+                    out.append({'id': t['id'], 'stops': [(feed['stops'][s['stopId']]['lat'], feed['stops'][s['stopId']]['lon'], base + s['departure'])
+                                                         for s in t['stops']], 'stopIds': [s['stopId'] for s in t['stops']]})
+    return out
