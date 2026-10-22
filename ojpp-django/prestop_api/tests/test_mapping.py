@@ -59,6 +59,17 @@ class BoardTests(SimpleTestCase):
         rows = mapping.build_board('IJPP:s', [morning, evening, stoptime('IJPP:n', 'IJPP:x', 'IJPP:y')], 'departure', [])
         self.assertEqual([r.get('tripStart') for r in rows], ['07:10', '18:10', None])
 
+    def test_a_bus_predicted_early_at_its_first_stop_leaves_at_its_time(self):
+        """D3: buses predicted early at their first stop left on time or later (EARLY_START); further on early is early."""
+        here = 'IJPP:here'
+        starts, through = stoptime('IJPP:starts', here, 'IJPP:y', rt=36000 - 180), stoptime('IJPP:through', 'IJPP:x', 'IJPP:y', rt=36000 - 180)
+        late = stoptime('IJPP:late', here, 'IJPP:y', rt=36000 + 120)
+        rows = {r['tripId']: r for r in mapping.build_board(here, [starts, through, late], 'departure', [])}
+        self.assertEqual(rows['IJPP:starts']['effectiveAt'], rows['IJPP:starts']['scheduledAt'])
+        self.assertEqual(rows['IJPP:starts']['quality'], 'predicted')
+        self.assertEqual(rows['IJPP:through']['effectiveAt'], mapping.iso(1791496800 + 36000 - 180))
+        self.assertEqual(rows['IJPP:late']['effectiveAt'], mapping.iso(1791496800 + 36000 + 120))
+
     def test_departures_skip_terminating_trips_and_arrivals_skip_originating(self):
         here = 'IJPP:here'
         rows = [stoptime('IJPP:a', 'IJPP:x', 'IJPP:y'), stoptime('IJPP:ends', 'IJPP:x', here), stoptime('IJPP:starts', here, 'IJPP:y')]

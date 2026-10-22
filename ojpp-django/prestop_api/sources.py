@@ -510,6 +510,8 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict], d
     updates = trainlive.trip_updates()
     back = mapping.MAX_UNCONFIRMED_DELAY if datetime.fromtimestamp(start, ZoneInfo('Europe/Ljubljana')).hour < SERVICE_DAY_ENDS_HOUR else 0
     back = max(back, min(mapping.MAX_UNCONFIRMED_DELAY, max((d for at, d in _late_by_stop(updates).get(stop_id, []) if at is None or at >= start), default=0)))
+    # A run OTP has leaving its first stop early, gone from OTP's board while the bus waits there (mapping.EARLY_START).
+    back = max(back, mapping.EARLY_START if kind == 'departure' else 0)
     # OTP's BOARD_MAX calls can hold far fewer rows (at Ljubljana AP 80 of 150 end there: 70 departures to 16:00, so
     # the app took the day for done; D3, 22 Oct 2026): it is asked on from its last call until the rows fill a board.
     until, at, calls, seen = start + _until_service_day_end(start), start - back, [], set()

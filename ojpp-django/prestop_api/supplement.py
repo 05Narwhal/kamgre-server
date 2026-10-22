@@ -393,7 +393,8 @@ def stoptimes(stop_id: str, start: int, span: int, limit: int, updates: dict) ->
             if not (start - 3600 <= base + s['departure'] <= start + span) or not runs(feed, t['serviceId'], day):
                 continue
             live = _live_times(t, day, updates.get(tid))[i]
-            if base + live['realtimeDeparture'] < start:
+            # A bus waits at its first stop for its time (mapping.EARLY_START).
+            if base + (max(live['realtimeDeparture'], live['scheduledDeparture']) if i == 0 else live['realtimeDeparture']) < start:
                 continue
             route = feed['routes'][t['routeId']]
             out.append({**live, 'headsign': t['headsign'], 'stopPosition': s['sequence'],

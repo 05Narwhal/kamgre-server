@@ -95,6 +95,15 @@ class SupplementTests(SimpleTestCase):
         self.assertEqual(rows[0]['trip']['arrivalStoptime']['stop']['name'], 'Kranj AP')
         self.assertIsNone(supplement.stoptimes('IJPP:1', start, 3600, 10, {}))
 
+    def test_a_bus_predicted_early_at_its_first_stop_stays_until_its_time(self):
+        """D3: a bus waits at its first stop for its time (mapping.EARLY_START); further on an early bus has gone."""
+        update = {'trip': {'startDate': '20261012'}, 'updates': [{'stopSequence': 1, 'departure': {'delay': -180}, 'stopId': 'MOKranj:27'},
+                                                                  {'stopSequence': 3, 'departure': {'delay': -180}, 'stopId': 'MOKranj:31'}]}
+        base = supplement.day_start(MONDAY)
+        first = supplement.stoptimes('MOKranj:27', base + 12 * 3600 + 5 * 60, 3600, 10, {'MOKranj:xfp_155095': update})
+        self.assertEqual([r['realtimeDeparture'] - r['scheduledDeparture'] for r in first], [-180])
+        self.assertEqual(supplement.stoptimes('MOKranj:31', base + 12 * 3600 + 17 * 60, 3600, 10, {'MOKranj:xfp_155095': update}), [])
+
     def test_a_run_named_by_otps_version_prefixed_id(self):
         # OTP's copy merges versions of the file and prefixes a shared trip id ('3_xfpW3oZOcB_155115', 19 Oct 2026);
         # the realtime feed names the run so, the file by its plain id.

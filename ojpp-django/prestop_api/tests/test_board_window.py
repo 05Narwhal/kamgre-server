@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from django.test import SimpleTestCase
 
-from prestop_api import sources
+from prestop_api import mapping, sources
 
 LOCAL = ZoneInfo('Europe/Ljubljana')
 
@@ -40,9 +40,32 @@ class BoardWindowTests(SimpleTestCase):
             board = sources._member_board('IJPP:s', 'departure', at('2026-10-20 01:10'), [])
             self.assertEqual(otp.query.call_args[0][1]['start'], at('2026-10-19 23:10'))
             self.assertEqual([r['tripId'] for r in board], ['IJPP:late', 'IJPP:next'])
-            # By day OTP has each train's live time on its run: nothing more is asked for
+            # By day OTP has each train's live time on its run: only the minutes a bus may be predicted early at its
+            # first stop are asked for (mapping.EARLY_START), and arrivals need none.
             sources._member_board('IJPP:s', 'departure', at('2026-10-20 10:00'), [])
+            self.assertEqual(otp.query.call_args[0][1]['start'], at('2026-10-20 10:00') - mapping.EARLY_START)
+            sources._member_board('IJPP:s', 'arrival', at('2026-10-20 10:00'), [])
             self.assertEqual(otp.query.call_args[0][1]['start'], at('2026-10-20 10:00'))
+
+    def test_a_bus_predicted_early_at_its_first_stop_stays_while_it_waits(self):
+        """D3: on 22 Oct 2026 buses predicted 2-5 min early at their first stop left on time or later (IJPP:473334:
+        -272 s, left +268 s), but OTP's board, by the early time, had dropped each while it stood there."""
+        from prestop_api.tests.test_mapping import stoptime
+        day, here = at('2026-10-22 00:00'), 'IJPP:1121238'
+
+        def row(trip, dep, rt, first=here):
+            st = stoptime(trip, first, 'IJPP:y', dep=at(dep) - day, rt=at(rt) - day)
+            st['trip']['departureStoptime'] = {'stop': {'gtfsId': first}, 'stopPosition': 2}
+            return {**st, 'serviceDay': day}
+        calls = [row('IJPP:473334', '2026-10-22 17:50', '2026-10-22 17:45'),  # waits at its first stop
+                 row('IJPP:through', '2026-10-22 17:50', '2026-10-22 17:45', first='IJPP:x'),  # passed early, gone
+                 row('IJPP:next', '2026-10-22 18:00', '2026-10-22 18:00')]
+        otp = mock.Mock()
+        otp.query.side_effect = lambda q, v: {'stop': {'stoptimesWithoutPatterns': [c for c in calls if day + c['realtimeDeparture'] >= v['start']]}}
+        with mock.patch.object(sources, 'otp', return_value=otp), mock.patch('prestop_api.trainlive.trip_updates', return_value={}):
+            board = sources._member_board(here, 'departure', at('2026-10-22 17:47'), [])
+        self.assertEqual([(r['tripId'], r['effectiveAt']) for r in board],
+                         [('IJPP:473334', '2026-10-22T15:50:00Z'), ('IJPP:next', '2026-10-22T16:00:00Z')])
 
     def test_a_late_run_otp_has_no_live_time_for_stays_until_it_leaves(self):
         """D3: A6295 (IJPP:463770) at Kranj AP, 13:30 and +19 min in the feed, which OTP left out: at 13:42 OTP no
@@ -82,6 +105,7 @@ class BoardWindowTests(SimpleTestCase):
         otp = mock.Mock()
         otp.query.side_effect = answer
         with mock.patch.object(sources, 'otp', return_value=otp), mock.patch.object(sources, 'BOARD_MAX', 4), \
+                mock.patch.object(mapping, 'EARLY_START', 0), \
                 mock.patch('prestop_api.trainlive.trip_updates', return_value={}), mock.patch.object(sources, '_live_delays', return_value={}):
             board = sources._member_board(here, 'departure', at('2026-10-22 15:00'), [])
             self.assertEqual([r['tripId'] for r in board], ['IJPP:0', 'IJPP:2', 'IJPP:4', 'IJPP:6', 'IJPP:8', 'IJPP:10'])

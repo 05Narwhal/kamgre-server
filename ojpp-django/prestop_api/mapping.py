@@ -15,6 +15,10 @@ MAX_VEHICLE_AGE = 15 * 60
 # reporting the trip it finished hours ago (N0127, 19 Oct: its 07:05 run "+208 min" at 10:39) or matched to another
 # run of its line (A6103 "+159 min") is shown as having no live data instead.
 MAX_UNCONFIRMED_DELAY = 120 * 60
+# A bus waits at its first stop for its time: a departure predicted earlier there is held to the timetable (D3, 22 Oct
+# 2026: buses predicted 2-5 min early at their first stop left on time or later, IJPP:473334 -272 s left +268 s, and
+# the board had dropped each while it stood there). Boards ask for departures this much earlier for them (s).
+EARLY_START = 10 * 60
 QUALIFIED = re.compile(r'^[^:]+:.+$')
 FALLBACK_URLS = {'IJPP:1161': 'https://potniski.sz.si/', 'LPP': 'https://www.lpp.si/', 'MARPROM': 'https://www.marprom.si/'}
 
@@ -429,6 +433,8 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
                                          scheduled, realtime, effective, day, st.get('stopPosition'))
         if realtime and believable(effective - scheduled, _shows(live.get((st.get('trip') or {}).get('gtfsId')), effective - scheduled)) is None:
             realtime, effective = False, scheduled
+        if kind == 'departure' and starts:  # it waits at its first stop for its time (EARLY_START)
+            effective = max(effective, scheduled)
         end = ((trip.get('departureStoptime' if kind == 'arrival' else 'arrivalStoptime') or {}).get('stop') or {})
         other_end = stopfix.renamed(end.get('gtfsId'), end.get('name'))
         if end.get('gtfsId') == stop_id:  # a loop: its own stop says nothing about where it goes, its headsign does
