@@ -217,6 +217,29 @@ def owns(gtfs_id: str) -> bool:
     return _feed_of(gtfs_id) is not None
 
 
+# OTP's copy of a feed can merge versions of the operator's file and prefix a trip id two of them share with the
+# version ('MOKranj:3_xfpW3oZOcB_155115', Kranj line 1, 19-20 Oct 2026); the realtime feed then names the run so, and
+# the file read here has it by its plain id, same stops and times.
+def _trip(feed: dict, trip_id: str) -> Optional[dict]:
+    t = feed['trips'].get(trip_id)
+    if t is None:
+        prefix, _, raw = trip_id.partition(':')
+        version, sep, rest = raw.partition('_')
+        t = feed['trips'].get(f'{prefix}:{rest}') if sep and version.isdigit() else None
+    return t
+
+
+def with_own_ids(index: dict) -> dict:
+    """Trip updates (trip id -> update) with each one named by OTP's prefixed id filed under the file's id too
+    ('oldId': the feed's), unless the feed names that run by the file's id as well."""
+    for trip_id, update in list(index.items()):
+        feed = _feed_of(trip_id)
+        t = feed and trip_id not in feed['trips'] and _trip(feed, trip_id)
+        if t and t['id'] not in index:
+            index[t['id']] = {**update, 'trip': {**update['trip'], 'tripId': t['id']}, 'oldId': trip_id}
+    return index
+
+
 def runs(feed: dict, service_id: str, day: date) -> bool:
     key = day.strftime('%Y%m%d')
     if (service_id, key) in feed['exceptions']:
@@ -261,7 +284,7 @@ def sequences() -> list[list[str]]:
 def trip_info(trip_id: str) -> dict:
     """Route, direction and destination of a trip (sources.TripInfo's record); {} when unknown."""
     feed = _feed_of(trip_id)
-    t = feed and feed['trips'].get(trip_id)
+    t = feed and _trip(feed, trip_id)
     if not t:
         return {}
     return {'routeId': t['routeId'], 'directionId': t['directionId'], 'headsign': t['headsign'],
@@ -312,7 +335,7 @@ def _live_times(t: dict, day: date, update: Optional[dict]) -> list[dict]:
 def otp_trip(trip_id: str, day: date, update: Optional[dict] = None) -> Optional[dict]:
     """A trip in the shape of trips.STATIC_FIELDS + TIMES_FIELDS (None when it does not run on `day`)."""
     feed = _feed_of(trip_id)
-    t = feed and feed['trips'].get(trip_id)
+    t = feed and _trip(feed, trip_id)
     if not t or not runs(feed, t['serviceId'], day):
         return None
     return {

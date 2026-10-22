@@ -153,6 +153,17 @@ def board_status(expected: dict, target_rows: Optional[list], here_rows: Optiona
     return expected.get('otp') or 'not returned by OTP for the board', 'sources._member_board'
 
 
+def next_page(rows: Optional[list], limit: int, at: int) -> Optional[int]:
+    """Where the app goes on from a board asked for at `at` ("Later", StationBoardPage.tsx): a full one (`limit` rows,
+    sources.BOARD_MAX) from its last row's own time (a minute on when that is no later); a shorter one is the rest of
+    the service day (None)."""
+    if not rows or len(rows) < limit:
+        return None
+    from datetime import datetime
+    last = int(max(datetime.fromisoformat(r.get('effectiveAt') or r['scheduledAt']) for r in rows).timestamp())
+    return last if last > at else at + 60
+
+
 # ---------------------------------------------------------------- report
 
 def tally(rows: Iterable[dict], ok: tuple = SHOWN) -> tuple[dict, dict, dict]:

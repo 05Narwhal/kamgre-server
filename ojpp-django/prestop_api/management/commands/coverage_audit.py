@@ -35,6 +35,7 @@ DEFAULT_STOPS = ['Kranj AP', 'Radovljica', 'Kropa', 'Trzin Ind. cona', 'Polhov G
 LOCAL = ZoneInfo('Europe/Ljubljana')
 WORKERS = 4
 LEAD = 300        # s: live runs are checked at stops at least this far ahead (the audit takes minutes)
+MAX_PAGES = 12    # boards read per stop, going on as the app does
 TARGET_LAG = 15   # s between the two reads of the target's vehicles
 GONE = 'left before its board was read'
 STOPTIMES_Q = '''query($id: String!, $date: String!) { stop(id: $id) {
@@ -128,17 +129,36 @@ class Command(BaseCommand):
 
     def _boards(self, keys: list[tuple[str, str]], start: Optional[int] = None) -> dict:
         """(stop id, kind) -> (target rows or None, rows built here, drop notes); each board from `start`, else from
-        when it is read (self.read_at), so a run due while the audit runs is not taken for a miss."""
+        when it is read (self.read_at), so a run due while the audit runs is not taken for a miss. Full boards go on
+        as the app's "Later" does (coverage.next_page) to the end of the audited window."""
+        def pages(get, at: int) -> Optional[list]:
+            rows: Optional[list] = None
+            for _ in range(MAX_PAGES):
+                page = get(at)
+                if page is None:
+                    return rows
+                ids = {r['id'] for r in rows or []}
+                rows = (rows or []) + [r for r in page if r['id'] not in ids]  # the last row shows again on the next
+                at = coverage.next_page(page, sources.BOARD_MAX, at)
+                if at is None or at >= self.now + self.horizon:
+                    break
+            return rows
+
         def one(key):
             stop_id, kind = key
             drops: list = []
             self.read_at[key] = at = start or int(time.time())
-            try:
-                here = sources._board(stop_id, kind, at, 'sl', drops)
-            except UpstreamError:
-                here = None
-            data = self._get(f'/stops/{quote(stop_id, safe=":")}/board', {'kind': kind, 'at': mapping.iso(at)})
-            return key, ((data or {}).get('items') if data is not None else None, here, drops)
+
+            def here(t):
+                try:
+                    return sources._board(stop_id, kind, t, 'sl', drops)
+                except UpstreamError:
+                    return None
+
+            def target(t):
+                data = self._get(f'/stops/{quote(stop_id, safe=":")}/board', {'kind': kind, 'at': mapping.iso(t)})
+                return (data or {}).get('items') if data is not None else None
+            return key, (pages(target, at), pages(here, at), drops)
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             return dict(pool.map(one, keys))
 
@@ -262,7 +282,7 @@ class Command(BaseCommand):
             out = []
             for m in stop.get('memberIds') or [stop['id']]:
                 if supplement.owns(m):
-                    own = supplement.stoptimes(m, start, end - start, sources.BOARD_MAX, updates) or []
+                    own = supplement.stoptimes(m, start, end - start, 10_000, updates) or []
                     patterns = [{'pattern': {'route': st['trip']['route']}, 'stoptimes': [st]} for st in own]
                 else:
                     patterns = []
@@ -316,6 +336,9 @@ class Command(BaseCommand):
 
             def one(trip):
                 trip_id = trip[0]
+                # The operator's file (supplement.py) is a rolling window from yesterday (Kranj: 21-30 Oct on the 22nd).
+                if supplement.owns(trip_id) and not supplement.otp_trip(trip_id, day):
+                    return {'feed': coverage.feed(trip_id), 'status': "operator's file no longer covers that day (replay artifact)", 'at': '', 'example': trip_id}
                 try:
                     data = otp().query(TRIP_DAY_Q, {'id': trip_id, 'date': day.strftime('%Y%m%d')}).get('trip')
                 except UpstreamError:

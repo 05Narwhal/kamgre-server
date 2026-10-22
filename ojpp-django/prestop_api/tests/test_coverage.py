@@ -115,6 +115,14 @@ class BoardTests(SimpleTestCase):
                 {'id': 'LPP:2@1/1', 'tripId': 'LPP:2', 'routeName': '51', 'scheduledAt': at, 'destination': 'Polhov Gradec'}]  # a second bus
         self.assertEqual([(a['tripId'], b['tripId']) for a, b in coverage.duplicates(rows)], [('IJPP:1', 'LPP:1')])
 
+    def test_the_app_pages_on_from_a_full_board_only(self):
+        rows = [{'scheduledAt': mapping.iso(NOW + 60 * i), 'effectiveAt': None} for i in range(3)]
+        rows[0]['effectiveAt'] = mapping.iso(NOW + 600)  # late: the board's last row by time
+        self.assertEqual(coverage.next_page(rows, 3, NOW), NOW + 600)
+        self.assertEqual(coverage.next_page(rows, 3, NOW + 600), NOW + 660)  # no later than asked: a minute on
+        self.assertIsNone(coverage.next_page(rows, 4, NOW))
+        self.assertIsNone(coverage.next_page([], 3, NOW))
+
     def test_upcoming_stops_of_a_trip_update(self):
         update = {'updates': [{'stopId': 'S1', 'departure': {'time': str(NOW - 60), 'delay': 60}},
                               {'stopId': 'S2', 'scheduleRelationship': 'SKIPPED', 'departure': {'time': NOW + 60}},

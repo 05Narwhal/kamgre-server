@@ -66,6 +66,37 @@ class BoardWindowTests(SimpleTestCase):
             self.assertEqual([(r['tripId'], r['effectiveAt']) for r in board],
                              [('IJPP:463770', '2026-10-22T11:49:09Z'), ('IJPP:next', None)])
 
+    def test_a_terminus_board_is_filled_from_further_pages(self):
+        """D3: at Ljubljana AP 80 of OTP's 150 calls end there, so the board had 70 departures to 16:00 and the app,
+        given fewer than BOARD_MAX rows, took the rest of the day for done."""
+        from prestop_api import mapping
+        from prestop_api.tests.test_mapping import stoptime
+        day, here = at('2026-10-22 00:00'), 'IJPP:ap'
+        calls = []
+        for i in range(12):  # every other call ends here
+            st = stoptime(f'IJPP:{i}', 'IJPP:x', here if i % 2 else 'IJPP:y', dep=at('2026-10-22 15:00') + 300 * i - day)
+            calls.append({**st, 'serviceDay': day})
+
+        def answer(query, v):  # OTP: the first n calls from `start`
+            return {'stop': {'stoptimesWithoutPatterns': [c for c in calls if day + c['realtimeDeparture'] >= v['start']][:v['n']]}}
+        otp = mock.Mock()
+        otp.query.side_effect = answer
+        with mock.patch.object(sources, 'otp', return_value=otp), mock.patch.object(sources, 'BOARD_MAX', 4), \
+                mock.patch('prestop_api.trainlive.trip_updates', return_value={}), mock.patch.object(sources, '_live_delays', return_value={}):
+            board = sources._member_board(here, 'departure', at('2026-10-22 15:00'), [])
+            self.assertEqual([r['tripId'] for r in board], ['IJPP:0', 'IJPP:2', 'IJPP:4', 'IJPP:6', 'IJPP:8', 'IJPP:10'])
+            self.assertEqual([c[0][1]['n'] for c in otp.query.call_args_list], [4, 8])
+            # A stop whose day fits one page is asked once.
+            otp.query.reset_mock()
+            self.assertEqual(len(sources._member_board(here, 'departure', at('2026-10-22 15:41'), [])), 1)
+            self.assertEqual(otp.query.call_count, 1)
+            # Rows by the time they go: a late bus (its timetable 15:00, +50 min) is the one past the cap.
+            rows = [{'id': str(i), 'scheduledAt': mapping.iso(at('2026-10-22 15:00') + 300 * i), 'effectiveAt': None} for i in range(6)]
+            rows[0]['effectiveAt'] = mapping.iso(at('2026-10-22 15:50'))
+            drops: list = []
+            self.assertEqual([r['id'] for r in sources._capped(rows, drops)], ['1', '2', '3', '4'])
+            self.assertEqual([d['item']['id'] for d in drops], ['0', '5'])
+
 
 class OldTripIdTests(SimpleTestCase):
     """D3: the feed names some runs by an older timetable's trip id, so OTP had no live data for the run and its board

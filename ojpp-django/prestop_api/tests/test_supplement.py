@@ -95,6 +95,26 @@ class SupplementTests(SimpleTestCase):
         self.assertEqual(rows[0]['trip']['arrivalStoptime']['stop']['name'], 'Kranj AP')
         self.assertIsNone(supplement.stoptimes('IJPP:1', start, 3600, 10, {}))
 
+    def test_a_run_named_by_otps_version_prefixed_id(self):
+        # OTP's copy merges versions of the file and prefixes a shared trip id ('3_xfpW3oZOcB_155115', 19 Oct 2026);
+        # the realtime feed names the run so, the file by its plain id.
+        self.assertEqual(supplement.trip_info('MOKranj:3_xfp_155095')['routeId'], 'MOKranj:4015')
+        self.assertEqual(supplement.otp_trip('MOKranj:3_xfp_155095', MONDAY)['gtfsId'], 'MOKranj:3_xfp_155095')
+        self.assertEqual(supplement.trip_info('MOKranj:3_nope'), {})
+        self.assertEqual(supplement.trip_info('MOKranj:x_xfp_155095'), {})
+        update = {'trip': {'tripId': 'MOKranj:3_xfp_155095', 'startDate': '20261012'},
+                  'updates': [{'stopSequence': 2, 'departure': {'delay': 300}, 'stopId': 'MOKranj:22'}]}
+        index = supplement.with_own_ids({'MOKranj:3_xfp_155095': update, 'IJPP:1': {'trip': {'tripId': 'IJPP:1'}, 'updates': []}})
+        filed = index['MOKranj:xfp_155095']
+        self.assertEqual((filed['trip']['tripId'], filed['oldId']), ('MOKranj:xfp_155095', 'MOKranj:3_xfp_155095'))
+        self.assertIn('MOKranj:3_xfp_155095', index)
+        start = supplement.day_start(MONDAY) + 12 * 3600
+        row = supplement.stoptimes('MOKranj:31', start, 3600, 10, index)[0]
+        self.assertEqual(row['realtimeDeparture'] - row['scheduledDeparture'], 300)
+        # A run the feed also names by the plain id keeps its own update.
+        own = {**update, 'trip': {'tripId': 'MOKranj:xfp_155095'}}
+        self.assertIs(supplement.with_own_ids({'MOKranj:3_xfp_155095': update, 'MOKranj:xfp_155095': own})['MOKranj:xfp_155095'], own)
+
 
 class LocalFeedTests(SimpleTestCase):
     """Hand-kept timetables in data/gtfs/<feedId>/ (Sevnica's city bus since its feed expired)."""

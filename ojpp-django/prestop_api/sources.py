@@ -136,7 +136,7 @@ def _load_positions():
 
 
 def _load_trip_updates():
-    return _with_old_ids(mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024)))
+    return _with_old_ids(supplement.with_own_ids(mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024))))
 
 
 positions = Cached(_load_positions, ttl=5, max_stale=120, revalidate=30)
@@ -471,7 +471,8 @@ def _load_rentals():
 rentals = Cached(_load_rentals, ttl=60, max_stale=900, revalidate=300)
 
 
-BOARD_MAX = 150
+BOARD_MAX = 150  # rows: a board this long goes on from its last row's time in the app ("Later"); a shorter one is all
+BOARD_PAGES = 6  # OTP pages of BOARD_MAX calls read for one stop at most (half of Ljubljana AP's calls end there)
 SERVICE_DAY_ENDS_HOUR = 4  # trips after midnight still belong to the previous day's timetable
 
 
@@ -491,7 +492,7 @@ def _until_service_day_end(start: int) -> int:
 def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict], drops: Optional[list] = None) -> Optional[list[dict]]:
     if supplement.owns(stop_id):  # OTP has this feed's timetable wrong (supplement.py)
         updates = trip_updates.get().value if _safe(trip_updates) else {}
-        own = supplement.stoptimes(stop_id, start, _until_service_day_end(start), BOARD_MAX, updates)
+        own = supplement.stoptimes(stop_id, start, _until_service_day_end(start), BOARD_MAX * BOARD_PAGES, updates)
         if own is not None:
             return mapping.build_board(stop_id, own, kind, alert_list, _live_delays(), drops=drops)
     # In the small hours OTP has a late train still out from yesterday at its timetable (mapping.update_run), so it
@@ -503,15 +504,34 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict], d
     updates = trainlive.trip_updates()
     back = mapping.MAX_UNCONFIRMED_DELAY if datetime.fromtimestamp(start, ZoneInfo('Europe/Ljubljana')).hour < SERVICE_DAY_ENDS_HOUR else 0
     back = max(back, min(mapping.MAX_UNCONFIRMED_DELAY, max((d for at, d in _late_by_stop(updates).get(stop_id, []) if at is None or at >= start), default=0)))
-    data = otp().query(BOARD_Q, {'id': stop_id, 'start': start - back, 'range': _until_service_day_end(start) + back, 'n': BOARD_MAX, 'omit': kind == 'departure'})
-    stop = data.get('stop')
-    if stop is None:
-        return None
-    rows = mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays(), updates, drops)
-    if not back:
-        return rows
-    coverage.note(drops, 'gone before the board starts', *(r for r in rows if (r['effectiveAt'] or r['scheduledAt']) < mapping.iso(start)))
-    return [r for r in rows if (r['effectiveAt'] or r['scheduledAt']) >= mapping.iso(start)]
+    # OTP's BOARD_MAX calls can hold far fewer rows (at Ljubljana AP 80 of 150 end there: 70 departures to 16:00, so
+    # the app took the day for done; D3, 22 Oct 2026): it is asked on from its last call until the rows fill a board.
+    until, at, calls, seen = start + _until_service_day_end(start), start - back, [], set()
+    live = _live_delays()
+    for _ in range(BOARD_PAGES):
+        n = 2 * BOARD_MAX if calls else BOARD_MAX  # OTP takes as long for 300 as for 150 (~0.2 s)
+        stop = otp().query(BOARD_Q, {'id': stop_id, 'start': at, 'range': until - at, 'n': n, 'omit': kind == 'departure'}).get('stop')
+        if stop is None:
+            return None
+        page = stop.get('stoptimesWithoutPatterns') or []
+        for st in page:  # a call at the time a page ends is on the next one too
+            key = ((st.get('trip') or {}).get('gtfsId'), st.get('serviceDay'), st.get('stopPosition'))
+            if key not in seen:
+                seen.add(key)
+                calls.append(st)
+        noted: list = []
+        rows = mapping.build_board(stop_id, calls, kind, alert_list, live, updates, noted if drops is not None else None)
+        kept = [r for r in rows if (r['effectiveAt'] or r['scheduledAt']) >= mapping.iso(start)] if back else rows
+        if len(page) < n or len(kept) >= BOARD_MAX:
+            break
+        at = max(at + 1, page[-1]['serviceDay'] + page[-1]['realtimeDeparture'])
+        if at >= until:
+            break
+    if drops is not None:
+        drops += noted
+    if back:
+        coverage.note(drops, 'gone before the board starts', *(r for r in rows if (r['effectiveAt'] or r['scheduledAt']) < mapping.iso(start)))
+    return kept
 
 
 _late: tuple = (None, {})  # the trip updates last indexed, and their index (mapping.late_by_stop)
@@ -559,7 +579,7 @@ def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[l
         alert_list = []
     members = stop_group(stop_id)
     if len(members) == 1:
-        return _with_live_platforms(_member_board(stop_id, kind, start, alert_list, drops), stop_id, kind, start, drops)
+        return _capped(_with_live_platforms(_member_board(stop_id, kind, start, alert_list, drops), stop_id, kind, start, drops), drops)
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(4, len(members))) as pool:
         boards = list(pool.map(lambda m: _member_board(m, kind, start, alert_list, drops), members))
@@ -576,8 +596,17 @@ def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[l
         seen.add(entry['id'])
         # Which of the merged stops it leaves from, by that stop's own name (stopgroups.py).
         entries.append({**entry, 'stopName': names[entry['stopId']]} if entry.get('stopId') in names else entry)
-    coverage.note(drops, 'beyond the board row cap', *entries[BOARD_MAX:])
-    return _with_live_platforms(entries[:BOARD_MAX], stop_id, kind, start, drops)
+    return _capped(_with_live_platforms(entries, stop_id, kind, start, drops), drops)
+
+
+def _capped(entries: Optional[list[dict]], drops: Optional[list] = None) -> Optional[list[dict]]:
+    """A board's first BOARD_MAX rows by the time they go, in their order: the app goes on from the last one's time
+    (a late bus kept by its timetable time would make it skip the rows between)."""
+    if not entries or len(entries) <= BOARD_MAX:
+        return entries
+    beyond = {id(e) for e in sorted(entries, key=lambda e: e.get('effectiveAt') or e['scheduledAt'])[BOARD_MAX:]}
+    coverage.note(drops, 'beyond the board row cap', *(e for e in entries if id(e) in beyond))
+    return [e for e in entries if id(e) not in beyond]
 
 
 def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str = 'departure', start: Optional[int] = None,
