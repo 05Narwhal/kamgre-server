@@ -384,6 +384,22 @@ def is_trip_end(st: dict, stop_id: str, end: str) -> bool:
     return call.get('stopPosition') is None or st.get('stopPosition') is None or call['stopPosition'] == st['stopPosition']
 
 
+def copy_of(row: dict, runs: dict) -> Optional[dict]:
+    """The row already listed that board row `row` repeats, else None; `runs` collects the rows seen, in board order.
+    A run (line, scheduled time, destination) listed by two feeds is one bus (LPP's suburban lines are IJPP's too),
+    and one trip at two stops of a group in one minute is one row. A feed's own trips are each a bus: A6196 runs
+    twice at 13:10 (D3: two vehicles drove the two trips, as every such pair recorded on 2026-10-22, 82 of 82), so
+    a row repeats another feed's only while that feed lists at least as many."""
+    trip = row.get('tripId') or row.get('id') or ''
+    by_feed = runs.setdefault((row.get('routeName'), row.get('scheduledAt'), fold(row.get('destination') or '')), {})
+    same = next((r for rows in by_feed.values() for r in rows if row.get('tripId') and r.get('tripId') == row['tripId']), None)
+    if same is not None:
+        return same
+    mine = by_feed.setdefault(trip.split(':', 1)[0], [])
+    mine.append(row)
+    return next((rows[len(mine) - 1] for rows in by_feed.values() if rows is not mine and len(rows) >= len(mine)), None)
+
+
 def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict],
                 live: Optional[dict[str, Optional[int]]] = None, updates: Optional[dict] = None, drops: Optional[list] = None) -> list[dict]:
     """`live`: trip id -> the delay its vehicle shows (build_vehicles); a delay beyond MAX_UNCONFIRMED_DELAY stays on

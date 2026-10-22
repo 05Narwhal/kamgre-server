@@ -131,6 +131,24 @@ class MemberNameTests(SimpleTestCase):
             items = sources.board('IJPP:1', 'departure', 0, 'sl')
         self.assertEqual({i['stopId']: i['stopName'] for i in items}, {'IJPP:1': 'Ljubljana Bavarski dvor', 'LPP:1': 'Bavarski dvor'})
 
+    def test_a_merged_board_drops_another_feeds_copy_but_keeps_a_second_bus(self):
+        """D3: A6196 13:10 Škofja Loka – Kranj AP runs as two trips of one feed (IJPP:455744 + IJPP:455745), and on
+        2026-10-22 two vehicles drove them (as every such pair recorded that day: 82 of 82): both are buses. A copy
+        from another feed (LPP 51 as IJPP's too) is still one bus, and one trip at two members in one minute one row."""
+        def row(sid, trip, line, dest='Kranj AP', at='2026-10-22T11:10:00Z'):
+            return {'id': f'{trip}@20261022/{sid}', 'tripId': trip, 'stopId': sid, 'routeName': line, 'scheduledAt': at, 'destination': dest}
+        boards = {'IJPP:1': [row('IJPP:1', 'IJPP:455744', 'A6196'), row('IJPP:1', 'IJPP:455745', 'A6196'),
+                             row('IJPP:1', 'IJPP:77', '51', 'Polhov Gradec'), row('IJPP:1', 'IJPP:5', '5', 'Bled')],
+                  'LPP:1': [row('LPP:1', 'LPP:9', '51', 'Polhov Gradec')],
+                  'IJPP:2': [row('IJPP:2', 'IJPP:5', '5', 'Bled')]}
+        with mock.patch.object(sources, 'stop_group', return_value=['IJPP:1', 'LPP:1', 'IJPP:2']), \
+                mock.patch.object(sources, 'alerts', return_value=[]), \
+                mock.patch.object(sources, '_member_board', side_effect=lambda m, *a: boards[m]), \
+                mock.patch.object(sources, 'stop_names', return_value={}), \
+                mock.patch.object(sources, '_with_live_platforms', side_effect=lambda entries, *a, **k: entries):
+            items = sources._board('IJPP:1', 'departure', 0, 'sl')
+        self.assertEqual(sorted(i['tripId'] for i in items), ['IJPP:455744', 'IJPP:455745', 'IJPP:5', 'IJPP:77'])
+
 
 class SearchTests(SimpleTestCase):
     """Search shows one result per place: namesakes far apart (Radovljica's bus stop, 340 m from its station) are two."""

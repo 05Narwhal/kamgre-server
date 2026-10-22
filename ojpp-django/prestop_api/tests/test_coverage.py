@@ -77,6 +77,8 @@ class BoardTests(SimpleTestCase):
         self.assertEqual(coverage.find_on_board(self.ROWS, 'IJPP:77', '51', NOW + 630), 'shown as copy')
         self.assertIsNone(coverage.find_on_board(self.ROWS, 'IJPP:77', '51', NOW + 900))
         self.assertIsNone(coverage.find_on_board(self.ROWS, 'IJPP:77', '6', NOW + 600))
+        # D3: a second trip of the same feed is another bus (A6196 twice at 13:10), never the first one's copy
+        self.assertIsNone(coverage.find_on_board(self.ROWS, 'LPP:10', '51', NOW + 600))
 
     def test_the_status_of_a_miss_is_the_first_note_about_it(self):
         drops = [{'reason': 'beyond the board row cap', 'at': 'sources.py:1', 'item': {'tripId': 'IJPP:1'}}]
@@ -109,7 +111,8 @@ class BoardTests(SimpleTestCase):
         at = mapping.iso(NOW)
         rows = [{'id': 'IJPP:1@1/1', 'tripId': 'IJPP:1', 'routeName': '51', 'scheduledAt': at, 'destination': 'Polhov Gradec'},
                 {'id': 'LPP:1@1/1', 'tripId': 'LPP:1', 'routeName': '51', 'scheduledAt': at, 'destination': 'POLHOV GRADEC'},
-                {'id': 'IJPP:2@1/1', 'tripId': 'IJPP:2', 'routeName': '51', 'scheduledAt': at, 'destination': 'Ljubljana'}]
+                {'id': 'IJPP:2@1/1', 'tripId': 'IJPP:2', 'routeName': '51', 'scheduledAt': at, 'destination': 'Ljubljana'},
+                {'id': 'LPP:2@1/1', 'tripId': 'LPP:2', 'routeName': '51', 'scheduledAt': at, 'destination': 'Polhov Gradec'}]  # a second bus
         self.assertEqual([(a['tripId'], b['tripId']) for a, b in coverage.duplicates(rows)], [('IJPP:1', 'LPP:1')])
 
     def test_upcoming_stops_of_a_trip_update(self):

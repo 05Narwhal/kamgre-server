@@ -100,7 +100,7 @@ def find_on_board(rows: Iterable[dict], trip_id: str, route_name: Optional[str],
         return 'shown'
     if route_name and scheduled is not None:
         lo, hi = iso(scheduled - COPY_SECONDS), iso(scheduled + COPY_SECONDS)
-        if any(r.get('routeName') == route_name and lo <= (r.get('scheduledAt') or '') <= hi for r in rows):
+        if any(r.get('routeName') == route_name and lo <= (r.get('scheduledAt') or '') <= hi and feed(r.get('tripId')) != feed(trip_id) for r in rows):
             return 'shown as copy'
     return None
 
@@ -125,17 +125,16 @@ def timetable_departures(patterns: Iterable[dict], stop_id: str, start: int, end
 
 
 def duplicates(rows: Iterable[dict]) -> list[tuple[dict, dict]]:
-    """Pairs of rows of one board that are the same run twice: the same row id, or the same line and scheduled
-    time with alike destinations under different trip ids."""
-    from .mapping import fold
-    seen: dict = {}
+    """Pairs of rows of one board that are the same run twice: the same row id, or another feed's copy of a run
+    (mapping.copy_of: the same line and scheduled time with alike destinations; a feed's own trips are each a bus)."""
+    from .mapping import copy_of
+    ids: dict = {}
+    runs: dict = {}
     out = []
     for r in rows:
-        for k in (('id', r.get('id')), ('run', r.get('routeName'), r.get('scheduledAt'), fold(r.get('destination') or ''))):
-            if k in seen and seen[k] is not r and (k[0] == 'id' or seen[k].get('tripId') != r.get('tripId')):
-                out.append((seen[k], r))
-                break
-            seen.setdefault(k, r)
+        first = ids.setdefault(r.get('id'), r)
+        if first is not r or (first := copy_of(r, runs)) is not None:
+            out.append((first, r))
     return out
 
 

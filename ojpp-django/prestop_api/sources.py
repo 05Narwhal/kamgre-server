@@ -486,15 +486,15 @@ def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[l
         boards = list(pool.map(lambda m: _member_board(m, kind, start, alert_list, drops), members))
     if all(b is None for b in boards):
         return None
-    entries, seen = [], set()
+    entries, seen, runs = [], set(), {}
     names = stop_names()
     for entry in sorted((e for b in boards if b for e in b), key=lambda e: e['scheduledAt']):
-        # The same trip can be listed by two feeds; keep the first (the head's feed).
-        key = (entry['routeName'], entry['scheduledAt'], entry['destination'])
-        if entry['id'] in seen or key in seen:
+        # The same trip can be listed by two feeds; keep the first (the head's feed). A feed's own second trip
+        # at that time is a second bus (mapping.copy_of).
+        if entry['id'] in seen or mapping.copy_of(entry, runs) is not None:
             coverage.note(drops, 'same run from another stop or feed', entry)
             continue
-        seen.update({entry['id'], key})
+        seen.add(entry['id'])
         # Which of the merged stops it leaves from, by that stop's own name (stopgroups.py).
         entries.append({**entry, 'stopName': names[entry['stopId']]} if entry.get('stopId') in names else entry)
     coverage.note(drops, 'beyond the board row cap', *entries[BOARD_MAX:])
