@@ -227,9 +227,17 @@ class MotionHistory:
         return list(reports)
 
 
+def entity_vehicle_id(entity: dict) -> Optional[str]:
+    """The id a feed entity's vehicle gets on the map (None: it names no trip)."""
+    v = entity.get('vehicle') or {}
+    trip_id = (v.get('trip') or {}).get('tripId')
+    return qualify((v.get('vehicle') or {}).get('id') or entity.get('id') or trip_id, trip_id.split(':', 1)[0]) if trip_id else None
+
+
 def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, routes: dict, stop_names: dict,
-                   now: Optional[float] = None, history: Optional[MotionHistory] = None) -> list[dict]:
-    from . import abroad
+                   now: Optional[float] = None, history: Optional[MotionHistory] = None, drops: Optional[list] = None) -> list[dict]:
+    """`drops`: collects each entity left out and why (coverage.note), for the coverage audit."""
+    from . import abroad, coverage
     now = now or time.time()
     out = []
     seen = set()
@@ -238,19 +246,23 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
         trip = v.get('trip') or {}
         trip_id, pos = trip.get('tripId'), v.get('position') or {}
         if not trip_id or pos.get('latitude') is None or pos.get('longitude') is None:
+            coverage.note(drops, 'no trip id' if not trip_id else 'no position', e)
             continue
         stamp = int(v.get('timestamp') or 0)
         if now - stamp > MAX_VEHICLE_AGE:
+            coverage.note(drops, 'stale', e)
             continue
         feed = trip_id.split(':', 1)[0]
         info = trips.get(trip_id) or {}
         route_id = info.get('routeId') or trip.get('routeId')
         route = routes.get(route_id) or {}
         if not route_id:
+            coverage.note(drops, 'unknown trip, no line', e)
             continue
         descriptor = v.get('vehicle') or {}
-        vehicle_id = qualify(descriptor.get('id') or e.get('id') or trip_id, feed)
+        vehicle_id = entity_vehicle_id(e)
         if vehicle_id in seen:
+            coverage.note(drops, 'same vehicle twice', e)
             continue
         seen.add(vehicle_id)
         bearing = pos.get('bearing')
@@ -258,6 +270,7 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
         speed = float(speed) if isinstance(speed, (int, float)) and 0 <= speed < 70 else None
         stop_id = v.get('stopId')
         if stop_id and abroad.is_abroad_stop(stop_names.get(stop_id)):
+            coverage.note(drops, 'abroad', e)
             continue  # on its way to or from its stops abroad: Slovenia only (abroad.py)
         report = (stamp, pos['latitude'], pos['longitude'])
         recent = history.observe(vehicle_id, *report, now=now) if history else [report]
@@ -339,11 +352,11 @@ def update_run(update: Optional[dict], stop_id: str, start: Optional[int], at: i
 
 
 def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list[dict],
-                live: Optional[dict[str, Optional[int]]] = None, updates: Optional[dict] = None) -> list[dict]:
+                live: Optional[dict[str, Optional[int]]] = None, updates: Optional[dict] = None, drops: Optional[list] = None) -> list[dict]:
     """`live`: trip id -> the delay its vehicle shows (build_vehicles); a delay beyond MAX_UNCONFIRMED_DELAY stays on
     the board only when the trip's vehicle shows it too, else the row has no live data. `updates`: the trip updates
-    (trip_update_index), for the run each is about (update_run)."""
-    from . import abroad, stopfix
+    (trip_update_index), for the run each is about (update_run). `drops`: the stoptimes left out and why (coverage.note)."""
+    from . import abroad, coverage, stopfix
     live, updates = live or {}, updates or {}
     out = []
     for st in stoptimes:
@@ -353,8 +366,10 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         last = ((trip.get('arrivalStoptime') or {}).get('stop') or {}).get('gtfsId')
         # Arrivals skip trips that start here; departures skip trips that end here.
         if kind == 'arrival' and (first == stop_id or st.get('dropoffType') == 'NONE'):
+            coverage.note(drops, 'starts here' if first == stop_id else 'no setting down', st)
             continue
         if kind == 'departure' and (last == stop_id or st.get('pickupType') == 'NONE'):
+            coverage.note(drops, 'ends here' if last == stop_id else 'no picking up', st)
             continue
         day = st['serviceDay']
         scheduled = day + (st['scheduledArrival'] if kind == 'arrival' else st['scheduledDeparture'])

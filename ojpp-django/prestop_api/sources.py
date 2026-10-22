@@ -19,7 +19,7 @@ from typing import Optional
 from django.conf import settings
 from django.db import DatabaseError
 
-from . import abroad, mapping, stopfix, stopgroups, supplement
+from . import abroad, coverage, mapping, stopfix, stopgroups, supplement
 from .upstream import Cached, Snapshot, UpstreamError, get_json, otp
 
 logger = logging.getLogger(__name__)
@@ -237,7 +237,8 @@ def infer_trip(update: Optional[dict], index: dict, route_index: dict) -> dict:
 motion_history = mapping.MotionHistory()
 
 
-def _load_vehicles():
+def _load_vehicles(drops: Optional[list] = None):
+    """`drops`: collects each feed entity or timetable train left out and why (coverage.note)."""
     pos = positions.get()
     updates = trip_updates.get().value if _safe(trip_updates) else {}
     route_index = routes.get().value
@@ -254,7 +255,7 @@ def _load_vehicles():
             guess = infer_trip(updates.get(t), index, route_index)
             if guess:
                 infos[t] = {**(infos.get(t) or {}), **{k: v for k, v in guess.items() if v}}
-    live = mapping.build_vehicles(pos.value, updates, infos, route_index, stop_names(), history=motion_history)
+    live = mapping.build_vehicles(pos.value, updates, infos, route_index, stop_names(), history=motion_history, drops=drops)
     from . import sz
     for v in live:
         if v['mode'] == 'rail':
@@ -262,7 +263,7 @@ def _load_vehicles():
     # Trains without a position feed (SŽ) are placed by their timetable, never instead of a live report.
     try:
         from . import scheduled
-        trains = scheduled.vehicles(skip_trips=frozenset(v['tripId'] for v in live if v.get('tripId')), updates=updates)
+        trains = scheduled.vehicles(skip_trips=frozenset(v['tripId'] for v in live if v.get('tripId')), updates=updates, drops=drops)
     except UpstreamError as e:
         logger.warning('Scheduled trains unavailable: %r', e)
         trains = []
@@ -408,12 +409,12 @@ def _until_service_day_end(start: int) -> int:
     return max(int(end.timestamp()) - start, 3600)
 
 
-def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict]) -> Optional[list[dict]]:
+def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict], drops: Optional[list] = None) -> Optional[list[dict]]:
     if supplement.owns(stop_id):  # OTP has this feed's timetable wrong (supplement.py)
         updates = trip_updates.get().value if _safe(trip_updates) else {}
         own = supplement.stoptimes(stop_id, start, _until_service_day_end(start), BOARD_MAX, updates)
         if own is not None:
-            return mapping.build_board(stop_id, own, kind, alert_list, _live_delays())
+            return mapping.build_board(stop_id, own, kind, alert_list, _live_delays(), drops=drops)
     # In the small hours OTP has a late train still out from yesterday at its timetable (mapping.update_run), so it
     # leaves it out once that time has passed here: the hours before are asked for too, and kept when still to come.
     from datetime import datetime
@@ -424,8 +425,11 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict]) -
     if stop is None:
         return None
     from . import trainlive
-    rows = mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays(), trainlive.trip_updates())
-    return [r for r in rows if (r['effectiveAt'] or r['scheduledAt']) >= mapping.iso(start)] if back else rows
+    rows = mapping.build_board(stop_id, stop.get('stoptimesWithoutPatterns') or [], kind, alert_list, _live_delays(), trainlive.trip_updates(), drops)
+    if not back:
+        return rows
+    coverage.note(drops, 'gone before the board starts', *(r for r in rows if (r['effectiveAt'] or r['scheduledAt']) < mapping.iso(start)))
+    return [r for r in rows if (r['effectiveAt'] or r['scheduledAt']) >= mapping.iso(start)]
 
 
 def _live_delays() -> dict[str, Optional[int]]:
@@ -455,17 +459,18 @@ def board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[d
     return items
 
 
-def _board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[dict]]:
+def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[list] = None) -> Optional[list[dict]]:
+    """`drops`: collects each run left out and why (coverage.note), for the coverage audit."""
     try:
         alert_list = alerts(language)
     except UpstreamError:
         alert_list = []
     members = stop_group(stop_id)
     if len(members) == 1:
-        return _with_live_platforms(_member_board(stop_id, kind, start, alert_list), stop_id, kind, start)
+        return _with_live_platforms(_member_board(stop_id, kind, start, alert_list, drops), stop_id, kind, start, drops)
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=min(4, len(members))) as pool:
-        boards = list(pool.map(lambda m: _member_board(m, kind, start, alert_list), members))
+        boards = list(pool.map(lambda m: _member_board(m, kind, start, alert_list, drops), members))
     if all(b is None for b in boards):
         return None
     entries, seen = [], set()
@@ -474,14 +479,17 @@ def _board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[
         # The same trip can be listed by two feeds; keep the first (the head's feed).
         key = (entry['routeName'], entry['scheduledAt'], entry['destination'])
         if entry['id'] in seen or key in seen:
+            coverage.note(drops, 'same run from another stop or feed', entry)
             continue
         seen.update({entry['id'], key})
         # Which of the merged stops it leaves from, by that stop's own name (stopgroups.py).
         entries.append({**entry, 'stopName': names[entry['stopId']]} if entry.get('stopId') in names else entry)
-    return _with_live_platforms(entries[:BOARD_MAX], stop_id, kind, start)
+    coverage.note(drops, 'beyond the board row cap', *entries[BOARD_MAX:])
+    return _with_live_platforms(entries[:BOARD_MAX], stop_id, kind, start, drops)
 
 
-def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str = 'departure', start: Optional[int] = None) -> Optional[list[dict]]:
+def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str = 'departure', start: Optional[int] = None,
+                         drops: Optional[list] = None) -> Optional[list[dict]]:
     """Track numbers from SŽ's live feed, for trains whose next station is this one; trains a bus
     replaces from here show as that bus (see replacement.board_rows)."""
     if not entries:
@@ -492,7 +500,7 @@ def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str 
     # The buses of SŽ's replacement timetables at this stop within the board's time get their own rows.
     window = {'stop_ids': stop_group(stop_id), 'start': start, 'end': start + _until_service_day_end(start)} if start is not None else {}
     try:
-        entries = replacement.board_rows(entries, kind, stop_names(), lambda when: scheduled.plan_at(when, wait=6), **window)
+        entries = replacement.board_rows(entries, kind, stop_names(), lambda when: scheduled.plan_at(when, wait=6), drops=drops, **window)
     except UpstreamError as e:
         logger.warning('Replaced trains unknown: %r', e)
     from . import platforms

@@ -233,7 +233,8 @@ def feed_bus_row(entry: dict, plan: dict, kind: str) -> dict:
 
 
 def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: Callable[[float], Optional[dict]],
-               stop_ids: Optional[list[str]] = None, start: Optional[float] = None, end: Optional[float] = None) -> list[dict]:
+               stop_ids: Optional[list[str]] = None, start: Optional[float] = None, end: Optional[float] = None,
+               drops: Optional[list] = None) -> list[dict]:
     """Rows of trains that a bus replaces at this station become that bus's rows (BUS 1896 to Logatec, its
     own line and trip), judged by each row's own service day: `plan_for(when)` gives the day's plan
     (scheduled.plan_at). A bus already listed on the board stands for its train itself.
@@ -241,7 +242,9 @@ def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: 
     The buses of SŽ's replacement timetables have their own times and stops, and a train can have several
     (318/1 and 318/2 both leave Ljubljana): each gets its own row at every stop of the board (`stop_ids`) it
     calls at between `start` and `end` (the board's time), and the rows of the trains they replace there, and
-    of the feed's buses they run instead of (the day's `suppressed`), are left out."""
+    of the feed's buses they run instead of (the day's `suppressed`), are left out. `drops`: the rows left out or
+    shown as their bus, and why (coverage.note)."""
+    from . import coverage
     listed = {e['tripId'] for e in entries}
     plans: dict = {}
 
@@ -254,6 +257,7 @@ def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: 
     for e in entries:
         plan = plan_of(_epoch(e['scheduledAt'])) if e['mode'] == 'rail' or e.get('replacement') else None
         if e['tripId'] in ((plan or {}).get('suppressed') or {}):
+            coverage.note(drops, 'run by a replacement timetable', e)
             continue
         trip_sections = (plan or {}).get('sections', {}).get(e['tripId']) if e['mode'] == 'rail' else None
         train = run_near(plan, e['tripId'], _epoch(e['scheduledAt'])) if trip_sections else None
@@ -264,10 +268,14 @@ def board_rows(entries: list[dict], kind: str, names: dict[str, str], plan_for: 
             out.append(feed_bus_row(e, plan, kind) if plan and e['mode'] == 'bus' and e.get('replacement') else e)
             continue
         if hit['busTripId'] in listed:
+            coverage.note(drops, 'replaced by a bus on the board', e)
             continue
         bus = plan['by_id'].get(hit['busTripId']) or run_near(plan, hit['busTripId'], hit['start'])
         if bus and bus.get('source') == 'timetable':
+            coverage.note(drops, 'replaced by a bus on the board', e)
             continue  # its buses' own rows follow
+        if bus:
+            coverage.note(drops, 'shown as its replacement bus', e)
         out.append(bus_row(e, trainlive.live_bus(plan, bus), kind, here) if bus else {**e, 'replacedByBus': True})
     times = [_epoch(e['scheduledAt']) for e in entries]
     start = min(times, default=None) if start is None else start

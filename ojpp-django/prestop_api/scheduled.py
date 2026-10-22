@@ -388,9 +388,11 @@ def _held(trip: dict, shape: Optional[dict], report: dict, at: Optional[dict]) -
 
 
 def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), live: Optional[dict] = None,
-             updates: Optional[dict] = None) -> list[dict]:
+             updates: Optional[dict] = None, drops: Optional[list] = None) -> list[dict]:
     """Trains and SŽ replacement buses by their timetable, moved by their live delay (trainlive.py): SŽ's report
-    (`live`, by train number) or the GTFS-RT trip updates (`updates`, sources.trip_updates) of the train they run for."""
+    (`live`, by train number) or the GTFS-RT trip updates (`updates`, sources.trip_updates) of the train they run for.
+    `drops`: collects the runs on their way that are left out and why (coverage.note)."""
+    from . import coverage
     now = now or time.time()
     trips = timetable.get().value
     shape_index = shapes.get().value
@@ -401,11 +403,12 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
     suppressed = derived.get('suppressed') or {}  # the feed's buses a replacement timetable runs instead
     out, seen = [], set()
     for trip in trips + derived['synthetic']:
-        if trip['id'] in skip_trips or trip['id'] in seen or trip['id'] in suppressed:
-            continue
         times = trip.get('scheduledDepartures') or trip['departures']
         if not times[0] - BOARDING <= now <= times[-1] + ARRIVED + mapping.MAX_UNCONFIRMED_DELAY:
             continue  # not on its way even when very late
+        if trip['id'] in skip_trips or trip['id'] in seen or trip['id'] in suppressed:
+            coverage.note(drops, 'has a live vehicle' if trip['id'] in skip_trips else 'run by a replacement timetable' if trip['id'] in suppressed else 'listed twice', trip)
+            continue
         shape = shape_index.get(trip['pattern'])
         replacement = mapping.is_replacement(trip['route'])
         run = trainlive.train_of(derived, trip) if replacement else trip
@@ -429,6 +432,7 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
         if held:
             at = _held(names, shape, held, at)
         if not at or any(replaced_by.inside(s, at['stop']) for s in sections):
+            coverage.note(drops, 'not on its way by its times' if not at else 'a bus runs this stretch', trip)
             continue
         seen.add(trip['id'])
         quality = 'inferred' if report else 'scheduled'
