@@ -206,7 +206,10 @@ class Command(BaseCommand):
         updates = sources.trip_updates.get().value
         vehicles = sources.vehicles.get().value
         wanted = []
+        filed = {u['oldId'] for u in updates.values() if u.get('oldId')}  # checked under OTP's run (sources._with_old_ids)
         for trip_id, u in updates.items():
+            if trip_id in filed:
+                continue
             for stop_id, at, delay in coverage.upcoming(u, self.now + LEAD, self.horizon):
                 wanted.append({'tripId': trip_id, 'stopId': stop_id, 'at': at, 'scheduled': at - (delay or 0)})
         with_update = set(updates)

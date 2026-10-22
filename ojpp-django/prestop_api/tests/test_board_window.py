@@ -1,4 +1,5 @@
 from datetime import datetime
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.test import SimpleTestCase
@@ -64,3 +65,76 @@ class BoardWindowTests(SimpleTestCase):
             self.assertEqual(otp.query.call_args[0][1]['start'], at('2026-10-22 13:42') - 1149)
             self.assertEqual([(r['tripId'], r['effectiveAt']) for r in board],
                              [('IJPP:463770', '2026-10-22T11:49:09Z'), ('IJPP:next', None)])
+
+
+class OldTripIdTests(SimpleTestCase):
+    """D3: the feed names some runs by an older timetable's trip id, so OTP had no live data for the run and its board
+    lost it when late. IJPP:445124 is OTP's A6105 IJPP:480671 from stop 1 at 14:40; its delays are against the older
+    times (+253 s at 14:42:49, where OTP's run has 14:43)."""
+    DAY = at('2026-10-22 00:00')
+
+    def setUp(self):
+        sources._old_ids.clear()
+
+    @staticmethod
+    def call(seq, stop, live, delay):
+        return {'stopSequence': seq, 'stopId': stop, 'departure': {'delay': delay, 'time': str(live)}}
+
+    def stoptime(self, trip, position, scheduled):
+        return {'serviceDay': self.DAY, 'scheduledArrival': scheduled - self.DAY, 'scheduledDeparture': scheduled - self.DAY,
+                'stopPosition': position, 'trip': {'gtfsId': trip}}
+
+    def calls(self, *stops):
+        return [{'stopPosition': i, 'stop': {'gtfsId': stop}, 'serviceDay': self.DAY, 'scheduledArrival': t - self.DAY,
+                 'scheduledDeparture': t - self.DAY} for i, (stop, t) in enumerate(stops, 1)]
+
+    def otp(self, boards, trips):
+        otp = mock.Mock()
+        otp.query.side_effect = lambda q, v: ({'trip': {'stoptimesForDate': trips[v['id']]}} if 'date' in v
+                                              else {'stop': {'stoptimesWithoutPatterns': boards[v['id']]}})
+        return otp
+
+    def test_an_update_under_an_old_trip_id_is_filed_under_otps_run_with_otps_times(self):
+        from prestop_api import mapping
+        t = lambda hm, s=0: at(f'2026-10-22 {hm}') + s
+        old = {'tripUpdate': {'trip': {'tripId': 'IJPP:445124', 'startDate': '20261022'}, 'stopTimeUpdate': [
+            self.call(1, 'IJPP:1123958', t('14:40'), 0), self.call(2, 'IJPP:b', t('14:42', 49), 253), self.call(3, 'IJPP:c', t('14:44', 12), 253)]}}
+        index = mapping.trip_update_index([old])
+        # Another line starts at the same stop and time, a third passes it then: only A6105 calls at the update's stops.
+        boards = {'IJPP:1123958': [self.stoptime('IJPP:480671', 1, t('14:40')), self.stoptime('IJPP:other', 1, t('14:40')),
+                                   self.stoptime('IJPP:through', 7, t('14:40'))]}
+        trips = {'IJPP:480671': self.calls(('IJPP:1123958', t('14:40')), ('IJPP:b', t('14:43')), ('IJPP:c', t('14:45'))),
+                 'IJPP:other': self.calls(('IJPP:1123958', t('14:40')), ('IJPP:x', t('14:44')), ('IJPP:y', t('14:46')))}
+        with mock.patch.object(sources, 'otp', return_value=self.otp(boards, trips)),                 mock.patch.object(sources.trip_info, 'get_many', return_value={'IJPP:445124': {}}):
+            index = sources._with_old_ids(index)
+        run = index['IJPP:480671']
+        self.assertEqual((run['trip']['tripId'], run['oldId']), ('IJPP:480671', 'IJPP:445124'))
+        self.assertEqual([mapping.update_delay(u) for u in run['updates']], [0, -11, -48])
+        self.assertEqual(mapping.update_delay(index['IJPP:445124']['updates'][1]), 253)  # the feed's own stays as sent
+        # OTP's run at the second stop now leaves at the live time
+        self.assertEqual(mapping.update_run(run, 'IJPP:b', t('14:40'), t('14:43'), False, t('14:43'), self.DAY, 2), (True, t('14:42', 49)))
+
+    def test_no_single_run_known_trips_and_runs_with_their_own_update_stay_as_they_are(self):
+        from prestop_api import mapping
+        first, second = at('2026-10-22 14:35'), at('2026-10-22 14:40')
+        def update(trip, stops):
+            calls = [self.call(1, stops[0], first, 0)] + ([self.call(2, stops[1], second + 300, 300)] if len(stops) > 1 else [])
+            return {'tripUpdate': {'trip': {'tripId': trip, 'startDate': '20261022'}, 'stopTimeUpdate': calls}}
+        index = mapping.trip_update_index([update('IJPP:two', ['IJPP:r', 'IJPP:s']), update('IJPP:none', ['IJPP:x', 'IJPP:y']),
+                                           update('IJPP:one', ['IJPP:r']), update('IJPP:known', ['IJPP:r', 'IJPP:s']),
+                                           update('IJPP:old', ['IJPP:m', 'IJPP:n']), update('IJPP:own', ['IJPP:m', 'IJPP:n'])])
+        same = self.calls(('IJPP:r', first), ('IJPP:s', second))  # two runs alike at every stop: no telling which
+        boards = {'IJPP:r': [self.stoptime('IJPP:a', 1, first), self.stoptime('IJPP:b', 1, first)], 'IJPP:x': [],
+                  'IJPP:m': [self.stoptime('IJPP:own', 1, first)]}
+        trips = {'IJPP:a': same, 'IJPP:b': same, 'IJPP:own': self.calls(('IJPP:m', first), ('IJPP:n', second))}
+        otp = self.otp(boards, trips)
+        infos = {'IJPP:two': {}, 'IJPP:none': {}, 'IJPP:one': {}, 'IJPP:old': {}, 'IJPP:known': {'routeId': 'IJPP:r1'}, 'IJPP:own': {'routeId': 'IJPP:r2'}}
+        with mock.patch.object(sources, 'otp', return_value=otp), mock.patch.object(sources.trip_info, 'get_many', return_value=infos):
+            out = sources._with_old_ids(dict(index))
+            self.assertEqual(set(out), set(index))
+            self.assertIs(out['IJPP:own'], index['IJPP:own'])
+            # Each run is looked up once; one stop alone is never enough
+            asked = otp.query.call_count
+            sources._with_old_ids(dict(index))
+            self.assertEqual(otp.query.call_count, asked)
+        self.assertEqual(sources._old_ids[('IJPP:one', '20261022')], None)

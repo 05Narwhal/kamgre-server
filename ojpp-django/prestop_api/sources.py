@@ -136,7 +136,7 @@ def _load_positions():
 
 
 def _load_trip_updates():
-    return mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024))
+    return _with_old_ids(mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024)))
 
 
 positions = Cached(_load_positions, ttl=5, max_stale=120, revalidate=30)
@@ -185,6 +185,85 @@ class TripInfo:
 
 
 trip_info = TripInfo()
+
+
+# The realtime feed can name a run by an older timetable version's trip id than OTP's (IJPP:477644 is OTP's
+# IJPP:481044, A6340 Jesenice bolnica 14:05; IJPP:475657 is line 69's IJPP:481137 at Ljubljana AP): OTP then has no
+# live data for the run, and its board lost a late bus once the timetable time had passed (D3, 22 Oct 2026: 9 such
+# IJPP updates). The update is filed under OTP's run too: the one run at its first timed stop at the same position and
+# timetable time whose stops are the update's at each position (at least two). Its delays are against the older
+# version's times (IJPP:445124: +253 s at 14:42:49 where OTP's A6105 has 14:43), so they are taken again from its live
+# times against OTP's. Never as a new run (that would show the bus twice); no single match: left as it is.
+OLD_ID_LOOKUPS = 20  # unknown trip ids looked up per load of the trip updates, the rest on the next
+OLD_ID_CANDIDATES = 6  # runs at the first stop compared at most
+TRIP_CALLS_Q = '''query($id: String!, $date: String!) { trip(id: $id) {
+  stoptimesForDate(serviceDate: $date) { stopPosition stop { gtfsId } serviceDay scheduledArrival scheduledDeparture } } }'''
+_old_ids: dict[tuple, Optional[tuple]] = {}  # (trip id, start date) -> (OTP's trip id of that run, its calls), or None
+
+
+def _with_old_ids(index: dict) -> dict:
+    if len(_old_ids) > 20_000:
+        _old_ids.clear()
+    ids = [t for t in index if not supplement.owns(t)]
+    known = trip_info.get_many(ids)
+    lookups = 0
+    for trip_id in ids:
+        if known.get(trip_id) != {}:  # OTP knows it, or the lookup failed
+            continue
+        update = index[trip_id]
+        key = (trip_id, update['trip'].get('startDate'))
+        if key not in _old_ids:
+            if lookups == OLD_ID_LOOKUPS:
+                continue
+            lookups += 1
+            try:
+                _old_ids[key] = _same_run(update)
+            except UpstreamError as e:
+                logger.warning('Run of trip update %s not found: %r', trip_id, e)
+                continue
+        found = _old_ids[key]
+        if found and found[0] not in index:
+            run, calls = found
+            index[run] = {**update, 'trip': {**update['trip'], 'tripId': run}, 'oldId': trip_id,
+                          'updates': [_against(u, calls[u['stopSequence']]) for u in update['updates'] if u.get('stopSequence') in calls]}
+    return index
+
+
+def _against(call: dict, scheduled: dict) -> dict:
+    """A trip update's call with its delays from its live times against OTP's timetable times there."""
+    out = dict(call)
+    for part, key in (('arrival', 'scheduledArrival'), ('departure', 'scheduledDeparture')):
+        live = (call.get(part) or {}).get('time')
+        if live:
+            out[part] = {**call[part], 'delay': int(live) - scheduled[key]}
+        else:
+            out.pop(part, None)
+    return out
+
+
+def _same_run(update: dict) -> Optional[tuple]:
+    """(OTP's trip id, its calls by position) of the run a trip update under an unknown trip id is about
+    (_with_old_ids), else None."""
+    stops = {u['stopSequence']: u['stopId'] for u in update.get('updates') or [] if u.get('stopId') and u.get('stopSequence') is not None}
+    first = next((u for u in update.get('updates') or [] if u.get('stopSequence') in stops and mapping.update_delay(u) is not None
+                  and ((u.get('departure') or {}).get('time') or (u.get('arrival') or {}).get('time'))), None)
+    if first is None or len(stops) < 2:
+        return None
+    from zoneinfo import ZoneInfo
+    part = next(p for p in (first.get('departure') or {}, first.get('arrival') or {}) if p.get('time'))
+    scheduled = int(part['time']) - int(part['delay'] if part.get('delay') is not None else mapping.update_delay(first))
+    stop = otp().query(BOARD_Q, {'id': first['stopId'], 'start': scheduled - 60, 'range': 120, 'n': 50, 'omit': False}).get('stop') or {}
+    candidates = [st for st in stop.get('stoptimesWithoutPatterns') or [] if st.get('stopPosition') == first['stopSequence']
+                  and min(abs(st['serviceDay'] + st[k] - scheduled) for k in ('scheduledArrival', 'scheduledDeparture')) <= 30]
+    found = []
+    for st in candidates[:OLD_ID_CANDIDATES]:
+        date = datetime.fromtimestamp(st['serviceDay'] + 12 * 3600, ZoneInfo('Europe/Ljubljana')).strftime('%Y%m%d')
+        trip = otp().query(TRIP_CALLS_Q, {'id': st['trip']['gtfsId'], 'date': date}).get('trip') or {}
+        calls = {c['stopPosition']: {'stopId': (c.get('stop') or {}).get('gtfsId'), 'scheduledArrival': c['serviceDay'] + c['scheduledArrival'],
+                                     'scheduledDeparture': c['serviceDay'] + c['scheduledDeparture']} for c in trip.get('stoptimesForDate') or []}
+        if all((calls.get(seq) or {}).get('stopId') == stop_id for seq, stop_id in stops.items()):
+            found.append((st['trip']['gtfsId'], calls))
+    return found[0] if len(found) == 1 and len(candidates) <= OLD_ID_CANDIDATES else None
 
 
 # ---------------------------------------------------------------- trips the timetable does not know
