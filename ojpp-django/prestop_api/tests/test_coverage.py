@@ -88,6 +88,9 @@ class BoardTests(SimpleTestCase):
         here = [{'tripId': 'IJPP:1', 'routeName': '6', 'scheduledAt': mapping.iso(NOW)}]
         self.assertEqual(coverage.board_status(want, [], here, []), ('missing on target', 'target API'))
         self.assertEqual(coverage.board_status(want, [], [], [])[0], 'not returned by OTP for the board')
+        # A loop (N6172 Idrija 18:00 – Idrija 18:24): our board lists its first call, the note is about its last.
+        loop_end = [{'reason': 'ends here', 'at': 'mapping.py:420', 'item': {'tripId': 'IJPP:1'}}]
+        self.assertEqual(coverage.board_status(want, [], here, loop_end), ('missing on target', 'target API'))
 
     def test_timetable_departures_keep_runs_in_the_window_that_pick_up_and_go_on(self):
         day = NOW - NOW % 86400

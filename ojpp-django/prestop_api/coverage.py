@@ -153,11 +153,12 @@ def board_status(expected: dict, target_rows: Optional[list], here_rows: Optiona
         return found, ''
     if target_rows is None:
         return 'stop has no board', 'target API'
+    # Our board first: a note can be about the run's other call here (a loop's arrival, D3: N6172 at Idrija).
+    if find_on_board(here_rows, expected['tripId'], expected.get('routeName'), expected.get('scheduled')):
+        return 'missing on target', 'target API'
     d = drop_for(drops, expected['tripId'])
     if d:
         return d['reason'], d['at']
-    if find_on_board(here_rows, expected['tripId'], expected.get('routeName'), expected.get('scheduled')):
-        return 'missing on target', 'target API'
     return expected.get('otp') or 'not returned by OTP for the board', 'sources._member_board'
 
 
