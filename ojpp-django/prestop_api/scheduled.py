@@ -179,15 +179,6 @@ def _derive(trips: Optional[list[dict]] = None) -> dict:
     return _derive_into(_derived, timetable.get().value if trips is None else trips, defer_timetables=True)
 
 
-def replaced_sections(trips: Optional[list[dict]] = None) -> dict[str, list[dict]]:
-    """Train trip id -> replaced sections, by real and synthetic replacement buses."""
-    return _derive(trips)['sections']
-
-
-def synthetic_trips() -> list[dict]:
-    return _derive()['synthetic']
-
-
 def day_timetable(day: date) -> Cached:
     key = day.isoformat()
     cache = _day_tables.get(key)
@@ -237,12 +228,6 @@ def plan_at(when: float, wait: float = 0, cold: bool = False) -> Optional[dict]:
     if day in (today, today - timedelta(days=1)):
         return day_plan(today, wait if cold else 0)
     return day_plan(day, wait)
-
-
-def train_run(plan: dict, trip_id: str, when: float) -> Optional[dict]:
-    """The run of train `trip_id` (one per service day in a plan) that is under way around `when`."""
-    runs = (plan.get('trips') or {}).get(trip_id) or []
-    return min(runs, key=lambda t: min(abs(x - when) for x in t['scheduledDepartures'] + t['scheduledArrivals']), default=None)
 
 
 def synthetic_bus(trip_id: str, wait: float = 8) -> tuple[Optional[dict], Optional[dict]]:

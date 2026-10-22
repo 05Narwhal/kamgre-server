@@ -133,7 +133,7 @@ def _ocr(crop, kind: str) -> str:
     gray = crop.convert('L')
     if sum(1 for v in gray.getdata() if v < INK) < 15:
         return ''
-    from PIL import Image, ImageOps
+    from PIL import ImageOps
     ink = gray.point(lambda v: 0 if v < INK else 255)
     ink = ImageOps.expand(ink, border=20, fill=255)
     with tempfile.TemporaryDirectory(prefix='szpdf-') as tmp:

@@ -37,7 +37,7 @@ class Command(BaseCommand):
             here = places.get(station)
             ids = {e['tripId'] for kind in ('departure', 'arrival') for e in sources.board(station, kind, now, 'sl') or [] if e['mode'] == 'bus'}
             # Wait for legs still being routed: a provisional line is not what serving settles on.
-            for attempt in range(3):
+            for _ in range(3):
                 loaded = trips.load_trips(sorted(ids))
                 if all(e['static'].get('complete', True) for e in loaded.values()):
                     break
