@@ -1,6 +1,7 @@
 # Hand-checked stop corrections; they win over the feeds and the automatic road snap (see stopfix.py).
 # type: stop (move this stop; merge_into joins it to another stop's station) | station (pin the merged station's marker)
 #       | replacement (where SZ replacement buses leave for station stop_id; label is shown to riders)
+#       | keep (stop_id stays on the map and in search though it has no trip in the next 7 days; no lat/lon)
 # note: where the position comes from.
 stop_id,type,lat,lon,merge_into,label,note
 IJPP:1121103,stop,45.538642,13.737744,,,"Koper AP: OSM node 1638019237 'Avtobusna postaja Koper' (gtfs:stop_id:ijpp=1121103, edited 2026-08); feed had it ~55 m SE"

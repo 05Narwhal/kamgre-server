@@ -73,6 +73,8 @@ def tick(now: float):
     plans()
     from . import variants
     variants.table()  # route groups (contract 4): rebuilt only when routes or patterns were reloaded
+    from . import stopservice
+    stopservice.warm()  # stops with a trip in the next days, in a thread of its own (~25 s of OTP every few hours)
 
 
 def _run():

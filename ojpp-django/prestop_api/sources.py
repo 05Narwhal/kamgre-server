@@ -65,8 +65,8 @@ def _load_stops():
     raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'))]
     built = mapping.build_stops(raw)
     # Stops that are the same physical stop or station become one (see stopgroups.py).
-    ways = _stop_directions(built)
-    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways)
+    ways, ends = _stop_directions(built)
+    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends)
     # Each side of a stop on its own side of the road (Slovenia drives on the right), at OSM's pole when one is close.
     stopgroups.place_sides(merged, built, ways, set(overrides['stops']) | set(overrides['stations']), stopfix.osm_poles())
     for i, station in enumerate(merged):
@@ -82,9 +82,10 @@ def _load_stops():
     return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways}
 
 
-def _stop_directions(built: list[dict]) -> dict[str, list]:
-    """Which way vehicles travel through each stop, from the timetable's patterns (stopgroups.directions);
-    empty when the patterns cannot be loaded (then only stops at the same spot merge across feeds)."""
+def _stop_directions(built: list[dict]) -> tuple[dict[str, list], set[str]]:
+    """Which way vehicles travel through each stop, from the timetable's patterns (stopgroups.directions), and the
+    stops where runs start or end (stopgroups.termini); empty when the patterns cannot be loaded (then only stops at
+    the same spot merge across feeds)."""
     try:
         runs = patterns.get().value['patterns']
     except UpstreamError as e:
@@ -93,7 +94,7 @@ def _stop_directions(built: list[dict]) -> dict[str, list]:
     own = supplement.sequences()
     feeds = {run[0].split(':', 1)[0] for run in own if run}
     sequences = [p['stops'] for p in runs if p['stops'] and p['stops'][0].split(':', 1)[0] not in feeds] + own
-    return stopgroups.directions(sequences, {s['id']: (s['latitude'], s['longitude']) for s in built})
+    return stopgroups.directions(sequences, {s['id']: (s['latitude'], s['longitude']) for s in built}), stopgroups.termini(sequences)
 
 
 def stop_directions(stop_id: str) -> list[tuple[float, float]]:
@@ -697,7 +698,8 @@ def search_stations(q: str, limit: int) -> list[dict]:
         return []
     groups: dict[str, list[dict]] = {}
     railway = set()  # every railway station's name, so a town's district ("Celje Lava") is not a town of its own
-    for s in stops.get().value['list']:
+    from . import stopservice
+    for s in stopservice.markers():  # without stops that have no trip in the next days
         name = mapping.fold(s['name'])
         if 'rail' in s['modes']:
             railway.add(name)

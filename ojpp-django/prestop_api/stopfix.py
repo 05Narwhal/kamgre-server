@@ -7,7 +7,8 @@ GPS-surveyed stops drift off the road. Two corrections apply, in this order of t
    Row types: `stop` moves one stop (with `merge_into` joins it to another stop's station, and
    with `label` renames it: LPP calls Aleja's pole "Avtomontaža"), `station` pins the marker of the merged station the stop belongs to, and
    `replacement` adds the stop where SŽ's replacement buses leave from (next to the station,
-   not at it) — see replacement.py.
+   not at it) — see replacement.py, and `keep` keeps a stop on the map and in search though it
+   has no trip in the next days (stopservice.py hides those).
 2. Automatic snapping: a stop more than SNAP_METERS from a road buses can use moves to the
    nearest road point (Valhalla `locate`, cached in `data/stop_snaps.json` by stop id and
    position). A stop that would move more than MAX_SNAP_METERS stays put and is listed in the
@@ -35,7 +36,7 @@ SNAPS = DATA / 'stop_snaps.json'
 REPORT = DATA / 'stop_report.csv'
 SNAP_METERS = 40       # a stop further than this from a bus road is snapped onto it
 MAX_SNAP_METERS = 150  # ... unless the road is further than this: then a person checks it
-TYPES = {'stop', 'station', 'replacement'}
+TYPES = {'stop', 'station', 'replacement', 'keep'}
 
 
 def _float(value) -> Optional[float]:
@@ -47,8 +48,8 @@ def _float(value) -> Optional[float]:
 
 def read_overrides(path: Path = OVERRIDES) -> dict:
     """{'stops': id -> (lat, lon), 'stations': id -> (lat, lon), 'merge': id -> target id, 'names': id -> name,
-    'replacement': station id -> [{'lat', 'lon', 'label'}]}. Bad rows are logged and skipped."""
-    out = {'stops': {}, 'stations': {}, 'merge': {}, 'names': {}, 'replacement': {}}
+    'replacement': station id -> [{'lat', 'lon', 'label'}], 'keep': stop ids}. Bad rows are logged and skipped."""
+    out = {'stops': {}, 'stations': {}, 'merge': {}, 'names': {}, 'replacement': {}, 'keep': set()}
     if not path.exists():
         return out
     with open(path, newline='', encoding='utf-8') as handle:
@@ -62,6 +63,9 @@ def read_overrides(path: Path = OVERRIDES) -> dict:
             if kind == 'replacement':
                 if lat is not None:
                     out['replacement'].setdefault(stop_id, []).append({'lat': lat, 'lon': lon, 'label': (row.get('label') or '').strip()})
+                continue
+            if kind == 'keep':
+                out['keep'].add(stop_id)
                 continue
             if lat is not None:
                 out['stations' if kind == 'station' else 'stops'][stop_id] = (lat, lon)

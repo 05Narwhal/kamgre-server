@@ -4,7 +4,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from prestop_api import mapping, scheduled, sources, warm
+from prestop_api import mapping, scheduled, sources, stopservice, warm
 from prestop_api.upstream import Cached, Snapshot
 
 
@@ -45,11 +45,12 @@ class GetNowaitTests(SimpleTestCase):
 class WarmerTests(SimpleTestCase):
     def test_refreshes_what_is_about_to_expire_while_the_app_is_in_use(self):
         old = mock.Mock()
-        with mock.patch.object(warm, 'caches', return_value=[old]), mock.patch.object(warm, 'plans') as plans:
+        with mock.patch.object(warm, 'caches', return_value=[old]), mock.patch.object(warm, 'plans') as plans,                 mock.patch.object(stopservice, 'warm') as served:
             warm._last_request = time.time()
             warm.tick(time.time())
             old.warm.assert_called_once()
             plans.assert_called_once()
+            served.assert_called_once()
 
     def test_an_idle_server_leaves_the_upstreams_alone(self):
         old = mock.Mock()

@@ -24,28 +24,20 @@
   of a group that took in a far one), with the farthest member.
 """
 import csv
-import json
 import math
-import time
-from datetime import timedelta
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
-from prestop_api import sources, stopfix, stopgroups, supplement, trips, views
-from prestop_api.upstream import UpstreamError, otp, session
+from prestop_api import sources, stopfix, stopgroups, views
+from prestop_api.stopservice import BATCH, SERVICE_DAYS, departures, members, served_stops
+from prestop_api.upstream import UpstreamError, session
 
 OFF_ROAD_METERS = 25
 FAR_METERS = 400
-SERVICE_DAYS = 7
-BATCH = 200  # stops per OTP query (200 boards of one departure: ~0.4 s)
 CSV = Path(__file__).resolve().parents[5] / 'docs' / 'research' / '2026-10-23-stop-audit.csv'
 PROD = 'https://api.kamgre.si/api/v1'
 KINDS = ('empty', 'twins', 'far', 'wide', 'clusters', 'sameSide', 'offRoad')
-
-
-def members(marker: dict) -> list[str]:
-    return marker.get('memberIds') or [marker['id']]
 
 
 def audit(snap: dict, snaps: dict, placed: dict, served: set = None) -> dict:
@@ -104,43 +96,6 @@ def audit(snap: dict, snaps: dict, placed: dict, served: set = None) -> dict:
     empty = [] if served is None else [m for m in merged if not any(i in served for i in members(m))]
     return {'markers': len(merged), 'clusters': clusters, 'offRoad': off_road, 'sameSide': same_side, 'empty': empty,
             'twins': sorted(twins, key=lambda p: p[2]), 'far': sorted(far, key=lambda p: p[2]), 'wide': sorted(wide, key=lambda p: -p[2])}
-
-
-def departures(ids: list[str], most: int, batch: int = BATCH) -> dict[str, int]:
-    """Stop id -> departures and arrivals in the next SERVICE_DAYS days, at most `most` (0 for a stop OTP lacks)."""
-    out, now = {}, int(time.time())
-    for i in range(0, len(ids), batch):
-        part = ids[i:i + batch]
-        q = '{ ' + ' '.join(
-            f's{k}: stop(id: {json.dumps(sid)}) {{ stoptimesWithoutPatterns(startTime: {now}, timeRange: {SERVICE_DAYS * 86400}, '
-            f'numberOfDepartures: {most}, omitNonPickups: false) {{ serviceDay }} }}' for k, sid in enumerate(part)) + ' }'
-        data = otp().query(q, timeout=(5, 120))
-        for k, sid in enumerate(part):
-            stop = data.get(f's{k}')
-            out[sid] = len(stop.get('stoptimesWithoutPatterns') or []) if stop else 0
-    return out
-
-
-def live_routes() -> set[str]:
-    """Routes the collector saw a vehicle of in the last SERVICE_DAYS days."""
-    from prestop_statistics.models import TripDelay
-    since = trips.service_day() - timedelta(days=SERVICE_DAYS)
-    return set(TripDelay.objects.filter(service_date__gte=since).values_list('route_id', flat=True).distinct())
-
-
-def served_stops(snap: dict) -> tuple[set, dict]:
-    """(stop ids with a trip in the next SERVICE_DAYS days, stop id -> why one has none)."""
-    today = trips.service_day()
-    by_stop = sources.patterns.get().value['by_stop']
-    ids = [s['id'] for s in snap['all']]
-    served = supplement.running_stops(today + timedelta(days=i) for i in range(SERVICE_DAYS))
-    counts = departures([i for i in ids if i in by_stop and not supplement.owns(i)], 1)
-    served |= {i for i, n in counts.items() if n}
-    seen = live_routes()
-    served |= {i for i in ids if (snap['routes'].get(i) or set()) & seen}
-    why = {i: 'no OTP pattern' if i not in by_stop and not supplement.owns(i) else f'no trip in {SERVICE_DAYS} days'
-           for i in ids if i not in served}
-    return served, why
 
 
 def prod_markers() -> list[dict]:

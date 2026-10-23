@@ -20,7 +20,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
-from . import coverage, geometry, mapping, maplinks, operator_notices, sources, trips, variants, warm
+from . import coverage, geometry, mapping, maplinks, operator_notices, sources, stopservice, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
@@ -308,7 +308,7 @@ def _linked_places(q: str, scope: str, limit: int, lang: str) -> list[dict]:
             coords, name = parsed['coords'], parsed['name']
     lat, lon = coords
     if scope == 'stations':
-        near = sorted(((geometry.distance([lon, lat], [s['longitude'], s['latitude']]), s) for s in sources.stops.get().value['list']
+        near = sorted(((geometry.distance([lon, lat], [s['longitude'], s['latitude']]), s) for s in stopservice.markers()
                        if abs(s['latitude'] - lat) < 0.02 and abs(s['longitude'] - lon) < 0.03), key=lambda pair: pair[0])
         # Nearest platform per stop name: one row per station, not per platform.
         nearest = {}
@@ -368,7 +368,8 @@ def places(request):
 def stops(request):
     box = bbox_param(request)
     mode, run_by = request.GET.get('mode'), operator_filter(request.GET.get('operatorId'))
-    items = [s for s in sources.stops.get().value['list'] if inside(s, box) and (not mode or mode in s['modes']) and run_by(s['operatorId'])]
+    # Stops with no trip in the next days are left out (stopservice.py); `stopId` finds the one holding that stop anyway.
+    items = [s for s in stopservice.markers(request.GET.get('stopId')) if inside(s, box) and (not mode or mode in s['modes']) and run_by(s['operatorId'])]
     try:
         offset = int(request.GET.get('cursor') or 0)
     except ValueError:

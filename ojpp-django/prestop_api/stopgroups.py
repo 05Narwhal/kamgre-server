@@ -17,13 +17,18 @@ normalised names match (see `normalize`) and:
   stops named after it are one place, whichever way you leave it;
 - they come from different feeds and are one pole (`same_pole`, SAME_POLE_METERS): not served opposite
   ways, or one of them is served both ways and also the other's way;
-- they come from the same feed and are exact duplicates (DUPLICATE_METERS);
+- they come from the same feed and are exact duplicates (DUPLICATE_METERS), or two poles for one way (most vehicles
+  at both go the same way) within SAME_SPOT_METERS, within SAME_POLE_METERS when one is also served the other way;
+- they are termini at one spot (`one_place`): runs start or end at both, both are served both ways, within
+  SAME_SPOT_METERS (one feed) or NEAR_METERS (two feeds), whichever way their busiest lines leave ("KOLODVOR" and
+  "SŽ KOLODVOR", 5 m); or two feeds' namesake bus stations ("Velenje" and "AP Velenje", 83 m) within MERGE_METERS;
 - the override table says so (`merge_into`, see stopfix.py), which also may pin the marker (the
   three bays of Kozina's bus station, Tržič's).
 
 Opposite sides of a road are different stops for the direction you travel: two groups never join
 when any pair across them goes different ways (unless alike or one pole), or lies more than MERGE_METERS
-apart, and a stop served both ways (a terminus, a loop) joins nothing beyond NEAR_METERS. A group holds
+apart, and a stop served both ways (a terminus, a loop) joins nothing beyond NEAR_METERS but a namesake bus
+station. A group holds
 two stops of one feed only when every direction in it is known, so the two sides can't chain into
 one through a stop whose direction is unknown. The merged stop takes the fullest of its members'
 names; each member keeps its own (line views and board rows show which one it is). Its marker is at a
@@ -174,6 +179,24 @@ def same_pole(a: dict, b: dict, ways: dict, d: float) -> bool:
     return not opposite(wa, wb) or serves(wa, wb) or serves(wb, wa)
 
 
+def termini(sequences: Iterable[list[str]]) -> set[str]:
+    """Stops where a run of stops starts or ends."""
+    return {sid for run in sequences if run for sid in (run[0], run[-1])}
+
+
+def one_place(a: dict, b: dict, ways: dict, ends: set, d: float) -> bool:
+    """Termini at one spot, or two feeds' namesake bus stations (see the module's list): one place whichever way
+    vehicles leave them."""
+    if a['id'] not in ends or b['id'] not in ends:
+        return False
+    cross = _feed(a) != _feed(b)
+    if cross and d <= MERGE_METERS and normalize(a['name']) == normalize(b['name']) and \
+            any(BUS_STATION_WORDS.search(fold(s['name'])) for s in (a, b)):
+        return True
+    wa, wb = ways.get(a['id']), ways.get(b['id'])
+    return two_way(wa) and two_way(wb) and d <= (NEAR_METERS if cross else SAME_SPOT_METERS)
+
+
 SIDE_METERS = 2  # a stop for one way less than this to the right of its opposite namesake is on the wrong side
 
 
@@ -219,13 +242,13 @@ def _cell(stop: dict) -> tuple[int, int]:
 
 def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
           pinned: Optional[dict[str, tuple[float, float]]] = None,
-          ways: Optional[dict[str, list]] = None) -> tuple[list[dict], dict[str, list[str]]]:
+          ways: Optional[dict[str, list]] = None, ends: Optional[set] = None) -> tuple[list[dict], dict[str, list[str]]]:
     """Merged stop list (input order kept, members dropped) and member id -> group ids (head first).
 
     `forced`: stop id -> stop id to join regardless of name and distance. `pinned`: stop id -> the
     marker position of whatever station that stop ends up in. `ways`: stop id -> its directions of
-    travel (see `directions`)."""
-    forced, pinned, ways = forced or {}, pinned or {}, ways or {}
+    travel (see `directions`). `ends`: stops where runs start or end (`termini`)."""
+    forced, pinned, ways, ends = forced or {}, pinned or {}, ways or {}, ends or set()
     parent = list(range(len(stops)))
     groups: dict[int, list[int]] = {i: [i] for i in range(len(stops))}
 
@@ -254,7 +277,8 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
                 way, d = main_way(wx, wy), meters(stops[x], stops[y])
                 if d > MERGE_METERS or (shared and way is None):
                     return False
-                if way is False and not (alike(wx, wy) and not opposite(wx, wy)) and not same_pole(stops[x], stops[y], ways, d):
+                if way is False and not (alike(wx, wy) and not opposite(wx, wy)) and not same_pole(stops[x], stops[y], ways, d) \
+                        and not one_place(stops[x], stops[y], ways, ends, d):
                     return False
         return True
 
@@ -283,9 +307,15 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         elif may_join(i, j):
             wa, wb = ways.get(a['id']), ways.get(b['id'])
             way = main_way(wa, wb)
-            if d > NEAR_METERS and (two_way(wa) or two_way(wb)):
+            if one_place(a, b, ways, ends, d):
+                join(i, j)
+            # Two poles of one feed for one way at one spot; a pole served both ways beside one for one way stays apart
+            # (Kropa, 15 m) unless they are one pole (Cesta na Drenik, 4 m).
+            elif _feed(a) == _feed(b) and way and (d <= SAME_POLE_METERS or (d <= SAME_SPOT_METERS and not (two_way(wa) or two_way(wb)))):
+                join(i, j)
+            elif d > NEAR_METERS and (two_way(wa) or two_way(wb)):
                 continue  # a terminus or loop further off is a place of its own (Litostrojska's LPP turning loop, 106 m)
-            if (alike(wa, wb) and not opposite(wa, wb)) or same_pole(a, b, ways, d) or (way and _feed(a) != _feed(b) and (d <= NEAR_METERS or namesakes)):
+            elif (alike(wa, wb) and not opposite(wa, wb)) or same_pole(a, b, ways, d) or (way and _feed(a) != _feed(b) and (d <= NEAR_METERS or namesakes)):
                 join(i, j)
             # Alike names from two feeds ("Slovenija avto", "Ljubljana Slovenija avto") on the same side of the road.
             elif _feed(a) != _feed(b) and ((way and d <= NEAR_METERS) or (way is None and d <= SAME_SPOT_METERS)):

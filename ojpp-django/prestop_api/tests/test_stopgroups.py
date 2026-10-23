@@ -288,6 +288,61 @@ class NamedCasesTests(SimpleTestCase):
         stops = [stop('IJPP:1', 'Notranje Gorice mostiček', 46.0, 14.4), stop('IJPP:2', 'Notranje Gorice mostiček', north_of(46.0, 20), 14.4)]
         merged, _ = stopgroups.merge(stops, ways={'IJPP:1': way(90, 270), 'IJPP:2': way(270, 90)})
         self.assertEqual(len(merged), 2)
+        # Termini elsewhere do not make them one place: runs pass through both.
+        merged, _ = stopgroups.merge(stops, ways={'IJPP:1': way(90, 270), 'IJPP:2': way(270, 90)}, ends={'IJPP:9'})
+        self.assertEqual(len(merged), 2)
+
+
+class TwinTests(SimpleTestCase):
+    """Spec 2026-10-23 E7: the twins stop_audit found (E6) become one marker; opposite sides still never do."""
+
+    def test_kolodvor_and_sz_kolodvor_two_termini_at_one_spot_are_one_stop(self):
+        # LPP's two poles 5 m apart, both served both ways (lines end and start there), busiest ways opposite.
+        stops = [stop('LPP:db9f7130', 'KOLODVOR', 46.057991, 14.514928), stop('LPP:e65047c0', 'SŽ KOLODVOR', north_of(46.057991, 5), 14.514928)]
+        ways = {'LPP:db9f7130': way(90, 270), 'LPP:e65047c0': way(270, 90)}
+        self.assertEqual(len(stopgroups.merge(stops, ways=ways)[0]), 2)  # as before E7, without knowing where runs end
+        merged, _ = stopgroups.merge(stops, ways=ways, ends={'LPP:db9f7130', 'LPP:e65047c0'})
+        self.assertEqual(merged_ids(merged), [['LPP:db9f7130', 'LPP:e65047c0']])
+        self.assertEqual(merged[0]['name'], 'SŽ KOLODVOR')
+        # Further apart than one spot, one feed's termini are two places.
+        far = [stops[0], stop('LPP:e65047c0', 'SŽ KOLODVOR', north_of(46.057991, 40), 14.514928)]
+        self.assertEqual(len(stopgroups.merge(far, ways=ways, ends={'LPP:db9f7130', 'LPP:e65047c0'})[0]), 2)
+
+    def test_two_poles_of_one_feed_for_one_way_differing_only_in_case_are_one_stop(self):
+        stops = [stop('LPP:91fb', 'Sostro', 46.04, 14.62), stop('LPP:d9f2', 'SOSTRO', north_of(46.04, 9), 14.62)]
+        merged, _ = stopgroups.merge(stops, ways={'LPP:91fb': way(80, 20), 'LPP:d9f2': way(85)})
+        self.assertEqual(merged_ids(merged), [['LPP:91fb', 'LPP:d9f2']])
+        # Beyond one spot they are two poles of their own.
+        far = [stops[0], stop('LPP:d9f2', 'SOSTRO', north_of(46.04, 40), 14.62)]
+        self.assertEqual(len(stopgroups.merge(far, ways={'LPP:91fb': way(80, 20), 'LPP:d9f2': way(85)})[0]), 2)
+
+    def test_a_pole_served_both_ways_and_one_for_its_main_way_are_one_stop_only_at_one_pole(self):
+        # Cesta na Drenik: IJPP's two poles 4 m apart; Kropa's (test above) 15 m apart stay two.
+        stops = [stop('IJPP:1150250', 'Cesta na Drenik', 46.07, 14.47), stop('IJPP:1150251', 'Cesta na Drenik', north_of(46.07, 4), 14.47)]
+        merged, _ = stopgroups.merge(stops, ways={'IJPP:1150250': BOTH_WAYS, 'IJPP:1150251': EAST})
+        self.assertEqual(merged_ids(merged), [['IJPP:1150250', 'IJPP:1150251']])
+
+    def test_opposite_sides_of_one_feed_at_one_spot_stay_apart(self):
+        stops = [stop('IJPP:1128105', 'Padna', 45.45, 13.70), stop('IJPP:1128106', 'Padna', north_of(45.45, 8), 13.70)]
+        merged, _ = stopgroups.merge(stops, ways={'IJPP:1128105': way(0), 'IJPP:1128106': way(180)}, ends=set())
+        self.assertEqual(len(merged), 2)
+
+    def test_two_feeds_namesake_bus_stations_are_one_station(self):
+        # Velenje: IJPP's bus station and the city line's "AP Velenje" 83 m apart, both where runs start and end.
+        stops = [stop('IJPP:1122728', 'Velenje', 46.3600, 15.1100), stop('MOVelenje:2', 'AP Velenje', north_of(46.3600, 83), 15.1100)]
+        ways = {'IJPP:1122728': way(90, 270), 'MOVelenje:2': way(90, 270)}
+        self.assertEqual(len(stopgroups.merge(stops, ways=ways)[0]), 2)
+        merged, _ = stopgroups.merge(stops, ways=ways, ends={'IJPP:1122728', 'MOVelenje:2'})
+        self.assertEqual(merged_ids(merged), [['IJPP:1122728', 'MOVelenje:2']])
+        # A turning loop of the same name that is no bus station stays a place of its own beyond NEAR_METERS.
+        loop = [stop('IJPP:1167150', 'Litostrojska', 46.0768, 14.4887), stop('LPP:300f', 'LITOSTROJSKA', north_of(46.0768, 106), 14.4887)]
+        self.assertEqual(len(stopgroups.merge(loop, ways={'IJPP:1167150': way(26), 'LPP:300f': way(338, 169)}, ends={'IJPP:1167150', 'LPP:300f'})[0]), 2)
+
+    def test_a_bus_station_s_bays_served_opposite_ways_stay_as_they_were(self):
+        stops = [stop('IJPP:1131250', 'Tržič', 46.362263, 14.308901), stop('IJPP:1131251', 'Tržič', 46.362291, 14.308698),
+                 stop('IJPP:1131252', 'Tržič', 46.362150, 14.308822)]
+        ways = {'IJPP:1131250': way(230, 51), 'IJPP:1131251': way(244, 224), 'IJPP:1131252': way(65, 44)}
+        self.assertEqual(len(stopgroups.merge(stops, ways=ways, ends={s['id'] for s in stops})[0]), 3)
 
 
 class SideTests(SimpleTestCase):
