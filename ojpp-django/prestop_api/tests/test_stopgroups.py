@@ -375,3 +375,34 @@ class SideTests(SimpleTestCase):
             self.assertEqual(markers, before)
         far = [stop('IJPP:n', 'Vas', 46.0, 14.5), stop('IJPP:s', 'Vas', north_of(46.0, 90), 14.5)]
         self.assertEqual(stopgroups.place_sides(far, list(far), {'IJPP:n': way(0), 'IJPP:s': way(180)}), 0)
+
+class MarkerPoleTests(SimpleTestCase):
+    """Spec 2026-10-23 E8: a merged marker sits on a pole, not at a far member that comes first by id."""
+    POLE = (46.0594, 14.5206)
+
+    def test_poles_far_apart_put_the_marker_where_most_members_stand(self):
+        # Ljubljana Viadukt: IJPP's and LPP's pole 5 m apart, line 27's LPP pole 130 m west came first by id.
+        lat, lon = self.POLE
+        stops = [stop('IJPP:1165693', 'Viadukt', lat, lon), stop('LPP:f14a', 'Viadukt', north_of(lat, 5), lon),
+                 stop('LPP:abca', 'Viadukt', lat, lon - 130 / 77_230)]
+        merged, _ = stopgroups.merge(stops, ways={s['id']: way(225) for s in stops})
+        self.assertEqual(merged_ids(merged), [['IJPP:1165693', 'LPP:abca', 'LPP:f14a']])
+        self.assertLess(stopgroups.meters(merged[0], {'latitude': lat, 'longitude': lon}), 10)
+
+    def test_a_pole_placed_by_hand_places_its_marker(self):
+        # Zg. Duplek: IJPP's stop moved onto its OSM pole (stop_overrides.csv); Marprom's pole is 70 m off.
+        lat, lon = self.POLE
+        stops = [stop('IJPP:1120991', 'Zg. Duplek', lat, lon), stop('MARPROM:403', 'Zg. Duplek', north_of(lat, 70), lon)]
+        ways = {'IJPP:1120991': way(0), 'MARPROM:403': way(0)}
+        self.assertEqual(stopgroups.merge(stops, ways=ways)[0][0]['latitude'], round(north_of(lat, 70), 6))
+        merged, _ = stopgroups.merge(stops, ways=ways, fixed=frozenset({'IJPP:1120991'}))
+        self.assertEqual(merged_ids(merged), [['IJPP:1120991', 'MARPROM:403']])
+        self.assertEqual((merged[0]['latitude'], merged[0]['longitude']), (lat, lon))
+
+    def test_a_railway_station_keeps_its_marker(self):
+        lat, lon = self.POLE
+        stops = [stop('IJPP:rail', 'Grosuplje', lat, lon, modes=('rail',)), stop('IJPP:1', 'Grosuplje', north_of(lat, 60), lon),
+                 stop('IJPP:2', 'Grosuplje', north_of(lat, 66), lon)]
+        merged, _ = stopgroups.merge(stops, ways={'IJPP:1': EAST, 'IJPP:2': WEST}, fixed=frozenset({'IJPP:1'}))
+        rail = next(s for s in merged if s['id'] == 'IJPP:rail')
+        self.assertEqual((rail['latitude'], rail['longitude']), (lat, lon))

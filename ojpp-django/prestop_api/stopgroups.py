@@ -32,7 +32,8 @@ station. A group holds
 two stops of one feed only when every direction in it is known, so the two sides can't chain into
 one through a stop whose direction is unknown. The merged stop takes the fullest of its members'
 names; each member keeps its own (line views and board rows show which one it is). Its marker is at a
-city feed's pole (never between poles further apart than SAME_SPOT_METERS), and `place_sides` puts the
+city feed's pole (never between poles further apart than SAME_SPOT_METERS; then at the pole most members
+stand at), and `place_sides` puts the
 two sides of a stop on their own sides of the road.
 """
 import math
@@ -242,12 +243,14 @@ def _cell(stop: dict) -> tuple[int, int]:
 
 def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
           pinned: Optional[dict[str, tuple[float, float]]] = None,
-          ways: Optional[dict[str, list]] = None, ends: Optional[set] = None) -> tuple[list[dict], dict[str, list[str]]]:
+          ways: Optional[dict[str, list]] = None, ends: Optional[set] = None,
+          fixed: frozenset = frozenset()) -> tuple[list[dict], dict[str, list[str]]]:
     """Merged stop list (input order kept, members dropped) and member id -> group ids (head first).
 
     `forced`: stop id -> stop id to join regardless of name and distance. `pinned`: stop id -> the
     marker position of whatever station that stop ends up in. `ways`: stop id -> its directions of
-    travel (see `directions`). `ends`: stops where runs start or end (`termini`)."""
+    travel (see `directions`). `ends`: stops where runs start or end (`termini`). `fixed`: stops placed by hand
+    (stop_overrides.csv) on their pole: a bus stop's marker sits there."""
     forced, pinned, ways, ends = forced or {}, pinned or {}, ways or {}, ends or set()
     parent = list(range(len(stops)))
     groups: dict[int, list[int]] = {i: [i] for i in range(len(stops))}
@@ -338,11 +341,14 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         head = ordered[0]
         ids = [s['id'] for s in ordered]
         pin = next((pinned[i] for i in ids if i in pinned), None)
-        # IJPP often puts a pole on the other side of the road (Gosposvetska, Litostrojska): a city feed's pole places it.
-        placed = [s for s in ordered if _feed(s) != 'IJPP' and 'rail' not in s['modes']] or ordered
-        # Poles at one spot: between them; poles further apart: at the first (busiest) one, never in the space between.
+        # A pole placed by hand places it; else, as IJPP often puts a pole on the other side of the road (Gosposvetska,
+        # Litostrojska), a city feed's pole does.
+        placed = ('rail' not in head['modes'] and [s for s in ordered if s['id'] in fixed]) or \
+            [s for s in ordered if _feed(s) != 'IJPP' and 'rail' not in s['modes']] or ordered
+        # Poles at one spot: between them; poles further apart: at a railway station, else at the pole most members
+        # stand at (then the first), never in the space between: Viadukt's main pole, not line 27's pole 130 m off.
         if any(meters(x, y) > SAME_SPOT_METERS for x in placed for y in placed):
-            placed = placed[:1]
+            placed = [max(placed, key=lambda x: ('rail' in x['modes'], sum(meters(x, y) <= SAME_SPOT_METERS for y in ordered)))]
         lat, lon = pin or (sum(s['latitude'] for s in placed) / len(placed), sum(s['longitude'] for s in placed) / len(placed))
         merged = {**head, 'name': head['name'] if stations[order[0]] else _fullest([s['name'] for s in ordered]),
                   'latitude': round(lat, 6), 'longitude': round(lon, 6),

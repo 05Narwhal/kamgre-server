@@ -66,7 +66,7 @@ def _load_stops():
     built = mapping.build_stops(raw)
     # Stops that are the same physical stop or station become one (see stopgroups.py).
     ways, ends = _stop_directions(built)
-    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends)
+    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends, frozenset(overrides['stops']))
     # Each side of a stop on its own side of the road (Slovenia drives on the right), at OSM's pole when one is close.
     stopgroups.place_sides(merged, built, ways, set(overrides['stops']) | set(overrides['stations']), stopfix.osm_poles())
     for i, station in enumerate(merged):
