@@ -425,6 +425,9 @@ def journeys(request):
     except ValueError:
         raise ApiError(422, 'INVALID_REQUEST', 'Expected a JSON body')
     req = planner.parse_request(body, settings.PRESTOP_INSANE_MODE)
+    from . import city_journeys
+    # Where the town search of city buses OTP does not know got to on the page before (city_journeys.py).
+    req, city_anchor = city_journeys.take_anchor(req)
     from . import scheduled
     # What replaces trains that day (today's and tomorrow's are kept warm; another date's takes a few seconds once):
     # OTP's time moves for the trains whose replacement bus has its own times (journey_legs.search_gain).
@@ -447,6 +450,10 @@ def journeys(request):
     # Searches OTP cannot fold into one (driving, drive + park + ride, scooters next to bikes, the rider's own bike
     # networks): with what is left of the budget, and cached.
     data = planner.with_extras(data, req, counted((5, 20)), budget=planner.MAX_OTP_QUERIES - asked[0])
+    # City buses OTP does not know (Kranj's full timetable, Sevnica, Jesenice): inside a town, and at either end of
+    # OTP's connections, with one more search via a town's station when none comes near (within the budget).
+    data, city_anchors = city_journeys.add(data, req, city_anchor, counted((5, 20)), budget=planner.MAX_OTP_QUERIES - asked[0])
+    page = city_journeys.mark(page, city_anchors)
     errors = (data.get('planConnection') or {}).get('routingErrors') or []
     try:
         alert_list = sources.alerts(language(request))

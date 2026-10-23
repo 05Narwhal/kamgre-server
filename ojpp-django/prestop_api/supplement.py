@@ -6,7 +6,7 @@ buses ran trips OTP did not know: no line drawn, no stops, a line guessed from s
 positions that looked off their route. The operator publishes the full file (Ridango, the same one
 gtfs-generators/kranj/fix_gtfs.py rebuilds), so trips, lines and stop boards of these feeds are
 built here from it, in the shapes OTP returns, and fed through the same code (trips.py, sources.py).
-Journeys still come from OTP.
+OTP cannot take these feeds, so city_journeys.py adds their runs to its journeys.
 
 Timetables nobody publishes as GTFS any more are kept by hand in `data/gtfs/<feedId>/` (GTFS text files,
 ids as in OTP's feed so stops and lines keep theirs) and read the same way: Sevnica's file expired on

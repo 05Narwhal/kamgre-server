@@ -1,8 +1,8 @@
 # Hand-kept city bus timetables
 
 Each folder is one OTP feed (`Sevnica` → ids `Sevnica:…`), as plain GTFS text files. `supplement.py`
-reads them instead of OTP's copy of that feed for lines, trips and stop boards (journeys still come
-from OTP). Keep the stop, route and trip ids of OTP's feed where they exist, so stops and saved lines
+reads them instead of OTP's copy of that feed for lines, trips and stop boards; `city_journeys.py`
+adds their runs to OTP's journeys. Keep the stop, route and trip ids of OTP's feed where they exist, so stops and saved lines
 keep working; new stops get new ids.
 
 ## Sevnica
