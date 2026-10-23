@@ -633,13 +633,79 @@ def plan(req: dict, query) -> dict:
     if not set(req['modes']) & (set(TRANSIT) | RIDE_MODES):
         return {'planConnection': {'edges': [], 'pageInfo': {}}}
     cursor = req.get('pageCursor') or ''
-    if cursor.startswith(WIDER_CURSOR):
-        return {**_plan({**req, 'pageCursor': cursor[len(WIDER_CURSOR):], 'wider': True}, query), 'wider': True}
+    if cursor:
+        return _paged(req, query)
     data = _plan(req, query)
-    if _edges(data) or req.get('riskMode') == 'insane' or cursor:
+    if _edges(data) or req.get('riskMode') == 'insane':
         return data
     wider = _plan({**req, 'wider': True}, query)
     return {**wider, 'wider': True} if _edges(wider) else data
+
+
+# A page of earlier or later connections past the end of the service day goes on to the neighbouring day by itself:
+# its cursors carry how many days from the day asked for it is (and the time mode it was searched in), `~1d:` / `~-1a:`
+# with no OTP cursor behind it standing for "the next day's first trips" / "the day before's last trips".
+DAY_CURSOR = re.compile(r'~(-?\d+)([da]):')
+MAX_PAGE_DAYS = 7  # days either way from the day asked for
+PAGE_HOPS = 2      # empty pages or days one request goes through before it answers
+
+
+def service_day(when: datetime):
+    return (when.astimezone(LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()
+
+
+def _day_start(day, tz) -> datetime:
+    return datetime(day.year, day.month, day.day, SERVICE_DAY_ENDS_HOUR, tzinfo=LOCAL).astimezone(tz)
+
+
+def _fresh(req: dict, days: int, mode: str) -> dict:
+    """The search for `days` from the day asked for: leaving from its start, or arriving by its end."""
+    day = service_day(req['dateTime']) + timedelta(days=days)
+    start = _day_start(day if mode == 'd' else day + timedelta(days=1), req['dateTime'].tzinfo)
+    return {**req, 'pageCursor': None, 'pageDirection': None, 'timeMode': 'arriveBy' if mode == 'a' else 'departAt', 'dateTime': start}
+
+
+def _day_allowed(req: dict, days: int, now: Optional[float] = None) -> bool:
+    """Within MAX_PAGE_DAYS of the day asked for, and not a day gone by (past days are not planned)."""
+    today = service_day(datetime.fromtimestamp(now if now is not None else time.time(), LOCAL))
+    return abs(days) <= MAX_PAGE_DAYS and service_day(req['dateTime']) + timedelta(days=days) >= today
+
+
+def _paged(req: dict, query) -> dict:
+    """A page of earlier or later connections from a cursor. When the cursor has nothing left to show, the
+    neighbouring service day's trips instead (Later: its first, Earlier: its last), at most PAGE_HOPS steps."""
+    cursor = req['pageCursor']
+    wide = cursor.startswith(WIDER_CURSOR)
+    cursor = cursor[len(WIDER_CURSOR):] if wide else cursor
+    span = DAY_CURSOR.match(cursor)
+    days, mode = (int(span[1]), span[2]) if span else (0, 'a' if req['timeMode'] == 'arriveBy' else 'd')
+    cursor = cursor[span.end():] if span else cursor
+    direction = req.get('pageDirection') or 'later'
+    key = 'previous' if direction == 'earlier' else 'next'
+    base = {**req, 'wider': True} if wide else req
+    data: dict = {}
+    for hop in range(PAGE_HOPS + 1):
+        if cursor:
+            data = _plan({**base, 'pageCursor': cursor, 'timeMode': 'arriveBy' if mode == 'a' else 'departAt'}, query)
+        else:
+            data = _plan(_fresh(base, days, mode), query)
+        if _edges(data) or hop == PAGE_HOPS:
+            break
+        onward = _raw_page(data)[key]
+        if onward:
+            cursor = onward
+            continue
+        days, mode, cursor = days + (-1 if direction == 'earlier' else 1), 'a' if direction == 'earlier' else 'd', ''
+        if not _day_allowed(req, days):
+            data = {'planConnection': {'edges': [], 'pageInfo': {}}}  # no stale cursors from a day left behind
+            break
+    return {**data, 'span': (days, mode), **({'wider': True} if wide else {})}
+
+
+def _raw_page(data: dict) -> dict:
+    info = (data.get('planConnection') or {}).get('pageInfo') or {}
+    return {'previous': info['startCursor'] if info.get('hasPreviousPage') and info.get('startCursor') else None,
+            'next': info['endCursor'] if info.get('hasNextPage') and info.get('endCursor') else None}
 
 
 def _plan(req: dict, query) -> dict:
@@ -701,12 +767,19 @@ def _plan(req: dict, query) -> dict:
     return {'planConnection': {**paged['planConnection'], 'edges': joined}}
 
 
-def page_info(data: dict) -> dict:
-    """Cursors for the connections before and after these (null when OTP has none)."""
-    info = (data.get('planConnection') or {}).get('pageInfo') or {}
+def page_info(data: dict, req: Optional[dict] = None) -> dict:
+    """Cursors for the connections before and after these. OTP's own where it has them; otherwise, for a request,
+    the next service day's first trips (`next`) or the day before's last trips (`previous`), as far as _paged goes."""
+    raw = _raw_page(data)
     mark = WIDER_CURSOR if data.get('wider') else ''
-    return {'previous': mark + info['startCursor'] if info.get('hasPreviousPage') and info.get('startCursor') else None,
-            'next': mark + info['endCursor'] if info.get('hasNextPage') and info.get('endCursor') else None}
+    if req is None:
+        return {k: mark + v if v else None for k, v in raw.items()}
+    days, mode = data.get('span') or (0, 'a' if req['timeMode'] == 'arriveBy' else 'd')
+    home = (days, mode) == (0, 'a' if req['timeMode'] == 'arriveBy' else 'd')
+    here = '' if home else f'~{days}{mode}:'
+    later, earlier = (days + 1, 'd'), (days - 1, 'a')
+    return {'previous': mark + here + raw['previous'] if raw['previous'] else mark + f'~{earlier[0]}a:' if _day_allowed(req, earlier[0]) else None,
+            'next': mark + here + raw['next'] if raw['next'] else mark + f'~{later[0]}d:' if _day_allowed(req, later[0]) else None}
 
 
 def _ts(value: str) -> float:

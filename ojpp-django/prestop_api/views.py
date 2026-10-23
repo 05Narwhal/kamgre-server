@@ -439,7 +439,7 @@ def journeys(request):
             return otp().query(q, v, timeout=timeout)
         return query
     data = planner.plan(req, counted((5, 45)))
-    page = planner.page_info(data)
+    page = planner.page_info(data, req)
     data = planner.bet_on_delays(data, req, counted((5, 20)))
     # Searches OTP cannot fold into one (driving, drive + park + ride, scooters next to bikes, the rider's own bike
     # networks): with what is left of the budget, and cached.

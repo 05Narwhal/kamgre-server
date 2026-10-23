@@ -71,7 +71,9 @@ class DayWindowTests(SimpleTestCase):
     def test_a_page_keeps_its_window(self):
         otp = FakeOtp()
         journeys.plan(request(insane=False, pageCursor='next'), otp)
-        self.assertEqual(len(otp.asked), 1)
+        # Empty pages follow OTP's cursor (and then the next day); none of them re-asks over the whole day.
+        self.assertEqual([v['after'] for v in otp.asked], ['next'] * (journeys.PAGE_HOPS + 1))
+        self.assertTrue(all('searchWindow' not in v for v in otp.asked))
 
     def test_nothing_within_the_usual_limits_asks_with_wider_ones(self):
         """Kropa → Ljubljana after the last bus: only a brisk walk to the train at Otoče gets there."""

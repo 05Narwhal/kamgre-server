@@ -111,7 +111,7 @@ class FacadeTests(TestCase):
         with mock.patch.object(views, 'otp', return_value=otp):
             response = self.client.post('/api/v1/journeys', body, content_type='application/json')
         self.assertEqual((response.status_code, response.json()['page']), (200, {'previous': 's', 'next': 'e'}))
-        self.assertEqual(otp.query.call_args[0][1]['after'], 'c1')
+        self.assertEqual(otp.query.call_args_list[0][0][1]['after'], 'c1')  # an empty page goes on through OTP's cursor
 
     def test_statistics_range_is_bounded(self):
         response = self.client.get('/api/v1/statistics/routes/IJPP:r1/daily',
