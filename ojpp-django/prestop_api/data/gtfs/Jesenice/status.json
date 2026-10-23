@@ -1,0 +1,35 @@
+{
+ "status": "ok",
+ "version": "af6a04704a18",
+ "end": "2027-06-24",
+ "source": "https://arriva.si/avtobusni-prevozi/mestni-avtobusni-prevozi/mestni-avtobusni-prevozi-jesenice/vozni-redi-in-cenik-jesenice/",
+ "files": [
+  {
+   "file": "Linija-1A-Koroska-Bela-trgovina-Blejska-Dobrava-pokopalisce-Hrusica-Belo-Polje.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2025/06/Linija-1A-Koroska-Bela-trgovina-Blejska-Dobrava-pokopalisce-Hrusica-Belo-Polje.pdf",
+   "sha256": "5393bf17e3965aded3b474263429909c25a24e5bba7e3650a336a32815be7204"
+  },
+  {
+   "file": "Linija-1B-Hrusica-Belo-polje-Blejska-Dobrava-pokopalisce-Koroska-bela-trgovina.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2025/06/Linija-1B-Hrusica-Belo-polje-Blejska-Dobrava-pokopalisce-Koroska-bela-trgovina.pdf",
+   "sha256": "b49d772907f5cc18d3d88eeb0bf279971da75dab3b365ccb055eb6ccd18424b8"
+  },
+  {
+   "file": "Linija-2A-Koroska-bela-trgovina-–-Tomsiceva-Jesenice-bolnica.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2025/06/Linija-2A-Koroska-bela-trgovina-–-Tomsiceva-Jesenice-bolnica.pdf",
+   "sha256": "4f4ee27e830e42804daf33c77d3c459b03c5265ae8da3e0395a970b9dda635fc"
+  },
+  {
+   "file": "Linija-2B-Jesenice-bolnica-Tomsiceva-Koroska-bela-trgovina.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2025/06/Linija-2B-Jesenice-bolnica-Tomsiceva-Koroska-bela-trgovina.pdf",
+   "sha256": "5963bfe50c03198f9d957b7397d419d1403fb3dff0e9391ac208af1fb6f65cd0"
+  }
+ ],
+ "lines": {
+  "1A": 5,
+  "1B": 5,
+  "2A": 5,
+  "2B": 5
+ },
+ "built": "2026-10-23"
+}

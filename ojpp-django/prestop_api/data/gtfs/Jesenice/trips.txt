@@ -1,0 +1,21 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,shape_id
+1A,redni,1A-0700,Hrušica Belo Polje,0,1A
+1A,redni,1A-0915,Hrušica Belo Polje,0,1A
+1A,redni,1A-1200,Hrušica Belo Polje,0,1A
+1A,redni,1A-1400,Hrušica Belo Polje,0,1A
+1A,redni,1A-1615,Hrušica Belo Polje,0,1A
+1B,redni,1B-0735,Koroška Bela trgovina,0,1B
+1B,redni,1B-0950,Koroška Bela trgovina,0,1B
+1B,redni,1B-1235,Koroška Bela trgovina,0,1B
+1B,redni,1B-1435,Koroška Bela trgovina,0,1B
+1B,redni,1B-1650,Koroška Bela trgovina,0,1B
+2A,redni,2A-0810,Jesenice bolnica,0,2A
+2A,redni,2A-1025,Jesenice bolnica,0,2A
+2A,redni,2A-1310,Jesenice bolnica,0,2A
+2A,redni,2A-1510,Jesenice bolnica,0,2A
+2A,redni,2A-1725,Jesenice bolnica,0,2A
+2B,redni,2B-0830,Koroška Bela trgovina,0,2B
+2B,redni,2B-1045,Koroška Bela trgovina,0,2B
+2B,redni,2B-1330,Koroška Bela trgovina,0,2B
+2B,redni,2B-1530,Koroška Bela trgovina,0,2B
+2B,redni,2B-1745,Koroška Bela trgovina,0,2B

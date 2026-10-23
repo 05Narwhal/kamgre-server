@@ -146,6 +146,6 @@ class LocalFeedTests(SimpleTestCase):
 
     def test_the_folders_are_feeds_when_turned_on(self):
         with self.settings(PRESTOP_LOCAL_GTFS=True, PRESTOP_KRANJ_GTFS_URL=''):
-            self.assertEqual(set(supplement.feeds()), {'Sevnica'})
+            self.assertEqual(set(supplement.feeds()), {'Jesenice', 'Sevnica'})
         with self.settings(PRESTOP_LOCAL_GTFS=False, PRESTOP_KRANJ_GTFS_URL=''):
             self.assertEqual(supplement.feeds(), {})

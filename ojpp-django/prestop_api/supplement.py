@@ -418,6 +418,27 @@ def stoptimes(stop_id: str, start: int, span: int, limit: int, updates: dict) ->
     return out[:limit]
 
 
+def timetable_runs(now: float, before: int, after: int) -> list[dict]:
+    """Runs of the hand-kept feeds (data/gtfs: no live positions) from `before` s ahead of their first departure to
+    `after` s past their last arrival, for scheduled.city_buses: {'id', 'route', 'headsign', 'stops', 'arrivals',
+    'departures', 'shapeKey', 'shape'} (epoch times, the shape as [lon, lat], [] when the feed has none)."""
+    out = []
+    today = datetime.fromtimestamp(now, LOCAL).date()
+    kept = _hand_kept()
+    for name, feed in _feeds().items():
+        if name not in kept:
+            continue
+        for day in (today - timedelta(days=1), today):
+            base = day_start(day)
+            for t in feed['trips'].values():
+                if base + t['stops'][0]['departure'] - before <= now <= base + t['stops'][-1]['arrival'] + after and runs(feed, t['serviceId'], day):
+                    out.append({'id': t['id'], 'route': feed['routes'][t['routeId']], 'headsign': t['headsign'],
+                                'stops': [_stop(feed, s['stopId']) for s in t['stops']],
+                                'arrivals': [base + s['arrival'] for s in t['stops']], 'departures': [base + s['departure'] for s in t['stops']],
+                                'shapeKey': _pattern_code(t), 'shape': feed['shapes'].get(t['shapeId']) or []})
+    return out
+
+
 def running(now: float, margin: int = 1800) -> list[dict]:
     """Runs of these timetables on the road around `now` (from `margin` s before their first departure to as long after
     their last arrival), as mapping.match_run takes them: {'id', 'stops': [(lat, lon, scheduled epoch)], 'stopIds'}."""

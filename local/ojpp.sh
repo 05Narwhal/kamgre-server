@@ -52,7 +52,8 @@ case "$cmd" in
     # (tile dir ~/valhalla/tiles, listen tcp://127.0.0.1:8002), valhalla_build_admins and valhalla_build_tiles.
     [ -f "$VALHALLA_DIR/valhalla.json" ] || { echo "no local valhalla (see ojpp.sh valhalla); using ${PRESTOP_VALHALLA_URL:-the public server}"; exit 0; }
     pgrep -f "valhalla_service" >/dev/null && { echo "valhalla already running"; exit 0; }
-    cd "$VALHALLA_DIR" && nohup "$HOME/.venvs/valhalla/bin/valhalla_service" valhalla.json 2 > service.log 2>&1 &
+    # pyvalhalla's wrapper finds its binary through PATH (3.9: "Can't find executable at valhalla_service").
+    cd "$VALHALLA_DIR" && PATH="$HOME/.venvs/valhalla/bin:$PATH" nohup "$HOME/.venvs/valhalla/bin/valhalla_service" valhalla.json 2 > service.log 2>&1 &
     sleep 2; curl -s -m 5 http://127.0.0.1:8002/status && echo ;;
   *) sed -n '2,12p' "${BASH_SOURCE[0]}" ;;
 esac

@@ -20,7 +20,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
-from . import coverage, geometry, mapping, maplinks, operator_notices, sources, stopservice, trips, variants, warm
+from . import citytt, coverage, geometry, mapping, maplinks, operator_notices, sources, stopservice, supplement, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
@@ -114,6 +114,8 @@ def all_sources():
         # so /health says when they are missing instead of the disruptions list just lacking them.
         _source('operator-site:arriva', "Arriva's website notices", operator_notices.arriva, ['alerts'], 3600),
         *_gbfs_sources(),
+        # City bus timetables built from the operators' pages on a PC (citytt): a failed build or one near its end.
+        *citytt.health(datetime.now(supplement.LOCAL).date()),
     ]
 
 

@@ -372,6 +372,62 @@ def _held(trip: dict, shape: Optional[dict], report: dict, at: Optional[dict]) -
     return at
 
 
+_city_shapes: dict[str, dict] = {}
+
+
+def city_buses(now: Optional[float] = None, skip_trips: frozenset = frozenset(), drops: Optional[list] = None) -> list[dict]:
+    """City buses of the hand-kept timetables (supplement.py's data/gtfs: Sevnica, Jesenice), which publish no live
+    positions, where their timetable puts them (quality "scheduled"), on the feed's shape or else on the roads
+    between their stops. A run a live vehicle is drawn on (`skip_trips`: one the feed reports without a trip, matched
+    by mapping.LooseVehicles) is left to it."""
+    from . import coverage, supplement
+    now = now or time.time()
+    out = []
+    for trip in supplement.timetable_runs(now, BOARDING, ARRIVED):
+        if trip['id'] in skip_trips:
+            coverage.note(drops, 'has a live vehicle', trip)
+            continue
+        stops = trip['stops']
+        key = ';'.join([trip['shapeKey'], *(s['gtfsId'] for s in stops)])
+        shape = _city_shapes.get(key)
+        if shape is None and len(trip['shape']) > 1:
+            coords = geometry.simplify(trip['shape'])
+            shape = {'coords': coords, 'cum': geometry.cumulative(coords), 'distances': geometry.stop_distances(coords, stops)}
+            if len(_city_shapes) > 500:
+                _city_shapes.clear()
+            _city_shapes[key] = shape
+        shape = shape or _road_shape(stops)
+        at = locate(trip, shape, now)
+        if not at:
+            coverage.note(drops, 'not on its way by its times', trip)
+            continue
+        i = at['stop']
+        if at['distance'] is not None:
+            lon, lat = geometry.point_at(shape['coords'], shape['cum'], at['distance'])
+            bearing = geometry.bearing_at(shape['coords'], shape['cum'], at['distance'])
+        elif at['stopped']:
+            lon, lat, bearing = stops[i]['lon'], stops[i]['lat'], None
+        else:
+            a, b, f = stops[i - 1], stops[i], at['fraction']
+            lon, lat, bearing = a['lon'] + (b['lon'] - a['lon']) * f, a['lat'] + (b['lat'] - a['lat']) * f, None
+        route = trip['route']
+        feed, local = trip['id'].split(':', 1)
+        out.append({
+            'id': f'{feed}:scheduled-{local}', 'name': mapping.route_name(route) or trip['id'],
+            'latitude': round(lat, 6), 'longitude': round(lon, 6), 'mode': 'bus',
+            'operatorId': (route.get('agency') or {}).get('gtfsId') or f'{feed}:unknown',
+            'routeId': route['gtfsId'], 'routeName': mapping.route_name(route) or '?',
+            'destination': stops[-1].get('name') or trip.get('headsign') or '',
+            'nextStop': stops[i].get('name'), 'nextStopId': stops[i]['gtfsId'],
+            'bearing': round(bearing, 1) if bearing is not None else None,
+            'updatedAt': mapping.iso(now), 'delaySeconds': None, 'quality': 'scheduled', 'tripId': trip['id'],
+            'trainCategory': None, 'trainNumber': None,
+            'speed': round(at['speed'], 2) if at['speed'] is not None and at['speed'] < 70 else None,
+            'stopped': at['stopped'],
+        })
+    return out
+
+
 def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), live: Optional[dict] = None,
              updates: Optional[dict] = None, drops: Optional[list] = None) -> list[dict]:
     """Trains and SŽ replacement buses by their timetable, moved by their live delay (trainlive.py): SŽ's report

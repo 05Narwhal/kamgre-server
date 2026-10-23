@@ -18,3 +18,21 @@ keep working; new stops get new ids.
 - Stops and shape 1–17 come from the AddTransit file. Approximate points (no public coordinates):
   18 Vila Planinska (on Planinska cesta), 20 Pokopališče (the cemetery). 19 Tuš rondo is the OSM bus
   stop by the roundabout (node 11181960230). Trips without a shape are routed on the roads (roads.py).
+
+## Jesenice
+
+Written by `manage.py city_timetables` (prestop_api/citytt), not by hand: run `yarn city-timetables` on a PC in
+Slovenia (arriva.si refuses other countries, the server included), check the summary and commit the folder.
+`--check` builds and compares without writing. `status.json` records the source files and the last result;
+/health shows `city-timetables:Jesenice` as stale after a failed build or 14 days before the end date.
+
+- Source: Arriva, "Mestni avtobusni prevozi Jesenice", one PDF per line (1A, 1B, 2A, 2B) on
+  <https://arriva.si/avtobusni-prevozi/mestni-avtobusni-prevozi/mestni-avtobusni-prevozi-jesenice/vozni-redi-in-cenik-jesenice/>
+  (read 2026-10-23; the PDFs print no validity, uploaded 2025-06).
+- Days, from the page's sentence (the build fails when it changes): Monday to Saturday, no Sundays or public
+  holidays except 31 October and 1 November. Valid until 2027-06-24, the end of the municipality's contract for
+  the lines (EU tender notice): check the page again before then and extend `CITIES` in citytt/__init__.py.
+- Stops: the IJPP pole of the same name and direction (stop id = the IJPP stop's number, same position, so the two
+  are one marker), else the OpenStreetMap pole (`osm<node>`): Straža, Tomšičeva trgovina, Tomšičeva I and II,
+  OŠ Prežihov Voranc, Blejska Dobrava pokopališče. Which pole a direction uses follows OTP's patterns and OSM's
+  bus route relations (citytt/poles.py). Shapes are routed with Valhalla.

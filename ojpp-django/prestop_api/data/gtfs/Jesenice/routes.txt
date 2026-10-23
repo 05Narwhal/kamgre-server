@@ -1,0 +1,5 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+1A,arriva,1A,Koroška Bela (trgovina) – Blejska Dobrava (pokopališče) – Hrušica (Belo Polje),3
+1B,arriva,1B,Hrušica (Belo polje) – Blejska Dobrava (pokopališče) – Koroška Bela (trgovina),3
+2A,arriva,2A,Koroška Bela (trgovina) – Tomšičeva – Jesenice Bolnica,3
+2B,arriva,2B,Jesenice Bolnica – Tomšičeva – Koroška Bela (trgovina),3

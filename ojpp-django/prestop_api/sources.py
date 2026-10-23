@@ -367,6 +367,8 @@ def _load_vehicles(drops: Optional[list] = None):
     except UpstreamError as e:
         logger.warning('Scheduled trains unavailable: %r', e)
         trains = []
+    # City buses of the hand-kept timetables (no live positions) by their timetable too.
+    trains += scheduled.city_buses(now, frozenset(v['tripId'] for v in live if v.get('tripId')), drops)
     broken = [v for v in trains if not mapping.fits_contract(v)]
     if broken:
         logger.warning('Timetable vehicles left out, they break the contract: %s', ', '.join(str(v.get('id')) for v in broken[:5]))
