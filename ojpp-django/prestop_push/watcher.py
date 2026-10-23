@@ -137,7 +137,7 @@ def tick(now: Optional[datetime] = None) -> int:
             # replaces it (a cancellation never).
             if alerts is None:
                 alerts = load_alerts(language)
-            current = journey.state(watch, trips, alerts, now.timestamp())
+            current = journey.state(watch, trips, alerts, now.timestamp(), set(watch.stay_trip_ids))
             if not watch.journey_state.get('seen'):
                 watch.journey_state = journey.baseline(current)
             else:

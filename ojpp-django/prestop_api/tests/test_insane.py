@@ -173,7 +173,7 @@ class StayOnVehicleTests(SimpleTestCase):
         with mock.patch.object(predictions, 'previous_trip', return_value=None), \
                 mock.patch.object(predictions, 'usual', return_value={}), \
                 mock.patch.object(predictions, 'departure', side_effect=learned_for), \
-                mock.patch.object(predictions, 'trip_pattern', side_effect=patterns.get), \
+                mock.patch.object(predictions, 'trip_patterns', side_effect=lambda ids: {t: patterns.get(t) for t in ids}), \
                 mock.patch('prestop_api.sources.stop_group', side_effect=lambda s: [s]):
             [j] = journeys.build_journeys(plan([first, second]), request(slack=0), [])
         return [l for l in j['legs'] if l['mode'] != 'walk'][1], j

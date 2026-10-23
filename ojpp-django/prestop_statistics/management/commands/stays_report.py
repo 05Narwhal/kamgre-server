@@ -3,6 +3,7 @@
 Per feed: complete days recorded, the 7-full-days gate (open since, or the day it opens if every day from today on
 counts), and what the nightly job learned (sure / likely stays, departures from the depot). With --lines, the lines
 of each open feed with their learned departures; `vehicle_blocks <line>` then shows one line departure by departure.
+With --pairs N, only a seeded sample of N learned `sure` stays (see stay_consistency).
 """
 from collections import Counter, defaultdict
 from datetime import timedelta
@@ -14,14 +15,39 @@ from prestop_statistics import stays
 from prestop_statistics.models import StayDeparture
 
 
+def sample_sure(n: int, seed: int = 1) -> list[dict]:
+    """About `n` learned `sure` stays spread over the feeds, seeded (stay_consistency). Self-contained: the server runs
+    this file with its own, older, stays.py."""
+    import random
+    rng = random.Random(seed)
+    by_feed: dict[str, list[dict]] = defaultdict(list)
+    fields = ('feed', 'route_id', 'kind', 'start', 'pattern', 'prev_route_id', 'prev_start', 'prev_pattern')
+    for r in StayDeparture.objects.filter(level='sure').order_by('feed', 'route_id', 'kind', 'start').values(*fields):
+        by_feed[r['feed']].append(r)
+    for rows in by_feed.values():
+        rng.shuffle(rows)
+    out: list[dict] = []
+    while len(out) < n and any(by_feed.values()):
+        for feed in sorted(by_feed):
+            if by_feed[feed] and len(out) < n:
+                out.append(by_feed[feed].pop())
+    return out
+
+
 class Command(BaseCommand):
     help = 'Overview of the stay-on and depot learning: gate per feed, what was learned, and (--lines) per line.'
 
     def add_arguments(self, parser):
         parser.add_argument('--lines', action='store_true', help='List the lines of each open feed')
         parser.add_argument('--feed', help='Only this feed (e.g. IJPP, LPP)')
+        parser.add_argument('--pairs', type=int, help='Print this many learned "sure" stays as PAIR lines for stay_consistency --pairs-file')
 
-    def handle(self, lines, feed, **options):
+    def handle(self, lines, feed, pairs=None, **options):
+        if pairs:
+            import json
+            for row in sample_sure(pairs):
+                self.stdout.write('PAIR ' + json.dumps(row))
+            return
         today = trips.service_day()
         since, until = stays.window(today)
         days = stays.complete_days(since, until)

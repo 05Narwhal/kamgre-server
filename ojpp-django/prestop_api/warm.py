@@ -60,6 +60,12 @@ def tick(now: float):
     """One round: refresh what is about to expire, if the app is in use."""
     if now - _last_request > ACTIVE:
         return
+    from . import predictions
+    try:
+        predictions.learned_table()  # the learned stays, before the slow caches: a first search must not find them missing
+    finally:
+        from django.db import connection
+        connection.close()  # this thread's own connection
     for cache in caches():
         cache.warm()
     from . import sources

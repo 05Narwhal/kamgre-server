@@ -114,9 +114,10 @@ def delay_at(trip: dict, stop: dict, arrival: bool) -> tuple[Optional[int], bool
     return _usual_delay(trip), False
 
 
-def state(watch, trips: dict, alerts: list[dict], now: float) -> dict:
+def state(watch, trips: dict, alerts: list[dict], now: float, stays: frozenset = frozenset()) -> dict:
     """{'late': {tripId: delay}, 'changes': {index: spare s}, 'getoff': [indexes of rides to leave next],
-    'transfers': {index: [leaves (unix s), bay or track]} for changes due soon, 'alerts': [ids], 'where': {...for the texts}}."""
+    'transfers': {index: [leaves (unix s), bay or track]} for changes due soon, 'alerts': [ids], 'where': {...for the texts}}.
+    `stays`: trips the rider stays on the vehicle for, so there is nothing to get off or change at their start."""
     built = rides(watch.trip_ids, watch.stop_id, trips, watch.exit_stop_id)
     late, changes, getoff, transfers, where = {}, {}, [], {}, {}
     for n, ride in enumerate(built):
@@ -128,7 +129,8 @@ def state(watch, trips: dict, alerts: list[dict], now: float) -> dict:
             late[trip['id']] = delay
             where[trip['id']] = {'route': trip.get('routeName') or '?', 'stop': board.get('name') or '',
                                  'at': datetime.fromtimestamp(_ts(board['scheduledDeparture']), LOCAL).strftime('%H:%M')}
-        if ride['alight'] is not None:
+        staying = n + 1 < len(built) and built[n + 1]['trip']['id'] in stays
+        if ride['alight'] is not None and not staying:
             alight, earlier = stops[ride['alight']], stops[ride['alight'] - 1]
             arrive, arrive_live = delay_at(trip, alight, arrival=True)
             gone, gone_live = delay_at(trip, earlier, arrival=False)
@@ -137,7 +139,7 @@ def state(watch, trips: dict, alerts: list[dict], now: float) -> dict:
             if left <= now and arrives - GETOFF_WITHIN <= now < arrives + 60 and not alight.get('canceled'):
                 getoff.append(str(n))
                 where[f'off:{n}'] = {'stop': alight.get('name') or ''}
-        if n + 1 < len(built) and ride['alight'] is not None:
+        if n + 1 < len(built) and ride['alight'] is not None and not staying:
             nxt = built[n + 1]
             alight, boards = stops[ride['alight']], nxt['trip']['stops'][nxt['board']]
             arrive, _ = delay_at(trip, alight, arrival=True)

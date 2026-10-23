@@ -72,6 +72,17 @@ class JourneyPushTests(JourneyBase):
         [sent] = self.tick(19, trips(second_delay=420))  # before the change is due (transfer heads-up)
         self.assertIn('7 min late', sent['body'])
 
+    def test_a_sure_stay_has_no_change_to_warn_about_and_no_get_off(self):
+        self.watch.stay_trip_ids = ['IJPP:rg1']
+        self.watch.save()
+        self.assertEqual(self.tick(1, trips(first_delay=0)), [])
+        sent = self.tick(2, trips(first_delay=600))  # the bus is 10 min late: only that is news, there is no change to miss
+        self.assertEqual([m['body'] for m in sent if 'change' in m['body'] or 'miss' in m['body']], [])
+        state = journey.state(self.watch, trips(first_delay=600), [], NOW.timestamp() + 1500, frozenset(['IJPP:rg1']))
+        self.assertEqual((state['changes'], state['transfers'], state['getoff']), ({}, {}, []))
+        state = journey.state(self.watch, trips(first_delay=600), [], NOW.timestamp() + 1500)
+        self.assertTrue(state['changes'] or state['transfers'] or state['getoff'])
+
     def test_a_disruption_on_the_route(self):
         alert = {'id': 'alert:works', 'title': 'Works between Ljubljana and Kranj', 'routeIds': ['IJPP:rg'], 'stopIds': [],
                  '_from': NOW.timestamp() - 3600, '_to': None}

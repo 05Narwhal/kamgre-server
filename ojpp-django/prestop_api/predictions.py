@@ -9,13 +9,17 @@ Each transit leg gets `predictedDelaySeconds` and `predictionBasis`, best first:
   departure usually is on this kind of day (the median of at least 5 trips, aggregation.usual_delays);
 - otherwise both are null.
 
-History and the learned departures are read from the database in the background (one worker), so a route seen for
-the first time doesn't slow the planner down: its first answer has no prediction, later ones do.
+History is read from the database in the background (one worker), so a route seen for the first time doesn't slow the
+planner down: its first answer has no history prediction, later ones do. The learned departures are not: the whole
+StayDeparture table is held in memory per process (loaded at start and whenever a new learning day appears), and the
+stop patterns of the trips come with the plan itself, so the first answer already has its stays.
 """
 import logging
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime, timedelta
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
@@ -68,16 +72,38 @@ def usual(route_id: str, day) -> Optional[dict]:
     return _background(('usual', route_id, day), lambda: usual_delays(route_id, day))
 
 
-def departure(route_id: str, start: int, day) -> Optional[dict]:
-    """What stays.py learned about a departure on `day`'s kind of day (StayDeparture), None while unknown or loading.
-    Empty until the feed's 7-full-days gate is open. Relearned every night, so the cache follows the learning day."""
+LEARNED_CHECK = 600  # s between looks at whether the server learned a new day
+_learned_lock = threading.Lock()
+_learned: dict = {'on': None, 'checked': 0.0, 'rows': {}}  # rows: (route_id, kind) -> {start: departure}
+
+
+def learned_table() -> dict:
+    """Every learned departure, (route_id, kind) -> {start: StayDeparture fields}: held per process and reloaded when
+    `stays.learned_version()` moves (one aggregate, looked at most every LEARNED_CHECK s). The first caller loads it and
+    the others wait for that, so no answer is built without it. A failed read keeps the old table."""
     from prestop_statistics import stays
+    if _learned['on'] is not None and time.monotonic() - _learned['checked'] < LEARNED_CHECK:
+        return _learned['rows']
+    with _learned_lock:
+        if _learned['on'] is not None and time.monotonic() - _learned['checked'] < LEARNED_CHECK:
+            return _learned['rows']
+        try:
+            version = stays.learned_version()
+            if version != _learned['on']:
+                _learned['rows'] = stays.all_departures()
+                logger.info('Stays: %s learned departures, learned on %s', sum(len(v) for v in _learned['rows'].values()), version[0])
+            _learned['on'], _learned['checked'] = version, time.monotonic()
+        except Exception as e:  # noqa: BLE001 - a prediction is optional
+            logger.warning('Learned stays unavailable: %r', e)
+            _learned['checked'] = time.monotonic() - LEARNED_CHECK + 60  # try again in a minute
+    return _learned['rows']
+
+
+def departure(route_id: str, start: int, day) -> Optional[dict]:
+    """What stays.py learned about a departure on `day`'s kind of day (StayDeparture), None while unknown.
+    Empty until the feed's 7-full-days gate is open. Relearned every night, so the table follows the learning day."""
     from prestop_statistics.aggregation import day_kind
-    learned = _background(('stays-learned',), stays.learned_on, ttl=600)
-    if not learned:
-        return None
-    kind = day_kind(day)
-    return (_background(('stays', route_id, kind, learned), lambda: stays.departures(route_id, kind)) or {}).get(start)
+    return learned_table().get((route_id, day_kind(day)), {}).get(start)
 
 
 def previous_trip(route_id: str, start: int, day) -> Optional[dict]:
@@ -158,9 +184,60 @@ def _service_day(ts: float):
     return (datetime.fromtimestamp(ts, LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()
 
 
-def trip_pattern(trip_id: str) -> Optional[str]:
+PATTERN_TTL = 6 * 3600
+PATTERN_WAIT = 1.0  # s all the missing patterns of one answer may take
+_patterns: dict = {}   # trip id -> (monotonic time, pattern)
+_fetching: dict = {}   # trip id -> Future
+_fetch_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='patterns')
+rejections: Counter = Counter()  # why a learned stay was not shown, since the process started
+
+
+def note_pattern(trip_id: str, stop_ids: list[str]) -> None:
+    """The stops of a trip as the plan query returned them, so no OTP query per trip is needed to compare them."""
+    from prestop_statistics import blocks
+    if trip_id and stop_ids:
+        _patterns[trip_id] = (time.monotonic(), blocks.hash_stops(stop_ids))
+
+
+def _fetch_pattern(trip_id: str) -> Optional[str]:
     from prestop_statistics import stays
-    return _background(('pattern', trip_id), lambda: stays.trip_pattern(trip_id))
+    try:
+        pattern = stays.trip_pattern(trip_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning('Stops of %s unavailable: %r', trip_id, e)
+        pattern = None
+    with _lock:
+        _fetching.pop(trip_id, None)
+    if pattern:
+        _patterns[trip_id] = (time.monotonic(), pattern)
+    return pattern
+
+
+def trip_patterns(trip_ids: list[str]) -> dict[str, Optional[str]]:
+    """The stop pattern of each trip: from the plan (note_pattern), else asked of OTP in parallel for at most
+    PATTERN_WAIT s in all (only a learned pair gets here). One not known in time stays None, and is kept once it arrives."""
+    now = time.monotonic()
+    out = {t: _patterns[t][1] if t in _patterns and now - _patterns[t][0] < PATTERN_TTL else None for t in trip_ids}
+    missing = [t for t, p in out.items() if p is None]
+    if missing:
+        with _lock:
+            futures = {t: _fetching.get(t) or _fetching.setdefault(t, _fetch_pool.submit(_fetch_pattern, t)) for t in missing}
+        deadline = time.monotonic() + PATTERN_WAIT
+        for t, f in futures.items():
+            try:
+                out[t] = f.result(timeout=max(0.0, deadline - time.monotonic()))
+            except FutureTimeout:
+                pass
+    return out
+
+
+def trip_pattern(trip_id: str) -> Optional[str]:
+    return trip_patterns([trip_id])[trip_id]
+
+
+def _refuse(why: str, leg: dict) -> None:
+    rejections[why] += 1
+    logger.debug('Stay refused (%s): %s %s', why, leg.get('routeId'), leg.get('tripId'))
 
 
 def stay_level(previous: dict, previous_meta: dict, leg: dict, meta: dict, walking: float) -> Optional[str]:
@@ -175,14 +252,26 @@ def stay_level(previous: dict, previous_meta: dict, leg: dict, meta: dict, walki
         return None
     day = _service_day(_ts(leg['scheduledDeparture']))
     d = departure(leg['routeId'], meta['tripStart'], day)
-    if not d or not d['level'] or d['prev_route_id'] != previous.get('routeId') or d['prev_start'] != previous_meta['tripStart']:
+    if not d or not d['level']:
+        return None
+    if d['prev_route_id'] != previous.get('routeId') or d['prev_start'] != previous_meta['tripStart']:
+        _refuse('other-previous-trip', leg)
         return None
     from .sources import stop_group
     end, begin = previous['destination'].get('stopId'), leg['origin'].get('stopId')
     if not end or (end != begin and begin not in stop_group(end)):
+        _refuse('stop-group', leg)
         return None
-    if not leg.get('tripId') or not previous.get('tripId') or trip_pattern(leg['tripId']) != d['pattern'] or trip_pattern(previous['tripId']) != d['prev_pattern']:
-        return None  # another timetable (or its stops still loading): not what was learned
+    if not leg.get('tripId') or not previous.get('tripId'):
+        _refuse('no-trip', leg)
+        return None
+    patterns = trip_patterns([leg['tripId'], previous['tripId']])
+    if None in patterns.values():
+        _refuse('pattern-missing', leg)
+        return None
+    if patterns[leg['tripId']] != d['pattern'] or patterns[previous['tripId']] != d['prev_pattern']:
+        _refuse('pattern-changed', leg)
+        return None  # another timetable: not what was learned
     if day == _service_day(time.time()):
         from prestop_statistics import blocks
         try:
@@ -191,6 +280,7 @@ def stay_level(previous: dict, previous_meta: dict, leg: dict, meta: dict, walki
             logger.warning('Vehicles of %s unavailable: %r', leg['tripId'], e)
             before = after = None
         if before and after and before != after:
+            _refuse('vehicle-today', leg)
             return None  # today another vehicle runs it
     return d['level']
 

@@ -59,7 +59,7 @@ PLAN_Q = '''query($origin: PlanLabeledLocationInput!, $destination: PlanLabeledL
         from { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } }
           rentalVehicle { vehicleId vehicleType { formFactor } rentalNetwork { networkId } } }
         to { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } } vehicleParking { name } }
-        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } }
+        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } stoptimes { stop { gtfsId } } }
         legGeometry { points } alerts { id } intermediatePlaces { name lat lon stop { gtfsId } } } } } } }'''
 
 
@@ -1099,6 +1099,9 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 if usual:
                     legs[-1]['platformUsual'] = True
             trip = l.get('trip') or {}
+            if transit:
+                # The trip's stops, to compare with the ones a stay was learned with (predictions.stay_level).
+                predictions.note_pattern(trip.get('gtfsId'), [(s.get('stop') or {}).get('gtfsId') or '' for s in trip.get('stoptimes') or []])
             meta.append({'transit': transit, 'interline': bool(l.get('interlineWithPreviousLeg')), 'duration': l.get('duration') or 0,
                          'realtime': bool(start_est), 'platform': platform, 'blockId': trip.get('blockId'),
                          'tripStart': (trip.get('departureStoptime') or {}).get('scheduledDeparture')})

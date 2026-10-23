@@ -31,6 +31,8 @@ class Watch(models.Model):
     scheduled_at = models.DateTimeField(null=True, blank=True)
     # A journey's last stop: where the rider gets off its final ride (journey.py), else unknown.
     exit_stop_id = models.CharField(max_length=200, blank=True, default='')
+    # Trips of a journey the rider stays on the vehicle for (a `sure` stay): no change to make at their start (journey.py).
+    stay_trip_ids = models.JSONField(default=list, blank=True)
     # Last delay (s) and status ('ok' | 'canceled') the user was told about; empty until first seen.
     last_delay = models.IntegerField(null=True, blank=True)
     last_status = models.CharField(max_length=10, blank=True, default='')

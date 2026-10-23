@@ -159,6 +159,17 @@ class PushApiTests(TestCase):
         self.assertEqual(self.post('/api/v1/push/watches', {k: v for k, v in watch.items() if k != 'exitStopId'}).status_code, 201)
         self.assertEqual(Watch.objects.get().exit_stop_id, '')  # an older app: unknown
 
+    def test_a_journey_watch_keeps_the_trips_the_rider_stays_on_for(self):
+        self.post('/api/v1/push/subscriptions', SUB)
+        watch = {'endpoint': SUB['endpoint'], 'id': 'journey:x', 'kind': 'journey', 'notifyAt': NOW.isoformat(), 'title': 't', 'body': 'b', 'url': '/',
+                 'tripIds': ['LPP:t1', 'LPP:t2'], 'stayTripIds': ['LPP:t2']}
+        self.assertEqual(self.post('/api/v1/push/watches', watch).status_code, 201)
+        self.assertEqual(Watch.objects.get().stay_trip_ids, ['LPP:t2'])
+        for bad in (['LPP:other'], 'LPP:t2', [{'a': 1}]):
+            self.assertEqual(self.post('/api/v1/push/watches', {**watch, 'stayTripIds': bad}).status_code, 422, bad)
+        self.assertEqual(self.post('/api/v1/push/watches', {k: v for k, v in watch.items() if k != 'stayTripIds'}).status_code, 201)
+        self.assertEqual(Watch.objects.get().stay_trip_ids, [])  # an older app: every change is announced
+
     def test_watch_needs_a_known_subscription(self):
         r = self.post('/api/v1/push/watches', {'endpoint': 'https://fcm.googleapis.com/fcm/send/zzz', 'id': 'x', 'kind': 'journey', 'notifyAt': NOW.isoformat(),
                                                'title': 't', 'body': 'b', 'url': '/', 'tripIds': []})

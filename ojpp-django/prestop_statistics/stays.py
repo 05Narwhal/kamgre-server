@@ -33,7 +33,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Count, Max
 from django.utils import timezone
 
 from prestop_statistics import blocks
@@ -372,10 +372,27 @@ def learned_on() -> Optional[date]:
     return StayDeparture.objects.aggregate(day=Max('learned_on'))['day']
 
 
+def learned_version() -> tuple:
+    """(latest learning day, rows): changes whenever the table was rewritten, even twice on one day."""
+    got = StayDeparture.objects.aggregate(day=Max('learned_on'), rows=Count('id'))
+    return got['day'], got['rows']
+
+
+FIELDS = ('route_id', 'kind', 'start', 'pattern', 'origin', 'level', 'prev_route_id', 'prev_start', 'prev_pattern', 'prev_end',
+          'absorb', 'depot_delay')
+
+
 def departures(route_id: str, kind: str) -> dict[int, dict]:
     """start -> the learned departure (StayDeparture's fields) of a route on a kind of day."""
-    return {r['start']: r for r in StayDeparture.objects.filter(route_id=route_id, kind=kind).values(
-        'start', 'pattern', 'origin', 'level', 'prev_route_id', 'prev_start', 'prev_pattern', 'prev_end', 'absorb', 'depot_delay')}
+    return {r['start']: r for r in StayDeparture.objects.filter(route_id=route_id, kind=kind).values(*FIELDS)}
+
+
+def all_departures() -> dict[tuple, dict[int, dict]]:
+    """(route_id, kind) -> start -> the learned departure: the whole table, for the web process to hold."""
+    out: dict[tuple, dict[int, dict]] = defaultdict(dict)
+    for r in StayDeparture.objects.values(*FIELDS).iterator(chunk_size=5000):
+        out[(r['route_id'], r['kind'])][r['start']] = r
+    return dict(out)
 
 
 def run_today(route_id: str, start: int, day: date) -> Optional[dict]:
