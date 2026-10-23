@@ -307,7 +307,7 @@
   }
  },
  "transit": {
-  "about": "Single fares in cents. Systems by feed (routeId prefix). ijpp: integrated tariff for intercity buses (and bus + train on one ticket): baseCents up to the first step, stepCents per further started stepKm, over150Cents beyond 150 km. sz: SŽ train-only tickets by distance band [up to km, cents]; supplement on higher-rank trains. city: one fare, free changes within transferMinutes. city.operators: agencies of that system in other feeds (LPP lines in the IJPP feed); city.zones: fare by the furthest point from the centre.",
+  "about": "Single fares in cents. Systems by feed (routeId prefix). ijpp: integrated tariff for intercity buses (and bus + train on one ticket): baseCents up to the first step, stepCents per further started stepKm, over150Cents beyond 150 km. sz: SŽ train-only tickets by distance band [up to km, cents]; supplement on higher-rank trains. city: one fare, free changes within transferMinutes (0: a ticket per ride; fareCents 0: free). city.operators: agencies of that system in other feeds (LPP lines in the IJPP feed); city.lines: IJPP lines (by number) that are this town's line; city.zones: fare by the furthest point from the centre. cards.covers: the systems a card is valid on; routeBound: only on the route it was bought for.",
   "ijpp": {
    "baseCents": 150,
    "stepKm": 5,
@@ -506,6 +506,45 @@
     "source": "Mestna občina Kranj, 4. 9. 2025",
     "sourceUrl": "https://www.kranj.si/cena-dnevne-vozovnice-za-javni-promet-v-kranju-ostaja-1-evro",
     "checked": "2026-10-18"
+   },
+   "Jesenice": {
+    "name": {
+     "sl": "Mestni promet Jesenice",
+     "en": "Jesenice city buses"
+    },
+    "fareCents": 150,
+    "transferMinutes": 0,
+    "note": "A ticket is for one ride, bought on the bus; children 6-15 pay half, under 6 ride free.",
+    "source": "Arriva, Cenik prevozov v mestnem potniškem prometu na Jesenicah (ARR-C-09), valid from 4. 11. 2024",
+    "sourceUrl": "https://arriva.si/wp-content/uploads/2025/06/Cenik-prevozov-v-mestnem-potniskem-prometu-na-Jesenicah.pdf",
+    "checked": "2026-10-24"
+   },
+   "SkofjaLoka": {
+    "name": {
+     "sl": "Mestni promet Škofja Loka",
+     "en": "Škofja Loka city bus"
+    },
+    "fareCents": 50,
+    "transferMinutes": 0,
+    "lines": [
+     "A6206"
+    ],
+    "note": "Line 1 Podlubnik - Lipica, IJPP line A6206; every IJPP ticket is valid on it too. Children 0.25 EUR.",
+    "source": "Arriva, Cenik Podlubnik - Škofja Loka - Lipica, valid from 1. 1. 2026",
+    "sourceUrl": "https://arriva.si/wp-content/uploads/2026/01/Cenik-Podlubnik-1.pdf",
+    "checked": "2026-10-24"
+   },
+   "Postojna": {
+    "name": {
+     "sl": "Mestni promet Postojna",
+     "en": "Postojna city buses"
+    },
+    "fareCents": 0,
+    "transferMinutes": 0,
+    "note": "Free: \"Storitev je popolnoma brezplačna\" (Nomago); free for its riders (n1info, 10. 1. 2024).",
+    "source": "Nomago, mestni promet Postojna",
+    "sourceUrl": "https://www.nomago.si/avtobusni-prevozi/mestni-promet/postojna",
+    "checked": "2026-10-24"
    }
   },
   "cards": [
@@ -578,7 +617,8 @@
     "period": "month",
     "priceCents": null,
     "covers": [
-     "ijpp"
+     "ijpp",
+     "SkofjaLoka"
     ],
     "routeBound": true,
     "note": "Valid on its own route; higher-rank trains need a supplement.",
@@ -597,7 +637,8 @@
     "period": "year",
     "priceCents": 20000,
     "covers": [
-     "ijpp"
+     "ijpp",
+     "SkofjaLoka"
     ],
     "routeBound": true,
     "note": "City buses need their own supplement (LPP: 10 EUR a month).",
@@ -624,7 +665,9 @@
      "MOKranj",
      "MONM",
      "MOMS",
-     "MOKrsko"
+     "MOKrsko",
+     "Jesenice",
+     "SkofjaLoka"
     ],
     "source": "LPP price list, valid from 1. 9. 2026; gov.si (towns covered)",
     "sourceUrl": "https://www.gov.si/zbirke/storitve/vloga-za-izdajo-brezplacne-vozovnice-javnega-medkrajevnega-potniskega-prometa/"
@@ -666,6 +709,66 @@
     ],
     "source": "Mestna občina Kranj, 4. 9. 2025",
     "sourceUrl": "https://www.kranj.si/cena-dnevne-vozovnice-za-javni-promet-v-kranju-ostaja-1-evro"
+   },
+   {
+    "id": "jesenice-monthly",
+    "system": "jesenice",
+    "name": {
+     "sl": "Jesenice, mesečna",
+     "en": "Jesenice city buses, monthly"
+    },
+    "regions": [
+     "jesenice"
+    ],
+    "eligibility": "all",
+    "period": "month",
+    "priceCents": 3380,
+    "covers": [
+     "Jesenice"
+    ],
+    "note": "Named card; unnamed 41.60 EUR, primary pupils 16.75 EUR. City lines only.",
+    "source": "Arriva, Cenik prevozov v mestnem potniškem prometu na Jesenicah (ARR-C-09), valid from 4. 11. 2024",
+    "sourceUrl": "https://arriva.si/wp-content/uploads/2025/06/Cenik-prevozov-v-mestnem-potniskem-prometu-na-Jesenicah.pdf"
+   },
+   {
+    "id": "skofjaloka-monthly",
+    "system": "skofjaloka",
+    "name": {
+     "sl": "Škofja Loka, mesečna",
+     "en": "Škofja Loka city bus, monthly"
+    },
+    "regions": [
+     "skofjaloka"
+    ],
+    "eligibility": "all",
+    "period": "month",
+    "priceCents": 1500,
+    "covers": [
+     "SkofjaLoka"
+    ],
+    "note": "Unnamed; children 7.50 EUR.",
+    "source": "Arriva, Cenik Podlubnik - Škofja Loka - Lipica, valid from 1. 1. 2026",
+    "sourceUrl": "https://arriva.si/wp-content/uploads/2026/01/Cenik-Podlubnik-1.pdf"
+   },
+   {
+    "id": "skofjaloka-annual",
+    "system": "skofjaloka",
+    "name": {
+     "sl": "Škofja Loka, letna",
+     "en": "Škofja Loka city bus, annual"
+    },
+    "regions": [
+     "skofjaloka"
+    ],
+    "eligibility": "all",
+    "period": "year",
+    "priceCents": 12000,
+    "covers": [
+     "SkofjaLoka"
+    ],
+    "note": "Unnamed; children 60 EUR.",
+    "source": "Arriva, Cenik Podlubnik - Škofja Loka - Lipica, valid from 1. 1. 2026",
+    "sourceUrl": "https://arriva.si/wp-content/uploads/2026/01/Cenik-Podlubnik-1.pdf"
    }
   ],
   "regions": [
@@ -810,6 +913,32 @@
      45.6,
      14.6,
      46.0
+    ]
+   },
+   {
+    "id": "jesenice",
+    "name": {
+     "sl": "Jesenice",
+     "en": "Jesenice"
+    },
+    "bbox": [
+     13.98,
+     46.39,
+     14.13,
+     46.47
+    ]
+   },
+   {
+    "id": "skofjaloka",
+    "name": {
+     "sl": "Škofja Loka",
+     "en": "Škofja Loka"
+    },
+    "bbox": [
+     14.26,
+     46.15,
+     14.36,
+     46.19
     ]
    }
   ]

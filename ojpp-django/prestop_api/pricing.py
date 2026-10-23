@@ -6,7 +6,8 @@ plan request's body only (journeys.parse_request); they are used for that answer
 
 Tickets: consecutive intercity legs (IJPP feed and SŽ replacement buses) share one ticket, priced by their length:
 train only at SŽ's own tariff (plus the higher-rank supplement), otherwise the integrated IJPP tariff. City buses
-(LPP, Marprom, Kranj) charge one fare with free changes within their window.
+(LPP, Marprom, Kranj) charge one fare with free changes within their window; Jesenice and Škofja Loka a fare per ride,
+Postojna's are free.
 """
 import json
 import math
@@ -22,7 +23,7 @@ TEXT = {
     'en': {'unknown': 'Price unknown', 'covered': 'Covered by your {card}', 'routeBound': 'Covered by your pass, if it is for this route',
            'ijpp': 'Integrated ticket (IJPP), {km} km', 'sz': 'SŽ train ticket, {km} km', 'szRank': 'SŽ train ticket, {km} km, with the {rank} supplement',
            'supplement': '{rank} supplement', 'sameTicket': 'On the same ticket', 'city': '{name} single fare, changes free for {minutes} min',
-           'cityDay': '{name} day ticket', 'cityChange': 'Free change on the same ticket', 'rideMember': '{name} with your membership',
+           'cityDay': '{name} day ticket', 'citySingle': '{name}: single ticket', 'cityFree': '{name}: free', 'cityChange': 'Free change on the same ticket', 'rideMember': '{name} with your membership',
            'rideJoin': '{name}: membership needed (from {cents}), then the ride', 'rideUnknown': '{name}: price list incomplete',
            'scooter': '{name}: unlock {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name} with your {card}: {minutes} min × {perMinute}',
            'lowestRate': 'lowest rate',
@@ -36,7 +37,7 @@ TEXT = {
     'sl': {'unknown': 'Cena ni znana', 'covered': 'Velja tvoja vozovnica: {card}', 'routeBound': 'Velja tvoja vozovnica, če je za to relacijo',
            'ijpp': 'Enotna vozovnica IJPP, {km} km', 'sz': 'Vozovnica SŽ, {km} km', 'szRank': 'Vozovnica SŽ, {km} km, z doplačilom za {rank}',
            'supplement': 'Doplačilo za {rank}', 'sameTicket': 'Na isti vozovnici', 'city': '{name}, enkratna vožnja, prestopi brezplačni {minutes} min',
-           'cityDay': '{name}, dnevna vozovnica', 'cityChange': 'Brezplačen prestop na isti vozovnici', 'rideMember': '{name} z naročnino',
+           'cityDay': '{name}, dnevna vozovnica', 'citySingle': '{name}: vozovnica za eno vožnjo', 'cityFree': '{name}: brezplačno', 'cityChange': 'Brezplačen prestop na isti vozovnici', 'rideMember': '{name} z naročnino',
            'rideJoin': '{name}: potrebna je naročnina (od {cents}), nato vožnja', 'rideUnknown': '{name}: cenik ni popoln',
            'scooter': '{name}: odklep {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name}, velja tvoj paket {card}: {minutes} min × {perMinute}',
            'lowestRate': 'najnižja cena',
@@ -68,7 +69,8 @@ def _day(iso: str, language: str) -> str:
 
 
 def _name(card: dict, language: str) -> str:
-    return card['name'].get(language) or card['name']['en']
+    name = card['name']
+    return name if isinstance(name, str) else name.get(language) or name['en']
 
 
 def _km(leg: dict) -> float:
@@ -105,7 +107,8 @@ def system_of(leg: dict) -> Optional[str]:
         return by_operator  # LPP's city lines also come in the IJPP feed
     feed = (leg.get('routeId') or '').split(':')[0]
     if feed == 'IJPP':
-        return 'ijpp'
+        # A town's line in the national register keeps the town's fare (Škofja Loka's line 1 is A6206).
+        return next((name for name, c in city.items() if leg.get('routeName') in c.get('lines', ())), 'ijpp')
     return feed if feed in city else 'unknown'
 
 
@@ -133,7 +136,8 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
     data = tariffs()
     profile = profile or {}
     cards = {c['id']: c for c in data['transit']['cards'] if c['id'] in set(profile.get('cards') or [])}
-    covering = lambda system: next((c for c in cards.values() if system in c['covers']), None)
+    # A card valid everywhere on the system before one valid only on its own route.
+    covering = lambda system: min((c for c in cards.values() if system in c['covers']), key=lambda c: bool(c.get('routeBound')), default=None)
     legs = journey['legs']
     included: dict[str, list] = {}  # city system -> [bus rides left on a P+R parking ticket, the car park's tariff]
 
@@ -217,7 +221,7 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
         for leg in group[1:]:
             put(leg, 0, text['sameTicket'], source, ticket=ticket)
 
-    # City buses: one fare, free changes within the window from the first boarding.
+    # City buses: one fare, free changes within the window from the first boarding (none where a ticket is for one ride).
     windows: dict[str, tuple[float, str, int]] = {}
     for i, leg in enumerate(legs):
         system = system_of(leg)
@@ -233,10 +237,13 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             continue
         card = covering(system)
         if card:
-            put(leg, 0, text['covered'].format(card=_name(card, language)), card, coveredBy=card['id'])
+            put(leg, 0, text['routeBound'] if card.get('routeBound') else text['covered'].format(card=_name(card, language)), card, coveredBy=card['id'])
             continue
         start, fare = _ts(leg['effectiveDeparture']), city_fare(city, leg)
-        open_ticket = windows.get(system)
+        if not fare:
+            put(leg, 0, text['cityFree'].format(name=_name(city, language)), city)
+            continue
+        open_ticket = windows.get(system) if city['transferMinutes'] else None
         if open_ticket and start <= open_ticket[0]:
             # A change on the same ticket; riding into more zones pays the difference.
             until, ticket, paid = open_ticket
@@ -245,8 +252,8 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             continue
         ticket = f'{system.lower()}-{i}'
         windows[system] = (start + city['transferMinutes'] * 60, ticket, fare)
-        basis = text['cityDay'] if city['transferMinutes'] >= 1440 else text['city']
-        put(leg, fare, basis.format(name=city['name'], minutes=city['transferMinutes']), city, ticket=ticket)
+        basis = text['cityDay'] if city['transferMinutes'] >= 1440 else text['city'] if city['transferMinutes'] else text['citySingle']
+        put(leg, fare, basis.format(name=_name(city, language), minutes=city['transferMinutes']), city, ticket=ticket)
 
     # Shared bikes and scooters.
     networks = sharing.rules()

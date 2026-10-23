@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -84,6 +85,59 @@ class JourneyPriceTests(SimpleTestCase):
         self.assertIn('prestopi', price(leg('LPP', 0), language='sl')[2]['legs'][0]['price']['basis'])
 
 
+class TownBusPriceTests(SimpleTestCase):
+    """E12: Jesenice and Škofja Loka (E9's price lists), Postojna free."""
+
+    def test_jesenice_charges_each_ride_unless_a_pass_covers_it(self):
+        cents, total, j = price(leg('Jesenice', 0, km=3, name='1A'), walk(20), leg('Jesenice', 30, km=2, name='2A'))
+        self.assertEqual((cents, total), ([150, '-', 150], 300))  # Arriva's single is for one ride: no free change
+        self.assertNotEqual(j['legs'][0]['price']['ticket'], j['legs'][2]['price']['ticket'])
+        self.assertEqual(j['legs'][0]['price']['basis'], 'Jesenice city buses: single ticket')
+        self.assertIn('ARR-C-09', j['legs'][0]['price']['source'])
+        self.assertEqual(price(leg('Jesenice', 0), language='sl')[2]['legs'][0]['price']['basis'], 'Mestni promet Jesenice: vozovnica za eno vožnjo')
+        cents, total, j = price(leg('Jesenice', 0), cards=['jesenice-monthly'])
+        self.assertEqual((cents, total, j['legs'][0]['price']['coveredBy']), ([0], 0, 'jesenice-monthly'))
+        self.assertEqual(j['legs'][0]['price']['basis'], 'Covered by your Jesenice city buses, monthly')
+        self.assertEqual(price(leg('Jesenice', 0), cards=['slovenia-free'])[0], [0])  # gov.si lists Jesenice
+        self.assertEqual(price(leg('Jesenice', 0), cards=['kranj-monthly'])[0], [150])
+
+    def test_skofja_loka_line_1_in_the_ijpp_feed_pays_the_town_fare(self):
+        town = leg('IJPP', 30, km=4, name='A6206', operatorId='IJPP:1123')
+        train = leg('IJPP', 0, km=20, mode='rail', name='LP 2112')
+        cents, total, j = price(train, town)
+        self.assertEqual(cents, [pricing.sz_cents(pricing._km(train)), 50])  # not one 24 km IJPP ticket
+        self.assertEqual(j['legs'][1]['price']['basis'], 'Škofja Loka city bus: single ticket')
+        self.assertEqual(price(leg('IJPP', 0, km=4, name='A6207'))[0], [150])  # another Arriva line stays IJPP
+        self.assertEqual(price(town, cards=['skofjaloka-annual'])[0], [0])
+        # Every IJPP ticket is valid on the line: a route pass if it is for this route, the town's own pass for sure.
+        self.assertEqual(price(town, cards=['ijpp-pass'])[2]['legs'][0]['price']['basis'], 'Covered by your pass, if it is for this route')
+        self.assertEqual(price(town, cards=['ijpp-pass', 'skofjaloka-monthly'])[2]['legs'][0]['price']['coveredBy'], 'skofjaloka-monthly')
+        self.assertEqual(price(town, cards=['slovenia-free'])[0], [0])
+
+    def test_a_free_card_is_preferred_over_a_route_pass_on_intercity_legs(self):
+        j = price(leg('IJPP', 0, km=30), cards=['ijpp-pass', 'slovenia-free'])[2]
+        self.assertEqual(j['legs'][0]['price']['coveredBy'], 'slovenia-free')
+
+    def test_postojna_is_free_and_known(self):
+        cents, total, j = price(leg('Postojna', 0), leg('LPP', 60))
+        self.assertEqual((cents, total), ([0, 150], 150))
+        self.assertEqual(j['legs'][0]['price']['basis'], 'Postojna city buses: free')
+        self.assertNotIn('coveredBy', j['legs'][0]['price'])
+
+    def test_balanced_puts_a_paid_town_bus_behind_walking_unless_the_rider_has_the_pass(self):
+        at = lambda m: mapping.iso(START + m * 60)
+        req = {'costPreset': 'balanced', 'dateTime': datetime.fromtimestamp(START, timezone.utc), 'timeMode': 'departAt', 'modes': {'walk', 'bus'}}
+
+        def ranked(cards):
+            bus = {'id': 'bus', 'legs': [leg('Jesenice', 0, minutes=10)], 'effectiveDeparture': at(0), 'effectiveArrival': at(10)}
+            on_foot = {'id': 'walk', 'legs': [walk(0)], 'effectiveDeparture': at(0), 'effectiveArrival': at(16)}
+            for j in (bus, on_foot):
+                pricing.price_journey(j, {'cards': cards}, 'en')
+            return [j['id'] for j in pricing.rank([bus, on_foot], req)]
+        self.assertEqual(ranked([]), ['walk', 'bus'])  # 1.50 € is worth 10 min in Balanced; the bus saves 6
+        self.assertEqual(ranked(['jesenice-monthly']), ['bus', 'walk'])
+
+
 class RentalPriceTests(SimpleTestCase):
     def rental(self, network, minutes, mode='bike', form=None):
         form = form or ('scooter' if mode == 'scooter' else 'bicycle')
@@ -140,7 +194,10 @@ class CatalogTests(SimpleTestCase):
         self.assertEqual((by_id['jcdecaux_ljubljana']['kind'], by_id['jcdecaux_ljubljana']['priceCents']), ('bike', 300))
         self.assertIn('ljubljana', {r['id'] for r in data['regions']})
         # One onboarding question per ticket system; who may buy each card.
-        self.assertEqual({c['system'] for c in data['cards'] if c['kind'] == 'transit'}, {'ijpp', 'urbana', 'marprom', 'kranj'})
+        self.assertEqual({c['system'] for c in data['cards'] if c['kind'] == 'transit'}, {'ijpp', 'urbana', 'marprom', 'kranj', 'jesenice', 'skofjaloka'})
+        # Town passes are asked only of riders who pick that town, not of all Gorenjska.
+        self.assertEqual((by_id['jesenice-monthly']['regions'], by_id['skofjaloka-annual']['regions']), (['jesenice'], ['skofjaloka']))
+        self.assertTrue({'jesenice', 'skofjaloka'} <= {r['id'] for r in data['regions']})
         self.assertEqual((by_id['ijpp-pupil-student']['system'], by_id['ijpp-pupil-student']['subsidy']), ('ijpp', 'student'))
         self.assertEqual((by_id['urbana-monthly']['subsidy'], by_id['slovenia-free']['subsidy']), ('none', 'senior'))
         self.assertEqual((by_id['jcdecaux_ljubljana']['system'], by_id['jcdecaux_ljubljana']['subsidy']), ('jcdecaux_ljubljana', 'none'))
