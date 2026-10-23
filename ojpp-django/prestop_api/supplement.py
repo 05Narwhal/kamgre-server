@@ -20,7 +20,7 @@ import time
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 from zoneinfo import ZoneInfo
 
 import requests
@@ -273,6 +273,16 @@ def stops() -> list[dict]:
         for sid, rids in feed['stopRoutes'].items():
             out.append({**_stop(feed, sid), 'vehicleMode': 'BUS', 'platformCode': None, 'parentStation': None,
                         'routes': [{'gtfsId': rid, 'mode': feed['routes'][rid]['mode'], 'agency': {'gtfsId': feed['routes'][rid]['agency']['gtfsId']}} for rid in sorted(rids)]})
+    return out
+
+
+def running_stops(days: Iterable[date]) -> set[str]:
+    """Stops a trip of a loaded feed serves on any of `days` (stop_audit's empty stops)."""
+    days = list(days)
+    out = set()
+    for feed in _feeds().values():
+        live = {t['id'] for t in feed['trips'].values() if any(runs(feed, t['serviceId'], d) for d in days)}
+        out |= {sid for sid, at in feed['byStop'].items() if any(tid in live for tid, _ in at)}
     return out
 
 

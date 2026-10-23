@@ -177,11 +177,17 @@ def same_pole(a: dict, b: dict, ways: dict, d: float) -> bool:
 SIDE_METERS = 2  # a stop for one way less than this to the right of its opposite namesake is on the wrong side
 
 
-def group_way(members: list[dict], ways: dict) -> Optional[tuple[float, float]]:
-    """The main way vehicles travel through a merged stop: that of its first member (in marker order: city
-    feeds' poles, then the rest) whose way is known."""
+def group_ways(members: list[dict], ways: dict) -> Optional[list]:
+    """The ways vehicles travel through a merged stop, main way first: those of its first member (in marker order:
+    city feeds' poles, then the rest) whose ways are known."""
     placed = [s for s in members if _feed(s) != 'IJPP'] + [s for s in members if _feed(s) == 'IJPP']
-    return next((ways[s['id']][0] for s in placed if ways.get(s['id'])), None)
+    return next((ways[s['id']] for s in placed if ways.get(s['id'])), None)
+
+
+def group_way(members: list[dict], ways: dict) -> Optional[tuple[float, float]]:
+    """The main way vehicles travel through a merged stop (group_ways)."""
+    found = group_ways(members, ways)
+    return found[0] if found else None
 
 
 def right_of(a: dict, b: dict, way: tuple[float, float]) -> float:
