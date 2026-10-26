@@ -707,7 +707,8 @@ def _load_bus_patterns() -> list[tuple[str, str, frozenset]]:
     return out
 
 
-_notices: dict = {'raw': None}  # SŽ's notices feed as last read with the points (sz_notice_alerts)
+# SŽ's notices feed as last read with the points (sz_notice_alerts); `since`: when notices last reached us at all
+_notices: dict = {'raw': None, 'since': None}
 notice_urls = Mirrors('PRESTOP_SZ_NOTICES_URL')
 
 
@@ -828,8 +829,12 @@ def notices_source() -> dict:
     else:
         status = 'unavailable'
     stamps = [s.fetched_at for s in (alerts if in_otp else None, feed if _notices['raw'] else None) if s]
+    ok = [s.fetched_at for s in (alerts if in_otp else None, feed if feed_ok else None) if s]
+    if ok:
+        _notices['since'] = max(ok + [_notices['since'] or 0])
+    since = mapping.iso(_notices['since']) if _notices['since'] else None
     return {'id': 'sz:notices', 'name': 'SŽ closures and replacement buses (notices)', 'status': status,
-            'updatedAt': mapping.iso(max(stamps)) if stamps else None, 'capabilities': ['alerts']}
+            'updatedAt': mapping.iso(max(stamps)) if stamps else None, 'capabilities': ['alerts'], 'since': since}
 _warming = threading.Lock()
 
 

@@ -107,3 +107,32 @@ class LiveFeedTests(SimpleTestCase):
         with self.settings(PRESTOP_SZ_TRACKS_URL=urls), mock.patch('prestop_api.upstream.get_json', side_effect=answers(got)):
             t._poll(day)
         self.assertEqual((t._today, t.mirrors.good), ({'1897': {'IJPP:1': '2'}}, urls[1]))
+
+
+class OutageTests(SimpleTestCase):
+    """F5: an SŽ source down for more than 30 min shows in /health `outages` (server:top and the watchdog print it)."""
+
+    def source(self, id_, status, since):
+        return {'id': id_, 'name': id_, 'status': status, 'updatedAt': since, 'capabilities': [], 'since': since}
+
+    def test_only_sz_sources_down_for_over_half_an_hour(self):
+        from prestop_api import mapping, views
+        now = T0
+        srcs = [self.source('sz:live', 'live', mapping.iso(now - 10)),
+                self.source('sz:notices', 'unavailable', mapping.iso(now - 45 * 60)),
+                self.source('sz:delays', 'stale', mapping.iso(now - 20 * 60)),  # not yet half an hour
+                self.source('operator-site:arriva', 'unavailable', None)]
+        with mock.patch.object(views, 'STARTED', now - 3600):
+            got = views.outages(srcs, now)
+            self.assertEqual([(o['id'], o['minutes']) for o in got], [('sz:notices', 45)])
+            # never answered since this server started an hour ago
+            self.assertEqual(views.outages([self.source('sz:news', 'unavailable', None)], now)[0]['minutes'], 60)
+        with mock.patch.object(views, 'STARTED', now - 60):  # just restarted: not an outage yet
+            self.assertEqual(views.outages([self.source('sz:news', 'unavailable', None)], now), [])
+
+    def test_a_feed_says_when_it_last_answered(self):
+        from prestop_api import views
+        feed = sz.LiveTrains()
+        self.assertEqual((views.sz_feed_source('sz:live', 'x', feed, [])['since'], feed.status()), (None, 'unavailable'))
+        feed.last_ok = T0
+        self.assertEqual(views.sz_feed_source('sz:live', 'x', feed, [])['since'], '2026-10-26T19:13:20Z')

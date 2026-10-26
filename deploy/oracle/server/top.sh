@@ -137,6 +137,8 @@ draw() {
         ([if $c.map then "map \($c.map.drawn)/\($c.map.inFeed) drawn" else empty end, if $c.boards then "boards \($c.boards.shown)/\($c.boards.checked) shown at \($c.boards.stops) stops" else empty end]
           + ["\($c.unexplained) unexplained"] | join(" · ")) as $t
         | (if $c.unexplained > 0 then "\($Y)\($t)\($N)" else $t end) + " \($D)(\((now - ($c.sampledAt | sub("\\.[0-9]+"; "") | fromdateiso8601)) / 60 | floor) min ago)\($N)" end' /tmp/prestop-top-health 2>&1 | head -1)"
+      # SŽ sources down for more than 30 min (prestop_api/views.outages); nothing while all of them answer
+      jq -r --arg R "$R" --arg N "$N" '.outages[]? | "SŽ       \($R)\(.id) \(.status) for \(.minutes) min\($N) (last answer \(.since // "none since start"))"' /tmp/prestop-top-health 2>/dev/null
     else printf 'Health   %sunavailable%s\n' "$R" "$N"; fi
     echo; printf '%s\n' "$LEARN_OUT"
 }

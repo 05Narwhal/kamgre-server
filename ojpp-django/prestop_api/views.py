@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 from datetime import date, datetime, timedelta
+from typing import Optional
 from functools import wraps
 
 from django.conf import settings
@@ -136,8 +137,30 @@ def _gbfs_sources():
 
 def _sz_source():
     from . import sz
-    return {'id': 'sz:live', 'name': 'SŽ live train delays (community feed)', 'status': sz.live.status(),
-            'updatedAt': mapping.iso(sz.live.last_ok) if sz.live.last_ok else None, 'capabilities': ['vehicles']}
+    return sz_feed_source('sz:live', 'SŽ live train delays (community feed)', sz.live, ['vehicles'])
+
+
+def sz_feed_source(id_, name, feed, capabilities):
+    """A polled SŽ feed (sz.Feed); `since`: when it last answered (outages() counts from it)."""
+    since = mapping.iso(feed.last_ok) if feed.last_ok else None
+    return {'id': id_, 'name': name, 'status': feed.status(), 'updatedAt': since, 'capabilities': capabilities, 'since': since}
+
+
+STARTED = time.time()
+OUTAGE = 30 * 60  # s an SŽ source may be down before /health lists it under `outages` (server:top, the watchdog)
+
+
+def outages(srcs: list[dict], now: Optional[float] = None) -> list[dict]:
+    """SŽ sources not live for more than OUTAGE s, counted from their last success (or this server's start)."""
+    now = now or time.time()
+    out = []
+    for s in srcs:
+        if not s['id'].startswith('sz:') or s['status'] == 'live':
+            continue
+        since = datetime.fromisoformat(s['since'].replace('Z', '+00:00')).timestamp() if s.get('since') else STARTED
+        if now - since > OUTAGE:
+            out.append({'id': s['id'], 'status': s['status'], 'since': s.get('since'), 'minutes': int((now - since) // 60)})
+    return out
 
 
 def _sz_notices_source():
@@ -217,8 +240,9 @@ def health(request):
     except Exception:
         database = 'unavailable'
     # coverage: the collector's last count of the buses the map and a few boards leave out (coverage.Sampler)
-    body = {'api': 'ready', 'database': database, 'sources': all_sources(), 'collector': _collector_source() if database == 'ready' else None,
-            'maintenance': _maintenance(), 'coverage': coverage.latest()}
+    srcs = all_sources()
+    body = {'api': 'ready', 'database': database, 'sources': srcs, 'collector': _collector_source() if database == 'ready' else None,
+            'maintenance': _maintenance(), 'coverage': coverage.latest(), 'outages': outages(srcs)}
     return JsonResponse(body, status=200 if database == 'ready' else 503)
 
 
