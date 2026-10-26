@@ -1,4 +1,5 @@
 """A3: a failed or empty read of an alert source keeps the last good alerts until they really end, and is logged."""
+import base64
 import time
 from unittest import mock
 
@@ -82,3 +83,18 @@ class SzNoticeTests(SimpleTestCase):
             with self.assertRaises(UpstreamError):
                 closures._load_points()
             self.assertIs(closures._notices['raw'], last)
+
+    def test_health_says_when_no_closure_notices_reach_us(self):
+        """2026-10-26: OTP carried only SŽ delays and SŽ's notices feed answered 500, so no replacement buses showed."""
+        delay = {'id': 'alert:' + base64.b64encode(b'Alert:IJPP:SZ-DELAY-46217').decode()}
+        closure = {'id': closures.notice_alert_id('11049')}
+        cases = [([delay], None, None, 'stale'),  # SŽ's feed not read yet (just restarted): no outage to tell
+                 ([delay, closure], None, None, 'live'),
+                 ([delay], Snapshot({}, time.time()), [{'ID_ovire': ['1']}], 'live'),
+                 ([delay], Snapshot({}, time.time(), error='500'), [{'ID_ovire': ['1']}], 'stale')]
+        for alerts, feed, raw, status in cases:
+            with self.subTest(status=status), mock.patch.object(sources.alerts_raw, '_snap', Snapshot(alerts, time.time())), \
+                    mock.patch.object(closures.points, '_snap', feed), mock.patch.dict(closures._notices, raw=raw):
+                self.assertEqual(closures.notices_source()['status'], status)
+        with mock.patch.object(sources.alerts_raw, '_snap', Snapshot([delay], time.time())), mock.patch.object(closures.points, '_snap', None),                 mock.patch.object(closures.points, '_last_error', 'HTTP 500'), mock.patch.dict(closures._notices, raw=None):
+            self.assertEqual(closures.notices_source()['status'], 'unavailable')

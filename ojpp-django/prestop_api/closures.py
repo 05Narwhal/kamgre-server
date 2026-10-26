@@ -811,6 +811,27 @@ def notice_alerts(alerts: list[dict], tables: Optional[sztimetables.Timetables] 
 
 bus_patterns = Cached(_load_bus_patterns, ttl=6 * 3600, max_stale=48 * 3600, revalidate=6 * 3600)
 points = Cached(_load_points, ttl=6 * 3600, max_stale=7 * 86400, revalidate=6 * 3600)
+
+
+def notices_source() -> dict:
+    """Whether SŽ's closure notices reach us at all (OTP's `SZ-OVIRA` alerts or SŽ's notices feed): without them
+    there are no replacement buses beyond the feed's own (2026-10-26: OTP had none and the feed answered 500), and
+    /health says so instead of the disruptions list just showing delays."""
+    from . import sources
+    alerts, feed = sources.alerts_raw.peek(), points.peek()
+    in_otp = bool(alerts and any(notice_id(a) for a in alerts.value))
+    feed_ok = bool(feed and not feed.error and _notices['raw'])
+    if in_otp or feed_ok:
+        status = 'live'
+    elif _notices['raw'] or not alerts or not (feed or points._last_error):
+        # The feed fails but its last notices still stand, or (just after a restart) a source wasn't read yet:
+        # not an outage to tell people about.
+        status = 'stale'
+    else:
+        status = 'unavailable'
+    stamps = [s.fetched_at for s in (alerts if in_otp else None, feed if _notices['raw'] else None) if s]
+    return {'id': 'sz:notices', 'name': 'SŽ closures and replacement buses (notices)', 'status': status,
+            'updatedAt': mapping.iso(max(stamps)) if stamps else None, 'capabilities': ['alerts']}
 _warming = threading.Lock()
 
 

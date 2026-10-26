@@ -110,6 +110,7 @@ def all_sources():
         _source('otp:alerts', 'Provider service alerts (incl. SŽ disruptions)', sources.alerts_raw, ['alerts'], 300),
         _source('otp:rentals', 'Bike and scooter sharing (GBFS via OTP)', sources.rentals, ['rentals'], 300),
         _sz_source(),
+        _sz_notices_source(),
         # Arriva's site notices: the server can be shut out of the site (ConnectTimeout from Oracle on 2026-10-15),
         # so /health says when they are missing instead of the disruptions list just lacking them.
         _source('operator-site:arriva', "Arriva's website notices", operator_notices.arriva, ['alerts'], 3600),
@@ -137,6 +138,11 @@ def _sz_source():
     from . import sz
     return {'id': 'sz:live', 'name': 'SŽ live train delays (community feed)', 'status': sz.live.status(),
             'updatedAt': mapping.iso(sz.live.last_ok) if sz.live.last_ok else None, 'capabilities': ['vehicles']}
+
+
+def _sz_notices_source():
+    from . import closures
+    return closures.notices_source()
 
 
 def envelope(data, status: str, used=(), source_updated=None, extra: dict | None = None):
@@ -521,7 +527,7 @@ def alerts(request):
         items = [a for a in items if route_id in a['routeIds']]
     if request.GET.get('journeyId'):
         items = []  # journeys are not stored; legs carry their own alertIds
-    return envelope([mapping.public_alert(a) for a in items], snapshot_status(sources.alerts_raw, 300), used=['otp:alerts', 'operator-site:arriva'])
+    return envelope([mapping.public_alert(a) for a in items], snapshot_status(sources.alerts_raw, 300), used=['otp:alerts', 'sz:notices', 'operator-site:arriva'])
 
 
 @csrf_exempt
