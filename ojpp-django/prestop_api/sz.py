@@ -226,8 +226,37 @@ class DelayTable(Feed):
         super().__init__('PRESTOP_SZ_DELAYS_URL', parse_delays, DELAYS_POLL, 'sz-delays')
 
 
+def parse_trip_updates(data: Any, now: float) -> dict[str, dict]:
+    """ijpp-rt's own SŽ trip updates (GTFS-RT JSON, ids without the feed prefix) as mapping.trip_update_index does
+    for the combined feed, ids made IJPP's; 'at' is the update's timestamp."""
+    from . import mapping
+    entities = data.get('entity') if isinstance(data, dict) else None
+    if not isinstance(entities, list):
+        raise ValueError('not GTFS-RT JSON')
+    fixed = []
+    for e in entities:
+        tu = (e or {}).get('tripUpdate') or {}
+        trip = tu.get('trip') or {}
+        if not trip.get('tripId'):
+            continue
+        prefixed = lambda value: value if not value or ':' in str(value) else f'IJPP:{value}'
+        fixed.append({'tripUpdate': {**tu, 'trip': {**trip, 'tripId': prefixed(trip['tripId'])},
+                                     'stopTimeUpdate': [{**u, 'stopId': prefixed(u.get('stopId'))} for u in tu.get('stopTimeUpdate') or []]}})
+    index = mapping.trip_update_index(fixed)
+    return {k: {**v, 'at': v['timestamp'] or now} for k, v in index.items()}
+
+
+class RawTripUpdates(Feed):
+    """ijpp-rt's SŽ trip updates before the combined aggregator (`PRESTOP_SZ_RT_URL`): a second path to the same
+    reports, by trip id."""
+
+    def __init__(self):
+        super().__init__('PRESTOP_SZ_RT_URL', parse_trip_updates, DELAYS_POLL, 'sz-rt')
+
+
 live = LiveTrains()
 delays = DelayTable()
+rt = RawTripUpdates()
 
 
 def merged(trains: dict[str, dict], table: dict[str, dict]) -> dict[str, dict]:

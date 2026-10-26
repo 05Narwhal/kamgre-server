@@ -160,6 +160,14 @@ def sz_feed_source(id_, name, feed, capabilities):
     return {'id': id_, 'name': name, 'status': feed.status(), 'updatedAt': since, 'capabilities': capabilities, 'since': since}
 
 
+def _sz_debug() -> dict:
+    """Debug counts for SŽ delays (not shown in the app): which source each train's delay came from, how often two
+    fresh sources disagreed by over 2 min today (trainlive.agreement), and ijpp-rt's own trip-update feed."""
+    from . import sz, trainlive
+    rt = sz_feed_source('sz:rt', 'ijpp-rt SŽ trip updates', sz.rt, [])
+    return {**trainlive.agreement.counts(), 'rt': {'status': rt['status'], 'since': rt['since'], 'url': sz.rt.used}}
+
+
 STARTED = time.time()
 OUTAGE = 30 * 60  # s an SŽ source may be down before /health lists it under `outages` (server:top, the watchdog)
 
@@ -256,7 +264,7 @@ def health(request):
     # coverage: the collector's last count of the buses the map and a few boards leave out (coverage.Sampler)
     srcs = all_sources()
     body = {'api': 'ready', 'database': database, 'sources': srcs, 'collector': _collector_source() if database == 'ready' else None,
-            'maintenance': _maintenance(), 'coverage': coverage.latest(), 'outages': outages(srcs)}
+            'maintenance': _maintenance(), 'coverage': coverage.latest(), 'outages': outages(srcs), 'sz': _sz_debug()}
     return JsonResponse(body, status=200 if database == 'ready' else 503)
 
 

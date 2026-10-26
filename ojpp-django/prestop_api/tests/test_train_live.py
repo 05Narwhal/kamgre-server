@@ -1,6 +1,7 @@
 """Trains and replacement buses move by the live delay of the train number (trainlive.py): a report against the train's
 timetable moves whichever vehicle runs that stretch, a delay at the change station carries on, and the map, boards,
 trip view and journeys show the same delay."""
+import base64
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -264,3 +265,59 @@ class DelayEventTests(SimpleTestCase):
         self.assertEqual((shown['delaySeconds'], shown['delaySource'], shown['delayKind']), (900, 'sz', 'predicted'))
         measured = run_map(plan, [self.RUN], T0 + 1000, live=self.report(900, None))[self.RUN['id']]
         self.assertNotIn('delayKind', measured)
+
+
+class SourcePickTests(SimpleTestCase):
+    """F3: one place picks where a train's delay comes from (trainlive.pick): the freshest measured report (our own
+    read of SŽ's scraper when equally fresh), SŽ's forecast only with nothing measured; disagreements are counted."""
+
+    RUN = trip('502', 'IC 502', NAMES, [T0, T0 + 600, T0 + 1200, T0 + 1800, T0 + 2400])
+
+    def sz_report(self, delay, at, station='Kranj', kind='actual', feed='live'):
+        return {'502': {'number': '502', 'station': station, 'next': station, 'event': None, 'delay': delay, 'kind': kind, 'at': at, 'feed': feed}}
+
+    def test_the_freshest_measured_report_wins(self):
+        feed = update(self.RUN, 'Kranj', 300, stamp=T0 + 600)
+        found, source, at, _ = trainlive.station_delays(self.RUN, feed, self.sz_report(420, T0 + 630), {})
+        self.assertEqual((found[1], source, at), (420, 'sz', T0 + 630))  # equally fresh: our own read of the scraper
+        found, source, _, _ = trainlive.station_delays(self.RUN, feed, self.sz_report(420, T0 + 500), {})
+        self.assertEqual((found[1], source), (300, 'gtfs-rt'))  # the scraper read stalled 100 s before the feed
+
+    def test_ijpp_rts_own_copy_when_the_combined_feed_lags(self):
+        raw = update(self.RUN, 'Podnart', 360, stamp=T0 + 1200)
+        found, source, _, _ = trainlive.station_delays(self.RUN, update(self.RUN, 'Kranj', 300, stamp=T0 + 1100), {}, {'ijpp-rt': raw})
+        self.assertEqual((found[2], source), (360, 'gtfs-rt'))
+
+    def test_a_forecast_never_beats_a_measured_delay(self):
+        found, source, _, kind = trainlive.station_delays(self.RUN, update(self.RUN, 'Kranj', 300, stamp=T0 + 600),
+                                                          self.sz_report(900, T0 + 610, kind='predicted', feed='delays'), {})
+        self.assertEqual((found[1], source, kind), (300, 'gtfs-rt', 'actual'))
+
+    def test_otps_delay_alert_text_is_a_source_too(self):
+        raw = [{'id': 'alert:' + base64.b64encode(b'Alert:IJPP:SZ-DELAY-502').decode(), 'effectiveStartDate': T0 + 650,
+                'alertDescriptionTextTranslations': [{'language': 'sl', 'text': 'Vlak IC 502 ima zamudo 8 min ob odhodu z postaje Kranj.'},
+                                                     {'language': 'en', 'text': 'Train IC 502 is delayed by 8 min on departure from Kranj.'}],
+                'entities': [{'__typename': 'Trip', 'gtfsId': 'IJPP:502'}]}]
+        reports = trainlive.alert_reports(raw)
+        self.assertEqual((reports['IJPP:502']['delay'], reports['IJPP:502']['station'], reports['IJPP:502']['event']), (480, 'Kranj', 'departure'))
+        found, source, _, _ = trainlive.station_delays(self.RUN, {}, {}, {'otp-alert': reports})
+        self.assertEqual((found[1], source), (480, 'gtfs-rt'))
+        self.assertEqual(trainlive.alert_reports([{**raw[0], 'id': 'alert:' + base64.b64encode(b'Alert:IJPP:SZ-OVIRA-1').decode()}]), {})
+
+    def test_two_fresh_sources_more_than_two_minutes_apart_are_counted_once(self):
+        counter = trainlive.Agreement()
+        with mock.patch.object(trainlive, 'agreement', counter):
+            for _ in range(3):  # every map refresh asks again: still one check
+                trainlive.station_delays(self.RUN, update(self.RUN, 'Kranj', 300, stamp=T0 + 600), self.sz_report(480, T0 + 620), {})
+            trainlive.station_delays(self.RUN, update(self.RUN, 'Podnart', 300, stamp=T0 + 1200), self.sz_report(300, T0 + 1210, station='Podnart'), {})
+        counts = counter.counts()
+        self.assertEqual(counts['pairs'], {'sz-live/gtfs-rt': {'checked': 2, 'differ': 1}})
+        self.assertEqual(counts['sources'], {'sz-live': 1})  # one train, its last pick (10 s apart: equally fresh)
+
+    def test_ijpp_rt_raw_updates_get_ijpp_ids(self):
+        data = {'header': {}, 'entity': [{'id': 'SZ-456519', 'tripUpdate': {'trip': {'tripId': '456519'}, 'timestamp': T0,
+                                                                              'stopTimeUpdate': [{'stopId': '1168303', 'arrival': {'delay': 60}}]}}]}
+        got = sz.parse_trip_updates(data, T0 + 5)
+        self.assertEqual(list(got), ['IJPP:456519'])
+        self.assertEqual((got['IJPP:456519']['updates'][0]['stopId'], got['IJPP:456519']['at']), ('IJPP:1168303', T0))
+

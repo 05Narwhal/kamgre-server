@@ -18,7 +18,10 @@ cannot tell them apart, so they keep their timetable. With nothing reported at a
 One function for the map (scheduled.vehicles), boards (replacement.board_rows), the trip view
 (scheduled.synthetic_entry, trips.load_trips) and journeys (journey_legs), so all show the same delay.
 """
+import base64
 import logging
+import re
+import threading
 import time
 from typing import Optional
 
@@ -43,24 +46,161 @@ def _around(run: dict, at: float) -> bool:
     return times[0] - AROUND <= at <= times[-1] + AROUND
 
 
-def station_delays(run: dict, updates: dict, reports: dict) -> tuple[list[Optional[int]], Optional[str], Optional[float], str]:
-    """What is reported of train `run` at each of its stations, against the train's timetable (None: nothing there),
-    where from ('gtfs-rt' | 'sz'), when, and whether it is measured or SŽ's forecast ('actual' | 'predicted'). The
-    feed's trip update first (what boards and journeys show, through OTP), then SŽ's report (sz.reports), then OTP's
-    own times from the timetable (up to two minutes old)."""
-    n = len(run['stops'])
-    update = updates.get(run['id'])
-    if update and _around(run, update.get('timestamp') or time.time()):
-        at_stop = {u.get('stopId'): mapping.update_delay(u) for u in update.get('updates') or []}
-        found = [mapping.believable(at_stop.get(s['gtfsId']), False) for s in run['stops']]
-        if any(d is not None for d in found):
-            return found, 'gtfs-rt', update.get('timestamp') or None, 'actual'
+# Where a train's live delay can come from, in the order that wins when two are equally fresh. Every path carries SŽ's
+# own minute reports as derp-si's scraper reads them: our own reads of the scraper (sz.py) first, as they are never
+# older than what is passed on from it and say where the train is (next station, coordinates); then the combined
+# feed (what boards and journeys show, through OTP), ijpp-rt's own copy of it, and OTP's SZ-DELAY alert text. A
+# feed's timestamp is when it was published, not when SŽ reported (ijpp-rt republishes every few seconds), so only a
+# source that stalled for over TIE s loses to a fresher one.
+ORDER = ('sz-live', 'sz-delays', 'gtfs-rt', 'ijpp-rt', 'otp-alert')
+TIE = 60       # s
+DIFFER = 120   # s: two fresh reports at one station further apart than this disagree (counted in `agreement`)
+FRESH = 180    # s between two reports for them to be compared at all
+
+
+def _update_delays(run: dict, update: Optional[dict]) -> Optional[list[Optional[int]]]:
+    if not update or not _around(run, update.get('timestamp') or time.time()):
+        return None
+    at_stop = {u.get('stopId'): mapping.update_delay(u) for u in update.get('updates') or []}
+    found = [mapping.believable(at_stop.get(s['gtfsId']), False) for s in run['stops']]
+    return found if any(d is not None for d in found) else None
+
+
+def others() -> dict:
+    """The second paths as last read, never waiting on them: {'ijpp-rt': ijpp-rt's trip updates by trip id,
+    'otp-alert': OTP's SZ-DELAY alerts by trip id}."""
+    from . import sources
+    snap = sources.alerts_raw.peek()
+    return {'ijpp-rt': sz.rt.get(), 'otp-alert': alert_reports(snap.value if snap else [])}
+
+
+ALERT = re.compile(r'delayed by (\d+) min(?: on (arrival) at| on (departure) from)?\s*([^.]*)', re.I)
+_alerts_memo: dict = {'ref': None, 'value': {}}
+
+
+def alert_reports(raw: list) -> dict[str, dict]:
+    """OTP's SZ-DELAY alerts ("Train RG 310 is delayed by 8 min on departure from Jesenice meja.") as SŽ reports by
+    the trip they name: delay, station (when said), event, `at` = the alert's start."""
+    if _alerts_memo['ref'] is raw:
+        return _alerts_memo['value']
+    out = {}
+    for a in raw or []:
+        if 'SZ-DELAY' not in _decoded(a.get('id') or ''):
+            continue
+        text = next((t.get('text') or '' for t in a.get('alertDescriptionTextTranslations') or [] if t.get('language') == 'en'), '')
+        m = ALERT.search(text)
+        trips = [e.get('gtfsId') for e in a.get('entities') or [] if e.get('__typename') == 'Trip' and e.get('gtfsId')]
+        if not m or not trips:
+            continue
+        report = {'delay': int(m.group(1)) * 60, 'event': m.group(2) or m.group(3), 'station': m.group(4).strip() or None,
+                  'kind': 'actual', 'at': float(a.get('effectiveStartDate') or 0)}
+        for trip in trips:
+            out[trip] = report
+    _alerts_memo.update(ref=raw, value=out)
+    return out
+
+
+def _decoded(alert_id: str) -> str:
+    """OTP's alert id ("alert:" + base64 "Alert:IJPP:SZ-DELAY-462770") in words."""
+    try:
+        return base64.b64decode(alert_id.split(':', 1)[-1] + '==').decode('utf-8', 'replace')
+    except ValueError:
+        return alert_id
+
+
+def candidates(run: dict, updates: dict, reports: dict, second: Optional[dict] = None) -> list[dict]:
+    """Every source's report of train `run`: {'name' (ORDER), 'source' ('gtfs-rt' | 'sz', as the app says it),
+    'found' (per station, against the train's timetable), 'at', 'kind'}."""
+    second = others() if second is None else second
+    out = []
+    for name, update in (('gtfs-rt', updates.get(run['id'])), ('ijpp-rt', (second.get('ijpp-rt') or {}).get(run['id']))):
+        found = _update_delays(run, update)
+        if found:
+            out.append({'name': name, 'source': 'gtfs-rt', 'found': found, 'at': update.get('timestamp') or None, 'kind': 'actual'})
     number = sz.train_parts(mapping.route_name(run['route']))[1]
     report = reports.get(number) if number else None
     if report and report.get('delay') is not None and _around(run, report['at']):
         placed = report_delays(run, report)
         if placed:
-            return placed, 'sz', report['at'], report.get('kind') or 'actual'
+            out.append({'name': 'sz-delays' if report.get('feed') == 'delays' else 'sz-live', 'source': 'sz', 'found': placed,
+                        'at': report['at'], 'kind': report.get('kind') or 'actual'})
+    alert = (second.get('otp-alert') or {}).get(run['id'])
+    if alert and alert.get('station') and _around(run, alert['at']):
+        placed = report_delays(run, alert)
+        if placed:
+            out.append({'name': 'otp-alert', 'source': 'gtfs-rt', 'found': placed, 'at': alert['at'], 'kind': 'actual'})
+    return out
+
+
+def pick(found: list[dict]) -> Optional[dict]:
+    """The freshest measured report (SŽ's forecast only when none is measured); within TIE s the one first in ORDER."""
+    pool = [c for c in found if c['kind'] == 'actual'] or found
+    if not pool:
+        return None
+    newest = max(c['at'] or 0 for c in pool)
+    return min((c for c in pool if (c['at'] or 0) >= newest - TIE), key=lambda c: ORDER.index(c['name']))
+
+
+class Agreement:
+    """How often two fresh sources disagree by more than DIFFER at the same train and station, per pair of sources,
+    for the current day, each (run, station, pair) counted once; and which source each train's delay came from last.
+    Counters, not log lines: /health (`sz`) and coverage_audit show them. The honest answer to "is it 100 % right": no
+    source is, and this says how often they differ."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.day: Optional[str] = None
+        self.checked: set = set()
+        self.differ: set = set()
+        self.picked: dict[str, str] = {}  # run id -> the source used last
+
+    def note(self, run: dict, found: list[dict], best: Optional[dict]):
+        day = time.strftime('%Y-%m-%d')
+        with self._lock:
+            if day != self.day:
+                self.day, self.checked, self.differ, self.picked = day, set(), set(), {}
+            if best:
+                self.picked[run['id']] = best['name']
+            for i, a in enumerate(found):
+                for b in found[i + 1:]:
+                    if abs((a['at'] or 0) - (b['at'] or 0)) > FRESH:
+                        continue
+                    pair = '/'.join(sorted((a['name'], b['name']), key=ORDER.index))
+                    for j, (x, y) in enumerate(zip(a['found'], b['found'])):
+                        if x is not None and y is not None:
+                            key = (run['id'], j, pair)
+                            self.checked.add(key)
+                            if abs(x - y) > DIFFER:
+                                self.differ.add(key)
+
+    def counts(self) -> dict:
+        """{'day', 'sources': {source: trains whose delay it gave last}, 'pairs': {pair: {'checked', 'differ'}}}."""
+        with self._lock:
+            pairs: dict[str, dict] = {}
+            for _, _, pair in self.checked:
+                pairs.setdefault(pair, {'checked': 0, 'differ': 0})['checked'] += 1
+            for _, _, pair in self.differ:
+                pairs[pair]['differ'] += 1
+            sources: dict[str, int] = {}
+            for name in self.picked.values():
+                sources[name] = sources.get(name, 0) + 1
+            return {'day': self.day, 'sources': dict(sorted(sources.items())), 'pairs': dict(sorted(pairs.items()))}
+
+
+agreement = Agreement()
+
+
+def station_delays(run: dict, updates: dict, reports: dict, second: Optional[dict] = None) -> tuple[list[Optional[int]], Optional[str], Optional[float], str]:
+    """What is reported of train `run` at each of its stations, against the train's timetable (None: nothing there),
+    where from ('gtfs-rt' | 'sz'), when, and whether it is measured or SŽ's forecast ('actual' | 'predicted'). The one
+    place that picks the source (`pick` of `candidates`); with none, OTP's own times from the timetable (up to two
+    minutes old)."""
+    n = len(run['stops'])
+    found = candidates(run, updates, reports, second)
+    best = pick(found)
+    agreement.note(run, found, best)
+    if best:
+        return best['found'], best['source'], best['at'], best['kind']
     own = [mapping.believable(d, False) for d in run.get('delays') or [None] * n]
     return (own, 'gtfs-rt', None, 'actual') if any(d is not None for d in own) else ([None] * n, None, None, 'actual')
 

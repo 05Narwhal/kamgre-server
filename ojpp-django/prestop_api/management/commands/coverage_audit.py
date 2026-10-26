@@ -236,6 +236,40 @@ class Command(BaseCommand):
             status, at = ('shown', '') if number in drawn else (d['reason'], d['at']) if d else ('not in the train timetable on its way', 'scheduled.vehicles')
             rows.append({'feed': 'SZ-live', 'status': status, 'at': at, 'example': number})
         self._print(f'Map: SŽ live reports ({sz.live.status()})', rows)
+        self._agreement()
+
+    def _agreement(self):
+        """sz-agreement: for every SŽ train on its way, each pair of fresh sources that both report a station
+        (trainlive.candidates), agreeing within 2 min or not. How right "right" is: no source is 100 %."""
+        from prestop_api import scheduled, trainlive
+        for feed in (sz.live, sz.delays, sz.rt):
+            if feed.url:
+                feed._poll()
+        snap = sources.alerts_raw.peek()
+        second = {'ijpp-rt': sz.rt.get(), 'otp-alert': trainlive.alert_reports(snap.value if snap else [])}
+        updates, reports = sources.trip_updates.get().value, sz.reports()
+        rows, used = [], {}
+        for run in scheduled.timetable.get().value:
+            times = run.get('scheduledDepartures') or run['departures']
+            if mapping.is_replacement(run['route']) or not times[0] - 600 <= self.now <= times[-1] + 3600:
+                continue
+            found = trainlive.candidates(run, updates, reports, second)
+            best = trainlive.pick(found)
+            if best:
+                used[best['name']] = used.get(best['name'], 0) + 1
+            number = sz.train_parts(mapping.route_name(run['route']))[1] or run['id']
+            for i, a in enumerate(found):
+                for b in found[i + 1:]:
+                    if abs((a['at'] or 0) - (b['at'] or 0)) > trainlive.FRESH:
+                        continue
+                    for j, (x, y) in enumerate(zip(a['found'], b['found'])):
+                        if x is not None and y is not None:
+                            differ = abs(x - y) > trainlive.DIFFER
+                            pair = '/'.join(sorted((a['name'], b['name']), key=trainlive.ORDER.index))
+                            rows.append({'feed': pair, 'status': 'differ by over 2 min' if differ else 'agree',
+                                         'at': 'trainlive.candidates', 'example': f'{number} @ {run["stops"][j].get("name")}' + (f' ({x // 60:+d} vs {y // 60:+d} min)' if differ else '')})
+        self._print('sz-agreement: SŽ delay sources at the same train and station (fresh pairs, 2 min apart = differ)', rows, ok=('agree',))
+        self.stdout.write('sz-sources: ' + (', '.join(f'{k} {v}' for k, v in sorted(used.items())) or 'none') + ' trains')
 
     # ------------------------------------------------------------ boards from live
 
