@@ -113,6 +113,7 @@ def all_sources():
         _sz_source(),
         _sz_delays_source(),
         _sz_notices_source(),
+        _sz_news_source(),
         # Arriva's site notices: the server can be shut out of the site (ConnectTimeout from Oracle on 2026-10-15),
         # so /health says when they are missing instead of the disruptions list just lacking them.
         _source('operator-site:arriva', "Arriva's website notices", operator_notices.arriva, ['alerts'], 3600),
@@ -139,6 +140,13 @@ def _gbfs_sources():
 def _sz_source():
     from . import sz
     return sz_feed_source('sz:live', 'SŽ live train delays (community feed)', sz.live, ['vehicles'])
+
+
+def _sz_news_source():
+    """SŽ's RSS (its passenger notices: text alerts while the closure notices are down); `since`: its last answer."""
+    entry = _source('sz:news', "SŽ news and passenger notices (RSS)", operator_notices.sz_news, ['alerts'], 3600)
+    snap = operator_notices.sz_news.peek()
+    return {**entry, 'since': mapping.iso(snap.fetched_at) if snap else None}
 
 
 def _sz_delays_source():

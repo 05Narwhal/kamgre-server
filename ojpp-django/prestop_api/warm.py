@@ -43,7 +43,7 @@ def caches():
     # The operator GTFS that replaces OTP's broken Kranj timetable (supplement.py) before the indexes built on it.
     from . import operator_notices
     return [scheduled.timetable, scheduled.shapes, supplement.gtfs, sources.stops, sources.routes, sources.alerts_raw, sources.vehicles,
-            scheduled.day_timetable(tomorrow), operator_notices.arriva]
+            scheduled.day_timetable(tomorrow), operator_notices.arriva, operator_notices.sz_news]
 
 
 def plans():

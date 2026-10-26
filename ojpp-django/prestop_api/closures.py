@@ -24,14 +24,19 @@ import functools
 import html
 import json
 import logging
+import os
 import re
 import threading
+import time
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Callable, Iterable, Optional, Sequence
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
+
 from . import geometry, leg_alerts, maplinks, mapping, platforms, stopfix, sz, szstops, sztimetables
-from .upstream import Cached, Mirrors, UpstreamError, otp
+from .upstream import Cached, Mirrors, Snapshot, UpstreamError, otp
 
 logger = logging.getLogger(__name__)
 LOCAL = ZoneInfo('Europe/Ljubljana')
@@ -707,21 +712,97 @@ def _load_bus_patterns() -> list[tuple[str, str, frozenset]]:
     return out
 
 
-# SŽ's notices feed as last read with the points (sz_notice_alerts); `since`: when notices last reached us at all
-_notices: dict = {'raw': None, 'since': None}
+# SŽ's notices feed as last read with the points (sz_notice_alerts); `since`: when notices last reached us at all;
+# `saved`: when the notices in use were saved to disk (they were read back after every notices URL failed)
+_notices: dict = {'raw': None, 'since': None, 'saved': None}
 notice_urls = Mirrors('PRESTOP_SZ_NOTICES_URL')
 
 
 def _load_points() -> dict[str, list]:
     if not notice_urls.urls:
         return {}
-    raw = notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20))
-    if not (isinstance(raw, list) and raw) and _notices['raw']:
-        # An empty or broken answer is not "no notices": keep the last ones (the cache keeps the last points).
-        logger.warning('SŽ notices feed returned %s; keeping the last %d notices', 'nothing' if not raw else type(raw).__name__, len(_notices['raw']))
-        raise UpstreamError('SŽ notices: empty answer')
-    _notices['raw'] = raw
+    try:
+        raw = notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20))
+    except UpstreamError:
+        _from_disk()
+        raise
+    if not (isinstance(raw, list) and raw):
+        _from_disk()
+        if _notices['raw']:
+            # An empty or broken answer is not "no notices": keep the last ones (the cache keeps the last points).
+            logger.warning('SŽ notices feed returned %s; keeping the last %d notices', 'nothing' if not raw else type(raw).__name__, len(_notices['raw']))
+            raise UpstreamError('SŽ notices: empty answer')
+    _notices.update(raw=raw, saved=None)
+    save_notices(raw)
     return notice_points(raw)
+
+
+def notice_end(item: dict, i: int) -> Optional[date]:
+    """The last day notice `i` of a feed record names in its time span (`Cas`, "26.10.2026-30.10.2026"), if any."""
+    dates = DATE.findall(_cell(item, 'Cas', i))
+    if not dates:
+        return None
+    d, m, y = dates[-1]
+    try:
+        return date(int(y), int(m), int(d))
+    except ValueError:
+        return None
+
+
+def current_notices(raw: list, today: date) -> list:
+    """`raw` without the notices whose last day has passed. A record can group several notices (ID_ovire[i] with
+    Naslov[i], Opis[i], Cas[i] ...): those are cut per notice, a record left with none is dropped."""
+    out = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        ids = item.get('ID_ovire') or []
+        keep = [i for i in range(len(ids)) if (notice_end(item, i) or today) >= today]
+        if not keep:
+            continue
+        out.append({k: [v[i] for i in keep if i < len(v)] if isinstance(v, list) and len(v) == len(ids) else v for k, v in item.items()})
+    return out
+
+
+def save_notices(raw: list, now: Optional[float] = None) -> None:
+    """The last good notices to PRESTOP_SZ_NOTICES_FILE (written to a temporary file, then moved over the old one, so
+    a crash never leaves half a file)."""
+    path = getattr(settings, 'PRESTOP_SZ_NOTICES_FILE', '')
+    if not path:
+        return
+    try:
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(target.name + '.tmp')
+        tmp.write_text(json.dumps({'savedAt': now or time.time(), 'notices': raw}, ensure_ascii=False), encoding='utf-8')
+        os.replace(tmp, target)
+    except OSError as e:
+        logger.warning('SŽ notices not saved to %s: %r', path, e)
+
+
+def saved_notices(today: Optional[date] = None) -> tuple[list, Optional[float]]:
+    """(the notices saved last that still run today or later, when they were saved); ([], None) without a file."""
+    path = getattr(settings, 'PRESTOP_SZ_NOTICES_FILE', '')
+    try:
+        body = json.loads(Path(path).read_text(encoding='utf-8')) if path else None
+        notices, at = body['notices'], float(body['savedAt'])
+    except (OSError, ValueError, KeyError, TypeError):
+        return [], None
+    return current_notices(notices, today or datetime.now(LOCAL).date()), at
+
+
+def _from_disk() -> None:
+    """Every notices URL failed and none was read since this server started: the last good notices from disk, so a
+    restart during an outage keeps today's closures and their buses. The points cache then holds them as a failed
+    read (retried every minute; /health says stale)."""
+    if _notices['raw'] is not None:
+        return
+    saved, at = saved_notices()
+    if not saved:
+        return
+    _notices.update(raw=saved, saved=at, since=_notices['since'] or at)
+    points._snap = Snapshot(notice_points(saved), min(at, time.time() - points.ttl), error='every notices URL failed: notices saved on disk')
+    logger.warning('Every SŽ notices URL failed: using the %d notices saved %s', len(saved), mapping.iso(at))
 
 
 SZ_NOTICES_PAGE = 'https://potniski.sz.si/ovire-in-izredne-spremembe/'

@@ -10,21 +10,32 @@ Checked 2026-10-14, each site's robots.txt and terms first:
   closed and its legal notice (pravno-obvestilo-2) forbids copying, distributing or republishing any of the site's
   material without prior written permission: not used. LPP's own alerts in the GTFS-RT feed still come through OTP.
 - Marprom (marprom.si): no notices posts or feed on the site. Nomago (nomago.si): no notices page. Others: none found.
+- SŽ (potniski.sz.si, checked 2026-10-26): robots.txt allows all but /wp-admin/; everything but its RSS answers a
+  Cloudflare challenge. The RSS (`/feed/`, the 10 newest posts) needs none: its "Obvestila za potnike" posts become
+  text alerts (`sz_news_alerts`, Slovenian only, a link to each post), read every 15 minutes with a conditional GET.
+  They name no train ids, so they never make a replacement bus, and they show only while SŽ's closure notices don't
+  reach us (closures.notices_source): a partial fallback that keeps the app from going silent, not a second copy.
 
 None of them gives a detour's changed trips in machine form, so the planner and line view keep the feed's times
 and paths (what the GTFS-RT feed itself changes reaches OTP as before).
 """
+import hashlib
 import html
 import logging
 import re
 import threading
 import time
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+import requests
+from django.conf import settings
+
 from . import mapping
-from .upstream import Cached, UpstreamError, get_json
+from .upstream import Cached, UpstreamError, get_json, session, url_list
 
 logger = logging.getLogger(__name__)
 LOCAL = ZoneInfo('Europe/Ljubljana')
@@ -200,8 +211,110 @@ def _read_later(cache) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
+SZ_CATEGORY = 'Obvestila za potnike'
+SZ_OPERATOR = 'IJPP:1161'
+RSS_LIMIT = 2 * 1024 * 1024
+CONTENT = '{http://purl.org/rss/1.0/modules/content/}encoded'
+_rss: dict = {'url': None, 'etag': None, 'modified': None}  # validators of the last full answer
+
+
+def rss_items(body: bytes) -> list[dict]:
+    """An RSS 2.0 document's items: {'title', 'link', 'date' (ISO, local), 'categories', 'text'}. A document that
+    declares a DOCTYPE or entities is refused (no entity expansion from a feed)."""
+    if b'<!DOCTYPE' in body[:4096].upper() or b'<!ENTITY' in body.upper():
+        raise ValueError('RSS with a DOCTYPE')
+    root = ET.fromstring(body)
+    channel = root.find('channel')
+    if root.tag != 'rss' or channel is None:
+        raise ValueError('not RSS')
+    out = []
+    for item in channel.iter('item'):
+        try:
+            posted = parsedate_to_datetime(item.findtext('pubDate') or '').astimezone(LOCAL)
+        except (TypeError, ValueError):
+            continue
+        out.append({'title': (item.findtext('title') or '').strip(), 'link': (item.findtext('link') or '').strip(),
+                    'date': posted.replace(tzinfo=None).isoformat(), 'categories': [(c.text or '').strip() for c in item.findall('category')],
+                    'text': item.findtext(CONTENT) or item.findtext('description') or ''})
+    return out
+
+
+def _load_sz_news() -> list[dict]:
+    """SŽ's RSS items, asked with the last answer's validators: unchanged (HTTP 304) keeps the items read before."""
+    urls = url_list(getattr(settings, 'PRESTOP_SZ_NEWS_URL', ''))
+    if not urls:
+        return []
+    last = sz_news.peek()
+    error: Optional[Exception] = None
+    for url in urls:
+        headers = {'Accept': 'application/rss+xml, application/xml'}
+        if last and _rss['url'] == url:
+            headers.update({k: v for k, v in (('If-None-Match', _rss['etag']), ('If-Modified-Since', _rss['modified'])) if v})
+        try:
+            with session().get(url, headers=headers, timeout=(5, 20), stream=True) as resp:
+                if resp.status_code == 304 and last:
+                    return last.value
+                if resp.status_code != 200:
+                    raise UpstreamError(f'{url} returned HTTP {resp.status_code}')
+                body = resp.raw.read(RSS_LIMIT + 1, decode_content=True)
+                if len(body) > RSS_LIMIT:
+                    raise UpstreamError(f'{url} exceeds {RSS_LIMIT} bytes')
+                items = rss_items(body)
+                _rss.update(url=url, etag=resp.headers.get('ETag'), modified=resp.headers.get('Last-Modified'))
+                return items
+        except (requests.RequestException, UpstreamError, ValueError, ET.ParseError) as e:
+            error = e
+    raise UpstreamError(f'SŽ RSS: {error!r}')
+
+
+sz_news = Cached(_load_sz_news, ttl=15 * 60, max_stale=MAX_AGE_DAYS * 86400, revalidate=15 * 60)
+
+
+def sz_news_alerts(items: list[dict], now: Optional[float] = None) -> list[dict]:
+    """SŽ's "Obvestila za potnike" posts as text alerts for the days they name (`window`), Slovenian only."""
+    now = now or time.time()
+    out = []
+    for p in items:
+        if SZ_CATEGORY not in p.get('categories', []) or not p.get('title'):
+            continue
+        try:
+            posted = datetime.fromisoformat(p['date']).replace(tzinfo=LOCAL)
+        except (KeyError, ValueError, TypeError):
+            continue
+        title, text = _plain(p['title']), _plain(p.get('text') or '')
+        text = re.sub(r'\s*\[(…|&#8230;|\.\.\.)\]\s*$', '…', text)
+        start, end = window(title, text, posted)
+        if end < now:
+            continue
+        alert_id = 'sz-news:' + hashlib.sha1((p.get('link') or title).encode()).hexdigest()[:12]
+        out.append({
+            'id': alert_id, 'title': title[:300], 'message': text[:MAX_TEXT] + ('…' if len(text) > MAX_TEXT else ''),
+            'operatorId': SZ_OPERATOR, 'stopIds': [], 'routeIds': [],
+            'validFrom': mapping.iso(start), 'validTo': mapping.iso(end), 'from': mapping.iso(start), 'to': mapping.iso(end),
+            'sourceUrl': p.get('link') or 'https://potniski.sz.si/', 'kind': mapping.alert_kind(f'{title} {text[:400]}'), 'source': 'operator-site',
+            '_from': start, '_to': end, '_aliases': [alert_id],
+        })
+    return out
+
+
+def sz_alerts() -> list[dict]:
+    """SŽ's RSS notices while its closure notices don't reach us (never waits for the site)."""
+    from . import closures
+    snap = sz_news.peek()
+    if snap is None:
+        _read_later(sz_news)
+        return []
+    if closures.notices_source()['status'] == 'live':
+        return []
+    return sz_news_alerts(snap.value)
+
+
 def alerts() -> list[dict]:
     """The operators' site notices as last read (never waits for a site; warm.py keeps them fresh)."""
+    return arriva_site_alerts() + sz_alerts()
+
+
+def arriva_site_alerts() -> list[dict]:
     snap = arriva.peek()
     from . import sources
     routes, pats = sources.routes.peek(), sources.patterns.peek()

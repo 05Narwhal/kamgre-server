@@ -56,7 +56,14 @@ class Command(BaseCommand):
         try:
             return mirrors.get_json(limit=8 * 1024 * 1024, timeout=(5, 30))
         except UpstreamError as e:
-            raise CommandError(f'Notices unavailable: {e}') from e
+            # Every notices URL fails: the last good notices saved by the API (closures.save_notices), so the PDFs
+            # of notices still running are kept; new notices need a working notices source.
+            from prestop_api import closures
+            saved, at = closures.saved_notices()
+            if not saved:
+                raise CommandError(f'Notices unavailable: {e}') from e
+            self.stderr.write(f'Notices unavailable ({e}); using the {len(saved)} saved on disk.')
+            return saved
 
     def goldens(self, fixtures: str):
         from prestop_api import szpdf
