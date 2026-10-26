@@ -1,13 +1,14 @@
-"""Each SŽ train's usual track at each station, from the track scraper's history, into data/sz_tracks.json
-(see tracks.py).
+"""Each SŽ train's usual track at each station, from the track scraper's history, into data/sz_tracks.json, or
+PRESTOP_SZ_USUAL_TRACKS_FILE when set (see tracks.usual_file; the server's night window rebuilds it on Sundays).
 
     manage.py sz_tracks              # the last 60 days
     manage.py sz_tracks --days 120
 
-Days the scraper has nothing for (its source was down) are skipped. The file is checked in: re-run it
+Days the scraper has nothing for (its source was down) are skipped. The app's copy is checked in: re-run it
 after a timetable change (December, or when SŽ moves trains), then commit it.
 """
 import json
+import os
 from datetime import date, timedelta
 
 import requests
@@ -52,6 +53,9 @@ class Command(BaseCommand):
             raise CommandError('The scraper had no tracks for any of those days; the file is left as it was.')
         usual = tracks.usual_tracks(rows)
         pairs = sum(len(v) for v in usual.values())
-        tracks.USUAL.write_text(json.dumps({'from': used[0], 'to': used[-1], 'days': len(used), 'trains': usual},
-                                           ensure_ascii=False, indent=0, sort_keys=True), encoding='utf-8')
+        target = tracks.usual_file()
+        tmp = target.with_name(target.name + '.tmp')
+        tmp.write_text(json.dumps({'from': used[0], 'to': used[-1], 'days': len(used), 'trains': usual},
+                                  ensure_ascii=False, indent=0, sort_keys=True), encoding='utf-8')
+        os.replace(tmp, target)
         self.stdout.write(f'{len(used)} days ({used[0]} – {used[-1]}): {len(usual)} trains, {pairs} train/station tracks.')

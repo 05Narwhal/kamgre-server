@@ -1,0 +1,23 @@
+[Unit]
+Description=Prestop night window: SŽ statistics rollups and the usual-track file (server/nightly.sh)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=prestop
+Group=prestop
+EnvironmentFile=/etc/prestop/prestop.env
+WorkingDirectory=/opt/prestop/app
+ExecStart=/opt/prestop/deploy/server/nightly.sh
+# Heavy reads only while almost no train runs (last ~00:30, first ~04:00), next to the API on the free A1 VM: low
+# priority, 60 % of a core at most, bounded memory, and done before the 03:00 backup (prestop-backup.timer).
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=60%
+MemoryMax=600M
+TimeoutStartSec=45min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true

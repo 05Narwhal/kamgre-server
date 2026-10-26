@@ -90,6 +90,8 @@ PRESTOP_SZ_DELAYS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_
 PRESTOP_SZ_RT_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_RT_URL', default=['http://jckcw4scco8wgo80c804gg0k.141.255.217.12.sslip.io/data/raw/sz/rt/trip-updates?type=json'])
 # SŽ track numbers announced today (prestop_api/tracks.py); off: trains show their usual track from data/sz_tracks.json.
 PRESTOP_SZ_TRACKS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_TRACKS_URL', default=[f'{h}/train_data' for h in SZ_SCRAPER])
+# Each train's usual track per station (prestop_api/tracks.py); empty: the copy checked in with the app.
+PRESTOP_SZ_USUAL_TRACKS_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_USUAL_TRACKS_FILE', default='')
 # SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py). A derp-si or
 # zamudil.si notices endpoint goes first once one exists (spec F4.1/F4.6); the last good notices are kept on disk.
 PRESTOP_SZ_NOTICES_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NOTICES_URL', default=['https://api.modra.ninja/sz/ovire_raw?lang=sl'])

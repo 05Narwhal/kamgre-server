@@ -122,7 +122,7 @@ bash "$DEPLOY/server/keep-stats.sh" check
 
 step "Services"
 systemctl enable -q prestop-web prestop-collector prestop-push prestop-ingest caddy redis-server postgresql
-systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer prestop-szpdf.timer
+systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer prestop-szpdf.timer prestop-nightly.timer
 # changed <name> <unit> [files]: true when the unit or the files differ from the last deploy (or the unit is down).
 changed() {
   local f="$STATE/.deploy-sum-$1" s; s=$({ systemctl cat "$2"; cat "${@:3}"; } 2>/dev/null | sha256sum)

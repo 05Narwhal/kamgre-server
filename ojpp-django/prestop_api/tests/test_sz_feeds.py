@@ -166,3 +166,21 @@ class DelayTableTests(SimpleTestCase):
         # listed without a delay: the table's row, where the list says the train is
         got = sz.merged({'502': {**trains['502'], 'delay': None, 'coords': (46.4, 15.7)}}, table)
         self.assertEqual((got['502']['feed'], got['502']['delay'], got['502']['coords']), ('delays', 660, (46.4, 15.7)))
+
+
+class UsualTrackFileTests(SimpleTestCase):
+    """F10: the night window rebuilds each train's usual track outside the deployed code (PRESTOP_SZ_USUAL_TRACKS_FILE);
+    until it has, the copy checked in with the app is read."""
+
+    def test_the_configured_file_once_it_exists_else_the_apps_copy(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            target = Path(d) / 'sz_tracks.json'
+            t = tracks.Tracks()
+            with self.settings(PRESTOP_SZ_USUAL_TRACKS_FILE=str(target)):
+                self.assertEqual(tracks.usual_file(), target)
+                self.assertEqual(t.usual(), json.loads(tracks.USUAL.read_text(encoding='utf-8'))['trains'])
+                target.write_text(json.dumps({'trains': {'1897': {'IJPP:1': '2'}}}), encoding='utf-8')
+                t._usual['checked'] = float('-inf')
+                self.assertEqual(t.usual(), {'1897': {'IJPP:1': '2'}})
+        self.assertEqual(tracks.usual_file(), tracks.USUAL)

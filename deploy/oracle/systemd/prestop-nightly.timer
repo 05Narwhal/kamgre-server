@@ -1,0 +1,10 @@
+[Unit]
+Description=Prestop night window at 02:05 (a missed night is skipped, never run at rush hour)
+
+[Timer]
+OnCalendar=*-*-* 02:05:00
+RandomizedDelaySec=5min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

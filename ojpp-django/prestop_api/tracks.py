@@ -27,6 +27,20 @@ from .upstream import Mirrors, UpstreamError
 logger = logging.getLogger(__name__)
 LOCAL = ZoneInfo('Europe/Ljubljana')
 USUAL = Path(__file__).resolve().parent / 'data' / 'sz_tracks.json'
+
+
+def usual_file() -> Path:
+    """Where each train's usual track is read from and written to: PRESTOP_SZ_USUAL_TRACKS_FILE (on the server, the
+    night window's weekly rebuild, outside the deployed code), else the copy checked in with the app. A configured file
+    that doesn't exist yet reads the checked-in one."""
+    from django.conf import settings
+    path = getattr(settings, 'PRESTOP_SZ_USUAL_TRACKS_FILE', '')
+    return Path(path) if path else USUAL
+
+
+def _readable_usual() -> Path:
+    path = usual_file()
+    return path if path.exists() else USUAL
 POLL = 300            # s between polls of today's tracks
 BACKOFF = (60, 1800)  # s, doubling while the scraper fails
 USUAL_SHARE = 0.8     # of a train's observed days at a station
@@ -78,14 +92,15 @@ class Tracks:
         if time.monotonic() < self._usual.get('checked', float('-inf')) + STAMP_CHECK:
             return self._usual['value']
         try:
-            stamp = USUAL.stat().st_mtime
+            source = _readable_usual()
+            stamp = (str(source), source.stat().st_mtime)
         except OSError:
             return {}
         with self._lock:
             self._usual['checked'] = time.monotonic()
             if self._usual['stamp'] != stamp:
                 try:
-                    value = json.loads(USUAL.read_text(encoding='utf-8')).get('trains') or {}
+                    value = json.loads(source.read_text(encoding='utf-8')).get('trains') or {}
                 except (OSError, ValueError):
                     value = {}
                 self._usual.update(stamp=stamp, value=value)
