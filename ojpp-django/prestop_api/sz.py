@@ -190,4 +190,64 @@ class LiveTrains(Feed):
         super().__init__('PRESTOP_SZ_LIVE_URL', parse_trains, POLL, 'sz-live')
 
 
+DELAYS_POLL = 30  # s
+
+
+def parse_delays(data: Any, now: float) -> dict[str, dict]:
+    """SŽ's delay tables (the scraper's `/delays`: {'count', 'delays': [...]}) by train number. A row says where the
+    delay was seen (`station`), whether it is measured or SŽ's forecast (`delay_type` actual | predicted), and for a
+    measured one at which event (`event` arrival | departure; none: "at the station"). Per train an actual row beats a
+    predicted one; of two alike the later row (the table's newer one) wins."""
+    rows = data.get('delays') if isinstance(data, dict) else data
+    if not isinstance(rows, list):
+        raise ValueError('not a delay table')
+    out: dict[str, dict] = {}
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        number, minutes = _number(r.get('train_id')), _float(r.get('delay_minutes'))
+        station = _text(r.get('station'))
+        if not number or minutes is None or not station:
+            continue
+        kind = 'predicted' if r.get('delay_type') == 'predicted' else 'actual'
+        item = {'number': number, 'category': (_text(r.get('train_type')) or '').upper() or None, 'station': station,
+                'event': r.get('event') if r.get('event') in ('arrival', 'departure') else None,
+                'delay': int(minutes * 60), 'kind': kind, 'relation': _text(r.get('relation')), 'at': now}
+        old = out.get(number)
+        if not old or old['kind'] == kind or kind == 'actual':
+            out[number] = item
+    return out
+
+
+class DelayTable(Feed):
+    """SŽ's delay tables by train number (`PRESTOP_SZ_DELAYS_URL`)."""
+
+    def __init__(self):
+        super().__init__('PRESTOP_SZ_DELAYS_URL', parse_delays, DELAYS_POLL, 'sz-delays')
+
+
 live = LiveTrains()
+delays = DelayTable()
+
+
+def merged(trains: dict[str, dict], table: dict[str, dict]) -> dict[str, dict]:
+    """One report per train from both feeds (as ijpp-rt merges them): an actual delay beats a predicted one, the
+    running-trains list (always measured) beats the delay table whenever it has a delay. Each report says where its
+    delay holds: `station` with `event` (arrival | departure | None: from there on), `kind`, `feed`."""
+    out: dict[str, dict] = {}
+    for number in trains.keys() | table.keys():
+        a, b = trains.get(number), table.get(number)
+        a = a and {**a, 'station': a.get('next'), 'event': None, 'kind': 'actual', 'feed': 'live'}
+        b = b and {**b, 'feed': 'delays'}
+        if a and (a.get('delay') is not None or not b):
+            out[number] = a
+        elif a:  # the list has the train without a delay: the table's row, where the list says the train is
+            out[number] = {**b, 'coords': a.get('coords'), 'next': a.get('next'), 'platform': a.get('platform')}
+        else:
+            out[number] = b
+    return out
+
+
+def reports(now: Optional[float] = None) -> dict[str, dict]:
+    """SŽ's fresh reports by train number, both feeds merged (see `merged`). Never blocks."""
+    return merged(live.get(now), delays.get(now))

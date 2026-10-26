@@ -194,10 +194,13 @@ def bus_row(entry: dict, bus: dict, kind: str, here: str) -> dict:
            'effectiveAt': mapping.iso(live[k]) if bus['delays'][k] is not None else None,
            'replacement': True, 'replacesTrain': entry['routeName']}
     row.pop('delaySource', None)
+    row.pop('delayKind', None)
     if bus['delays'][k] is not None:  # its own live time (trainlive.py), not the train's
         row.update(updatedAt=mapping.iso(time.time()), quality='predicted')
         if bus.get('delaySource'):
             row['delaySource'] = bus['delaySource']
+        if bus.get('delayKind') == 'predicted':
+            row['delayKind'] = 'predicted'
     else:
         row.update({k: None for k in ('updatedAt', 'quality') if k in entry})
     row.pop('replacedByBus', None)
@@ -229,6 +232,8 @@ def feed_bus_row(entry: dict, plan: dict, kind: str) -> dict:
     if entry.get('effectiveAt') is None and live['delays'][k] is not None:
         row.update(effectiveAt=mapping.iso((live['departures'] if leave else live['arrivals'])[k]),
                    updatedAt=mapping.iso(time.time()), quality='predicted', delaySource=live['delaySource'])
+        if live.get('delayKind') == 'predicted':
+            row['delayKind'] = 'predicted'
     return row
 
 
@@ -324,6 +329,8 @@ def timetable_rows(plan: dict, kind: str, stops: set[str], start: float, end: fl
                 row['replacesTrain'] = bus['trainName']
             if moved is not None and live.get('delaySource'):
                 row['delaySource'] = live['delaySource']
+            if moved is not None and live.get('delayKind') == 'predicted':
+                row['delayKind'] = 'predicted'
             if leave and ends[0]:
                 row['comesFrom'] = ends[0]
             if merged and stop['gtfsId'] in names:

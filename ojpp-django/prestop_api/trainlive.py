@@ -43,27 +43,42 @@ def _around(run: dict, at: float) -> bool:
     return times[0] - AROUND <= at <= times[-1] + AROUND
 
 
-def station_delays(run: dict, updates: dict, reports: dict) -> tuple[list[Optional[int]], Optional[str], Optional[float]]:
+def station_delays(run: dict, updates: dict, reports: dict) -> tuple[list[Optional[int]], Optional[str], Optional[float], str]:
     """What is reported of train `run` at each of its stations, against the train's timetable (None: nothing there),
-    where from ('gtfs-rt' | 'sz') and when. The feed's trip update first (what boards and journeys show, through
-    OTP), then SŽ's live report, then OTP's own times from the timetable (up to two minutes old)."""
+    where from ('gtfs-rt' | 'sz'), when, and whether it is measured or SŽ's forecast ('actual' | 'predicted'). The
+    feed's trip update first (what boards and journeys show, through OTP), then SŽ's report (sz.reports), then OTP's
+    own times from the timetable (up to two minutes old)."""
     n = len(run['stops'])
     update = updates.get(run['id'])
     if update and _around(run, update.get('timestamp') or time.time()):
         at_stop = {u.get('stopId'): mapping.update_delay(u) for u in update.get('updates') or []}
         found = [mapping.believable(at_stop.get(s['gtfsId']), False) for s in run['stops']]
         if any(d is not None for d in found):
-            return found, 'gtfs-rt', update.get('timestamp') or None
+            return found, 'gtfs-rt', update.get('timestamp') or None, 'actual'
     number = sz.train_parts(mapping.route_name(run['route']))[1]
     report = reports.get(number) if number else None
     if report and report.get('delay') is not None and _around(run, report['at']):
-        key = sz.station_key(report.get('next') or '')
-        i = next((i for i, s in enumerate(run['stops']) if key and sz.station_key(s.get('name') or '') == key), None)
-        delay = mapping.believable(report['delay'], bool(report.get('coords')))
-        if i is not None and delay is not None:
-            return [delay if j == i else None for j in range(n)], 'sz', report['at']
+        placed = report_delays(run, report)
+        if placed:
+            return placed, 'sz', report['at'], report.get('kind') or 'actual'
     own = [mapping.believable(d, False) for d in run.get('delays') or [None] * n]
-    return (own, 'gtfs-rt', None) if any(d is not None for d in own) else ([None] * n, None, None)
+    return (own, 'gtfs-rt', None, 'actual') if any(d is not None for d in own) else ([None] * n, None, None, 'actual')
+
+
+def report_delays(run: dict, report: dict) -> Optional[list[Optional[int]]]:
+    """SŽ's report as a departure delay at the station it names (None when the train does not call there): the next
+    station of the running-trains list, or a delay-table row's station. An arrival delay holds for that arrival only:
+    the train leaves at its timetable time or once in, whichever is later (it never leaves early), so a long stop
+    takes some of it up. A departure, or a row without an event, holds from that departure on."""
+    key = sz.station_key(report.get('station') or report.get('next') or '')
+    i = next((i for i, s in enumerate(run['stops']) if key and sz.station_key(s.get('name') or '') == key), None)
+    delay = mapping.believable(report['delay'], bool(report.get('coords')))
+    if i is None or delay is None:
+        return None
+    if report.get('event') == 'arrival' and i < len(run['stops']) - 1:
+        t_arr, t_dep = _times(run)
+        delay = max(0, round(t_arr[i] + delay - t_dep[i]))
+    return [delay if j == i else None for j in range(len(run['stops']))]
 
 
 def _times(vehicle: dict) -> tuple[list[float], list[float]]:
@@ -113,8 +128,8 @@ def parts(plan: dict, run: dict) -> list[tuple[dict, list[tuple[int, int]], bool
 def run_delays(plan: dict, run: dict, updates: dict, reports: dict) -> dict[str, dict]:
     """Vehicle id (the train's, its buses') -> {'delays' (per stop of that vehicle, against its own timetable; None
     before anything is known), 'source', 'at', 'reported' (its last stop reported itself; None when it only carries
-    the delay of the vehicle before it)}."""
-    found, source, at = station_delays(run, updates, reports)
+    the delay of the vehicle before it), 'kind' ('actual' | 'predicted')}."""
+    found, source, at, kind = station_delays(run, updates, reports)
     if source is None:
         return {}
     t_arr, t_dep = _times(run)
@@ -123,7 +138,8 @@ def run_delays(plan: dict, run: dict, updates: dict, reports: dict) -> dict[str,
     for vehicle, pairs, sure in parts(plan, run):
         v_arr, v_dep = _times(vehicle)
         bus = vehicle is not run
-        entry = out.setdefault(vehicle['id'], {'delays': [None] * len(vehicle['stops']), 'source': source, 'at': at, 'reported': None})
+        entry = out.setdefault(vehicle['id'], {'delays': [None] * len(vehicle['stops']), 'source': source, 'at': at, 'reported': None,
+                                               'kind': kind})
         delays = entry['delays']
         last_k = len(vehicle['stops']) - 1
         delay = None
@@ -160,7 +176,7 @@ def of(plan: Optional[dict], vehicle: dict, updates: Optional[dict] = None, repo
     if not plan:
         return None
     updates = trip_updates() if updates is None else updates
-    reports = sz.live.get() if reports is None else reports
+    reports = sz.reports() if reports is None else reports
     run = train_of(plan, vehicle) if mapping.is_replacement(vehicle['route']) else vehicle
     return run_delays(plan, run, updates, reports).get(vehicle['id']) if run else None
 
@@ -176,7 +192,7 @@ def carried(delays: list[Optional[int]]) -> list[Optional[int]]:
 
 def applied(vehicle: dict, live: Optional[dict]) -> dict:
     """`vehicle` (a plan's trip or bus) with its live times: 'arrivals', 'departures' and 'delays' (None where
-    nothing is known yet), 'delaySource'. Without live data, its timetable."""
+    nothing is known yet), 'delaySource', 'delayKind'. Without live data, its timetable."""
     t_arr, t_dep = _times(vehicle)
     if not live:
         return {**vehicle, 'arrivals': list(t_arr), 'departures': list(t_dep), 'delays': [None] * len(t_arr)}
@@ -184,7 +200,8 @@ def applied(vehicle: dict, live: Optional[dict]) -> dict:
     first = next((d for d in ahead if d is not None), 0)
     shift = [first if d is None else d for d in ahead]  # before its first report it was that late too
     return {**vehicle, 'arrivals': [t + d for t, d in zip(t_arr, shift)], 'departures': [t + d for t, d in zip(t_dep, shift)],
-            'delays': ahead, 'delaySource': live['source'], 'scheduledArrivals': list(t_arr), 'scheduledDepartures': list(t_dep)}
+            'delays': ahead, 'delaySource': live['source'], 'delayKind': live.get('kind') or 'actual',
+            'scheduledArrivals': list(t_arr), 'scheduledDepartures': list(t_dep)}
 
 
 def live_bus(plan: Optional[dict], bus: dict) -> dict:

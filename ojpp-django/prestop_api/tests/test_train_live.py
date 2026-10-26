@@ -232,3 +232,35 @@ class NoLiveDataTests(SimpleTestCase):
         train = trip('2904', 'LPV 2904', NAMES, [T0, T0 + 600, T0 + 1200, T0 + 1800, T0 + 2400])
         v = run_map(plan_of([train]), [train], T0 + 700, updates=update(train, 'Kranj', 120))['IJPP:2904']
         self.assertEqual((v['delaySeconds'], v['delaySource'], v['quality'], v['nextStop']), (120, 'gtfs-rt', 'scheduled', 'Kranj'))
+
+
+class DelayEventTests(SimpleTestCase):
+    """F2: where SŽ's report holds (trainlive.report_delays): an arrival delay for that arrival only (a long stop takes
+    some of it up), a departure delay from that departure on; SŽ's forecast is labelled as one."""
+
+    # 5 min stop at Kranj: arrives T0+600, leaves T0+900
+    RUN = {**trip('502', 'IC 502', NAMES, [T0, T0 + 600, T0 + 1200, T0 + 1800, T0 + 2400]),
+           'scheduledDepartures': [T0, T0 + 900, T0 + 1200, T0 + 1800, T0 + 2400]}
+
+    def report(self, delay, event, kind='actual', station='Kranj'):
+        return {'502': {'number': '502', 'station': station, 'event': event, 'delay': delay, 'kind': kind, 'at': T0 + 700}}
+
+    def test_an_arrival_delay_holds_for_that_arrival(self):
+        found, source, _, kind = trainlive.station_delays(self.RUN, {}, self.report(480, 'arrival'))
+        self.assertEqual((found[1], source, kind), (180, 'sz', 'actual'))  # in at +8, out at +3 (5 of 8 min taken up)
+        found = trainlive.station_delays(self.RUN, {}, self.report(240, 'arrival'))[0]
+        self.assertEqual(found[1], 0)  # in at +4, leaves on time
+
+    def test_a_departure_delay_holds_from_that_departure(self):
+        self.assertEqual(trainlive.station_delays(self.RUN, {}, self.report(480, 'departure'))[0][1], 480)
+        self.assertEqual(trainlive.station_delays(self.RUN, {}, self.report(480, None))[0][1], 480)
+        self.assertEqual(trainlive.station_delays(self.RUN, {}, self.report(480, 'arrival', station='Jesenice'))[0][4], 480)  # last stop
+
+    def test_a_forecast_is_said_as_one(self):
+        plan = plan_of([self.RUN])
+        live = trainlive.of(plan, self.RUN, {}, self.report(900, None, 'predicted'))
+        self.assertEqual((live['delays'][1], live['kind']), (900, 'predicted'))
+        shown = run_map(plan, [self.RUN], T0 + 1000, live=self.report(900, None, 'predicted'))[self.RUN['id']]
+        self.assertEqual((shown['delaySeconds'], shown['delaySource'], shown['delayKind']), (900, 'sz', 'predicted'))
+        measured = run_map(plan, [self.RUN], T0 + 1000, live=self.report(900, None))[self.RUN['id']]
+        self.assertNotIn('delayKind', measured)

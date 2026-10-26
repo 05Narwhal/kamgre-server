@@ -111,6 +111,7 @@ def all_sources():
         _source('otp:alerts', 'Provider service alerts (incl. SŽ disruptions)', sources.alerts_raw, ['alerts'], 300),
         _source('otp:rentals', 'Bike and scooter sharing (GBFS via OTP)', sources.rentals, ['rentals'], 300),
         _sz_source(),
+        _sz_delays_source(),
         _sz_notices_source(),
         # Arriva's site notices: the server can be shut out of the site (ConnectTimeout from Oracle on 2026-10-15),
         # so /health says when they are missing instead of the disruptions list just lacking them.
@@ -138,6 +139,11 @@ def _gbfs_sources():
 def _sz_source():
     from . import sz
     return sz_feed_source('sz:live', 'SŽ live train delays (community feed)', sz.live, ['vehicles'])
+
+
+def _sz_delays_source():
+    from . import sz
+    return sz_feed_source('sz:delays', "SŽ delay table: measured and expected delays (derp-si scraper)", sz.delays, ['vehicles'])
 
 
 def sz_feed_source(id_, name, feed, capabilities):
@@ -419,7 +425,7 @@ def vehicles(request):
     mode, run_by = request.GET.get('mode'), operator_filter(request.GET.get('operatorId'))
     items = [v for v in sources.vehicles.get().value if inside(v, box) and (not mode or v['mode'] == mode)
              and run_by(v['operatorId']) and (not route or v['routeId'] == route)]
-    return envelope(items, snapshot_status(sources.positions, 60), used=['gtfs-rt:vehicles', 'gtfs-rt:trip-updates', 'sz:live'])
+    return envelope(items, snapshot_status(sources.positions, 60), used=['gtfs-rt:vehicles', 'gtfs-rt:trip-updates', 'sz:live', 'sz:delays'])
 
 
 @require_GET

@@ -136,3 +136,33 @@ class OutageTests(SimpleTestCase):
         self.assertEqual((views.sz_feed_source('sz:live', 'x', feed, [])['since'], feed.status()), (None, 'unavailable'))
         feed.last_ok = T0
         self.assertEqual(views.sz_feed_source('sz:live', 'x', feed, [])['since'], '2026-10-26T19:13:20Z')
+
+
+class DelayTableTests(SimpleTestCase):
+    """F2: SŽ's delay tables (`/delays`): measured or expected, at an arrival or a departure."""
+
+    def test_todays_table_is_read(self):
+        rows = sz.parse_delays(fixture('delays-2026-10-26.json'), T0)
+        self.assertEqual(len(rows), 27)
+        r = rows['3222']
+        self.assertEqual((r['station'], r['delay'], r['kind'], r['event'], r['category']), ('Grosuplje', 2400, 'actual', 'departure', 'LP'))
+        p = rows['480']  # from Croatia, not in Slovenia yet: SŽ's forecast
+        self.assertEqual((p['station'], p['delay'], p['kind'], p['event']), ('Ilirska Bistrica', 900, 'predicted', None))
+
+    def test_a_measured_row_beats_a_forecast_of_the_same_train(self):
+        table = {'delays': [{'train_id': '480', 'station': 'Pivka', 'delay_minutes': 12, 'delay_type': 'actual', 'event': 'arrival'},
+                            {'train_id': '480', 'station': 'Ilirska Bistrica', 'delay_minutes': 15, 'delay_type': 'predicted'}]}
+        self.assertEqual(sz.parse_delays(table, T0)['480']['kind'], 'actual')
+        with self.assertRaises(ValueError):
+            sz.parse_delays({'detail': 'x'}, T0)
+
+    def test_the_running_trains_list_beats_the_table_when_both_measure(self):
+        trains = {'502': {'number': '502', 'next': 'Pragersko', 'delay': 600, 'coords': None, 'at': T0}}
+        table = {'502': {'number': '502', 'station': 'Kidričevo', 'event': 'departure', 'delay': 660, 'kind': 'actual', 'at': T0 + 5},
+                 '480': {'number': '480', 'station': 'Ilirska Bistrica', 'event': None, 'delay': 900, 'kind': 'predicted', 'at': T0}}
+        got = sz.merged(trains, table)
+        self.assertEqual((got['502']['feed'], got['502']['station'], got['502']['delay'], got['502']['kind']), ('live', 'Pragersko', 600, 'actual'))
+        self.assertEqual((got['480']['feed'], got['480']['kind']), ('delays', 'predicted'))  # only the table has it
+        # listed without a delay: the table's row, where the list says the train is
+        got = sz.merged({'502': {**trains['502'], 'delay': None, 'coords': (46.4, 15.7)}}, table)
+        self.assertEqual((got['502']['feed'], got['502']['delay'], got['502']['coords']), ('delays', 660, (46.4, 15.7)))

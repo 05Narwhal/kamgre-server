@@ -437,7 +437,7 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
     now = now or time.time()
     trips = timetable.get().value
     shape_index = shapes.get().value
-    live = sz.live.get(now) if live is None else live
+    live = sz.reports(now) if live is None else live
     updates = {} if updates is None else updates
     derived = _derive()
     replaced = derived['sections']
@@ -518,6 +518,8 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
         })
         if delay is not None:
             out[-1]['delaySource'] = own['source']
+            if own.get('kind') == 'predicted':
+                out[-1]['delayKind'] = 'predicted'  # SŽ's forecast (a train still abroad), not a measured delay
         if replacement:
             out[-1]['replacement'] = True
             # The train it runs for ("LPV 1896"), as its line and board rows name it
