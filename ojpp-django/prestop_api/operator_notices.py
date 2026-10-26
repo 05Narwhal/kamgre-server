@@ -304,9 +304,8 @@ def sz_alerts() -> list[dict]:
     if snap is None:
         _read_later(sz_news)
         return []
-    if closures.notices_source()['status'] == 'live':
-        return []
-    return sz_news_alerts(snap.value)
+    found = sz_news_alerts(snap.value)
+    return found if found and closures.notices_source()['status'] != 'live' else []
 
 
 def alerts() -> list[dict]:

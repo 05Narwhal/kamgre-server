@@ -242,6 +242,9 @@ class Command(BaseCommand):
         """sz-agreement: for every SŽ train on its way, each pair of fresh sources that both report a station
         (trainlive.candidates), agreeing within 2 min or not. How right "right" is: no source is 100 %."""
         from prestop_api import scheduled, trainlive
+        if not (sz.live.url or sz.delays.url or sz.rt.url):
+            return  # no SŽ source configured (tests)
+        now = time.time()
         for feed in (sz.live, sz.delays, sz.rt):
             if feed.url:
                 feed._poll()
@@ -251,7 +254,7 @@ class Command(BaseCommand):
         rows, used = [], {}
         for run in scheduled.timetable.get().value:
             times = run.get('scheduledDepartures') or run['departures']
-            if mapping.is_replacement(run['route']) or not times[0] - 600 <= self.now <= times[-1] + 3600:
+            if mapping.is_replacement(run['route']) or not times[0] - 600 <= now <= times[-1] + 3600:
                 continue
             found = trainlive.candidates(run, updates, reports, second)
             best = trainlive.pick(found)
