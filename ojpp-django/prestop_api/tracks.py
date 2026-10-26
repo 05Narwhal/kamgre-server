@@ -5,7 +5,7 @@ derp-si's sz-platform-scraper (gitlab.com/derp-si/sz-platform-scraper, also used
 reads them for every station every few minutes and serves them per day (`train_data?date=`:
 train number, IJPP stop id, track such as '3' or '6-A'). Two uses:
 
-- Today's announced tracks, polled in the background (`PRESTOP_SZ_TRACKS_URL`, '' turns it off).
+- Today's announced tracks, polled in the background (`PRESTOP_SZ_TRACKS_URL`, a URL list; empty turns it off).
   A request never waits on it.
 - Each train's usual track at each station, from that history (`data/sz_tracks.json`, rebuilt by
   `manage.py sz_tracks`): a train keeps its track from day to day, so before its track is announced
@@ -22,9 +22,7 @@ from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from django.conf import settings
-
-from .upstream import UpstreamError, get_json
+from .upstream import Mirrors, UpstreamError
 
 logger = logging.getLogger(__name__)
 LOCAL = ZoneInfo('Europe/Ljubljana')
@@ -68,10 +66,12 @@ class Tracks:
         self._backoff = BACKOFF[0]
         self._usual: dict = {'stamp': None, 'value': {}}
         self.last_ok: Optional[float] = None
+        self.mirrors = Mirrors('PRESTOP_SZ_TRACKS_URL')
 
     @property
     def url(self) -> str:
-        return getattr(settings, 'PRESTOP_SZ_TRACKS_URL', '')
+        """The scraper's `train_data` URLs, tried in order ('' when off)."""
+        return ','.join(self.mirrors.urls)
 
     def usual(self) -> dict:
         # The file changes a few times a year: its stamp is checked at most every STAMP_CHECK s, not per board row.
@@ -110,9 +110,9 @@ class Tracks:
 
     def _poll(self, day: str):
         try:
-            data = get_json(f'{self.url}?date={day}', limit=8 * 1024 * 1024, timeout=(4, 20))
+            data = self.mirrors.get_json(f'?date={day}', check=lambda d: d['trains'], limit=8 * 1024 * 1024, timeout=(4, 20))
             found: dict[str, dict[str, str]] = {}
-            for r in (data.get('trains') or []) if isinstance(data, dict) else []:
+            for r in data if isinstance(data, list) else []:
                 train, stop, track = str(r.get('train_id') or '').strip(), r.get('ijpp_id'), str(r.get('platform') or '').strip()
                 if train and stop and track:
                     found.setdefault(train, {})[stop] = track

@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from prestop_api.szpdf import sync
-from prestop_api.upstream import UpstreamError, get_json
+from prestop_api.upstream import Mirrors, UpstreamError
 
 
 class Command(BaseCommand):
@@ -50,11 +50,11 @@ class Command(BaseCommand):
     def notices(self, source: str) -> list:
         if source:
             return json.loads(Path(source).read_text(encoding='utf-8'))
-        url = getattr(settings, 'PRESTOP_SZ_NOTICES_URL', '')
-        if not url:
+        mirrors = Mirrors('PRESTOP_SZ_NOTICES_URL')
+        if not mirrors.urls:
             raise CommandError('No notices: set PRESTOP_SZ_NOTICES_URL or pass --from.')
         try:
-            return get_json(url, limit=8 * 1024 * 1024, timeout=(5, 30))
+            return mirrors.get_json(limit=8 * 1024 * 1024, timeout=(5, 30))
         except UpstreamError as e:
             raise CommandError(f'Notices unavailable: {e}') from e
 

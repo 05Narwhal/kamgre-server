@@ -65,6 +65,42 @@ def get_json(url: str, params: Optional[dict] = None, limit: int = 32 * 1024 * 1
         raise UpstreamError(f'{url}: {e.__class__.__name__}') from e
 
 
+def url_list(value) -> list[str]:
+    """A setting naming one URL or several (a list, or comma-separated in the env): the URLs in order, blanks left out."""
+    items = value.split(',') if isinstance(value, str) else list(value or [])
+    return [u.strip() for u in items if isinstance(u, str) and u.strip()]
+
+
+class Mirrors:
+    """URLs that serve the same data (one service under two host names, then an older service): each call tries the
+    one that answered last time first, then the others in their listed order. `setting` names the Django setting, read
+    on every call so tests and env changes apply at once."""
+
+    def __init__(self, setting: str):
+        self.setting = setting
+        self.good: Optional[str] = None  # the URL that answered last
+
+    @property
+    def urls(self) -> list[str]:
+        return url_list(getattr(settings, self.setting, ''))
+
+    def get_json(self, suffix: str = '', check: Callable[[Any], Any] = lambda data: data, **kwargs) -> Any:
+        """The first usable answer: `check` turns the JSON into the value or raises ValueError/TypeError for a
+        shape that isn't this feed (an answer of a dead mirror)."""
+        urls = self.urls
+        order = ([self.good] if self.good in urls else []) + [u for u in urls if u != self.good]
+        last: Optional[Exception] = None
+        for url in order:
+            try:
+                value = check(get_json(url + suffix, **kwargs))
+            except (UpstreamError, ValueError, TypeError, AttributeError) as e:
+                last = e
+                continue
+            self.good = url
+            return value
+        raise UpstreamError(f'{self.setting}: every URL failed ({last!r})' if last else f'{self.setting}: no URL')
+
+
 class Otp:
     """GraphQL client that fails over between the configured OTP servers."""
 

@@ -79,7 +79,7 @@ class SzNoticeTests(SimpleTestCase):
     def test_an_empty_notices_feed_keeps_the_last_notices(self):
         last = [{'ID_ovire': ['11049'], 'Opis': ['x']}]
         with mock.patch.dict(closures._notices, raw=last), self.settings(PRESTOP_SZ_NOTICES_URL='https://example/ovire'), \
-                mock.patch.object(closures, 'get_json', return_value=[]), self.assertLogs('prestop_api.closures', 'WARNING'):
+                mock.patch('prestop_api.upstream.get_json', return_value=[]), self.assertLogs('prestop_api.closures', 'WARNING'):
             with self.assertRaises(UpstreamError):
                 closures._load_points()
             self.assertIs(closures._notices['raw'], last)

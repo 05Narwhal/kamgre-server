@@ -78,13 +78,25 @@ PRESTOP_KRANJ_GTFS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_KRANJ_G
 PRESTOP_LOCAL_GTFS = False if 'test' in sys.argv[1:2] else env.bool('PRESTOP_LOCAL_GTFS', default=True)
 PRESTOP_PELIAS_URL =env('PRESTOP_PELIAS_URL', default='http://pelias.ojpp.derp.si/v1')
 PRESTOP_PHOTON_URL = env('PRESTOP_PHOTON_URL', default='https://photon.komoot.io/api/')
-# SZ live train delays/positions (community feed used by derp-si/ijpp-rt); '' turns it off.
-PRESTOP_SZ_LIVE_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIVE_URL', default='https://api.modra.ninja/sz/lokacije')
-# SŽ track numbers announced today (derp-si/sz-platform-scraper, as brezavta.si uses it; prestop_api/tracks.py);
-# '' turns it off (trains then show their usual track from data/sz_tracks.json).
-PRESTOP_SZ_TRACKS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TRACKS_URL', default='http://l10wspc3n0hqslvh6xuyd8la.141.255.217.12.sslip.io:12669/train_data')
-# SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py).
-PRESTOP_SZ_NOTICES_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_URL', default='https://api.modra.ninja/sz/ovire_raw?lang=sl')
+# SŽ sources are URL lists (comma-separated in the env, tried in order, the last one that answered first;
+# upstream.Mirrors): derp-si's sz-platform-scraper under its two host names, then older services. '' turns one off.
+# docs/research/2026-10-26-sz-source-chain.md lists who runs what.
+SZ_SCRAPER = ('http://sz-platform-scraper.coolify.pve.si:12669', 'http://l10wspc3n0hqslvh6xuyd8la.141.255.217.12.sslip.io:12669')
+# SŽ live trains: delay, next station, coordinates (prestop_api/sz.py).
+PRESTOP_SZ_LIVE_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_LIVE_URL', default=[f'{h}/active_trains' for h in SZ_SCRAPER] + ['https://api.modra.ninja/sz/lokacije'])
+# SŽ's delay table: actual and predicted delays, arrival or departure (prestop_api/sz.py).
+PRESTOP_SZ_DELAYS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_DELAYS_URL', default=[f'{h}/delays' for h in SZ_SCRAPER])
+# ijpp-rt's own SŽ trip updates, a second path that skips the combined aggregator (gtfs-rt-aggregator providers/ijpp.js).
+PRESTOP_SZ_RT_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_RT_URL', default=['http://jckcw4scco8wgo80c804gg0k.141.255.217.12.sslip.io/data/raw/sz/rt/trip-updates?type=json'])
+# SŽ track numbers announced today (prestop_api/tracks.py); off: trains show their usual track from data/sz_tracks.json.
+PRESTOP_SZ_TRACKS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_TRACKS_URL', default=[f'{h}/train_data' for h in SZ_SCRAPER])
+# SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py). A derp-si or
+# zamudil.si notices endpoint goes first once one exists (spec F4.1/F4.6); the last good notices are kept on disk.
+PRESTOP_SZ_NOTICES_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NOTICES_URL', default=['https://api.modra.ninja/sz/ovire_raw?lang=sl'])
+# The last good notices, so a restart while every notices URL fails keeps today's closures (closures.py).
+PRESTOP_SZ_NOTICES_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_FILE', default=str(root / 'data/sz-notices.json'))
+# SŽ's own RSS (news and "Obvestila za potnike"; no bot check): text alerts while no notices source works.
+PRESTOP_SZ_NEWS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NEWS_URL', default=['https://potniski.sz.si/feed/'])
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))

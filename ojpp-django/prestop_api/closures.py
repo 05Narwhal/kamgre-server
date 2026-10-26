@@ -30,10 +30,8 @@ from datetime import date, datetime, timedelta
 from typing import Callable, Iterable, Optional, Sequence
 from zoneinfo import ZoneInfo
 
-from django.conf import settings
-
 from . import geometry, leg_alerts, maplinks, mapping, platforms, stopfix, sz, szstops, sztimetables
-from .upstream import Cached, UpstreamError, get_json, otp
+from .upstream import Cached, Mirrors, UpstreamError, otp
 
 logger = logging.getLogger(__name__)
 LOCAL = ZoneInfo('Europe/Ljubljana')
@@ -710,13 +708,13 @@ def _load_bus_patterns() -> list[tuple[str, str, frozenset]]:
 
 
 _notices: dict = {'raw': None}  # SŽ's notices feed as last read with the points (sz_notice_alerts)
+notice_urls = Mirrors('PRESTOP_SZ_NOTICES_URL')
 
 
 def _load_points() -> dict[str, list]:
-    url = getattr(settings, 'PRESTOP_SZ_NOTICES_URL', '')
-    if not url:
+    if not notice_urls.urls:
         return {}
-    raw = get_json(url, limit=8 * 1024 * 1024, timeout=(4, 20))
+    raw = notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20))
     if not (isinstance(raw, list) and raw) and _notices['raw']:
         # An empty or broken answer is not "no notices": keep the last ones (the cache keeps the last points).
         logger.warning('SŽ notices feed returned %s; keeping the last %d notices', 'nothing' if not raw else type(raw).__name__, len(_notices['raw']))

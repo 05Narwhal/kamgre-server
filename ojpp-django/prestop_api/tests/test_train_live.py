@@ -216,7 +216,7 @@ class NoLiveDataTests(SimpleTestCase):
 
     def test_a_stale_report_is_no_live_data(self):
         trains = sz.LiveTrains()
-        trains._trains = {'2428': {'number': '2428', 'delay': 1200, 'next': 'Lesce-Bled', 'coords': None, 'at': T0 + 2800 - sz.FRESH - 1}}
+        trains._items = {'2428': {'number': '2428', 'delay': 1200, 'next': 'Lesce-Bled', 'coords': None, 'at': T0 + 2800 - sz.FRESH - 1}}
         with self.settings(PRESTOP_SZ_LIVE_URL=''):
             reports = trains.get(T0 + 2800)
         self.assertEqual(reports, {})

@@ -15,7 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from prestop_api import tracks
-from prestop_api.upstream import USER_AGENT
+from prestop_api.upstream import USER_AGENT, url_list
 
 
 class Command(BaseCommand):
@@ -26,18 +26,24 @@ class Command(BaseCommand):
         parser.add_argument('--url', default='', help='the scraper\'s train_data endpoint (default PRESTOP_SZ_TRACKS_URL)')
 
     def handle(self, *args, days=60, url='', **options):
-        url = url or getattr(settings, 'PRESTOP_SZ_TRACKS_URL', '')
-        if not url:
+        urls = [url] if url else url_list(getattr(settings, 'PRESTOP_SZ_TRACKS_URL', ''))
+        if not urls:
             raise CommandError('No track scraper URL (PRESTOP_SZ_TRACKS_URL).')
         rows, used = [], []
         for back in range(days, 0, -1):
             day = (date.today() - timedelta(days=back)).isoformat()
-            try:
-                resp = requests.get(url, params={'date': day}, timeout=60, headers={'User-Agent': USER_AGENT})
-                resp.raise_for_status()
-                found = [r for r in resp.json().get('trains') or [] if r.get('platform')]
-            except (requests.RequestException, ValueError, AttributeError) as e:
-                self.stderr.write(f'{day}: {e}')
+            found = None
+            for url in list(urls):  # the scraper's host names in turn; the one that answered stays first
+                try:
+                    resp = requests.get(url, params={'date': day}, timeout=60, headers={'User-Agent': USER_AGENT})
+                    resp.raise_for_status()
+                    found = [r for r in resp.json().get('trains') or [] if r.get('platform')]
+                    urls.remove(url)
+                    urls.insert(0, url)
+                    break
+                except (requests.RequestException, ValueError, AttributeError) as e:
+                    self.stderr.write(f'{day} {url}: {e}')
+            if found is None:
                 continue
             if found:
                 rows += [{**r, 'date': day} for r in found]

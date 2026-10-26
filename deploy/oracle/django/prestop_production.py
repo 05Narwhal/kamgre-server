@@ -37,6 +37,8 @@ PRESTOP_TRAFFIC_STATE_DIR = '/var/lib/prestop/traffic'
 PRESTOP_MAINTENANCE_FILE = '/var/lib/prestop/maintenance.json'
 # SŽ replacement timetables read from the notices' PDFs (prestop-szpdf.timer writes, the API reads).
 PRESTOP_SZ_TIMETABLES_DIR = '/var/lib/prestop/sz-timetables'
+# The last good SŽ notices (closures.py), so a restart while every notices URL fails keeps today's closures.
+PRESTOP_SZ_NOTICES_FILE = '/var/lib/prestop/sz-notices.json'
 
 # Reuse database connections between requests (peer auth over the local socket).
 DATABASES['default']['CONN_MAX_AGE'] = 60
