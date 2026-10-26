@@ -153,3 +153,41 @@ class LearnedTime(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['route_id', 'kind', 'band'], name='prestop_learned_time_unique')]
+
+
+class TrainDay(models.Model):
+    """One SŽ train's run on one service day, rolled up at night from TripDelay (rollup.py, `manage.py rollup_stats`):
+    delays in seconds against the timetable (max, mean over its reported stations, at its last reported station), the
+    share of those stations it passed on time (under rollup.ON_TIME_LATE late), and per station in order
+    `stops` [{'id', 'name', 'delay' (None: not reported), 'track' (as announced that day, None: unknown)}]."""
+    service_date = models.DateField()
+    number = models.CharField(max_length=16)
+    category = models.CharField(max_length=8, blank=True, default='')
+    route_id = models.CharField(max_length=200)
+    trip_id = models.CharField(max_length=200)
+    origin = models.CharField(max_length=200, blank=True, default='')
+    destination = models.CharField(max_length=200, blank=True, default='')
+    max_delay = models.IntegerField(null=True)
+    avg_delay = models.IntegerField(null=True)
+    final_delay = models.IntegerField(null=True)
+    on_time_share = models.FloatField(null=True)
+    stops = models.JSONField(default=list)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['service_date', 'number'], name='prestop_train_day_unique')]
+        indexes = [models.Index(fields=['number', 'service_date'], name='prestop_sta_train_day_idx')]
+
+
+class StationDay(models.Model):
+    """One railway station on one service day, from that day's TrainDay rows: trains with a reported delay there,
+    the share of them on time (under rollup.ON_TIME_LATE late) and their mean delay in seconds."""
+    service_date = models.DateField()
+    stop_id = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, blank=True, default='')
+    trains = models.IntegerField(default=0)
+    on_time_share = models.FloatField(null=True)
+    avg_delay = models.IntegerField(null=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['service_date', 'stop_id'], name='prestop_station_day_unique')]
+        indexes = [models.Index(fields=['stop_id', 'service_date'], name='prestop_sta_station_day_idx')]
