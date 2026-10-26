@@ -7,6 +7,7 @@ Responses use the `{data, meta}` envelope from `src/contracts/transit.ts`; error
 import json
 import logging
 import math
+import re
 import threading
 import time
 import uuid
@@ -935,3 +936,70 @@ def statistics_reliability(request):
     data = [_memo(('reliability', r, today), 600, lambda r=r: route_reliability(r, today)) for r in ids]
     collector = _collector_source()
     return envelope(data, collector['status'], used=['otp:timetables'], source_updated=collector['updatedAt'])
+
+
+# ---------------------------------------------------------------- SŽ trains and the statistics overview (F7)
+
+TRAIN_NUMBER = re.compile(r'^\d{1,6}$')
+
+
+def _number_param(number: str) -> str:
+    number = (number or '').lstrip('0')
+    if not TRAIN_NUMBER.match(number):
+        raise ApiError(422, 'INVALID_TRAIN', 'A train number is 1 to 6 digits')
+    return number
+
+
+def _days_param(request, default: int = 30) -> int:
+    from . import trains
+    try:
+        days = int(request.GET.get('days') or default)
+    except ValueError:
+        raise ApiError(422, 'INVALID_DAYS', 'days must be a whole number')
+    if not 1 <= days <= trains.MAX_DAYS:
+        raise ApiError(422, 'INVALID_DAYS', f'days must be 1 to {trains.MAX_DAYS}')
+    return days
+
+
+@require_GET
+@api
+def train_detail(request, number):
+    from . import scheduled, trains
+    number = _number_param(number)
+    day = _day_param(request) or scheduled.service_day()
+    data = trains.train(number, day, language(request))
+    if not data:
+        raise ApiError(404, 'TRAIN_NOT_FOUND', 'No train with this number runs that day.')
+    status = 'live' if data['vehicle'] or (data['trip'] or {}).get('realtime') else 'scheduled'
+    return envelope(data, status, used=['otp:timetables', 'gtfs-rt:trip-updates', 'sz:live', 'sz:delays'], source_updated=mapping.iso(time.time()))
+
+
+@require_GET
+@api
+def train_history(request, number):
+    from . import scheduled, trains
+    number, days = _number_param(number), _days_param(request)
+    data = _memo(('train-history', number, days), 600, lambda: trains.history(number, days, scheduled.service_day()))
+    collector = _collector_source()
+    return envelope(data, collector['status'], used=['otp:timetables'], source_updated=collector['updatedAt'])
+
+
+@require_GET
+@api
+def statistics_overview(request):
+    from . import scheduled, trains
+    data = trains.overview(scheduled.service_day())
+    return envelope(data, snapshot_status(sources.positions, 60), used=['gtfs-rt:trip-updates', 'sz:live', 'sz:delays'], source_updated=mapping.iso(time.time()))
+
+
+@require_GET
+@api
+def station_statistics(request, stop_id):
+    from . import scheduled, trains
+    days = _days_param(request)
+    members = sorted(set(sources.stop_group(stop_id, wait=True)) | {stop_id})
+    data = _memo(('station-stats', tuple(members), days), 600, lambda: trains.station(members, days, scheduled.service_day()))
+    if not data:
+        raise ApiError(404, 'NO_STATISTICS', 'No train statistics for this stop yet.')
+    collector = _collector_source()
+    return envelope({**data, 'stopId': stop_id}, collector['status'], used=['otp:timetables'], source_updated=collector['updatedAt'])
