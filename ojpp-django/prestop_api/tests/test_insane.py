@@ -237,6 +237,30 @@ class LearnedOriginTests(SimpleTestCase):
             d['origin'] = 'depot'
             self.assertIsNone(predictions.previous_trip('IJPP:B', self.START, date(2026, 10, 9)))
 
+    def test_a_delay_is_carried_along_sure_stays_to_later_trips(self):
+        # The vehicle runs A (9:00, 10 min late now), then B (10:25), then C (11:40); B and C have not started.
+        from datetime import date
+        day = date(2026, 10, 9)
+        link = {'origin': 'continues', 'level': 'sure', 'absorb': None}
+        learned = {('IJPP:C', 11 * 3600 + 40 * 60): {**link, 'prev_route_id': 'IJPP:B', 'prev_start': self.START, 'prev_end': 11 * 3600 + 35 * 60},
+                   ('IJPP:B', self.START): {**link, 'prev_route_id': 'IJPP:A', 'prev_start': 9 * 3600, 'prev_end': 10 * 3600 + 20 * 60, 'absorb': 120}}
+        runs = {('IJPP:A', 9 * 3600): {'tripId': 'IJPP:a', 'vehicleId': 'IJPP:v1', 'routeId': 'IJPP:A', 'delaySeconds': 900}}
+        carried = lambda: predictions.previous_trip('IJPP:C', 11 * 3600 + 40 * 60, day)
+        with mock.patch.object(predictions, 'departure', side_effect=lambda r, s, d: learned.get((r, s))), \
+                mock.patch('prestop_statistics.stays.run_today', side_effect=lambda r, s, d: runs.get((r, s))):
+            # 15 min late on A, B's layover takes up 2 of them: B ends 13 min late, C's 5-min layover leaves 8.
+            self.assertEqual((carried()['tripId'], carried()['delaySeconds'], carried()['slack']), ('IJPP:a', 780, 300))
+            learned[('IJPP:B', self.START)]['level'] = 'likely'  # a likely stay carries nothing further back
+            self.assertIsNone(carried())
+            learned[('IJPP:B', self.START)]['level'] = 'sure'
+            learned[('IJPP:C', 11 * 3600 + 40 * 60)]['level'] = 'likely'
+            self.assertIsNone(carried())
+            learned[('IJPP:C', 11 * 3600 + 40 * 60)]['level'] = 'sure'
+            runs[('IJPP:A', 9 * 3600)]['delaySeconds'] = None  # A's vehicle is not seen now
+            self.assertIsNone(carried())
+            del learned[('IJPP:B', self.START)]  # B starts from the depot (not learned as continuing)
+            self.assertIsNone(carried())
+
     def test_a_depot_start_has_its_own_usual_delay(self):
         second = ride('10:25:00', '10:50:00', 'IJPP:t2', frm='IJPP:b', to='IJPP:c')
         second['trip']['departureStoptime'] = {'scheduledDeparture': self.START}

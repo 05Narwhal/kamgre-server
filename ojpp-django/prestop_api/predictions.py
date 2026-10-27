@@ -4,7 +4,8 @@ Each transit leg gets `predictedDelaySeconds` and `predictionBasis`, best first:
 
 - `live`: the feed's own estimate for this trip (OTP's realtime times);
 - `previous-trip`: the trip hasn't started, but the vehicle that runs it (learned in prestop_statistics.stays) is
-  on its previous trip now, late: that delay minus what the layover usually takes up;
+  on its previous trip now, late: that delay minus what the layover usually takes up; when the vehicle is still a
+  few trips earlier, the delay is carried along its `sure` stays (each layover taking up its share, previous_trip);
 - `history`: for a departure whose vehicle comes from the depot, how late it usually starts then; else how late this
   departure usually is on this kind of day (the median of at least 5 trips, aggregation.usual_delays);
 - otherwise both are null.
@@ -106,12 +107,19 @@ def departure(route_id: str, start: int, day) -> Optional[dict]:
     return learned_table().get((route_id, day_kind(day)), {}).get(start)
 
 
-def previous_trip(route_id: str, start: int, day) -> Optional[dict]:
+CHAIN_HOPS = 6  # trips back along a vehicle's sure stays to find the one it is running now
+
+
+def previous_trip(route_id: str, start: int, day, hops: int = CHAIN_HOPS, sure_only: bool = False) -> Optional[dict]:
     """Today's run of the departure this one continues on the same vehicle: {'tripId', 'vehicleId', 'routeId',
-    'delaySeconds' (live, or None), 'slack' (s of its delay the layover takes up)}; None for a depot start or unknown."""
+    'delaySeconds' (live, or None), 'slack' (s of its delay the layover takes up)}; None for a depot start or unknown.
+
+    When that trip has not started yet, the vehicle is followed further back, but only along `sure` stays (a depot
+    start or a `likely` one ends it): the trip it runs now passes its delay on, each layover taking up its usual
+    share, and `delaySeconds` is what reaches the end of the trip just before this one."""
     from prestop_statistics import stays
     d = departure(route_id, start, day)
-    if not d or d['origin'] != 'continues':
+    if not d or d['origin'] != 'continues' or (sure_only and d['level'] != 'sure'):
         return None
     try:
         run = stays.run_today(d['prev_route_id'], d['prev_start'], day)
@@ -119,7 +127,14 @@ def previous_trip(route_id: str, start: int, day) -> Optional[dict]:
         logger.warning('Previous trip of %s unavailable: %r', route_id, e)
         return None
     slack = d['absorb'] if d['absorb'] is not None else start - (d['prev_end'] or start)
-    return {**run, 'slack': slack} if run else None
+    if run:
+        return {**run, 'slack': slack}
+    if d['level'] != 'sure' or hops <= 1:
+        return None
+    before = previous_trip(d['prev_route_id'], d['prev_start'], day, hops - 1, sure_only=True)
+    if not before or before['delaySeconds'] is None:
+        return None
+    return {**before, 'delaySeconds': max(0, before['delaySeconds'] - max(0, before['slack'] or 0)), 'slack': slack}
 
 
 def _hhmm(seconds: int) -> str:
