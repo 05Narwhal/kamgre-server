@@ -4,7 +4,8 @@
   along the line; trips.build_trip), the train on the map now (its delay, where from, measured or SŽ's forecast,
   next station; scheduled.vehicles through trainlive), and the notices on its line.
 - `history(number, days)`: its last runs from the nightly rollups (prestop_statistics.rollup).
-- `overview()`: trains on their way, the share on time now, the biggest delays now and the busiest stations.
+- `overview()`: trains on their way, how many are on time, 3–4 min and 5+ min late now, the biggest
+  delays now and the busiest stations.
 - `station(stop ids, days)`: a station's days from the rollups.
 
 On time = less than ON_TIME_LATE late, the one definition of rollup.py and the app.
@@ -17,8 +18,9 @@ from . import mapping, sources, sz
 from .upstream import UpstreamError
 
 ON_TIME_LATE = 180   # s (prestop_statistics.aggregation.ON_TIME_LATE)
+LATE = 300           # s: this late or more is "late" (5′+); between the two "slightly late" (the app's delayTone)
 BIGGEST = 8          # delays listed on the overview
-STATIONS = 12        # stations listed on the overview
+STATIONS = 40        # stations listed (the statistics overview shows the first few, its Stations tab all)
 STATION_DAYS = 7     # days of rollups behind the overview's stations
 MAX_DAYS = 90        # history asked for at most
 DAY_WAIT = 8         # s a request waits for another day's timetable (today's is kept warm)
@@ -117,8 +119,11 @@ def overview(today: date, now: Optional[float] = None) -> dict:
         row['onTime'] += (s.on_time_share or 0) * s.trains
         row['delay'] += (s.avg_delay or 0) * s.trains
     stations = sorted(per_stop.values(), key=lambda r: (-r['trains'], r['name']))[:STATIONS]
+    late_now = sum(1 for v in known if v['delaySeconds'] >= LATE)
+    on_time_now = sum(1 for v in known if v['delaySeconds'] < ON_TIME_LATE)
     return {'running': len(trains), 'measured': len(known),
-            'onTimeShare': round(sum(1 for v in known if v['delaySeconds'] < ON_TIME_LATE) / len(known), 4) if known else None,
+            'buckets': {'onTime': on_time_now, 'slightlyLate': len(known) - on_time_now - late_now, 'late': late_now},
+            'onTimeShare': round(on_time_now / len(known), 4) if known else None,
             'biggestDelays': late,
             'stations': [{'stopId': r['stopId'], 'name': r['name'], 'trains': r['trains'], 'onTimeShare': round(r['onTime'] / r['trains'], 4),
                           'avgDelaySeconds': round(r['delay'] / r['trains'])} for r in stations if r['trains']],

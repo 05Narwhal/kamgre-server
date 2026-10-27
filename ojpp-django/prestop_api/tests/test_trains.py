@@ -42,6 +42,7 @@ class TrainEndpointTests(TestCase):
         with mock.patch.object(scheduled, 'timetable', fixed([])):
             body = self.client.get('/api/v1/statistics/overview').json()['data']
         self.assertEqual((body['running'], body['measured'], body['onTimeShare']), (4, 3, 0.3333))  # the bus is not a train
+        self.assertEqual(body['buckets'], {'onTime': 1, 'slightlyLate': 0, 'late': 2})  # under 3 min, 3-4 min, 5 min or more
         self.assertEqual([(t['number'], t['delaySeconds'], t.get('delayKind')) for t in body['biggestDelays']], [('480', 900, 'predicted'), ('310', 600, None)])
         self.assertEqual([(s['name'], s['trains'], s['onTimeShare'], s['avgDelaySeconds']) for s in body['stations']],
                          [('Ljubljana', 200, 0.6, 150), ('Kranj', 50, 1.0, 0)])
