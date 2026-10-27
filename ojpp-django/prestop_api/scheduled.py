@@ -121,6 +121,11 @@ def _trips_for(day) -> list[dict]:
     return out
 
 
+def _service_date(trip: dict) -> date:
+    """The service day a timetable trip runs on."""
+    return datetime.fromtimestamp((trip.get('serviceDay') or trip['departures'][0] - 12 * 3600) + 12 * 3600, closures.LOCAL).date()
+
+
 def _load_timetable() -> list[dict]:
     """Today's trains and yesterday's (for those still running after midnight)."""
     today = service_day()
@@ -534,6 +539,9 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             track, usual = tracks.tracks.track(mapping.route_name(route), stops[i]['gtfsId'], (trip.get('scheduledDepartures') or trip['departures'])[i])
             if track:
                 out[-1].update(nextPlatform=track, nextPlatformUsual=usual)
+            planned = zamudil.class_of(number, _service_date(trip))  # SŽ's planned class (zamudil.si), never the unit seen
+            if planned:
+                out[-1]['trainClass'] = planned
         if trip.get('alertIds'):
             out[-1]['alertIds'] = trip['alertIds']
         elif not replacement and (notices := closures.train_alert_ids(route['gtfsId'], now)):

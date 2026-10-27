@@ -633,6 +633,17 @@ def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[l
     return _capped(_with_live_platforms(entries, stop_id, kind, start, drops), drops)
 
 
+def _row_day(entry: dict):
+    """A board row's service day: its id names the day's origin ("<trip>@<serviceDay>/<position>"), else its time."""
+    from datetime import date
+    from zoneinfo import ZoneInfo
+    local = ZoneInfo('Europe/Ljubljana')
+    try:
+        return datetime.fromtimestamp(int(entry['id'].split('@', 1)[1].split('/', 1)[0]) + 12 * 3600, local).date()
+    except (IndexError, ValueError):
+        return datetime.fromisoformat(entry['scheduledAt'].replace('Z', '+00:00')).astimezone(local).date() if entry.get('scheduledAt') else date.today()
+
+
 def _capped(entries: Optional[list[dict]], drops: Optional[list] = None) -> Optional[list[dict]]:
     """A board's first BOARD_MAX rows by the time they go, in their order: the app goes on from the last one's time
     (a late bus kept by its timetable time would make it skip the rows between)."""
@@ -672,7 +683,10 @@ def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str 
     from . import sz, tracks
     reports = sz.live.get()
     here = sz.station_key(stop_names().get(stop_id, ''))
+    from . import zamudil
     for e in entries:
+        if e['mode'] == 'rail' and not e.get('replacement') and (planned := zamudil.class_of(sz.train_parts(e['routeName'])[1], _row_day(e))):
+            e['trainClass'] = planned  # SŽ's planned class that day (zamudil.si)
         if e['mode'] != 'rail' or e.get('platform'):
             continue
         report = reports.get(sz.train_parts(e['routeName'])[1] or '')

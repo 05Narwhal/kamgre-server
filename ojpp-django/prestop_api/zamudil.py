@@ -590,6 +590,63 @@ def train_notices(lists: list[tuple[date, dict]]) -> list[dict]:
     return list(found.values())
 
 
+# ---------------------------------------------------------------- planned classes (G6)
+
+# zamudil's class name → the series the app draws (src/lib/trains.ts TrainSeries), first match
+SERIES = [(re.compile(r'avtovlak'), 'avt'), (re.compile(r'razlicnih sestavah'), '541'),
+          *((re.compile(rf'\b{n}\b'), n) for n in ('310', '312', '313', '510', '610', '713', '813'))]
+CARS = {'dvoclen': 2, 'troclen': 3, 'stiriclen': 4}
+FEATURES = {'first_class': 'first-class', 'accessibility': 'accessible', 'bicycle_space': 'bikes', 'air_conditioning': 'air-conditioning',
+            'power_outlets': 'power-outlets', 'wifi': 'wifi', 'cctv': 'cctv', 'food_service': 'food', 'sleeping': 'sleeping'}
+_classes: dict[str, tuple] = {}  # date -> (copy data it was made from, number -> class)
+_unknown: set[str] = set()
+
+
+def train_class(item: dict) -> dict:
+    """One class of the assignments as the contract's trainClass: {series, name, cars (when the name says it),
+    features, planned, source}. A name no series matches is 'unknown' (logged once)."""
+    name = ' '.join(str(item.get('name') or '').replace('*', ' ').split())
+    folded = fold(name)
+    series = next((s for pattern, s in SERIES if pattern.search(folded)), 'unknown')
+    if series == 'unknown' and name not in _unknown:
+        _unknown.add(name)
+        logger.warning('zamudil class "%s": no series matches; shown as unknown', name)
+    features = [ours for theirs, ours in FEATURES.items() if (item.get('features') or {}).get(theirs) is True]
+    if item.get('tables'):  # where the tables are ("first_class"); none: null
+        features.append('tables')
+    out = {'series': series, 'name': name, 'features': features, 'planned': True, 'source': SOURCE_NAME}
+    cars = next((n for word, n in CARS.items() if word in folded), None)
+    if cars:
+        out['cars'] = cars
+    return out
+
+
+def classes(day: date) -> dict[str, dict]:
+    """Train number (text) → the class SŽ plans for it on `day`; empty without that date's copy."""
+    found = copy(CLASSES, day) if enabled() else None
+    data = (found or {}).get('data')
+    key = day.isoformat()
+    hit = _classes.get(key)
+    if hit and hit[0] is data:
+        return hit[1]
+    out: dict[str, dict] = {}
+    for item in (data or {}).get('rollingStock') or []:
+        made = train_class(item)
+        for n in item.get('trainNumbers') or []:
+            if str(n).isdigit():
+                out.setdefault(str(int(n)), made)
+    if len(_classes) > 16:
+        _classes.clear()
+    _classes[key] = (data, out)
+    return out
+
+
+def class_of(number: Optional[str], day: date) -> Optional[dict]:
+    """The planned class of train `number` on service day `day` (a copy of it), or None."""
+    found = classes(day).get(str(number).lstrip('0')) if number else None
+    return {**found, 'features': list(found['features'])} if found else None
+
+
 # ---------------------------------------------------------------- works on the lines (G5)
 
 WORKS_AHEAD = 14       # days: zamudil's maintenance covers this far

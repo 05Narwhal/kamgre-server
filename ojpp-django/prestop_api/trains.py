@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import leg_alerts, mapping, sources, sz
+from . import leg_alerts, mapping, sources, sz, zamudil
 from .upstream import UpstreamError
 
 ON_TIME_LATE = 180   # s (prestop_statistics.aggregation.ON_TIME_LATE)
@@ -82,7 +82,7 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
     category, _ = sz.train_parts(mapping.route_name(run['route']))
     return {'number': number, 'name': mapping.route_name(run['route']) or number, 'category': category, 'date': day.isoformat(),
             'routeId': route_id, 'tripId': run['id'], 'trip': trip, 'vehicle': vehicle_of(number) if day == scheduled.service_day() else None,
-            'alerts': alerts}
+            'alerts': alerts, **({'trainClass': planned} if (planned := zamudil.class_of(number, day)) else {})}
 
 
 def history(number: str, days: int, today: date) -> dict:

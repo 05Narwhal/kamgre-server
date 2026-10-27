@@ -420,3 +420,47 @@ class WorksEndpointTests(TestCase):
             self.assertEqual(len(self.client.get('/api/v1/rail/works').json()['data']), 5)  # today
             for bad in ('from=2026-10-30&to=2026-10-29', 'from=2026-10-27&to=2026-11-20', 'from=x'):
                 self.assertEqual(self.client.get(f'/api/v1/rail/works?{bad}').status_code, 422, bad)
+
+
+class TrainClassTests(ZamudilCase):
+    """G6: the class SŽ plans for each train (never the unit that runs)."""
+
+    def setUp(self):
+        super().setUp()
+        zamudil._copies[(zamudil.CLASSES, DAY.isoformat())] = {'data': fixture('assignments'), 'fetchedAt': NOON, 'checkedAt': NOON, 'error': None}
+        zamudil._looked[(zamudil.CLASSES, DAY.isoformat())] = (1e12, None)
+        zamudil._classes.clear()
+
+    def test_every_train_of_the_fixture_has_a_known_series(self):
+        found = zamudil.classes(DAY)
+        self.assertGreater(len(found), 500)
+        self.assertEqual({c['series'] for c in found.values()}, {'avt', '310', '312', '313', '510', '610', '713', '813', '541'})
+        self.assertEqual(zamudil._unknown, set())
+
+    def test_the_classes(self):
+        pendolino = zamudil.class_of('36', DAY)
+        self.assertEqual(pendolino, {'series': '310', 'name': 'SŽ 310 “Pendolino”', 'planned': True, 'source': 'zamudil.si',
+                                     'features': ['first-class', 'accessible', 'air-conditioning', 'power-outlets', 'wifi', 'food']})
+        desiro = zamudil.class_of('512', DAY)
+        self.assertEqual((desiro['series'], desiro['cars'], desiro['name']), ('312', 3, 'SŽ 312 Siemens Desiro (tročleni)'))
+        kiss = zamudil.class_of('18', DAY)
+        self.assertEqual((kiss['series'], kiss['features'][-1]), ('313', 'tables'))
+        self.assertNotIn('cars', kiss)
+        self.assertEqual(zamudil.class_of('850', DAY)['series'], 'avt')
+        coaches = zamudil.class_of('70', DAY)
+        self.assertEqual((coaches['series'], coaches['name']), ('541', 'Vlak v različnih sestavah vagonov'))
+        self.assertIsNone(zamudil.class_of('99999', DAY))
+        self.assertIsNone(zamudil.class_of('36', date(2026, 10, 28)))  # no copy of that date
+        zamudil.class_of('36', DAY)['features'].append('x')
+        self.assertNotIn('x', zamudil.class_of('36', DAY)['features'])  # each caller gets its own copy
+
+    def test_names(self):
+        self.assertEqual(zamudil.train_class({'name': 'SŽ 312 Siemens Desiro (dvočleni)', 'features': {}})['cars'], 2)
+        with self.assertLogs('prestop_api.zamudil', 'WARNING'):
+            self.assertEqual(zamudil.train_class({'name': 'SŽ 999 Nekaj novega', 'features': {}})['series'], 'unknown')
+
+    def test_a_board_rows_day(self):
+        from prestop_api import sources
+        day = int(datetime(2026, 10, 27, 0, 0, tzinfo=zamudil.LOCAL).timestamp())
+        self.assertEqual(sources._row_day({'id': f'IJPP:t@{day}/3'}), DAY)
+        self.assertEqual(sources._row_day({'id': 'x', 'scheduledAt': '2026-10-27T22:30:00Z'}), date(2026, 10, 27))
