@@ -43,16 +43,16 @@ def caches():
     # The operator GTFS that replaces OTP's broken Kranj timetable (supplement.py) before the indexes built on it.
     from . import operator_notices
     return [scheduled.timetable, scheduled.shapes, supplement.gtfs, sources.stops, sources.routes, sources.alerts_raw, sources.vehicles,
-            scheduled.day_timetable(tomorrow), operator_notices.arriva, operator_notices.sz_news]
+            scheduled.day_timetable(tomorrow), scheduled.day_timetable(tomorrow + timedelta(days=1)), operator_notices.arriva, operator_notices.sz_news]
 
 
 def plans():
-    """Today's and tomorrow's replacement plans, worked out ahead of the boards and journeys that need them,
-    with SŽ's replacement timetables as last read (at most once a minute, sztimetables.load)."""
+    """Today's, tomorrow's and the next day's replacement plans, worked out ahead of the boards and journeys that need
+    them, with SŽ's replacement timetables as last read (at most once a minute, sztimetables.load)."""
     from . import scheduled, sztimetables
     sztimetables.load()
     today = scheduled.service_day()
-    for day in (today, today + timedelta(days=1)):
+    for day in (today, today + timedelta(days=1), today + timedelta(days=2)):
         scheduled.day_plan(day, refresh=True)
 
 

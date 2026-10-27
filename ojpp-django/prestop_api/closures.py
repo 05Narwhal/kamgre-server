@@ -127,6 +127,15 @@ def _days(alert: dict) -> set[str]:
     return {(start + timedelta(days=i)).strftime('%Y%m%d') for i in range((end - start).days + 1)}
 
 
+def trains_of(alert: dict, day: str) -> Optional[frozenset]:
+    """The train numbers a notice replaces on service day `day` (YYYYMMDD): the ones zamudil.si lists with it that
+    date, or on any date when that date's list was not read; None: the notice names none (every train crossing its
+    section)."""
+    if alert.get('_trains') is None:
+        return None
+    return (alert.get('_trains_on') or {}).get(day, alert['_trains'])
+
+
 def in_effect(alert: dict, start: float, end: float) -> bool:
     return alert['_from'] <= end and (alert.get('_to') is None or alert['_to'] >= start) and leg_alerts.on_listed_day(alert, start, end)
 
@@ -293,6 +302,8 @@ def synthesize(trips: list[dict], real: dict[str, list[dict]], alerts: list[dict
         if not is_closure(alert) or len(notice_sides) < 2:
             continue
         listed = [t for r in alert['routeIds'] for t in by_route.get(r, [])] if alert['routeIds'] else trains
+        if alert.get('_trains') is not None:  # the notice names its trains: only those, each on the dates it names them
+            listed = [t for t in trains if sz.train_parts(mapping.route_name(t['route']))[1] in (trains_of(alert, service_date(t)) or ())]
         keys = corridor(notice_sides, listed)
         if not keys or covered(keys, alert, bus_patterns):
             continue
@@ -516,6 +527,10 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
         for sha in sorted(used):
             data, linked = used[sha]
             notices = sorted({notice_id(a) or '' for a in linked})
+            # Notices that name their trains (zamudil.si): the timetable's buses of those trains only (the Ljubljana -
+            # Celje timetable lists every bus of the line, the notice IC 36 alone).
+            named = [trains_of(a, day) for a in linked]
+            only = None if any(n is None for n in named) else frozenset().union(*named)
             columns = _columns(data, stations)
             usable, unusable = set(), set()
             for _, _, col, calls, why in columns:
@@ -532,6 +547,8 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
             for ti, ci, col, calls, why in columns:
                 numbers = _numbers_on(col, day, trains)
                 if why or not sztimetables.runs_on(data, col, when) or (not col.get('additional') and unusable & set(numbers)):
+                    continue
+                if only is not None and not col.get('additional') and not only & set(numbers):
                     continue
                 calls = sztimetables.calls_on(data, data['tables'][ti], col, calls, when)
                 if not calls:

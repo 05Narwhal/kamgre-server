@@ -17,7 +17,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Optional
 
-from . import abroad, closures, geometry, mapping, roads, sz, sztimetables, tracks, trainlive
+from . import abroad, closures, geometry, mapping, roads, sz, sztimetables, tracks, trainlive, zamudil
 from . import replacement as replaced_by
 from .trips import service_day
 from .upstream import Cached, otp
@@ -133,7 +133,7 @@ shapes = Cached(_load_shapes, ttl=6 * 3600, max_stale=48 * 3600, revalidate=6 * 
 timetable = Cached(_load_timetable, ttl=120, max_stale=6 * 3600, revalidate=600)
 _derived: dict = {'key': None, 'sections': {}, 'synthetic': [], 'by_id': {}, 'suppressed': {}, 'decided': {}}
 # Other service days (a board or a journey for another date): their trains, and what replaces them that day.
-DAY_PLANS = 4
+DAY_PLANS = 5  # tomorrow and the day after (kept warm, warm.py) and three dates people asked for
 _day_tables: dict[str, Cached] = {}
 _day_derived: dict[str, dict] = {}
 
@@ -145,8 +145,9 @@ def _derive_into(slot: dict, trips: list[dict], defer_timetables: bool = False) 
     not rebuild the plan: the warmer does that in the background (warm.plans). Their first read after a restart
     does: a plan guessed from the notices alone would show EC 38 (19 Oct) by train until the warmer came round."""
     loaded = closures.inputs()
-    # The notices by content, the rest by identity (a reload is a new object).
-    key = (trips, closures.notices_fingerprint(loaded[0]), *loaded[1:], sztimetables.current()) if loaded else (trips,)
+    # OTP's notices by content, the rest by identity (a reload is a new object; SŽ's notices stay one object while
+    # they stay the same, closures._load_points).
+    key = (trips, closures.notices_fingerprint(loaded[0]), *loaded[1:], closures._notices['raw'], sztimetables.current()) if loaded else (trips,)
     old = slot['key']
     same = lambda a, b: a == b if isinstance(a, int) else a is b  # noqa: E731
     if old is not None and len(old) == len(key):
@@ -196,7 +197,8 @@ def day_plan(day: date, wait: float = 0, refresh: bool = False) -> Optional[dict
     'by_id' (synthetic buses), 'trips' (trip id -> that day's timetable trips, trains and buses), 'suppressed'
     (feed buses a replacement timetable runs instead, see closures.plan), 'decided'}. Each day has its own
     trains and only the notices in effect that day, so a closure that ends on the 11th leaves the 12th's
-    trains alone. None while the day's timetable is not loaded (after waiting up to `wait` s); today's never
+    trains alone; a date up to 13 days ahead first reads that date's notices from zamudil.si when its copy is over
+    6 h old (a request that may wait, or the warmer). None while the day's timetable is not loaded (after waiting up to `wait` s); today's never
     waits unless asked to. New replacement timetables rebuild today's and tomorrow's plans only with
     `refresh` (the warmer's call), so no request waits on that. Right after a restart a request that may wait
     also waits (within `wait`) for the notices and reads the replacement timetables, so its plan is not one
@@ -208,8 +210,10 @@ def day_plan(day: date, wait: float = 0, refresh: bool = False) -> Optional[dict
             time.sleep(0.05)
     if wait and sztimetables.current() is None:
         sztimetables.load()  # reads the files at most once a minute; nothing when there are none
-    wait = max(0.0, deadline - time.time()) if wait else 0
     today = service_day()
+    if day != today and (wait or refresh) and zamudil.ensure(zamudil.NOTICES, day):
+        closures.refresh_notices()  # that date's notices (zamudil.si lists them per date), older than 6 h or none yet
+    wait = max(0.0, deadline - time.time()) if wait else 0
     if day == today:
         snap = timetable.wait(wait) if wait else timetable.get_nowait()
         slot = _derived

@@ -347,13 +347,13 @@ class DayPlanTests(SimpleTestCase):
         self.assertEqual(first[2], {})
         self.assertIs(first[2], again[2])
 
-    def test_the_warmer_reads_new_timetables_and_rebuilds_todays_and_tomorrows_plans(self):
+    def test_the_warmer_reads_new_timetables_and_rebuilds_the_next_three_days_plans(self):
         today = datetime(2026, 10, 14).date()
         with mock.patch.object(sztimetables, 'load') as load, mock.patch.object(scheduled, 'day_plan') as day_plan,                 mock.patch.object(scheduled, 'service_day', return_value=today):
             warm.plans()
         load.assert_called_once()
         self.assertEqual([(c.args[0], c.kwargs.get('refresh')) for c in day_plan.call_args_list],
-                         [(today, True), (today.replace(day=15), True)])
+                         [(today, True), (today.replace(day=15), True), (today.replace(day=16), True)])
 
 
 class _Value:

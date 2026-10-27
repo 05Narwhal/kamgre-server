@@ -160,15 +160,20 @@ def beyond(plan: Optional[dict], train: dict) -> tuple[Optional[dict], Optional[
 
 def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
     """A train trip's (trips.build_trip) stretches a bus runs instead that day: {'fromIndex', 'toIndex' (the bus's
-    first and last station in the trip's stops, None where the train does not call), 'busTripId', 'busName'}."""
+    first and last station in the trip's stops, None where the train does not call), 'busTripId', 'busName'}. A bus
+    that runs only before the train's first station or on from its last one (the feed splits ICS 36 into BUS 36006
+    Ljubljana – Celje and the train Celje – Maribor) is listed too, with its other end None."""
     if not trip['stops']:
         return []
     train, crossed = stretches(plan, trip['id'], _epoch(trip['stops'][0]['scheduledDeparture']))
     if not train:
         return []
     keys, own = _keys(train), [sz.station_key(s['name']) for s in trip['stops']]
+    before, after = beyond(plan, train)
     out = []
-    for _, _, s in crossed:
+    for s in [before] + [s for _, _, s in crossed] + [after]:
+        if not s:
+            continue
         bus = plan['by_id'].get(s['busTripId']) or run_near(plan, s['busTripId'], s['start'])
         ends = [keys[i] if i is not None else None for i in (s['fromIndex'], s['toIndex'])]
         a, b = (own.index(k) if k in own else None for k in ends)
@@ -176,6 +181,40 @@ def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
             continue
         out.append({'fromIndex': a, 'toIndex': b, 'busTripId': s['busTripId'],
                     'busName': mapping.route_name(bus['route']) if bus else None})
+    return out
+
+
+def replaced_runs(plan: Optional[dict], departures: list[dict]) -> list[dict]:
+    """The runs of a rail line on its day (its patterns' departures: {tripId, departure}) that a bus runs instead of,
+    whole or in part, by departure (lineSchema.replacedRuns): {tripId, trainNumber, fromStop, toStop (the train's
+    stations; None where the bus runs on beyond the train's first or last one), busRouteId, busTripIds (several
+    buses for one stretch: "BUS 318/1", "BUS 318/2")}. The same plan as the line's boards, trips and journeys."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    for d in sorted(departures, key=lambda d: d['departure']):
+        if d['tripId'] in seen:
+            continue
+        seen.add(d['tripId'])
+        train, stretched = stretches(plan, d['tripId'], datetime.fromisoformat(d['departure']).timestamp())
+        if not train:
+            continue
+        before, after = beyond(plan, train)
+        last = len(train['stops']) - 1
+        parts: dict[tuple, list[dict]] = {}  # (order, first station index or None, last or None) -> its sections
+        for a, b, s in stretched:
+            parts.setdefault((a, a, b), []).append(s)
+        if before:
+            parts.setdefault((-1, None, 0), []).append(before)
+        if after:
+            parts.setdefault((last, last, None), []).append(after)
+        name = mapping.route_name(train['route'])
+        for (_, a, b), found in sorted(parts.items(), key=lambda kv: kv[0][0]):
+            bus = plan['by_id'].get(found[0]['busTripId']) or run_near(plan, found[0]['busTripId'], found[0]['start'])
+            out.append({'tripId': train['id'], 'trainNumber': sz.train_parts(name)[1] or name,
+                        'fromStop': train['stops'][a].get('name') if a is not None else None,
+                        'toStop': train['stops'][b].get('name') if b is not None else None,
+                        'busRouteId': bus['route']['gtfsId'] if bus else None,
+                        'busTripIds': list(dict.fromkeys(s['busTripId'] for s in found))})
     return out
 
 

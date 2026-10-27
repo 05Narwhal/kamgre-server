@@ -887,9 +887,25 @@ def line_detail(request, route_id):
     # Contract 4: the line's group, what sets it apart, and the other variants of the group.
     grouped = {**variants.of(line['id']), 'variants': variants.siblings(line['id'])}
     patterns = _dense(line['patterns'])
+    extra = {}
     if line.get('mode') == 'rail':
         patterns = _with_sibling_trains(line['id'], patterns, grouped['variants'], _day_param(request))
-    return envelope({**line, **grouped, 'patterns': patterns}, 'scheduled', used=['otp:timetables'])
+        runs = _replaced_runs(patterns, date.fromisoformat(line['serviceDate']))
+        if runs is not None:
+            extra['replacedRuns'] = runs
+    return envelope({**line, **grouped, 'patterns': patterns, **extra}, 'scheduled', used=['otp:timetables'])
+
+
+def _replaced_runs(patterns: list[dict], day: date) -> Optional[list[dict]]:
+    """The line's runs that day a bus runs instead of (replacement.replaced_runs); None while that day's plan is not
+    worked out (the app then shows the runs as trains)."""
+    from . import replacement, scheduled
+    try:
+        plan = scheduled.day_plan(day, wait=8)
+        return replacement.replaced_runs(plan, [d for p in patterns for d in p.get('departures') or []]) if plan else None
+    except Exception as e:  # the line is still useful without them
+        logger.warning('Replaced runs failed: %r', e)
+        return None
 
 
 SIBLING_TRAINS = 40

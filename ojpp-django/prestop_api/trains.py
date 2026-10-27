@@ -65,6 +65,12 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
         return None
     found = trips.load_trips([run['id']], day).get(run['id'])
     trip = trips.build_trip(found, {}, geometry=False) if found else None
+    if trip and trip['stops']:
+        from . import replacement
+        # the stretches a bus runs instead that day, from the plan boards, lines and journeys use
+        sections = replacement.trip_sections(trip, scheduled.plan_at(replacement._epoch(trip['stops'][0]['scheduledDeparture']), wait=DAY_WAIT))
+        if sections:
+            trip['replacedSections'] = sections
     route_id = run['route']['gtfsId']
     try:
         alerts = [mapping.public_alert(a) for a in sources.alerts(lang) if route_id in a['routeIds']]
