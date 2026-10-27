@@ -12,6 +12,7 @@ LOCAL = ZoneInfo('Europe/Ljubljana')
 # "Prefix: A - B / C (A) in obratno (dates)." → the "A - B / C" part (after the last colon); English "and vice versa".
 _SEGMENT = re.compile(r'([^:]+?)\s+(?:in obratno|and vice versa)', re.IGNORECASE)
 _COUNTRY = re.compile(r'\((?:a|i|hr)\)', re.IGNORECASE)
+_RELATION = re.compile(r'^.*\bna relaciji\s+', re.IGNORECASE)  # "Avtobusni IC prevoz na relaciji Ljubljana - Celje in obratno"
 # "(10., 11., 17., 24., 25. oktober)", "(5. - 6. in 19. - 20. oktober)", "(5 - 6 and 19 - 20 October)" — days in one month.
 _DAYS = re.compile(r'\(((?:\d{1,2}\.?\s*(?:,|-|in\b|and\b)?\s*)+)([a-z]+)\s*\)')
 _MONTHS = (('jan',), ('feb',), ('mar',), ('apr',), ('maj', 'may'), ('jun',), ('jul',), ('avg', 'aug'), ('sep',),
@@ -24,7 +25,7 @@ def title_sections(title: str) -> list[set[str]]:
     m = _SEGMENT.search(title or '')
     if not m or ' - ' not in m.group(1):
         return []
-    sides = re.split(r'\s+-\s+', _COUNTRY.sub('', m.group(1)))
+    sides = re.split(r'\s+-\s+', _COUNTRY.sub('', _RELATION.sub('', m.group(1))))
     out = [{fold(n).strip(' .') for n in side.split('/') if n.strip(' .')} for side in sides]
     return [side for side in out if side]
 
@@ -34,7 +35,7 @@ def title_stations(title: str) -> list[str]:
     m = _SEGMENT.search(title or '')
     if not m or ' - ' not in m.group(1):
         return []
-    names = re.split(r'\s+-\s+|\s*/\s*', _COUNTRY.sub('', m.group(1)))
+    names = re.split(r'\s+-\s+|\s*/\s*', _COUNTRY.sub('', _RELATION.sub('', m.group(1))))
     return [fold(n).strip(' .') for n in names if n.strip(' .')]
 
 
@@ -57,7 +58,9 @@ def title_days(title: str, year: int) -> Optional[set[date]]:
 
 
 def on_listed_day(alert: dict, start: float, end: float) -> bool:
-    """False when the title lists days and the trip runs on none of them."""
+    """False when the title lists days (or the notice its own dates, `_dates`, see closures) and the trip runs on none."""
+    if alert.get('_dates') is not None:
+        return bool({datetime.fromtimestamp(t, LOCAL).strftime('%Y%m%d') for t in (start, end)} & alert['_dates'])
     first = datetime.fromtimestamp(alert['_from'], LOCAL).date()
     days = title_days(alert['title'], first.year)
     if days is None:

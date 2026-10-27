@@ -1,7 +1,7 @@
 """Read SŽ's replacement-bus timetables from the PDFs its disruption notices link (prestop_api/szpdf) into
 PRESTOP_SZ_TIMETABLES_DIR: one <sha256>.json per PDF and index.json, which the API reads.
 
-    manage.py szpdf_sync                       # the live notices (PRESTOP_SZ_NOTICES_URL); the prestop-szpdf timer
+    manage.py szpdf_sync                       # the live notices (zamudil.si, else PRESTOP_SZ_NOTICES_URL); the timer
     manage.py szpdf_sync --report              # … and print one line per notice
     manage.py szpdf_sync --from prestop_api/tests/fixtures/szpdf/notices-2026-10-14.json \\
                          --fixtures prestop_api/tests/fixtures/szpdf --report   # the test snapshot, nothing downloaded
@@ -15,14 +15,14 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from prestop_api.szpdf import sync
-from prestop_api.upstream import Mirrors, UpstreamError
+from prestop_api.upstream import UpstreamError
 
 
 class Command(BaseCommand):
     help = "Read the SŽ notices' replacement-timetable PDFs into PRESTOP_SZ_TIMETABLES_DIR."
 
     def add_arguments(self, parser):
-        parser.add_argument('--from', dest='source', default='', help='a saved notices JSON instead of PRESTOP_SZ_NOTICES_URL')
+        parser.add_argument('--from', dest='source', default='', help='a saved notices JSON instead of the live notices')
         parser.add_argument('--fixtures', default='', help='read <ID_ovire>.pdf from this directory instead of downloading')
         parser.add_argument('--report', action='store_true', help='print one line per notice')
         parser.add_argument('--write-goldens', action='store_true', help='with --fixtures: rewrite <id>.expected.json')
@@ -50,15 +50,18 @@ class Command(BaseCommand):
     def notices(self, source: str) -> list:
         if source:
             return json.loads(Path(source).read_text(encoding='utf-8'))
-        mirrors = Mirrors('PRESTOP_SZ_NOTICES_URL')
-        if not mirrors.urls:
-            raise CommandError('No notices: set PRESTOP_SZ_NOTICES_URL or pass --from.')
+        from prestop_api import closures, zamudil
+        # zamudil.si's notices of today on (the copies the API keeps; today's asked for here only when due), then
+        # PRESTOP_SZ_NOTICES_URL, then the notices the API saved last.
+        zamudil.poll(endpoints=(zamudil.NOTICES,))
         try:
-            return mirrors.get_json(limit=8 * 1024 * 1024, timeout=(5, 30))
+            raw, found = closures.read_notices()
+            if not found:
+                raise CommandError('No notices: set PRESTOP_ZAMUDIL_URL or PRESTOP_SZ_NOTICES_URL, or pass --from.')
+            return raw
         except UpstreamError as e:
             # Every notices URL fails: the last good notices saved by the API (closures.save_notices), so the PDFs
             # of notices still running are kept; new notices need a working notices source.
-            from prestop_api import closures
             saved, at = closures.saved_notices()
             if not saved:
                 raise CommandError(f'Notices unavailable: {e}') from e

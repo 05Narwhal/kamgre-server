@@ -35,7 +35,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
-from . import geometry, leg_alerts, maplinks, mapping, platforms, stopfix, sz, szstops, sztimetables
+from . import geometry, leg_alerts, maplinks, mapping, platforms, stopfix, sz, szstops, sztimetables, zamudil
 from .upstream import Cached, Mirrors, Snapshot, UpstreamError, otp
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ PREFIX = 'sub-'           # synthetic trip ids: "IJPP:sub-20261010-453228-0"; th
 LINE_PREFIX = PREFIX + 'r-'
 NOTICE_WALK = 1500        # m: a linked or hand-checked replacement stop further than this is another station's
 NEAR_STOP = 500           # m: a bus stop this close and named like the station is where the bus stops
-CLOSURE = re.compile(r'nad(?:omestn\w*|\.)\s+prevoz')
+CLOSURE = re.compile(r'nad(?:omestn\w*|\.)\s+prevoz|avtobusn\w*\s+(?:\w+\s+)?prevoz\s+na\s+relaciji')
 LINK = re.compile(r'href="(https?://(?:maps\.app\.goo\.gl|goo\.gl/maps|(?:www\.)?google\.[a-z.]+/maps)[^"]*)"')
 NOTICE_ID = re.compile(r'SZ-OVIRA-(\d+)')
 
@@ -117,7 +117,10 @@ def notice_id(alert: dict) -> Optional[str]:
 
 
 def _days(alert: dict) -> set[str]:
-    """Service days (YYYYMMDD) the notice is in effect on, at most a year ahead."""
+    """Service days (YYYYMMDD) the notice is in effect on, at most a year ahead: its own dates when it lists them
+    (`_dates`: "26. - 30. 10. in 3. - 6. 11." is not in effect from 31. 10. to 2. 11.)."""
+    if alert.get('_dates') is not None:
+        return set(alert['_dates'])
     start = datetime.fromtimestamp(alert['_from'], LOCAL).date()
     end = datetime.fromtimestamp(alert['_to'], LOCAL).date() if alert.get('_to') else start + timedelta(days=366)
     end = min(end, start + timedelta(days=400))
@@ -713,28 +716,66 @@ def _load_bus_patterns() -> list[tuple[str, str, frozenset]]:
 
 
 # SŽ's notices feed as last read with the points (sz_notice_alerts); `since`: when notices last reached us at all;
-# `saved`: when the notices in use were saved to disk (they were read back after every notices URL failed)
-_notices: dict = {'raw': None, 'since': None, 'saved': None}
+# `saved`: when the notices in use were saved to disk (they were read back after every notices URL failed);
+# `source`: 'zamudil' or 'feed'; `version`: zamudil's copies the notices were made from (zamudil.version)
+_notices: dict = {'raw': None, 'since': None, 'saved': None, 'source': None, 'version': None}
 notice_urls = Mirrors('PRESTOP_SZ_NOTICES_URL')
+_points_of: dict = {'raw': None, 'value': None}
+
+
+def read_notices() -> tuple[Optional[list], str]:
+    """SŽ's notices as records of its old notices feed, from the first source that has them: zamudil.si's copies of
+    today on (zamudil.notice_records; a list without closures is an answer too), else PRESTOP_SZ_NOTICES_URL.
+    (None, '') when neither is set up; UpstreamError when the notices URLs fail and zamudil has no copy."""
+    found = zamudil.notice_records()
+    if found is not None:
+        return found, 'zamudil'
+    if not notice_urls.urls:
+        return None, ''
+    return notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20)), 'feed'
 
 
 def _load_points() -> dict[str, list]:
-    if not notice_urls.urls:
-        return {}
     try:
-        raw = notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20))
+        raw, source = read_notices()
     except UpstreamError:
         _from_disk()
         raise
-    if not (isinstance(raw, list) and raw):
+    if not source:
+        return {}
+    if source == 'feed' and not (isinstance(raw, list) and raw):
         _from_disk()
         if _notices['raw']:
             # An empty or broken answer is not "no notices": keep the last ones (the cache keeps the last points).
             logger.warning('SŽ notices feed returned %s; keeping the last %d notices', 'nothing' if not raw else type(raw).__name__, len(_notices['raw']))
             raise UpstreamError('SŽ notices: empty answer')
-    _notices.update(raw=raw, saved=None)
-    save_notices(raw)
-    return notice_points(raw)
+    if raw != _notices['raw']:
+        _notices['raw'] = raw  # one object while the notices stay the same: the day plans are keyed on it
+        save_notices(raw)
+    _notices.update(saved=None, source=source)
+    if _points_of['raw'] is not _notices['raw']:
+        _points_of.update(raw=_notices['raw'], value=notice_points(_notices['raw']))
+    return _points_of['value']
+
+
+def notices_changed():
+    """zamudil's copies changed since the notices were read (a poll every 10 minutes): read them again in the
+    background, so boards and plans follow within a minute without a request waiting."""
+    if not zamudil.enabled():
+        return
+    stamp = zamudil.version()
+    if stamp != _notices['version']:
+        _notices['version'] = stamp
+        points._refresh_in_background()
+
+
+def refresh_notices():
+    """Reads the notices again now (a date's copy just came on demand, zamudil.ensure)."""
+    _notices['version'] = zamudil.version()
+    try:
+        points._refresh(force=True)
+    except UpstreamError:
+        pass
 
 
 def notice_end(item: dict, i: int) -> Optional[date]:
@@ -828,22 +869,28 @@ def sz_notice_alerts(raw_notices, known: list[dict], tables: Optional[sztimetabl
     """Replacement notices read from SŽ's own notices feed, for those whose replacement timetable we have (a usable
     file) but OTP has no alert for yet (11198 on 2026-10-14): its buses run all the same, under an alert that names
     the line (`Relacija`) and, through `line_routes`, the SŽ routes on it."""
-    if not tables or not isinstance(raw_notices, list):
+    if not isinstance(raw_notices, list):
         return []
     have = {notice_id(a) for a in known}
+    # The same notice OTP has under SŽ's own number (zamudil's records have numbers of their own, zamudil.notice_number)
+    titles = {title_key(a.get('title') or '') for a in known if a.get('source') == 'sz'}
     out = []
     for item in raw_notices:
         if not isinstance(item, dict):
             continue
         for i, number in enumerate(item.get('ID_ovire') or []):
             number = str(number)
-            if number in have or not any(f.get('status') in ('ok', 'unsure') for f in tables.files_for(number)):
+            files = tables.files_for(number) if tables else []
+            trains = _trains_cell(item, i)
+            # zamudil's notices name their trains, so they replace them even without a readable timetable (guessed
+            # from the notice, `synthesize`); the old feed's only where we have the timetable
+            if number in have or (trains is None and not any(f.get('status') in ('ok', 'unsure') for f in files)):
                 continue
             title, line = _cell(item, 'Naslov', i), _cell(item, 'Relacija', i)
-            dates = DATE.findall(_cell(item, 'Cas', i))
-            if not title or not dates:
+            spans = notice_spans(item, i, files)
+            if not title or not spans or title_key(title) in titles:
                 continue
-            first, last = (date(int(y), int(m), int(d)) for d, m, y in (dates[0], dates[-1]))
+            first, last = spans[0][0], spans[-1][1]
             start = datetime(first.year, first.month, first.day, tzinfo=LOCAL).timestamp()
             end = datetime(last.year, last.month, last.day, 23, 59, tzinfo=LOCAL).timestamp()
             text = re.sub(r'\n{3,}', '\n\n', TAGS.sub('', html.unescape(_cell(item, 'Opis', i)))).strip()
@@ -853,10 +900,66 @@ def sz_notice_alerts(raw_notices, known: list[dict], tables: Optional[sztimetabl
                      'sourceUrl': SZ_NOTICES_PAGE, 'kind': mapping.alert_kind(f'{title} {text}'), 'source': 'sz',
                      'from': mapping.iso(start), 'to': mapping.iso(end),
                      '_from': start, '_to': end, '_aliases': [alert_id], '_line': line}
-            alert['routeIds'] = sorted(line_routes(alert))
+            if len(spans) > 1 or _cell(item, 'CasVir', i) == 'listed':
+                alert['_dates'] = frozenset((a + timedelta(days=k)).strftime('%Y%m%d') for a, b in spans for k in range((b - a).days + 1))
+            if trains is not None:
+                alert.update(_trains=trains, _trains_on=_trains_by_day(item, i))
+                alert['routeIds'] = train_routes(trains)
+            else:
+                alert['routeIds'] = sorted(line_routes(alert))
             have.add(number)
+            titles.add(title_key(title))
             out.append(alert)
     return out
+
+
+def title_key(title: str) -> str:
+    return ' '.join(re.findall(r'[a-z0-9]+', mapping.fold(title)))
+
+
+def _trains_cell(item: dict, i: int) -> Optional[frozenset]:
+    """The trains of notice `i` of a record (`Vlaki`, zamudil's records), as numbers in text; None without."""
+    value = item.get('Vlaki')
+    value = value[i] if isinstance(value, list) and i < len(value) and isinstance(value[i], list) else None
+    return frozenset(str(n) for n in value) if value is not None else None
+
+
+def _trains_by_day(item: dict, i: int) -> dict[str, frozenset]:
+    value = item.get('VlakiPoDnevih')
+    value = value[i] if isinstance(value, list) and i < len(value) and isinstance(value[i], dict) else {}
+    return {d.replace('-', ''): frozenset(str(n) for n in numbers) for d, numbers in value.items() if isinstance(numbers, list)}
+
+
+def notice_spans(item: dict, i: int, files: Sequence[dict] = ()) -> list[tuple[date, date]]:
+    """The spans of days notice `i` is in effect (`Cas`: "26.10.2026-30.10.2026, 03.11.2026-06.11.2026"). A notice
+    whose title gave no readable dates (`CasVir` 'listed': the dates zamudil listed it on) takes its timetable's
+    validity when there is one."""
+    found = DATE.findall(_cell(item, 'Cas', i))
+    days = []
+    for d, m, y in found:
+        try:
+            days.append(date(int(y), int(m), int(d)))
+        except ValueError:
+            return []
+    spans = [(days[k], days[k + 1] if k + 1 < len(days) else days[k]) for k in range(0, len(days), 2)]
+    if _cell(item, 'CasVir', i) == 'listed':
+        valid = [(f.get('valid') or {}) for f in files if f.get('status') in ('ok', 'unsure')]
+        dates = sorted({date.fromisoformat(d) for v in valid for d in v.get('dates') or []}
+                       | {date.fromisoformat(v['from']) + timedelta(days=k) for v in valid if v.get('from') and v.get('to') and not v.get('dates')
+                          for k in range((date.fromisoformat(v['to']) - date.fromisoformat(v['from'])).days + 1)})
+        if dates:
+            spans = zamudil._merged_days(dates)
+    return spans
+
+
+def train_routes(numbers: Iterable[str]) -> list[str]:
+    """SŽ's train routes (one per train) of these train numbers."""
+    from . import sources
+    routes = sources.routes.peek()
+    wanted = set(numbers)
+    return sorted(rid for rid, r in (routes.value if routes else {}).items()
+                  if r.get('agencyId') in mapping.REPLACEMENT_AGENCIES and r.get('mode') == 'RAIL'
+                  and sz.train_parts(mapping.route_name(r))[1] in wanted)
 
 
 def rail_routes_on(alert: dict) -> list[str]:
@@ -900,7 +1003,8 @@ def notices_source() -> dict:
     from . import sources
     alerts, feed = sources.alerts_raw.peek(), points.peek()
     in_otp = bool(alerts and any(notice_id(a) for a in alerts.value))
-    feed_ok = bool(feed and not feed.error and _notices['raw'])
+    # zamudil's notices without a closure today are an answer too
+    feed_ok = bool(feed and not feed.error and (_notices['raw'] or _notices['source'] == 'zamudil'))
     if in_otp or feed_ok:
         status = 'live'
     elif _notices['raw'] or not alerts or not (feed or points._last_error):
@@ -951,6 +1055,7 @@ def inputs():
     """(alerts, bus patterns, notice points, bus stops) when all are loaded, else None (no synthetic buses yet).
     The tuple's members are the cached values themselves, so callers can tell when one changed."""
     from . import sources
+    notices_changed()
     snaps = [sources.alerts_raw.peek(), bus_patterns.peek(), points.peek(), sources.stops.peek()]
     if any(s is None for s in snaps[:2]) or snaps[3] is None:
         return None

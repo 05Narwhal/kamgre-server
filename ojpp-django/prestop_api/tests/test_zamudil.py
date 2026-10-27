@@ -1,5 +1,7 @@
-"""zamudil.si client (spec 2026-10-27 G1): fixtures parse, a failing or changed API keeps the last copy."""
+"""zamudil.si client (spec 2026-10-27 G1): fixtures parse, a failing or changed API keeps the last copy; its notices as
+SŽ's old notices feed records (G2)."""
 import json
+import re
 import tempfile
 from datetime import date, datetime
 from pathlib import Path
@@ -169,3 +171,102 @@ class ScheduleTests(ZamudilCase):
             self.assertTrue(zamudil.ensure(zamudil.NOTICES, later, now=NOON + 7 * 3600))
             self.assertFalse(zamudil.ensure(zamudil.NOTICES, date(2026, 11, 20), now=NOON))  # past the 14 days
         self.assertEqual(asked, [('/notices', '2026-11-03')] * 2)
+
+
+class TitleDateTests(SimpleTestCase):
+    """G2: the five ways SŽ writes a notice's days, the year from the service date it was listed on."""
+
+    def spans(self, title, seen=DAY):
+        return zamudil.title_spans(title, seen)
+
+    def test_the_five_forms(self):
+        d = date
+        self.assertEqual(self.spans('Vozni red nadomestnega prevoza: Ljubljana - Jesenice / Beljak in obratno (24. 10. - 1. 11.).'),
+                         [(d(2026, 10, 24), d(2026, 11, 1))])
+        self.assertEqual(self.spans('Vozni red nadomestnega prevoza: B. Bistrica / Vintgar - Jesenice in obratno (26. - 30. oktober).'),
+                         [(d(2026, 10, 26), d(2026, 10, 30))])
+        self.assertEqual(self.spans('Vozni red nadomestnega prevoza: Grosuplje - Kočevje in obratno (26. in 27. oktober).'),
+                         [(d(2026, 10, 26), d(2026, 10, 26)), (d(2026, 10, 27), d(2026, 10, 27))])
+        self.assertEqual(self.spans('Vozni red nadomestnega prevoza: Ptuj / Moškanjci - Ormož in obratno (26. - 30. 10. in 3. - 6. 11.).'),
+                         [(d(2026, 10, 26), d(2026, 10, 30)), (d(2026, 11, 3), d(2026, 11, 6))])
+        self.assertEqual(self.spans('Avtobusni IC prevoz na relaciji Ljubljana - Celje in obratno (do 12. decembra).'),
+                         [(DAY, d(2026, 12, 12))])
+
+    def test_the_year_rolls_over(self):
+        seen = date(2026, 12, 28)
+        self.assertEqual(self.spans('Vozni red nadomestnega prevoza: Divača - Koper in obratno (28. 12. - 5. 1.).', seen),
+                         [(seen, date(2027, 1, 5))])
+        self.assertEqual(self.spans('… in obratno (do 15. januarja).', seen), [(seen, date(2027, 1, 15))])
+        self.assertEqual(self.spans('… in obratno (3. - 6. 1.).', seen), [(date(2027, 1, 3), date(2027, 1, 6))])
+        self.assertEqual(self.spans('… in obratno (20. 12. 2026 - 5. 1. 2027).', seen), [(date(2026, 12, 20), date(2027, 1, 5))])
+
+    def test_unreadable(self):
+        for title in ('Vozni red nadomestnega prevoza: Ljubljana - Kranj in obratno.', '… (do nadaljnjega)', '… (27. oktober, 7.00 - 15.00)',
+                      '… (31. 2.)', '… (30. - 26. 10.)', 'Beljak (A) in obratno'):
+            with self.subTest(title=title):
+                self.assertIsNone(self.spans(title))
+
+    def test_relation(self):
+        self.assertEqual(zamudil.relation('Vozni red nadomestnega prevoza: Lesce Bled - Jesenice / Beljak (A) in obratno (24. 10. - 1. 11.).'),
+                         'Lesce Bled - Jesenice / Beljak (A)')
+        self.assertEqual(zamudil.relation('Avtobusni IC prevoz na relaciji Ljubljana - Celje in obratno (do 12. decembra).'), 'Ljubljana - Celje')
+
+
+class RecordTests(SimpleTestCase):
+    """G2: zamudil's notices as SŽ's old notices feed records (closures.py and szpdf_sync read them unchanged)."""
+
+    def records(self, *lists):
+        return zamudil.records(list(lists) or [(DAY, fixture('notices'))])
+
+    def test_the_fixture_gives_one_record_per_replacement_notice(self):
+        recs = self.records()
+        lines = sorted(r['Relacija'][0] for r in recs)
+        self.assertEqual(lines, ['B. Bistrica / Vintgar - Jesenice', 'Grosuplje - Kočevje', 'Lesce Bled - Jesenice / Beljak (A)', 'Ljubljana - Celje',
+                                 'Ljubljana - Jesenice / Beljak', 'Ptuj / Moškanjci - Ormož'])
+        pdfs = {r['ID_ovire'][0]: re.findall(r'href="([^"]+\.pdf)"', r['Opis'][0]) for r in recs}
+        self.assertTrue(all(len(v) == 1 for v in pdfs.values()), pdfs)
+        self.assertEqual(len({v[0] for v in pdfs.values()}), 5)  # Ljubljana - Jesenice and Lesce Bled - Jesenice share one PDF
+        self.assertEqual(len({r['ID_ovire'][0] for r in recs}), 6)
+        self.assertTrue(all(r['ID_ovire'][0].isdigit() for r in recs))
+        by_line = {r['Relacija'][0]: r for r in recs}
+        ormoz = by_line['Ptuj / Moškanjci - Ormož']
+        self.assertEqual(ormoz['Cas'], ['26.10.2026-30.10.2026, 03.11.2026-06.11.2026'])
+        self.assertEqual(ormoz['Vlaki'], [[640, 2501, 2503, 2519]])
+        self.assertEqual(ormoz['VlakiPoDnevih'], [{'2026-10-27': [640, 2501, 2503, 2519]}])
+        self.assertEqual(by_line['Ljubljana - Celje']['Vlaki'], [[36]])
+        self.assertEqual(by_line['Ljubljana - Celje']['Cas'], ['27.10.2026-12.12.2026'])
+        self.assertIn('Zaradi del na progi Ptuj', ormoz['Opis'][0])
+        self.assertEqual(ormoz['Naslov'], ['Vozni red nadomestnega prevoza: Ptuj / Moškanjci - Ormož in obratno (26. - 30. 10. in 3. - 6. 11.).'])
+
+    def test_the_numbers_stay_from_date_to_date(self):
+        one = {r['Relacija'][0]: r['ID_ovire'][0] for r in self.records()}
+        later = fixture('notices') | {'serviceDate': '2026-10-28'}
+        both = self.records((DAY, fixture('notices')), (date(2026, 10, 28), later))
+        self.assertEqual({r['Relacija'][0]: r['ID_ovire'][0] for r in both}, one)  # one record per notice
+        ormoz = next(r for r in both if r['Relacija'][0].startswith('Ptuj'))
+        self.assertEqual(sorted(ormoz['VlakiPoDnevih'][0]), ['2026-10-27', '2026-10-28'])
+
+    def test_unreadable_dates_take_the_listed_dates(self):
+        data = {'notices': [{'summary': 'Vozni red nadomestnega prevoza: Ljubljana - Kamnik in obratno.', 'trainNumbers': [1, 2]},
+                            {'summary': 'Povezava: [Vozni red](https://example.si/a.pdf)', 'body': 'x', 'trainNumbers': [2, 1]}]}
+        with self.assertLogs('prestop_api.zamudil', 'WARNING'):
+            [rec] = zamudil.records([(DAY, data), (date(2026, 10, 28), data), (date(2026, 10, 30), data)])
+        self.assertEqual((rec['Cas'], rec['CasVir']), (['27.10.2026-28.10.2026, 30.10.2026-30.10.2026'], ['listed']))
+
+    def test_the_old_feeds_readers(self):
+        from prestop_api import closures
+        from prestop_api.szpdf import sync
+        recs = self.records()
+        self.assertEqual(len(sync.notice_pdfs(recs)), 6)
+        self.assertEqual(len(closures.current_notices(recs, date(2026, 11, 2))), 2)  # Moškanjci (to 6 Nov) and IC (to 12 Dec)
+        alerts = closures.sz_notice_alerts(recs, [], None)
+        self.assertEqual(len(alerts), 6)
+        self.assertTrue(all(closures.is_closure(a) for a in alerts), [a['title'] for a in alerts if not closures.is_closure(a)])
+        ormoz = next(a for a in alerts if 'Ormož' in a['title'])
+        self.assertEqual((ormoz['_trains'], ormoz['_trains_on']['20261027']), (frozenset({'640', '2501', '2503', '2519'}),) * 2)
+        self.assertIn('20261103', ormoz['_dates'])
+        self.assertNotIn('20261101', ormoz['_dates'])
+        self.assertEqual(closures.sides(next(a for a in alerts if 'Celje' in a['title'])), [['ljubljana'], ['celje']])
+        # the same notice from OTP (SŽ's own number) is one alert
+        otp = [{'id': 'alert:x', 'title': ormoz['title'], 'source': 'sz', 'routeIds': []}]
+        self.assertEqual(len(closures.sz_notice_alerts(recs, otp, None)), 5)
