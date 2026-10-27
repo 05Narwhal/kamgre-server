@@ -39,6 +39,8 @@ PRESTOP_MAINTENANCE_FILE = '/var/lib/prestop/maintenance.json'
 PRESTOP_SZ_TIMETABLES_DIR = '/var/lib/prestop/sz-timetables'
 # The last good SŽ notices (closures.py), so a restart while every notices URL fails keeps today's closures.
 PRESTOP_SZ_NOTICES_FILE = '/var/lib/prestop/sz-notices.json'
+# zamudil.si's last good copies (notices per date, planned classes, line works), shared by the API workers and szpdf.
+PRESTOP_ZAMUDIL_DIR = '/var/lib/prestop/zamudil'
 # Each train's usual track, rebuilt on Sundays by the night window (server/nightly.sh); the app's copy until then.
 PRESTOP_SZ_USUAL_TRACKS_FILE = '/var/lib/prestop/sz_tracks.json'
 
