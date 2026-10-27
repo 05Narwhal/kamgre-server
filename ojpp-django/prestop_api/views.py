@@ -114,6 +114,7 @@ def all_sources():
         _sz_source(),
         _sz_delays_source(),
         _sz_notices_source(),
+        *_zamudil_sources(),
         _sz_news_source(),
         # Arriva's site notices: the server can be shut out of the site (ConnectTimeout from Oracle on 2026-10-15),
         # so /health says when they are missing instead of the disruptions list just lacking them.
@@ -184,6 +185,12 @@ def outages(srcs: list[dict], now: Optional[float] = None) -> list[dict]:
         if now - since > OUTAGE:
             out.append({'id': s['id'], 'status': s['status'], 'since': s.get('since'), 'minutes': int((now - since) // 60)})
     return out
+
+
+def _zamudil_sources():
+    """zamudil.si's notices, planned classes and line works (`since`: each one's last good answer)."""
+    from . import zamudil
+    return zamudil.health()
 
 
 def _sz_notices_source():

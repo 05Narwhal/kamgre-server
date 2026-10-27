@@ -92,8 +92,14 @@ PRESTOP_SZ_RT_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_RT_U
 PRESTOP_SZ_TRACKS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_TRACKS_URL', default=[f'{h}/train_data' for h in SZ_SCRAPER])
 # Each train's usual track per station (prestop_api/tracks.py); empty: the copy checked in with the app.
 PRESTOP_SZ_USUAL_TRACKS_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_USUAL_TRACKS_FILE', default='')
-# SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py). A derp-si or
-# zamudil.si notices endpoint goes first once one exists (spec F4.1/F4.6); the last good notices are kept on disk.
+# zamudil.si (allowed by its author 2026-10-27, source named, our User-Agent): SŽ's notices per service date, the
+# planned class of each train and the works on the lines (prestop_api/zamudil.py). Its notices go first, before
+# PRESTOP_SZ_NOTICES_URL. The last good copy of each endpoint and date is kept in PRESTOP_ZAMUDIL_DIR, which the API's
+# workers and szpdf_sync share; '' keeps copies in memory only.
+PRESTOP_ZAMUDIL_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_ZAMUDIL_URL', default=['https://api.zamudil.si/api'])
+PRESTOP_ZAMUDIL_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_ZAMUDIL_DIR', default=str(root / 'data/zamudil'))
+# SŽ disruption notices with their HTML (map links of replacement stops; see prestop_api/closures.py), read when
+# zamudil.si has no copy; the last good notices are kept on disk.
 PRESTOP_SZ_NOTICES_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NOTICES_URL', default=['https://api.modra.ninja/sz/ovire_raw?lang=sl'])
 # The last good notices, so a restart while every notices URL fails keeps today's closures (closures.py).
 PRESTOP_SZ_NOTICES_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_FILE', default=str(root / 'data/sz-notices.json'))

@@ -68,6 +68,9 @@ def tick(now: float):
         connection.close()  # this thread's own connection
     for cache in caches():
         cache.warm()
+    from . import zamudil
+    if zamudil.enabled():  # zamudil.si's copies that are due, beside the warming (one poll at a time)
+        threading.Thread(target=zamudil.poll, daemon=True, name='prestop-zamudil').start()
     from . import sources
     sources.warm_alerts()  # the alert lists boards and journeys share, rebuilt here instead of in a request
     plans()
