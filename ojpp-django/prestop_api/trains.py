@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import mapping, sources, sz
+from . import leg_alerts, mapping, sources, sz
 from .upstream import UpstreamError
 
 ON_TIME_LATE = 180   # s (prestop_statistics.aggregation.ON_TIME_LATE)
@@ -72,8 +72,11 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
         if sections:
             trip['replacedSections'] = sections
     route_id = run['route']['gtfsId']
-    try:
-        alerts = [mapping.public_alert(a) for a in sources.alerts(lang) if route_id in a['routeIds']]
+    start = (run.get('departures') or [run['serviceDay']])[0]
+    end = (run.get('arrivals') or [run['serviceDay'] + 86400])[-1]
+    try:  # the notices on its route in effect while it runs that day
+        alerts = [mapping.public_alert(a) for a in sources.alerts(lang) if route_id in a['routeIds'] and a['_from'] <= end
+                  and (a['_to'] is None or a['_to'] >= start) and leg_alerts.on_listed_day(a, start, end)]
     except UpstreamError:
         alerts = []
     category, _ = sz.train_parts(mapping.route_name(run['route']))

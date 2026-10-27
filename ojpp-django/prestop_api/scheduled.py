@@ -536,4 +536,6 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
                 out[-1].update(nextPlatform=track, nextPlatformUsual=usual)
         if trip.get('alertIds'):
             out[-1]['alertIds'] = trip['alertIds']
+        elif not replacement and (notices := closures.train_alert_ids(route['gtfsId'], now)):
+            out[-1]['alertIds'] = notices  # zamudil.si's notices on this train today (closures.train_alerts)
     return out

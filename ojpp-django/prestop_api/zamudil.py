@@ -562,6 +562,34 @@ def records(lists: list[tuple[date, dict]]) -> list[dict]:
     return sorted(out, key=lambda r: r['ID_ovire'][0])
 
 
+def train_notices(lists: list[tuple[date, dict]]) -> list[dict]:
+    """The other notices of each date's list (not replacement timetables, G4), one per notice however many dates list
+    it: {'number', 'title' (plain), 'text', 'url' (its first link), 'source' ('sz' | 'oebb'), 'trains' (numbers as
+    text), 'days'}. An item right after one with the same trains continues it ("OBVESTILO: Združeni vlaki iz/do
+    Zidanega Mosta" + "ZIDANI MOST - LJUBLJANA:" with the details)."""
+    found: dict[str, dict] = {}
+    for day, data in sorted(lists, key=lambda x: x[0]):
+        _, others = replacement_pairs([n for n in (data or {}).get('notices') or [] if isinstance(n, dict)])
+        groups: list[list[dict]] = []
+        for item in others:
+            if groups and _numbers(groups[-1][-1]) == _numbers(item) and _numbers(item):
+                groups[-1].append(item)
+            else:
+                groups.append([item])
+        for group in groups:
+            head = group[0]
+            title, url = markdown_text(head.get('summary') or '')
+            parts = [markdown_text(head.get('body') or '')] + [markdown_text(f'{n.get("summary") or ""}\n\n{n.get("body") or ""}') for n in group[1:]]
+            text = '\n\n'.join(t for t, _ in parts if t)
+            url = url or next((u for _, u in parts if u), None)
+            number = notice_number('', title)
+            entry = found.setdefault(number, {'number': number, 'title': title, 'text': text, 'url': url, 'source': head.get('source') or 'sz',
+                                              'trains': [], 'days': []})
+            entry['trains'] = sorted(set(entry['trains']) | {str(n) for item in group for n in _numbers(item)}, key=int)
+            entry['days'].append(day)
+    return list(found.values())
+
+
 _records: dict = {'version': None, 'value': None}
 
 

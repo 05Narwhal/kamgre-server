@@ -127,7 +127,8 @@ def _short(text: str) -> str:
 def add_notices(journeys: list[dict], alerts: list[dict], lang: str) -> list[dict]:
     """Each leg's short disruption lines (`notices`, besides alertIds): a replacement bus names the train it runs
     instead of, and the stretch when the train runs the rest of the way; a detour, a moved stop or a closure on
-    the leg's line says so in the notice's own title. A train that runs anyway has none (its notice was dropped,
+    the leg's line says so in the notice's own title, and so does a notice about the train itself (`_leg_notice`:
+    zamudil.si's train notices, works on the line) whatever its kind. A train that runs anyway has none (its notice was dropped,
     journey_legs.unreplaced_notices)."""
     words = _WORDS.get(lang, _WORDS['en'])
     by_id = {a['id']: a for a in alerts}
@@ -142,7 +143,7 @@ def add_notices(journeys: list[dict], alerts: list[dict], lang: str) -> list[dic
             for alert_id in leg.get('alertIds') or []:
                 alert = by_id.get(alert_id) or {}
                 kind = alert.get('kind')
-                if kind not in NOTICE_KINDS or (out and kind in ('replacement', 'closure') and leg.get('replacement')):
+                if (kind not in NOTICE_KINDS and not alert.get('_leg_notice')) or (out and kind in ('replacement', 'closure') and leg.get('replacement')):
                     continue  # the bus already says what it replaces
                 out.append({'kind': kind, 'text': _short(alert.get('title') or alert.get('message') or '')})
             seen, notices = set(), []

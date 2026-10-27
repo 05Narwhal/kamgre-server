@@ -76,7 +76,8 @@ class TrainEndpointTests(TestCase):
         with mock.patch.object(scheduled, 'timetable', fixed([yesterday, bus, run])), \
                 mock.patch('prestop_api.trips.load_trips', return_value={'IJPP:t310': {'static': {}}}), \
                 mock.patch('prestop_api.trips.build_trip', return_value=trip), \
-                mock.patch.object(sources, 'alerts', return_value=[{'id': 'a', 'routeIds': ['IJPP:r310'], '_from': 0}, {'id': 'b', 'routeIds': ['x']}]):
+                mock.patch.object(sources, 'alerts', return_value=[{'id': 'a', 'title': '', 'routeIds': ['IJPP:r310'], '_from': 0, '_to': None}, {'id': 'b', 'title': '', 'routeIds': ['x'], '_from': 0, '_to': None},
+                                                                       {'id': 'old', 'title': '', 'routeIds': ['IJPP:r310'], '_from': 0, '_to': 1}]):
             body = self.client.get('/api/v1/trains/0310').json()
         data = body['data']
         self.assertEqual((data['number'], data['category'], data['tripId'], data['date'], data['trip'], body['meta']['status']),

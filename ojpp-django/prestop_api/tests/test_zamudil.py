@@ -270,3 +270,66 @@ class RecordTests(SimpleTestCase):
         # the same notice from OTP (SŽ's own number) is one alert
         otp = [{'id': 'alert:x', 'title': ormoz['title'], 'source': 'sz', 'routeIds': []}]
         self.assertEqual(len(closures.sz_notice_alerts(recs, otp, None)), 5)
+
+
+def routes(*names: str) -> dict:
+    return {f'IJPP:r{n.split()[-1]}': {'gtfsId': f'IJPP:r{n.split()[-1]}', 'shortName': n, 'agencyId': 'IJPP:1161', 'mode': 'RAIL'} for n in names}
+
+
+class TrainNoticeTests(ZamudilCase):
+    """G4: the other notices as alerts on the trains they name, that date."""
+
+    def setUp(self):
+        super().setUp()
+        from prestop_api import closures, sources
+        from prestop_api.upstream import Snapshot
+        zamudil._copies[(zamudil.NOTICES, DAY.isoformat())] = {'data': fixture('notices'), 'fetchedAt': NOON, 'checkedAt': NOON, 'error': None}
+        zamudil._looked[(zamudil.NOTICES, DAY.isoformat())] = (1e12, None)  # no disk look
+        closures._train_alerts.update(stamp=None, value=[])
+        self.routes = mock.patch.object(sources.routes, 'peek', return_value=Snapshot(routes('RG 619', 'RG 631', 'RG 632', 'EC 573', 'AVT 850', 'LPV 2424'), NOON))
+        self.routes.start()
+
+    def tearDown(self):
+        self.routes.stop()
+        super().tearDown()
+
+    def test_the_notices(self):
+        notices = zamudil.train_notices([(DAY, fixture('notices'))])
+        self.assertEqual(len(notices), 8)  # 21 items: 6 replacement pairs, the joined-trains notice and its details as one
+        joined = next(n for n in notices if n['title'].startswith('OBVESTILO: Združeni'))
+        self.assertEqual(joined['trains'], ['619', '631', '632'])
+        self.assertIn('Garnitura vlaka RG 619 iz Maribora', joined['text'])
+        siska = next(n for n in notices if n['title'].startswith('Zaradi obsežnih'))
+        self.assertNotIn('](', siska['title'])  # Markdown links as their words
+        self.assertIn('iskalniku voznega reda', siska['title'])
+        self.assertEqual(siska['url'], 'https://potniski.sz.si/')
+
+    def test_alerts_on_their_trains(self):
+        from prestop_api import closures
+        alerts = closures.train_alerts()
+        oebb = next(a for a in alerts if 'tujini' in a['title'])
+        self.assertTrue(oebb['title'].startswith('ÖBB: '))
+        self.assertEqual((oebb['routeIds'], oebb['source']), (['IJPP:r573'], 'sz'))
+        joined = next(a for a in alerts if 'Združeni' in a['title'])
+        self.assertEqual(joined['routeIds'], ['IJPP:r619', 'IJPP:r631', 'IJPP:r632'])
+        self.assertTrue(joined['id'].startswith('sz-zamudil:') and joined['_leg_notice'])
+        self.assertEqual((joined['validFrom'], joined['validTo']), ('2026-10-26T23:00:00Z', '2026-10-28T03:00:00Z'))
+        self.assertEqual(closures.train_alert_ids('IJPP:r850', NOON), [a['id'] for a in alerts if 'IJPP:r850' in a['routeIds']])
+        self.assertEqual(len(closures.train_alert_ids('IJPP:r850', NOON)), 2)  # two car-train notices
+        self.assertEqual(closures.train_alert_ids('IJPP:r850', NOON + 2 * 86400), [])
+        self.assertIs(closures.train_alerts(), alerts)  # worked out once per copy
+
+    def test_one_alert_when_otp_has_it_too(self):
+        from prestop_api import closures
+        joined = next(a for a in closures.train_alerts() if 'Združeni' in a['title'])
+        otp = {'id': 'alert:otp', 'title': joined['title'], 'message': '', 'source': 'sz', 'routeIds': ['IJPP:r619'], 'stopIds': [], 'kind': 'info'}
+        with mock.patch.object(closures, 'sz_notice_alerts', return_value=[]):
+            out = closures.notice_alerts([otp])
+        self.assertEqual([a['id'] for a in out if 'Združeni' in a['title']], ['alert:otp'])
+
+    def test_a_leg_tells_its_trains_notice(self):
+        from prestop_api import closures, leg_alerts
+        joined = next(a for a in closures.train_alerts() if 'Združeni' in a['title'])
+        journey = {'legs': [{'mode': 'rail', 'routeName': 'RG 619', 'alertIds': [joined['id']], 'origin': {'name': 'Celje'}, 'destination': {'name': 'Ljubljana'}}]}
+        [leg] = leg_alerts.add_notices([journey], [joined], 'sl')[0]['legs']
+        self.assertEqual(leg['notices'], [{'kind': joined['kind'], 'text': 'OBVESTILO: Združeni vlaki iz/do Zidanega Mosta (do nadaljnjega).'}])

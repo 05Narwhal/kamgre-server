@@ -1006,7 +1006,50 @@ def notice_alerts(alerts: list[dict], tables: Optional[sztimetables.Timetables] 
     for a in alerts:
         if a.get('source') == 'sz' and not a['routeIds']:
             a['routeIds'] = rail_routes_on(a)
-    return alerts + sz_notice_alerts(_notices['raw'], alerts, tables or sztimetables.current(), rail_routes_on)
+    made = sz_notice_alerts(_notices['raw'], alerts, tables or sztimetables.current(), rail_routes_on)
+    otp_titles = {title_key(a.get('title') or '') for a in alerts if a.get('source') == 'sz'}
+    return alerts + made + [dict(a) for a in train_alerts() if a['_key'] not in otp_titles]
+
+
+ZAMUDIL_PREFIX = 'sz-zamudil:'
+_train_alerts: dict = {'stamp': None, 'value': []}
+
+
+def train_alerts() -> list[dict]:
+    """zamudil.si's other notices (G4: trains joined at Zidani Most, stops skipped abroad, car-train loading, delays
+    from works) as alerts on the trains they name, for the days they are listed on: the train page, its board rows,
+    journey legs (`_leg_notice`: a leg's short line whatever its kind) and the train on the map carry them. Markdown
+    links become their words, the first link the alert's source; ÖBB's are titled so. Worked out again only when a
+    copy or the routes changed."""
+    from . import sources
+    if not zamudil.enabled():
+        return []
+    lists = zamudil.copies(zamudil.NOTICES)
+    routes = sources.routes.peek()
+    stamp = (tuple((d, id(data)) for d, data in lists), id(routes))
+    if _train_alerts['stamp'] == stamp:
+        return _train_alerts['value']
+    out = []
+    for n in zamudil.train_notices(lists):
+        first, last = min(n['days']), max(n['days'])
+        start = datetime(first.year, first.month, first.day, tzinfo=LOCAL).timestamp()
+        # its trains' whole service day (a train after midnight still runs that day)
+        end = datetime(last.year, last.month, last.day, 4, tzinfo=LOCAL).timestamp() + 86400
+        title = f'ÖBB: {n["title"]}' if n['source'] == 'oebb' else n['title']
+        alert_id = ZAMUDIL_PREFIX + n['number']
+        out.append({'id': alert_id, 'title': title[:300], 'message': n['text'][:2000], 'operatorId': 'IJPP:1161', 'stopIds': [],
+                    'routeIds': train_routes(n['trains']) if n['trains'] else [],
+                    'validFrom': mapping.iso(start), 'validTo': mapping.iso(end), 'from': mapping.iso(start), 'to': mapping.iso(end),
+                    'sourceUrl': n['url'] or SZ_NOTICES_PAGE, 'kind': mapping.alert_kind(f'{n["title"]} {n["text"][:400]}'), 'source': 'sz',
+                    '_from': start, '_to': end, '_aliases': [alert_id], '_trains': frozenset(n['trains']), '_leg_notice': True,
+                    '_key': title_key(n['title'])})
+    _train_alerts.update(stamp=stamp, value=out)
+    return out
+
+
+def train_alert_ids(route_id: str, at: float) -> list[str]:
+    """Ids of zamudil's train notices on this train's route in effect at `at` (the train on the map, G4)."""
+    return [a['id'] for a in train_alerts() if route_id in a['routeIds'] and mapping.alert_active(a, at)]
 
 
 bus_patterns = Cached(_load_bus_patterns, ttl=6 * 3600, max_stale=48 * 3600, revalidate=6 * 3600)
