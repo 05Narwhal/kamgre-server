@@ -340,6 +340,15 @@ class AlertTests(SimpleTestCase):
         self.assertEqual(sz['operatorId'], 'IJPP:1161')
         self.assertEqual(unknown['operatorId'], 'IJPP:unknown')
 
+    def test_sz_per_train_delays_are_not_alerts(self):
+        # The train's live delay shows them; SŽ's other disruptions stay.
+        import base64
+        delay = base64.b64encode(b'Alert:IJPP:SZ-DELAY-453081').decode().rstrip('=')
+        works = base64.b64encode(b'Alert:IJPP:SZ-OVIRA-11300').decode().rstrip('=')
+        raw = [otp_alert(delay, [{'language': 'en', 'text': 'Train delayed by 29 min'}]),
+               otp_alert(works, [{'language': 'en', 'text': 'Works on the line, delays possible'}], start=NOW - 50)]
+        self.assertEqual([a['id'] for a in mapping.build_alerts(raw, 'en', NOW)], [f'alert:{works}'])
+
 class RentalTests(SimpleTestCase):
     def test_car_sharing_is_not_a_bike(self):
         stations = [{'stationId': 'sharengo:1', 'network': 'sharengo', 'name': 'Car', 'lat': 46, 'lon': 14, 'vehiclesAvailable': 2},

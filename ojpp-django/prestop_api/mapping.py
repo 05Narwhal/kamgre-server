@@ -722,6 +722,8 @@ def build_alerts(otp_alerts: Iterable[dict], language: str, now: Optional[float]
         end = a.get('effectiveEndDate')
         if end and end < now:
             continue
+        if 'SZ-DELAY' in _decoded(a['id']):
+            continue  # "Train RG 618 is delayed by 29 min": the train's live delay shows it (trainlive still reads them)
         title, title_match = _pick(a.get('alertHeaderTextTranslations'), language)
         message, _ = _pick(a.get('alertDescriptionTextTranslations'), language)
         if not (title or message):
