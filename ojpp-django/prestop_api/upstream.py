@@ -55,9 +55,13 @@ def _read_json(resp: requests.Response, limit: int) -> Any:
         raise UpstreamError(f'{resp.url} returned invalid JSON') from e
 
 
-def get_json(url: str, params: Optional[dict] = None, limit: int = 32 * 1024 * 1024, timeout=TIMEOUT) -> Any:
+def get_json(url: str, params: Optional[dict] = None, limit: int = 32 * 1024 * 1024, timeout=TIMEOUT, meta: Optional[dict] = None) -> Any:
+    """`meta`, when given, receives the answer's status and its caching headers (Cache-Control, Age, Retry-After)."""
     try:
         with session().get(url, params=params, timeout=timeout, stream=True, headers={'Accept': 'application/json'}) as resp:
+            if meta is not None:
+                meta.clear()
+                meta.update({'status': resp.status_code, **{k.lower(): resp.headers[k] for k in ('Cache-Control', 'Age', 'Retry-After') if k in resp.headers}})
             if resp.status_code != 200:
                 raise UpstreamError(f'{url} returned HTTP {resp.status_code}')
             return _read_json(resp, limit)

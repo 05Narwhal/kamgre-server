@@ -13,10 +13,14 @@ may change, so every answer is checked and a wrong shape counts as a failing mir
 - `map/maintenance` {works: [{id, relation, validFrom, validTo, title, body, geometry}]}: works up to 14 days ahead.
 
 Light on their server: the polls (`poll`, from warm.py while the app is in use, and from szpdf_sync) follow
-`interval`, about 200 requests a day in all, and the last good copy of each endpoint and date is kept in
-`PRESTOP_ZAMUDIL_DIR` (written atomically, past dates pruned). That directory is shared: the API's workers and the
-szpdf timer read each other's copies and none asks again for a copy younger than its interval. A failed poll keeps
-the copy and marks it stale (/health `sz:zamudil-*`).
+`interval`, and never ask before zamudil's CDN would have a newer copy: each answer says how long the CDN keeps it
+(Cache-Control s-maxage, less Age; on 2026-10-27 an hour for notices and classes, 15 min for works), so asking sooner
+only gets the same copy back (`cache_window`). That is about 110 requests a day in all, each copy as fresh as the CDN
+has it. At most PER_POLL requests go per poll, a second apart, most needed first (today's, then the days after). The
+last good copy of each endpoint and date is kept in `PRESTOP_ZAMUDIL_DIR` (written atomically, past dates pruned).
+That directory is shared: the API's workers and the szpdf timer read each other's copies, one at a time under a lock,
+and none asks again for a copy another has just brought. A failed poll keeps the copy and marks it stale (/health
+`sz:zamudil-*`); the next try waits RETRY, doubling with each failure up to MAX_RETRY (or the answer's Retry-After).
 """
 import hashlib
 import html
@@ -45,7 +49,12 @@ NOTICES, CLASSES, WORKS = 'notices', 'assignments', 'maintenance'
 PATHS = {NOTICES: '/notices', CLASSES: '/rollingstock/assignments', WORKS: '/map/maintenance'}
 DAYS_AHEAD = 13        # notices of today … today + 13 (the planner's date window)
 ON_DEMAND_AGE = 6 * 3600  # s: a plan for another date asks for that date's notices when its copy is older
-RETRY = 600            # s between attempts at one copy after a failure (shared through the copy's `checkedAt`)
+RETRY = 600            # s before the first new attempt at one copy after a failure (shared through the copy's `retryAt`)
+MAX_RETRY = 3600       # s: … doubling with each failure in a row up to this
+MAX_RETRY_AFTER = 6 * 3600  # s: the most of an answer's Retry-After that is followed
+STALE_RECHECK = 60     # s: an answer the CDN served past its time is asked again this soon (it is fetching a new one)
+PER_POLL = 4           # requests at most in one poll (warm.py ticks every 20 s, szpdf every 30 min)
+PAUSE = 1.0            # s between the requests of one poll
 STAT_EVERY = 10        # s between looks at one copy's file (stat is slow on the WSL /mnt drives)
 LIMIT = 2 * 1024 * 1024
 TIMEOUT = (4, 15)
@@ -216,9 +225,35 @@ class _Locked:
             self.handle.close()  # releases the lock
 
 
-def fetch(endpoint: str, day: Optional[date] = None, now: Optional[float] = None) -> Optional[dict]:
+_SECONDS = {name: re.compile(rf'(?:^|[,\s]){name}\s*=\s*"?(\d+)', re.I) for name in ('s-maxage', 'max-age')}
+
+
+def _int(value) -> Optional[int]:
+    try:
+        return max(0, int(str(value).strip()))
+    except (TypeError, ValueError):
+        return None
+
+
+def cache_window(meta: Optional[dict], now: float) -> dict:
+    """When an answer was made and until when zamudil's CDN keeps it (Cache-Control s-maxage, else max-age, less
+    Age): {'madeAt', 'cdnUntil', 'cdnMaxAge'}. Asking before `cdnUntil` only gets the same copy back. An answer
+    served past its time (stale-while-revalidate: the CDN is fetching a new one) is asked again after STALE_RECHECK.
+    {} without those headers (the copy then follows `interval` alone)."""
+    control = (meta or {}).get('cache-control') or ''
+    found = next((m for m in (_SECONDS['s-maxage'].search(control), _SECONDS['max-age'].search(control)) if m), None)
+    max_age = int(found.group(1)) if found else 0
+    if not max_age or re.search(r'no-store|no-cache|private', control, re.I):
+        return {}
+    made = now - (_int((meta or {}).get('age')) or 0)
+    until = made + max_age
+    return {'madeAt': made, 'cdnUntil': until if until > now else now + STALE_RECHECK, 'cdnMaxAge': max_age, 'cdnStale': until <= now}
+
+
+def fetch(endpoint: str, day: Optional[date] = None, now: Optional[float] = None, every: Optional[float] = None) -> Optional[dict]:
     """Asks zamudil for one copy now; returns the copy in use afterwards. A failure, a wrong shape, or an empty list
-    where the last copy had items keeps the last copy (with `error` set)."""
+    where the last copy had items keeps the last copy (with `error` set). `every`: the copy's interval, looked at
+    again under the lock, so a copy another process brought while this one waited is not asked for twice."""
     if not enabled():
         return None
     now = time.time() if now is None else now
@@ -227,33 +262,43 @@ def fetch(endpoint: str, day: Optional[date] = None, now: Optional[float] = None
         if not mine:
             return copy(endpoint, day, now)
         old = copy(endpoint, day, now, look=True)  # what another process stored meanwhile
+        if every is not None and old and not _due(endpoint, day, every, now):
+            return old
+        kept = old if old and isinstance(old.get('data'), dict) else None
         params = {'date': key} if key else None
+        meta: dict = {}
         try:
-            data = urls.get_json(PATHS[endpoint], check=lambda raw: CHECKS[endpoint](raw, day), params=params, limit=LIMIT, timeout=TIMEOUT)
-            if not data[LISTS[endpoint]] and old and (old.get('data') or {}).get(LISTS[endpoint]):
-                raise UpstreamError(f'zamudil {endpoint}: empty answer (the last copy had {len(old["data"][LISTS[endpoint]])})')
+            data = urls.get_json(PATHS[endpoint], check=lambda raw: CHECKS[endpoint](raw, day), params=params, limit=LIMIT, timeout=TIMEOUT, meta=meta)
+            if not data[LISTS[endpoint]] and kept and kept['data'].get(LISTS[endpoint]):
+                raise UpstreamError(f'zamudil {endpoint}: empty answer (the last copy had {len(kept["data"][LISTS[endpoint]])})')
         except UpstreamError as e:
             logger.warning('zamudil %s %s: %s', endpoint, key or '', e)
-            if old:
-                _store(endpoint, key, {**old, 'checkedAt': now, 'error': str(e)[:300]})
-            else:
-                _copies[(endpoint, key)] = _store_failure(endpoint, key, now, str(e))
-            return copy(endpoint, day, now) if old else None
-        _store(endpoint, key, {'data': data, 'fetchedAt': now, 'checkedAt': now, 'error': None})
+            failed = _failure(old, meta, now, str(e))
+            if kept:
+                _store(endpoint, key, {**kept, **failed})
+                return copy(endpoint, day, now)
+            _copies[(endpoint, key)] = {'data': None, 'fetchedAt': None, **failed}  # remembered so the retry waits, never written
+            return None
+        _store(endpoint, key, {'data': data, 'fetchedAt': now, 'checkedAt': now, 'error': None, **cache_window(meta, now)})
         return _copies[(endpoint, key)]
 
 
-def _store_failure(endpoint: str, key: Optional[str], now: float, error: str) -> dict:
-    """No copy yet and the first try failed: remembered without data (so the retry waits), never written."""
-    return {'data': None, 'fetchedAt': None, 'checkedAt': now, 'error': error[:300]}
+def _failure(old: Optional[dict], meta: dict, now: float, error: str) -> dict:
+    """A failed try: when to try again (RETRY, doubling with each failure in a row up to MAX_RETRY, or longer when
+    the answer said Retry-After)."""
+    failures = ((old or {}).get('failures') or 0) + 1
+    wait = max(min(RETRY * 2 ** (failures - 1), MAX_RETRY), min(_int(meta.get('retry-after')) or 0, MAX_RETRY_AFTER))
+    return {'checkedAt': now, 'error': error[:300], 'failures': failures, 'retryAt': now + wait}
 
 
 def interval(endpoint: str, day: Optional[date], first: date, now: float) -> Optional[float]:
-    """Seconds a copy is good for before the next poll; None: not polled (asked for on demand only)."""
+    """The oldest a copy should get before the next poll (s); None: not polled (asked for on demand only). Never
+    sooner than the CDN has a new copy (`_due`): today's notices every 10 min only if the CDN ever keeps them that
+    short."""
     hour = datetime.fromtimestamp(now, LOCAL).hour
     day_time = DAYTIME[0] <= hour < DAYTIME[1]
-    if endpoint == WORKS:
-        return 3600
+    if endpoint == WORKS:  # planned days ahead
+        return 3 * 3600
     ahead = (day - first).days if day else 0
     if endpoint == NOTICES:
         if ahead == 0:
@@ -262,26 +307,33 @@ def interval(endpoint: str, day: Optional[date], first: date, now: float) -> Opt
             return 3600
         # the dates further on once a night (and on demand, `ensure`)
         return 20 * 3600 if 0 < ahead <= DAYS_AHEAD and hour < DAYTIME[0] else None
-    if endpoint == CLASSES:
+    if endpoint == CLASSES:  # planned the day before; changes within the day are rare
         if ahead == 0:
-            return 1800 if day_time else 3600
+            return 3600
         return 20 * 3600 if ahead == 1 and hour < DAYTIME[0] else None
     return None
 
 
 def _due(endpoint: str, day: Optional[date], every: float, now: float) -> bool:
+    """Whether a copy is to be asked for: none yet; a failed try's wait is over; or it is `every` old (from when
+    zamudil made it) and the CDN may have a newer one."""
     found = copy(endpoint, day, now)
     if not found:
         return True
     if found.get('error') or not found.get('fetchedAt'):
-        return now - (found.get('checkedAt') or 0) >= RETRY
-    return now - found['fetchedAt'] >= every
+        return now >= (found.get('retryAt') or (found.get('checkedAt') or 0) + RETRY)
+    made = found.get('madeAt') or found['fetchedAt']
+    until = found.get('cdnUntil') or 0
+    if found.get('cdnStale') and every >= (found.get('cdnMaxAge') or 0):
+        # Served stale: a copy polled no oftener than the CDN keeps it takes it, rather than ask again in a minute.
+        until = found['fetchedAt'] + found['cdnMaxAge']
+    return now >= max(made + every, until)
 
 
 def wanted(now: float) -> list[tuple[str, Optional[date], float]]:
     """(endpoint, date, interval) of every copy the schedule keeps."""
     first = today()
-    out: list[tuple[str, Optional[date], float]] = [(WORKS, None, 3600)]
+    out: list[tuple[str, Optional[date], float]] = [(WORKS, None, interval(WORKS, None, first, now))]
     for ahead in range(DAYS_AHEAD + 1):
         day = first + timedelta(days=ahead)
         for endpoint in (NOTICES, CLASSES):
@@ -295,15 +347,21 @@ _polling = threading.Lock()
 
 
 def poll(now: Optional[float] = None, endpoints: Iterable[str] = (NOTICES, CLASSES, WORKS)) -> int:
-    """Asks for the copies that are due (warm.py's tick, szpdf_sync); returns how many were asked for."""
+    """Asks for the copies that are due (warm.py's tick, szpdf_sync), at most PER_POLL, PAUSE apart, in `wanted`'s
+    order (works, then today on); the rest wait for the next poll. Returns how many were asked for."""
     if not enabled() or not _polling.acquire(blocking=False):
         return 0
     try:
+        real = now is None
         now = time.time() if now is None else now
         asked = 0
         for endpoint, day, every in wanted(now):
+            if asked >= PER_POLL:
+                break
             if endpoint in endpoints and _due(endpoint, day, every, now):
-                fetch(endpoint, day, now)
+                if asked and real:
+                    time.sleep(PAUSE)
+                fetch(endpoint, day, now, every=every)
                 asked += 1
         prune(now)
         return asked
@@ -320,7 +378,7 @@ def ensure(endpoint: str, day: date, max_age: float = ON_DEMAND_AGE, now: Option
     if not _due(endpoint, day, max_age, now):
         return False
     before = (copy(endpoint, day, now) or {}).get('fetchedAt')
-    after = (fetch(endpoint, day, now) or {}).get('fetchedAt')
+    after = (fetch(endpoint, day, now, every=max_age) or {}).get('fetchedAt')
     return bool(after and after != before)
 
 
@@ -359,11 +417,12 @@ def health(now: Optional[float] = None) -> list[dict]:
     for endpoint, (id_, name, capabilities) in NAMES.items():
         day = None if endpoint == WORKS else first
         found = copy(endpoint, day, now) or {}
-        every = interval(endpoint, day, first, now) or 3600
+        # As old as the polls let it get: its interval, or the CDN's time when that is longer.
+        every = max(interval(endpoint, day, first, now) or 3600, found.get('cdnMaxAge') or 0)
         at = found.get('fetchedAt')
         if not at:
             status = 'unavailable'
-        elif found.get('error') or now - at > 2 * every + 120:
+        elif found.get('error') or now - (found.get('madeAt') or at) > 2 * every + 120:
             status = 'stale'
         else:
             status = 'live'

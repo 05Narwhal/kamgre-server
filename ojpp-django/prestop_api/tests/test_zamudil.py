@@ -43,13 +43,17 @@ class ZamudilCase(SimpleTestCase):
         zamudil._records.update(version=None, value=None)
         zamudil.urls.good = None
 
-    def answer(self, by_path: dict):
-        """upstream.get_json answering each endpoint with by_path[path] (an exception is raised)."""
+    def answer(self, by_path: dict, headers=None):
+        """upstream.get_json answering each endpoint with by_path[path] (an exception is raised); `headers(path)` gives
+        the answer's caching headers (into `meta`, as upstream.get_json fills it)."""
         asked = []
 
-        def get(url, params=None, **kwargs):
+        def get(url, params=None, meta=None, **kwargs):
             path = url.split('/api', 1)[1]
             asked.append((path, (params or {}).get('date')))
+            if meta is not None and headers:
+                meta.clear()
+                meta.update(headers(path))
             value = by_path[path]
             if isinstance(value, Exception):
                 raise value
@@ -153,14 +157,85 @@ class ScheduleTests(ZamudilCase):
         self.assertEqual({d for p, d in asked if p == '/notices'}, {f'2026-{m}' for m in ['10-27', '10-28', '10-29', '10-30', '10-31', '11-01', '11-02',
                                                                                          '11-03', '11-04', '11-05', '11-06', '11-07', '11-08', '11-09']})
 
+    def test_a_day_of_polls_follows_the_cdn(self):
+        """zamudil's CDN keeps notices and classes an hour and works 15 min (2026-10-27 headers): asking sooner only
+        gets the same copy, so a day is about 110 requests, and by day each new copy of today's notices comes within two
+        minutes."""
+        start = datetime(2026, 10, 27, 0, 0, tzinfo=zamudil.LOCAL).timestamp()
+        clock = {'now': start}
+        keep = {'/map/maintenance': 900}
+
+        def headers(path):  # the CDN makes a new copy at every full hour (quarter for works), served stale a minute
+            ttl = keep.get(path, 3600)
+            age = int(clock['now'] - start) % ttl
+            return {'status': 200, 'cache-control': f'public, s-maxage={ttl}, stale-while-revalidate=600', 'age': str(age + (ttl if age < 30 else 0))}
+        patch, asked = self.answer({'/notices': fixture('notices') | {'serviceDate': None}, '/rollingstock/assignments': fixture('assignments') | {'serviceDate': None},
+                                    '/map/maintenance': fixture('maintenance')}, headers)
+        behind = 0  # by day, how far today's notices are behind the CDN's newest copy
+        with patch:
+            for minute in range(0, 24 * 60):
+                clock['now'] = start + minute * 60
+                zamudil.poll(clock['now'])
+                if 6 * 60 <= minute < 22 * 60 and minute % 60 >= 2:  # two minutes after the CDN's new copy
+                    newest = clock['now'] - (clock['now'] - start) % 3600
+                    behind = max(behind, newest - zamudil.copy(zamudil.NOTICES, DAY, clock['now'])['madeAt'])
+        per = {}
+        for path, day in asked:
+            per[(path, day)] = per.get((path, day), 0) + 1
+        self.assertLessEqual(len(asked), 120, per)
+        self.assertLessEqual(per[('/notices', '2026-10-27')], 50)  # about two an hour at most: the new copy (and its stale first look)
+        self.assertGreaterEqual(per[('/notices', '2026-10-27')], 24)  # but every hour's copy
+        self.assertEqual({d for p, d in asked if p == '/notices'}, {f'2026-{m}' for m in ['10-27', '10-28', '10-29', '10-30', '10-31', '11-01', '11-02',
+                                                                                         '11-03', '11-04', '11-05', '11-06', '11-07', '11-08', '11-09']})
+        self.assertEqual(behind, 0)  # each new CDN copy within two minutes
+
+    def test_cache_window(self):
+        self.assertEqual(zamudil.cache_window({'cache-control': 'public, s-maxage=3600, stale-while-revalidate=600', 'age': '600'}, NOON),
+                         {'madeAt': NOON - 600, 'cdnUntil': NOON + 3000, 'cdnMaxAge': 3600, 'cdnStale': False})
+        self.assertEqual(zamudil.cache_window({'cache-control': 'max-age=60'}, NOON)['cdnUntil'], NOON + 60)
+        self.assertEqual(zamudil.cache_window({'cache-control': 's-maxage=3600', 'age': '3700'}, NOON)['cdnUntil'], NOON + zamudil.STALE_RECHECK)  # served stale
+        self.assertEqual(zamudil.cache_window({'cache-control': 'no-store'}, NOON), {})
+        self.assertEqual(zamudil.cache_window({}, NOON), {})
+
+    def test_at_most_a_few_requests_per_poll(self):
+        patch, asked = self.answer({'/notices': fixture('notices') | {'serviceDate': None}, '/rollingstock/assignments': fixture('assignments') | {'serviceDate': None},
+                                    '/map/maintenance': fixture('maintenance')})
+        with patch:
+            self.assertEqual(zamudil.poll(NIGHT), zamudil.PER_POLL)
+        self.assertEqual(asked[:3], [('/map/maintenance', None), ('/notices', '2026-10-27'), ('/rollingstock/assignments', '2026-10-27')])
+
+    def test_failures_back_off(self):
+        patch, asked = self.answer({'/notices': UpstreamError('HTTP 503')}, lambda path: {'status': 503})
+        with patch:
+            at = NOON
+            for wait in (600, 1200, 2400, 3600, 3600):
+                zamudil.fetch(zamudil.NOTICES, DAY, at)
+                self.assertFalse(zamudil._due(zamudil.NOTICES, DAY, 600, at + wait - 1))
+                self.assertTrue(zamudil._due(zamudil.NOTICES, DAY, 600, at + wait))
+                at += wait
+
+    def test_retry_after_is_followed(self):
+        patch, _ = self.answer({'/notices': UpstreamError('HTTP 429')}, lambda path: {'status': 429, 'retry-after': '7200'})
+        with patch:
+            zamudil.fetch(zamudil.NOTICES, DAY, NOON)
+        self.assertFalse(zamudil._due(zamudil.NOTICES, DAY, 600, NOON + 7199))
+        self.assertTrue(zamudil._due(zamudil.NOTICES, DAY, 600, NOON + 7200))
+
+    def test_a_copy_brought_while_waiting_for_the_lock_is_not_asked_again(self):
+        patch, asked = self.answer({'/notices': fixture('notices')})
+        with patch:
+            zamudil.fetch(zamudil.NOTICES, DAY, NOON)
+            zamudil.fetch(zamudil.NOTICES, DAY, NOON + 30, every=600)  # another worker found it due a moment before
+        self.assertEqual(len(asked), 1)
+
     def test_intervals(self):
         self.assertEqual(zamudil.interval(zamudil.NOTICES, DAY, DAY, NOON), 600)
         self.assertEqual(zamudil.interval(zamudil.NOTICES, DAY, DAY, NIGHT), 3600)
         self.assertEqual(zamudil.interval(zamudil.NOTICES, date(2026, 10, 28), DAY, NOON), 3600)
         self.assertIsNone(zamudil.interval(zamudil.NOTICES, date(2026, 10, 30), DAY, NOON))  # on demand by day
         self.assertIsNotNone(zamudil.interval(zamudil.NOTICES, date(2026, 10, 30), DAY, NIGHT))
-        self.assertEqual(zamudil.interval(zamudil.CLASSES, DAY, DAY, NOON), 1800)
-        self.assertEqual(zamudil.interval(zamudil.WORKS, None, DAY, NOON), 3600)
+        self.assertEqual(zamudil.interval(zamudil.CLASSES, DAY, DAY, NOON), 3600)
+        self.assertEqual(zamudil.interval(zamudil.WORKS, None, DAY, NOON), 3 * 3600)
 
     def test_on_demand(self):
         later = date(2026, 11, 3)
