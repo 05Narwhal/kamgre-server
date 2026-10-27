@@ -7,7 +7,7 @@ from datetime import date, datetime
 from pathlib import Path
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from prestop_api import upstream, zamudil
 from prestop_api.upstream import UpstreamError
@@ -333,3 +333,80 @@ class TrainNoticeTests(ZamudilCase):
         journey = {'legs': [{'mode': 'rail', 'routeName': 'RG 619', 'alertIds': [joined['id']], 'origin': {'name': 'Celje'}, 'destination': {'name': 'Ljubljana'}}]}
         [leg] = leg_alerts.add_notices([journey], [joined], 'sl')[0]['legs']
         self.assertEqual(leg['notices'], [{'kind': joined['kind'], 'text': 'OBVESTILO: Združeni vlaki iz/do Zidanega Mosta (do nadaljnjega).'}])
+
+
+def shifted(line: list, metres: float) -> list:
+    """The line moved north by `metres`."""
+    return [[p[0], p[1] + metres / 110_574] for p in line]
+
+
+def with_works(case):
+    zamudil._copies[(zamudil.WORKS, None)] = {'data': fixture('maintenance'), 'fetchedAt': NOON, 'checkedAt': NOON, 'error': None}
+    zamudil._looked[(zamudil.WORKS, None)] = (1e12, None)
+    zamudil._works.update(stamp=None, value=[])
+
+
+class LineWorkTests(ZamudilCase):
+    """G5: works on the lines, and the rail legs that run along them."""
+
+    def setUp(self):
+        super().setUp()
+        with_works(self)
+
+    def test_the_works(self):
+        works = zamudil.line_works()
+        self.assertEqual(len(works), 7)
+        zalog = next(w for w in works if w['id'] == '287')
+        self.assertEqual((zalog['relation'], zalog['validFrom'], zalog['validTo']), ('Ljubljana - Ljubljana Zalog', '2026-10-29', '2026-10-30'))
+        self.assertTrue(zalog['title'].startswith('DELA NA PROGI') and zalog['message'] and len(zalog['geometry']) == 16)
+        self.assertEqual(zamudil.line_works()[0]['id'], works[0]['id'])
+        on = {w['id'] for w in zamudil.works_between(date(2026, 10, 29), date(2026, 10, 29))}
+        self.assertEqual(on, {'32', '253', '255', '287'})
+        self.assertNotIn('284', on)  # Brežice - Krško ended on the 27th
+
+    def test_a_leg_along_a_work(self):
+        work = next(w for w in zamudil.line_works() if w['id'] == '32')['geometry']  # Ljubljana - Borovnica
+        self.assertTrue(zamudil.runs_along(shifted(work, 12), work))
+        other = next(w for w in zamudil.line_works() if w['id'] == '198')['geometry']  # Prestranek - Gornje Ležeče
+        self.assertFalse(zamudil.runs_along(other, work))
+        self.assertFalse(zamudil.runs_along(shifted(work, 2000), work))
+        self.assertFalse(zamudil.runs_along(work[:2], work) and geometry_length(work[:2]) < 300)
+        crossing = [[work[5][0] - 0.01, work[5][1]], [work[5][0] + 0.01, work[5][1] + 0.0001]]  # crosses it once
+        self.assertFalse(zamudil.runs_along(crossing, work))
+
+    def test_the_leg_notice(self):
+        from prestop_api import leg_alerts
+        work = next(w for w in zamudil.line_works() if w['id'] == '287')
+        def journey(day, mode='rail'):
+            return {'legs': [{'mode': mode, 'geometry': shifted(work['geometry'], 5), 'scheduledDeparture': f'{day}T07:00:00Z'}]}
+        found = leg_alerts.add_work_notices([journey('2026-10-29'), journey('2026-10-28'), journey('2026-10-29', 'bus')], [work], 'en')
+        self.assertEqual([j['legs'][0].get('notices') for j in found], [[{'kind': 'delay', 'text': 'Works on the line: possible delays'}], None, None])
+        [sl] = leg_alerts.add_work_notices([journey('2026-10-30')], [work], 'sl')
+        self.assertEqual(sl['legs'][0]['notices'][0]['text'], 'Dela na progi: možne zamude')
+
+
+def geometry_length(line: list) -> float:
+    from prestop_api import geometry
+    return geometry.cumulative(line)[-1]
+
+
+class WorksEndpointTests(TestCase):
+    def setUp(self):
+        self.settings_ = override_settings(PRESTOP_ZAMUDIL_URL=['https://zamudil.example/api'], PRESTOP_ZAMUDIL_DIR='')
+        self.settings_.enable()
+        with_works(self)
+
+    def tearDown(self):
+        self.settings_.disable()
+        zamudil._copies.clear()
+        zamudil._looked.clear()
+
+    def test_rail_works(self):
+        from prestop_api import scheduled
+        with mock.patch.object(scheduled, 'service_day', return_value=DAY):
+            body = self.client.get('/api/v1/rail/works?from=2026-10-29&to=2026-10-30').json()
+            self.assertEqual(sorted(w['id'] for w in body['data']), ['253', '255', '287', '32'])
+            self.assertEqual(sorted(body['data'][0]), ['geometry', 'id', 'message', 'relation', 'sourceUrl', 'title', 'validFrom', 'validTo'])
+            self.assertEqual(len(self.client.get('/api/v1/rail/works').json()['data']), 5)  # today
+            for bad in ('from=2026-10-30&to=2026-10-29', 'from=2026-10-27&to=2026-11-20', 'from=x'):
+                self.assertEqual(self.client.get(f'/api/v1/rail/works?{bad}').status_code, 422, bad)

@@ -114,8 +114,10 @@ NOTICE_KINDS = ('replacement', 'closure', 'detour', 'stop-moved', 'disruption')
 MAX_NOTICES = 3       # per leg
 NOTICE_TEXT = 160     # characters of a notice's title kept
 _WORDS = {
-    'sl': {'bus': 'Avtobus namesto vlaka {train}', 'part': 'Avtobus namesto vlaka {train} na odseku {a} – {b}'},
-    'en': {'bus': 'Bus instead of train {train}', 'part': 'Bus instead of train {train} between {a} and {b}'},
+    'sl': {'bus': 'Avtobus namesto vlaka {train}', 'part': 'Avtobus namesto vlaka {train} na odseku {a} – {b}',
+           'works': 'Dela na progi: možne zamude'},
+    'en': {'bus': 'Bus instead of train {train}', 'part': 'Bus instead of train {train} between {a} and {b}',
+           'works': 'Works on the line: possible delays'},
 }
 
 
@@ -155,4 +157,27 @@ def add_notices(journeys: list[dict], alerts: list[dict], lang: str) -> list[dic
                 leg['notices'] = notices[:MAX_NOTICES]
             else:
                 leg.pop('notices', None)
+    return journeys
+
+
+def add_work_notices(journeys: list[dict], works: list[dict], lang: str) -> list[dict]:
+    """A rail leg running along works on its line that day (zamudil.si's maintenance, `works`: lineWork) for at least
+    300 m within 30 m gets the short line "Works on the line: possible delays" (kind `delay`). No buses."""
+    from . import zamudil
+    if not works:
+        return journeys
+    text = _WORDS.get(lang, _WORDS['en'])['works']
+    for journey in journeys:
+        for leg in journey['legs']:
+            if leg.get('mode') != 'rail' or leg.get('replacement') or len(leg.get('geometry') or []) < 2:
+                continue
+            try:
+                day = datetime.fromisoformat(str(leg['scheduledDeparture']).replace('Z', '+00:00')).astimezone(LOCAL).date().isoformat()
+            except (KeyError, ValueError):
+                continue
+            if not any(w['validFrom'] <= day <= w['validTo'] and zamudil.runs_along(leg['geometry'], w['geometry']) for w in works):
+                continue
+            notices = leg.get('notices') or []
+            if len(notices) < MAX_NOTICES and all(n['text'] != text for n in notices):
+                leg['notices'] = notices + [{'kind': 'delay', 'text': text}]
     return journeys

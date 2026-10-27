@@ -524,6 +524,14 @@ def journeys(request):
     # Short lines per leg: the train a bus replaces, a detour or moved stop on the leg's line.
     from . import leg_alerts
     result = leg_alerts.add_notices(result, alert_list, language(request))
+    try:  # works on the lines the journey's trains run (zamudil.si)
+        from . import zamudil
+        days = [datetime.fromisoformat(str(leg['scheduledDeparture']).replace('Z', '+00:00')).date() for j in result for leg in j['legs']
+                if leg.get('mode') == 'rail' and leg.get('scheduledDeparture')]
+        if days:
+            result = leg_alerts.add_work_notices(result, zamudil.works_between(min(days) - timedelta(days=1), max(days) + timedelta(days=1)), language(request))
+    except Exception as e:  # the journeys are still useful without them
+        logger.warning('Works on the line failed: %r', e)
     if any(leg.get('rental') for j in result for leg in j['legs']):
         from . import sharing
         # E-scooters walk where they may not ride (roads over 50 km/h without a cycle lane, ZPrCP 97.a).
@@ -995,6 +1003,30 @@ def train_detail(request, number):
         raise ApiError(404, 'TRAIN_NOT_FOUND', 'No train with this number runs that day.')
     status = 'live' if data['vehicle'] or (data['trip'] or {}).get('realtime') else 'scheduled'
     return envelope(data, status, used=['otp:timetables', 'gtfs-rt:trip-updates', 'sz:live', 'sz:delays'], source_updated=mapping.iso(time.time()))
+
+
+@require_GET
+@api
+def rail_works(request):
+    """Works on railway lines in effect on any day from `from` to `to` (default today; at most 14 days ahead), from
+    zamudil.si's maintenance copy (polled hourly). Empty while it never answered."""
+    from . import scheduled, zamudil
+    today = scheduled.service_day()
+    first = _day_param_named(request, 'from') or today
+    last = _day_param_named(request, 'to') or first
+    if last < first or (last - first).days > zamudil.WORKS_AHEAD or last > today + timedelta(days=zamudil.WORKS_AHEAD):
+        raise ApiError(422, 'INVALID_DATES', f'from..to must be in order, at most {zamudil.WORKS_AHEAD} days and at most {zamudil.WORKS_AHEAD} days ahead')
+    return envelope(zamudil.works_between(first, last), 'scheduled', used=['sz:zamudil-works'])
+
+
+def _day_param_named(request, name: str):
+    raw = request.GET.get(name)
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise ApiError(422, 'INVALID_DATE', f'{name} must be YYYY-MM-DD')
 
 
 @require_GET

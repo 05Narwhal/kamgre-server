@@ -590,6 +590,81 @@ def train_notices(lists: list[tuple[date, dict]]) -> list[dict]:
     return list(found.values())
 
 
+# ---------------------------------------------------------------- works on the lines (G5)
+
+WORKS_AHEAD = 14       # days: zamudil's maintenance covers this far
+NEAR_WORK = 30.0       # m: a leg this close to a work's line runs along it
+ALONG_WORK = 300.0     # m: … for at least this long
+_works: dict = {'stamp': None, 'value': []}
+
+
+def _iso_day(value) -> Optional[str]:
+    try:
+        return date.fromisoformat(str(value)[:10]).isoformat()
+    except ValueError:
+        return None
+
+
+def line_works() -> list[dict]:
+    """Every work in the maintenance copy as a lineWork (contract): {id, title, message, relation, validFrom,
+    validTo, geometry, sourceUrl}; works without dates or a line of two points are left out. Worked out once per
+    copy (polled hourly)."""
+    found = copy(WORKS) if enabled() else None
+    data = (found or {}).get('data') or {}
+    stamp = (found or {}).get('fetchedAt'), id(data)
+    if _works['stamp'] == stamp:
+        return _works['value']
+    out = []
+    for w in data.get('works') or []:
+        start, end = _iso_day(w.get('validFrom')), _iso_day(w.get('validTo'))
+        line = [[round(float(p[0]), 6), round(float(p[1]), 6)] for p in w.get('geometry') or []
+                if isinstance(p, (list, tuple)) and len(p) >= 2 and all(isinstance(x, (int, float)) for x in p[:2])
+                and 13 < p[0] < 17 and 45 < p[1] < 47.5]  # [lon, lat] in and around Slovenia
+        if not start or not end or len(line) < 2:
+            continue
+        text, url = markdown_text(w.get('body') or '')
+        title, _ = markdown_text(w.get('title') or '')
+        out.append({'id': str(w['id']), 'title': title or (w.get('relation') or ''), 'message': text, 'relation': str(w.get('relation') or ''),
+                    'validFrom': start, 'validTo': end, 'geometry': line, 'sourceUrl': url})
+    _works.update(stamp=stamp, value=out)
+    return out
+
+
+def works_between(first: date, last: date) -> list[dict]:
+    """The works in effect on any day from `first` to `last`."""
+    a, b = first.isoformat(), last.isoformat()
+    return [w for w in line_works() if w['validFrom'] <= b and w['validTo'] >= a]
+
+
+def runs_along(leg: list, work: list, near: float = NEAR_WORK, along: float = ALONG_WORK) -> bool:
+    """Whether a leg's line ([lon, lat]) runs within `near` m of a work's line for at least `along` m."""
+    from . import geometry
+    if len(leg) < 2 or len(work) < 2:
+        return False
+    lat0 = work[0][1]
+    pad_x, pad_y = near / geometry._kx(lat0), near / geometry.KY
+    lo_x, hi_x = min(p[0] for p in work) - pad_x, max(p[0] for p in work) + pad_x
+    lo_y, hi_y = min(p[1] for p in work) - pad_y, max(p[1] for p in work) + pad_y
+    if max(p[0] for p in leg) < lo_x or min(p[0] for p in leg) > hi_x or max(p[1] for p in leg) < lo_y or min(p[1] for p in leg) > hi_y:
+        return False
+    segments = list(zip(geometry._local(work, lat0), geometry._local(work, lat0)[1:]))
+
+    def close(p) -> bool:
+        if not (lo_x <= p[0] <= hi_x and lo_y <= p[1] <= hi_y):
+            return False
+        [(x, y)] = geometry._local([p], lat0)
+        for (ax, ay), (bx, by) in segments:
+            dx, dy = bx - ax, by - ay
+            t = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy))) if dx or dy else 0.0
+            if (x - ax - t * dx) ** 2 + (y - ay - t * dy) ** 2 <= near * near:
+                return True
+        return False
+    points = geometry.densify(leg, near / 2)
+    flags = [close(p) for p in points]
+    length = sum(geometry.distance(a, b) for a, b, fa, fb in zip(points, points[1:], flags, flags[1:]) if fa and fb)
+    return length >= along
+
+
 _records: dict = {'version': None, 'value': None}
 
 
