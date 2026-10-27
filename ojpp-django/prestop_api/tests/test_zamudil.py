@@ -370,6 +370,11 @@ class LineWorkTests(ZamudilCase):
         other = next(w for w in zamudil.line_works() if w['id'] == '198')['geometry']  # Prestranek - Gornje Ležeče
         self.assertFalse(zamudil.runs_along(other, work))
         self.assertFalse(zamudil.runs_along(shifted(work, 2000), work))
+        # a Kranj train shares the first kilometre out of Ljubljana with these works, then leaves them
+        cum = geometry_length_each(work)
+        shared = [p for p, d in zip(work, cum) if d <= 1000]
+        self.assertGreater(geometry_length(shared), 600)
+        self.assertFalse(zamudil.runs_along(shared + [[shared[-1][0] + 0.01, shared[-1][1] + 0.03]], work))
         self.assertFalse(zamudil.runs_along(work[:2], work) and geometry_length(work[:2]) < 300)
         crossing = [[work[5][0] - 0.01, work[5][1]], [work[5][0] + 0.01, work[5][1] + 0.0001]]  # crosses it once
         self.assertFalse(zamudil.runs_along(crossing, work))
@@ -383,6 +388,11 @@ class LineWorkTests(ZamudilCase):
         self.assertEqual([j['legs'][0].get('notices') for j in found], [[{'kind': 'delay', 'text': 'Works on the line: possible delays'}], None, None])
         [sl] = leg_alerts.add_work_notices([journey('2026-10-30')], [work], 'sl')
         self.assertEqual(sl['legs'][0]['notices'][0]['text'], 'Dela na progi: možne zamude')
+
+
+def geometry_length_each(line: list) -> list:
+    from prestop_api import geometry
+    return geometry.cumulative(line)
 
 
 def geometry_length(line: list) -> float:

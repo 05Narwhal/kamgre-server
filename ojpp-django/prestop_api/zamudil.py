@@ -594,7 +594,9 @@ def train_notices(lists: list[tuple[date, dict]]) -> list[dict]:
 
 WORKS_AHEAD = 14       # days: zamudil's maintenance covers this far
 NEAR_WORK = 30.0       # m: a leg this close to a work's line runs along it
-ALONG_WORK = 300.0     # m: … for at least this long
+ALONG_WORK = 300.0     # m: … for at least this long,
+WORK_SHARE = 0.2       # and for this share of the work's line (at most PART_OF_WORK): a Kranj train shares the first
+PART_OF_WORK = 2000.0  # 1 km out of Ljubljana with the Ljubljana - Borovnica works, which are not on its way
 _works: dict = {'stamp': None, 'value': []}
 
 
@@ -637,7 +639,8 @@ def works_between(first: date, last: date) -> list[dict]:
 
 
 def runs_along(leg: list, work: list, near: float = NEAR_WORK, along: float = ALONG_WORK) -> bool:
-    """Whether a leg's line ([lon, lat]) runs within `near` m of a work's line for at least `along` m."""
+    """Whether a leg's line ([lon, lat]) runs within `near` m of a work's line for at least `along` m and a fair part
+    of the work (WORK_SHARE of its length, at most PART_OF_WORK)."""
     from . import geometry
     if len(leg) < 2 or len(work) < 2:
         return False
@@ -662,7 +665,7 @@ def runs_along(leg: list, work: list, near: float = NEAR_WORK, along: float = AL
     points = geometry.densify(leg, near / 2)
     flags = [close(p) for p in points]
     length = sum(geometry.distance(a, b) for a, b, fa, fb in zip(points, points[1:], flags, flags[1:]) if fa and fb)
-    return length >= along
+    return length >= max(along, min(WORK_SHARE * geometry.cumulative(work)[-1], PART_OF_WORK))
 
 
 _records: dict = {'version': None, 'value': None}
