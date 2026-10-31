@@ -649,6 +649,37 @@ def train_notices(lists: list[tuple[date, dict]]) -> list[dict]:
     return list(found.values())
 
 
+# ---------------------------------------------------------------- joined trains (spec 2026-10-31 H7)
+
+TRAIN_REF = re.compile(r'\b(?:ics|ic|ec|en|mv|rg|lpv|lp|avt)\s*(\d{1,5})\b')
+SET_PLACE = re.compile(r'\b(prva|druga|tretja|zadnja)\s+garnitura\s*:?\s*(?:v\s+)?smer\w*\s+([a-z ]+?)\s*(?=[,;.)]|$)')
+SET_POSITION = {'prva': 1, 'druga': 2, 'tretja': 3, 'zadnja': 'last'}
+
+
+def joined_trains(day: date) -> list[dict]:
+    """zamudil's notices of trains run joined on `day` ("Združeni vlaki iz/do Zidanega Mosta"): one per paragraph that
+    names exactly two trains and says they run joined (združi, združeno): {'trains' (the two numbers as text, in the
+    order named), 'sets' ({place: 1 | 2 | 3 | 'last'}, only where the notice says which set goes where: "prva
+    garnitura: Smer Dobova"), 'notice' (its number)}. Which station and which way the timetable tells
+    (train_stays.notice_links); a paragraph naming one train or three is left out, never guessed."""
+    found = copy(NOTICES, day) if enabled() else None
+    data = (found or {}).get('data')
+    if not isinstance(data, dict):
+        return []
+    out = []
+    for n in train_notices([(day, data)]):
+        for paragraph in re.split(r'\n\s*\n', n['text'] or ''):
+            folded = fold(paragraph)
+            if 'zdruz' not in folded:
+                continue
+            numbers = list(dict.fromkeys(str(int(m)) for m in TRAIN_REF.findall(folded)))
+            if len(numbers) != 2:
+                continue
+            sets = {m.group(2).strip(): SET_POSITION[m.group(1)] for m in SET_PLACE.finditer(folded)}
+            out.append({'trains': tuple(numbers), 'sets': sets, 'notice': n['number']})
+    return out
+
+
 # ---------------------------------------------------------------- planned classes (G6)
 
 # zamudil's class name → the series the app draws (src/lib/trains.ts TrainSeries), first match

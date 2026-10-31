@@ -199,3 +199,57 @@ class StationDay(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=['service_date', 'stop_id'], name='prestop_station_day_unique')]
         indexes = [models.Index(fields=['stop_id', 'service_date'], name='prestop_sta_station_day_idx')]
+
+
+class TrainLinkDay(models.Model):
+    """One day of evidence for train A's set going on as train B (train_stays.py, spec 2026-10-31 H5/H6): A ends at
+    the station B starts from, B leaving `gap` s after A's timetable arrival. The delays SŽ reported that day (A at
+    its last reported station near the end, B at its first near the start; None: not reported), whether A or B was
+    canceled or replaced by buses (the day says nothing then), and the level the pair had that morning (the live
+    check: a `sure` that a day contradicts caps the pair)."""
+    day = models.DateField()
+    from_number = models.CharField(max_length=16)
+    to_number = models.CharField(max_length=16)
+    station = models.CharField(max_length=200)        # B's first stop id
+    station_name = models.CharField(max_length=200, blank=True, default='')
+    arrival = models.IntegerField()                   # A's timetable arrival, s after the service day's midnight
+    departure = models.IntegerField()                 # B's timetable departure
+    from_delay = models.IntegerField(null=True)
+    to_delay = models.IntegerField(null=True)
+    skipped = models.CharField(max_length=16, blank=True, default='')  # 'canceled', 'replaced', 'class' or ''
+    level = models.CharField(max_length=6, blank=True, default='')     # what TrainStay said that day
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['day', 'from_number', 'to_number'], name='prestop_train_link_day_unique')]
+        indexes = [models.Index(fields=['day'], name='prestop_sta_link_day_idx')]
+
+
+class TrainCoverDay(models.Model):
+    """How much of a service day's trains SŽ's live data covered (the train-stay gate, train_stays.py): trains in the
+    timetable, of them the ones with a rolled-up delay (TrainDay), and the seconds the collector ran that day."""
+    day = models.DateField(unique=True)
+    trains = models.IntegerField(default=0)
+    reported = models.IntegerField(default=0)
+    collector_seconds = models.IntegerField(default=0)
+
+
+class TrainStay(models.Model):
+    """Train A's set goes on as train B (train_stays.py): `continues` (the same set, new number) or `coupled` (A's
+    set joins B, as SŽ's notice says). Relearned every night from TrainLinkDay; `level` 'sure' or 'likely'.
+    `slack`: s of A's delay B's timetable takes up (gap minus the station's least turn)."""
+    from_number = models.CharField(max_length=16)
+    to_number = models.CharField(max_length=16)
+    station = models.CharField(max_length=200)
+    station_name = models.CharField(max_length=200, blank=True, default='')
+    kind = models.CharField(max_length=10, default='continues')
+    level = models.CharField(max_length=6)
+    arrival = models.IntegerField()
+    departure = models.IntegerField()
+    slack = models.IntegerField(default=0)
+    informative_days = models.SmallIntegerField(default=0)
+    agree_days = models.SmallIntegerField(default=0)
+    last_seen = models.DateField()
+    learned_on = models.DateField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['from_number', 'to_number'], name='prestop_train_stay_unique')]

@@ -6,7 +6,7 @@ from django.core.management import BaseCommand
 
 from prestop_api import analytics, coverage, detected, platforms
 from prestop_api.upstream import UpstreamError, get_json
-from prestop_statistics import blocks, dwell, learned, stays
+from prestop_statistics import blocks, dwell, learned, stays, train_stays
 from prestop_statistics.collector import ScheduleCache, collect_once
 
 logger = logging.getLogger('prestop collector')
@@ -63,6 +63,13 @@ class Command(BaseCommand):
                     logger.info('learned times: %s', times)
             except Exception as e:  # never let the learning stop the delay collector
                 logger.warning('nightly learning failed: %r', e)
+            try:
+                # Staying on the train (train_stays.py): yesterday's evidence from the 02:05 rollups, then relearned.
+                learned_trains = train_stays.nightly()
+                if learned_trains:
+                    logger.info('train stays learned: %s', learned_trains)
+            except Exception as e:  # never let the learning stop the delay collector
+                logger.warning('train stays failed: %r', e)
             try:
                 # API usage counts: Redis -> AnalyticsHour every poll, and the finished day's visitors each night.
                 analytics.flush()
