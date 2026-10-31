@@ -267,8 +267,13 @@ def stay_level(previous: dict, previous_meta: dict, leg: dict, meta: dict, walki
 
     Only what the vehicles were seen to do counts (stays.py: per departure and kind of day, after the feed's 7-full-days
     gate); OTP's interline and the feed's block_id never do on their own. Both trips must still have the stops they
-    were learned with, and today the vehicles already seen on them must not disagree. Trains: no vehicle data, none."""
-    if 'rail' in (previous['mode'], leg['mode']) or walking > STAY_WALK or meta.get('held') or leg.get('replacement') or previous.get('replacement'):
+    were learned with, and today the vehicles already seen on them must not disagree. Trains: train_stays.py (learned
+    from delays, or a join SŽ's notice announces)."""
+    if walking > STAY_WALK or meta.get('held') or leg.get('replacement') or previous.get('replacement'):
+        return None
+    if previous['mode'] == leg['mode'] == 'rail':
+        return _train_stay(previous, leg)
+    if 'rail' in (previous['mode'], leg['mode']):
         return None
     if not settings.PRESTOP_PREDICTIONS or meta.get('tripStart') is None or previous_meta.get('tripStart') is None or not leg.get('routeId'):
         return None
@@ -307,10 +312,26 @@ def stay_level(previous: dict, previous_meta: dict, leg: dict, meta: dict, walki
     return d['level']
 
 
+def _train_stay(previous: dict, leg: dict) -> Optional[str]:
+    """'sure' or 'likely' when the train of `previous` goes on as the train of `leg` at the station where one ends and
+    the other starts (train_stays.journey_level), else None."""
+    if not settings.PRESTOP_PREDICTIONS:
+        return None
+    from prestop_statistics import train_stays
+    from . import sz
+    from .sources import stop_group
+    end, begin = previous['destination'].get('stopId'), leg['origin'].get('stopId')
+    if not end or (end != begin and begin not in stop_group(end)
+                   and sz.station_key(previous['destination'].get('name') or '') != sz.station_key(leg['origin'].get('name') or '')):
+        return None
+    numbers = [sz.train_parts(x.get('routeName') or '')[1] for x in (previous, leg)]
+    return train_stays.journey_level(numbers[0], numbers[1], begin, _service_day(_ts(leg['scheduledDeparture'])))
+
+
 # The ticket when staying on the same vehicle, by operator:
 # - SŽ (IJPP:1161), train to train: a ticket is for a relation, not for one train, so a through train that
-#   changes its number needs none (SŽ's conditions of carriage: "vozovnica velja za relacijo"). Trains get no stay
-#   level today (no vehicle data), so this waits for that.
+#   changes its number needs none (SŽ's conditions of carriage: "vozovnica velja za relacijo"). Train stays come from
+#   train_stays.py (spec 2026-10-31 H9).
 # - LPP: a fare paid with Urbana covers every ride within 90 minutes of the first validation, but each boarding is
 #   validated (lpp.si, Urbana; visitljubljana.com/en/visitors/travel-information/getting-around/city-buses/: "transfers
 #   free of charge within 90 minutes"; n1info.si 2023: the Urbana app counts the 90 minutes down). So nothing to do

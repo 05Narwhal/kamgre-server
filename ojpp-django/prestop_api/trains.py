@@ -91,7 +91,29 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
     category, _ = sz.train_parts(mapping.route_name(run['route']))
     return {'number': number, 'name': mapping.route_name(run['route']) or number, 'category': category, 'date': day.isoformat(),
             'routeId': route_id, 'tripId': run['id'], 'trip': trip, 'vehicle': vehicle_of(number) if day == scheduled.service_day() else None,
-            'alerts': alerts, **({'trainClass': planned} if (planned := zamudil.class_of(number, day)) else {})}
+            'alerts': alerts, **({'trainClass': planned} if (planned := zamudil.class_of(number, day)) else {}), **stay_links(number, day, run)}
+
+
+def stay_links(number: str, day: date, run: dict) -> dict:
+    """Staying on the train (spec 2026-10-31 H9, train_stays.links_of): 'comesFrom', 'continuesAs', 'coupledWith'
+    when known, with the times as timestamps."""
+    import logging
+    from prestop_statistics import train_stays
+    try:
+        found = train_stays.links_of(number, day)
+    except Exception as e:  # noqa: BLE001 - optional: the train page stands without it
+        logging.getLogger(__name__).warning('Train stays of %s unavailable: %r', number, e)
+        return {}
+    for key, field in (('comesFrom', 'arrival'), ('continuesAs', 'departure')):
+        if key in found:
+            found[key] = {**found[key], field: mapping.iso(run['serviceDay'] + found[key][field])}
+    if found.get('comesFrom', {}).get('level') == 'sure':
+        from . import trainlive
+        # how late it leaves because that train is late (H8), as the board and the map say it before its own report
+        came = trainlive.carried_for_trip(run['id'], (run.get('scheduledDepartures') or run['departures'])[0])
+        if came and came['delay'] > 0:
+            found['comesFrom']['delaySeconds'] = came['delay']
+    return found
 
 
 def _quantile(values: list[int], q: float) -> Optional[int]:

@@ -73,3 +73,71 @@ class Carried(SimpleTestCase):
         self.assertEqual(row['effectiveAt'], mapping.iso(T0 + 2400 + 540))
         self.assertEqual((row['delayKind'], row['quality']), ('predicted', 'predicted'))
         self.assertEqual(predicted, (540, 'previous-trip'))
+
+
+class Shown(SimpleTestCase):
+    """H9: journeys and the train page."""
+
+    def legs(self, walk_end='IJPP:Ljubljana'):
+        prev = {'mode': 'rail', 'routeName': 'LPV 3295', 'routeId': 'IJPP:r', 'tripId': A['id'], 'operatorId': 'IJPP:1161',
+                'destination': {'stopId': walk_end, 'name': 'Ljubljana'}}
+        leg = {'mode': 'rail', 'routeName': 'LPV 3294', 'routeId': 'IJPP:r', 'tripId': B['id'], 'operatorId': 'IJPP:1161',
+               'origin': {'stopId': 'IJPP:Ljubljana', 'name': 'Ljubljana'}, 'scheduledDeparture': mapping.iso(T0 + 2400)}
+        return prev, leg
+
+    @override_settings(PRESTOP_PREDICTIONS=True)
+    def test_two_rail_legs_of_one_set_are_a_stay_without_a_new_ticket(self):
+        prev, leg = self.legs()
+        with mock.patch.object(train_stays, 'journey_level', return_value='sure') as level, mock.patch('prestop_api.sources.stop_group', return_value=[]):
+            self.assertEqual(predictions.stay_level(prev, {}, leg, {}, 0), 'sure')
+        self.assertEqual(level.call_args.args[:2], ('3295', '3294'))
+        self.assertEqual(predictions.ticket_note(prev, leg, None), 'none')  # SŽ: a ticket is for the relation
+
+    @override_settings(PRESTOP_PREDICTIONS=True)
+    def test_another_station_or_a_walk_is_a_change(self):
+        prev, leg = self.legs(walk_end='IJPP:Kranj')
+        prev['destination']['name'] = 'Kranj'
+        with mock.patch.object(train_stays, 'journey_level', return_value='sure'), mock.patch('prestop_api.sources.stop_group', return_value=[]):
+            self.assertIsNone(predictions.stay_level(prev, {}, leg, {}, 0))
+            prev, leg = self.legs()
+            self.assertIsNone(predictions.stay_level(prev, {}, leg, {}, 300))  # five minutes' walk
+
+    def test_train_page_times_as_timestamps(self):
+        from prestop_api import trains
+        found = {'continuesAs': {'number': '3294', 'name': 'LPV 3294', 'station': 'Ljubljana', 'departure': 40_000, 'destination': 'Kranj',
+                                 'level': 'sure', 'kind': 'continues'}}
+        with mock.patch.object(train_stays, 'links_of', return_value=found):
+            got = trains.stay_links('3295', None, {'serviceDay': DAY})
+        self.assertEqual(got['continuesAs']['departure'], mapping.iso(DAY + 40_000))
+        found = {'comesFrom': {'number': '3295', 'name': 'LPV 3295', 'station': 'Ljubljana', 'arrival': T0 + 1800 - DAY, 'level': 'sure', 'kind': 'continues'}}
+        with mock.patch.object(train_stays, 'links_of', return_value=found),                 mock.patch.object(trainlive, 'carried_for_trip', return_value={'delay': 540, 'source': 'sz', 'at': 0, 'from': '3295'}) as carried:
+            got = trains.stay_links('3294', None, B)
+        self.assertEqual(got['comesFrom']['delaySeconds'], 540)  # as the board says it
+        self.assertEqual(carried.call_args.args, (B['id'], T0 + 2400))
+        with mock.patch.object(train_stays, 'links_of', side_effect=RuntimeError('down')):
+            self.assertEqual(trains.stay_links('3295', None, {'serviceDay': DAY}), {})  # the page stands without it
+
+
+class Replaced(SimpleTestCase):
+    """A bus running part of either train: not the same set going on (seen locally on 31 Oct: BUS 2427 after RG 18)."""
+
+    def test_no_carried_delay_onto_a_replaced_train(self):
+        from prestop_api.tests.test_train_live import timetable_bus
+        bus = timetable_bus(B, [T0 + 2400, T0 + 4800], stations=['Ljubljana', 'Kranj'], label='32949')
+        plan = plan_of([C, A, B], [bus])
+        with links(), mock.patch.object(trainlive.time, 'time', return_value=T0 + 600):
+            self.assertIsNone(trainlive.carried_delay(plan, B, update(A, 'Ljubljana', 900), {}))
+            self.assertEqual(trainlive.carried_delay(PLAN, B, update(A, 'Ljubljana', 900), {})['delay'], 540)
+
+    def test_a_learned_stay_does_not_hold_on_a_replaced_day(self):
+        from prestop_api.tests.test_train_live import timetable_bus
+        stay = {'from_number': '3295', 'to_number': '3294', 'station': B['stops'][0]['gtfsId'], 'station_name': 'Ljubljana',
+                'arrival': T0 + 1800 - DAY, 'departure': T0 + 2400 - DAY}
+        runs = {n: {'trip': t['id'], 'stops': [{'id': s['gtfsId'], 'name': s['name'], 'arr': a - DAY, 'dep': a - DAY} for s, a in zip(t['stops'], t['arrivals'])]}
+                for n, t in (('3295', A), ('3294', B))}
+        bus = timetable_bus(B, [T0 + 2400, T0 + 4800], stations=['Ljubljana', 'Kranj'], label='32949')
+        with mock.patch('prestop_api.zamudil.class_of', return_value=None):
+            with mock.patch('prestop_api.scheduled.day_plan', return_value=PLAN):
+                self.assertTrue(train_stays.holds(stay, None, runs))
+            with mock.patch('prestop_api.scheduled.day_plan', return_value=plan_of([C, A, B], [bus])):
+                self.assertFalse(train_stays.holds(stay, None, runs))
