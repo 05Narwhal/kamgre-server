@@ -270,6 +270,12 @@ def run_delays(plan: dict, run: dict, updates: dict, reports: dict) -> dict[str,
     before anything is known), 'source', 'at', 'reported' (its last stop reported itself; None when it only carries
     the delay of the vehicle before it), 'kind' ('actual' | 'predicted')}."""
     found, source, at, kind = station_delays(run, updates, reports)
+    if source is None and not mapping.is_replacement(run['route']):
+        # Nothing of its own yet: the delay of the train whose set it is (a `sure` stay), as SŽ's forecast would be
+        came = carried_delay(plan, run, updates, reports)
+        if came and came['delay'] > 0:
+            found = [came['delay']] + [None] * (len(run['stops']) - 1)
+            source, at, kind = came['source'], came['at'], 'predicted'
     if source is None:
         return {}
     t_arr, t_dep = _times(run)
@@ -297,6 +303,107 @@ def run_delays(plan: dict, run: dict, updates: dict, reports: dict) -> dict[str,
         k_end = pairs[-1][0] if pairs else None
         carry = v_arr[k_end] + delays[k_end] if sure and k_end is not None and delays[k_end] is not None else None
     return {k: v for k, v in out.items() if any(d is not None for d in v['delays'])}
+
+
+# ---------------------------------------------------------------- the delay of the train before (spec 2026-10-31 H8)
+
+CHAIN_HOPS = 6        # trains back along `sure` stays (as predictions.CHAIN_HOPS for buses)
+CHAIN_AHEAD = 3 * 3600  # s: only for a train leaving this soon
+_numbers: dict = {'trips': None, 'value': {}}
+
+
+def _by_number(plan: dict) -> dict[str, list[dict]]:
+    """Train number -> its runs in a day's plan (trains only)."""
+    trips = plan.get('trips') or {}
+    if _numbers['trips'] is not trips:
+        out: dict[str, list[dict]] = {}
+        for runs in trips.values():
+            for r in runs:
+                if not mapping.is_replacement(r['route']):
+                    number = sz.train_parts(mapping.route_name(r['route']))[1]
+                    if number:
+                        out.setdefault(number, []).append(r)
+        _numbers.update(trips=trips, value=out)
+    return _numbers['value']
+
+
+def _service_date(run: dict):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.fromtimestamp(run['serviceDay'] + 12 * 3600, ZoneInfo('Europe/Ljubljana')).date()
+
+
+def carried_delay(plan: Optional[dict], run: dict, updates: dict, reports: dict, now: Optional[float] = None,
+                  hops: int = CHAIN_HOPS) -> Optional[dict]:
+    """How late train `run` will leave because the train whose set it is (a `sure` stay, train_stays.py) is late:
+    {'delay' (s, never below 0), 'source', 'at' (of the report it comes from), 'from' (that train's number)}, or None.
+    That train's live delay minus the slack in the turn; when it has nothing reported yet either, its own carried delay,
+    up to CHAIN_HOPS trains back, only through `sure` stays and for a train leaving within CHAIN_AHEAD. It never beats a
+    train's own report or SŽ's forecast for it (run_delays asks only when there is none)."""
+    from prestop_statistics import train_stays
+    if not plan or hops <= 0 or not run.get('serviceDay'):
+        return None
+    now = time.time() if now is None else now
+    if _times(run)[1][0] - now > CHAIN_AHEAD:
+        return None
+    link = train_stays.sure_link_to(number_of(run), _service_date(run))
+    if not link:
+        return None
+    arrives = run['serviceDay'] + link['arrival']
+    before = next((r for r in _by_number(plan).get(link['from_number'], ()) if abs(_times(r)[0][-1] - arrives) <= 120), None)
+    if not before:
+        return None
+    found, source, at, _ = station_delays(before, updates, reports)
+    end = carried(found)[-1] if source else None
+    if end is None:
+        earlier = carried_delay(plan, before, updates, reports, now, hops - 1)
+        if not earlier:
+            return None
+        end, source, at = earlier['delay'], earlier['source'], earlier['at']
+    return {'delay': max(0, round(end - link['slack'])), 'source': source, 'at': at, 'from': link['from_number']}
+
+
+def number_of(run: dict) -> Optional[str]:
+    return sz.train_parts(mapping.route_name(run['route']))[1]
+
+
+def _run_in(plan: Optional[dict], trip_id: str, when: float) -> Optional[dict]:
+    """The run of a trip in a day's plan that is on its way at `when` (one of its stop times), else the nearest."""
+    runs = (plan or {}).get('trips', {}).get(trip_id) or []
+    return min(runs, key=lambda r: max(0, _times(r)[1][0] - when, when - _times(r)[0][-1]), default=None)
+
+
+def carried_for_trip(trip_id: str, when: float) -> Optional[dict]:
+    """carried_delay for the run of a train trip with a stop at `when` (journeys, boards), from the plan of that time,
+    never waiting for one."""
+    from . import scheduled
+    run = _run_in(plan := scheduled.plan_at(when), trip_id, when)
+    if not run or mapping.is_replacement(run['route']):
+        return None
+    try:
+        return carried_delay(plan, run, trip_updates(), sz.reports())
+    except (KeyError, IndexError, TypeError) as e:  # a plan we cannot read must not take the answer down
+        logger.warning('Carried delay of %s failed: %r', trip_id, e)
+        return None
+
+
+def carried_rows(rows: list[dict]) -> list[dict]:
+    """Board rows of trains without a live time of their own get the carried delay (as SŽ's forecast: 'predicted');
+    the rest as they are. New dicts, never the cached rows."""
+    from datetime import datetime
+    out = []
+    for row in rows:
+        if row.get('mode') != 'rail' or row.get('replacement') or row.get('effectiveAt') or row.get('canceled') or not row.get('tripId'):
+            out.append(row)
+            continue
+        at = datetime.fromisoformat(row['scheduledAt']).timestamp()
+        came = carried_for_trip(row['tripId'], at)
+        if not came or came['delay'] < 60:
+            out.append(row)
+            continue
+        out.append({**row, 'effectiveAt': mapping.iso(at + came['delay']), 'updatedAt': mapping.iso(time.time()), 'quality': 'predicted',
+                    'delaySource': came['source'], 'delayKind': 'predicted'})
+    return out
 
 
 def train_of(plan: dict, bus: dict) -> Optional[dict]:

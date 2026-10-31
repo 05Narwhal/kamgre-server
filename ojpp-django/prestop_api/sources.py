@@ -560,7 +560,7 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict], d
         drops += noted
     if back:
         coverage.note(drops, 'gone before the board starts', *(r for r in rows if (r['effectiveAt'] or r['scheduledAt']) < mapping.iso(start)))
-    return kept
+    return trainlive.carried_rows(kept)  # a train with nothing of its own: the delay of the train whose set it is (H8)
 
 
 _late: tuple = (None, {})  # the trip updates last indexed, and their index (mapping.late_by_stop)

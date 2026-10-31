@@ -152,6 +152,13 @@ def predict_leg(leg: dict, raw: dict, now: Optional[float] = None) -> tuple[Opti
         return None, None
     start = ((raw.get('trip') or {}).get('departureStoptime') or {}).get('scheduledDeparture')
     departs = _ts(leg['scheduledDeparture'])
+    if leg['mode'] == 'rail' and leg.get('tripId') and not leg.get('replacement'):
+        # A train: the delay of the train whose set it is, through `sure` stays only (train_stays.py, trainlive),
+        # as the map and boards show it
+        from . import trainlive
+        came = trainlive.carried_for_trip(leg['tripId'], departs) if 0 <= departs - (now or time.time()) <= PREVIOUS_AHEAD else None
+        if came and came['delay'] > 0:
+            return came['delay'], 'previous-trip'
     day = (datetime.fromtimestamp(departs, LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()  # after midnight: yesterday's service
     now = now or time.time()
     if start is not None and 0 <= departs - now <= PREVIOUS_AHEAD:

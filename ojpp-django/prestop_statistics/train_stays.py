@@ -469,6 +469,7 @@ def comes_from(number: Optional[str]) -> Optional[dict]:
 
 _days: dict[str, tuple] = {}  # date -> (monotonic time, runs by number)
 RUNS_TTL = 3600
+RETRY = 300  # s after a failed timetable read
 
 
 def _runs(day: date) -> dict[str, dict]:
@@ -477,7 +478,13 @@ def _runs(day: date) -> dict[str, dict]:
     hit = _days.get(key)
     if hit and time.monotonic() - hit[0] < RUNS_TTL:
         return hit[1]
-    runs = timetable(day)
+    try:
+        runs = timetable(day)
+    except Exception as e:  # noqa: BLE001 - asked again in RETRY s, not on every map refresh
+        logger.info('Timetable of %s for train stays unavailable: %r', day, e)
+        runs = hit[1] if hit else {}
+        _days[key] = (time.monotonic() - RUNS_TTL + RETRY, runs)
+        return runs
     if len(_days) > 4:
         _days.clear()
     _days[key] = (time.monotonic(), runs)
