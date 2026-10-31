@@ -54,7 +54,7 @@ class RollupTests(TestCase):
         t = trains[0]
         self.assertEqual((t['category'], t['origin'], t['destination']), ('LPV', 'Ljubljana', 'Jesenice'))
         self.assertEqual((t['max_delay'], t['avg_delay'], t['final_delay'], t['on_time_share']), (300, 165, 240, 0.5))
-        self.assertEqual(t['stops'][1], {'id': 'IJPP:kr', 'name': 'Kranj', 'delay': 120, 'gained': 120, 'track': '2'})
+        self.assertEqual(t['stops'][1], {'id': 'IJPP:kr', 'name': 'Kranj', 'delay': 120, 'gained': 120, 'track': '2', 'time': None})
         self.assertEqual([s['gained'] for s in t['stops']], [None, 120, 180, -60])
         self.assertEqual((t['canceled'], t['replaced']), (False, None))  # no plan: replaced unknown, not 'none'
         rg = trains[1]
@@ -157,6 +157,18 @@ class CanceledAndReplacedTests(TestCase):
         rollup.write(DAY, trains, [])
         row = TrainDay.objects.get(number='2428')
         self.assertEqual((row.departure, row.canceled, row.replaced), (8 * 3600, False, None))
+
+    def test_stations_by_the_hour_of_their_scheduled_time(self):
+        delay('IJPP:t2428', {1: 0, 2: 240, 3: 300})
+        delay('IJPP:t310', {1: 60, 2: 600})
+        times = {1: 7 * 3600 + 3000, 2: 8 * 3600 + 600, 3: 8 * 3600 + 1800, 4: 9 * 3600}
+        trips = lambda ids: {t: {**TRIPS[t], 'times': times} for t in ids}  # noqa: E731 - both trains at the same times
+        trains, stations, _ = rollup.build(DAY, trips, lambda day: {}, plan=NO_PLAN)
+        self.assertEqual(trains[0]['stops'][1]['time'], 8 * 3600 + 600)
+        by = {s['stop_id']: s['hours'] for s in stations}
+        self.assertEqual(by['IJPP:kr'], {'8': [2, 0, 840]})       # 4 and 10 min late at 8:10
+        self.assertEqual(by['IJPP:lj'], {'7': [2, 2, 60]})
+        self.assertEqual(by['IJPP:le'], {'8': [1, 0, 300]})
 
     def test_since_re_rolls_days_that_already_have_rows(self):
         for back in (0, 1, 2):

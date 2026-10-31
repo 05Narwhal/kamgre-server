@@ -188,13 +188,16 @@ class TrainDay(models.Model):
 
 class StationDay(models.Model):
     """One railway station on one service day, from that day's TrainDay rows: trains with a reported delay there,
-    the share of them on time (under rollup.ON_TIME_LATE late) and their mean delay in seconds."""
+    the share of them on time (under rollup.ON_TIME_LATE late) and their mean delay in seconds. `hours` (spec
+    2026-10-31 H3): by the hour of the scheduled time there, {"7": [trains, on time, sum of their delays in s]}; {} on
+    rows rolled up before."""
     service_date = models.DateField()
     stop_id = models.CharField(max_length=200)
     name = models.CharField(max_length=200, blank=True, default='')
     trains = models.IntegerField(default=0)
     on_time_share = models.FloatField(null=True)
     avg_delay = models.IntegerField(null=True)
+    hours = models.JSONField(default=dict)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['service_date', 'stop_id'], name='prestop_station_day_unique')]

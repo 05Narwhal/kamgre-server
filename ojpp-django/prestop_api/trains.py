@@ -367,14 +367,22 @@ def station(stop_ids: list[str], days: int, today: date) -> Optional[dict]:
     if not rows:
         return None
     per_day: dict[date, dict] = {}
+    hours = [[0, 0, 0] for _ in range(24)]
     for r in rows:
         d = per_day.setdefault(r.service_date, {'trains': 0, 'onTime': 0.0, 'delay': 0.0})
         d['trains'] += r.trains
         d['onTime'] += (r.on_time_share or 0) * r.trains
         d['delay'] += (r.avg_delay or 0) * r.trains
+        for hour, (n, on_time, delay) in (r.hours or {}).items():
+            if str(hour).isdigit() and 0 <= int(hour) < 24:
+                cell = hours[int(hour)]
+                cell[0], cell[1], cell[2] = cell[0] + n, cell[1] + on_time, cell[2] + delay
     out = [{'date': d.isoformat(), 'trains': v['trains'], 'onTimeShare': round(v['onTime'] / v['trains'], 4) if v['trains'] else None,
             'avgDelaySeconds': round(v['delay'] / v['trains']) if v['trains'] else None} for d, v in sorted(per_day.items(), reverse=True)]
     trains = sum(v['trains'] for v in per_day.values())
     return {'stopId': stop_ids[0], 'name': rows[0].name, 'days': out, 'summary': {
         'trains': trains, 'onTimeShare': round(sum(v['onTime'] for v in per_day.values()) / trains, 4) if trains else None,
-        'avgDelaySeconds': round(sum(v['delay'] for v in per_day.values()) / trains) if trains else None}}
+        'avgDelaySeconds': round(sum(v['delay'] for v in per_day.values()) / trains) if trains else None},
+        # by the hour of the scheduled time there (rows rolled up since H3; empty before)
+        'hours': [{'trains': n, 'onTimeShare': round(on_time / n, 4) if n else None, 'avgDelaySeconds': round(delay / n) if n else None}
+                  for n, on_time, delay in hours]}

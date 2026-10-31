@@ -32,7 +32,7 @@ TRIP_Q = 'route { gtfsId shortName mode } stoptimes { stopPosition scheduledDepa
 
 def otp_trip_stops(trip_ids: list[str]) -> dict[str, Optional[dict]]:
     """trip id -> {'route', 'name', 'mode', 'stops' {stopPosition: (stop id, name)}, 'departure' (scheduled at the
-    first stop, s after midnight)}, or None when OTP no longer has the trip (an older timetable's): its day is left
+    first stop, s after midnight), 'times' {stopPosition: scheduled departure there}}, or None when OTP no longer has the trip (an older timetable's): its day is left
     out, not guessed."""
     out: dict[str, Optional[dict]] = {}
     for i in range(0, len(trip_ids), CHUNK):
@@ -42,7 +42,7 @@ def otp_trip_stops(trip_ids: list[str]) -> dict[str, Optional[dict]]:
         for k, t in enumerate(chunk):
             trip = data.get(f't{k}')
             times = sorted((s['stopPosition'], s.get('scheduledDeparture')) for s in (trip or {}).get('stoptimes') or [])
-            out[t] = {'departure': times[0][1] if times else None,
+            out[t] = {'departure': times[0][1] if times else None, 'times': dict(times),
                       'route': trip['route']['gtfsId'], 'name': trip['route'].get('shortName') or '', 'mode': trip['route'].get('mode'),
                       'stops': {s['stopPosition']: (s['stop']['gtfsId'], s['stop'].get('name') or '') for s in trip.get('stoptimes') or []}} if trip else None
     return out
@@ -80,7 +80,7 @@ def train_row(day: date, delay: Optional[TripDelay], trip: dict, tracks: dict, r
         d = reported.get(p)
         stops.append({'id': trip['stops'][p][0], 'name': trip['stops'][p][1], 'delay': d,
                       'gained': d - before if d is not None and before is not None else None,
-                      'track': (tracks.get(number) or {}).get(trip['stops'][p][0])})
+                      'track': (tracks.get(number) or {}).get(trip['stops'][p][0]), 'time': (trip.get('times') or {}).get(p)})
         before = d if d is not None else before
     delays = [s['delay'] for s in stops if s['delay'] is not None]
     canceled = bool(delay and delay.canceled)
@@ -128,7 +128,8 @@ def replaced_runs(day: date, plan: Optional[dict]) -> Optional[dict[str, str]]:
 
 
 def station_rows(day: date, trains: list[dict]) -> list[dict]:
-    """StationDay fields from one day's train rows."""
+    """StationDay fields from one day's train rows; `hours` {hour of the scheduled time there: [trains, on time, sum of
+    their delays]} (spec 2026-10-31 H3: a station's trains by hour)."""
     seen: dict[str, dict] = {}
     for t in trains:
         if t.get('canceled'):
@@ -136,11 +137,16 @@ def station_rows(day: date, trains: list[dict]) -> list[dict]:
         for s in t['stops']:
             if s['delay'] is None:
                 continue
-            row = seen.setdefault(s['id'], {'name': s['name'], 'delays': []})
+            row = seen.setdefault(s['id'], {'name': s['name'], 'delays': [], 'hours': {}})
             row['delays'].append(s['delay'])
+            if s.get('time') is not None:
+                hour = row['hours'].setdefault(str(s['time'] // 3600 % 24), [0, 0, 0])
+                hour[0] += 1
+                hour[1] += s['delay'] < ON_TIME_LATE
+                hour[2] += s['delay']
     return [{'service_date': day, 'stop_id': stop, 'name': v['name'], 'trains': len(v['delays']),
              'on_time_share': round(sum(1 for d in v['delays'] if d < ON_TIME_LATE) / len(v['delays']), 4),
-             'avg_delay': round(sum(v['delays']) / len(v['delays']))} for stop, v in sorted(seen.items())]
+             'avg_delay': round(sum(v['delays']) / len(v['delays'])), 'hours': v['hours']} for stop, v in sorted(seen.items())]
 
 
 def _weight(row: dict) -> tuple[int, int]:

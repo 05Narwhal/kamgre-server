@@ -64,8 +64,20 @@ class TrainEndpointTests(TestCase):
         with mock.patch.object(sources, 'stop_group', return_value=['IJPP:lj', 'IJPP:lj2']):
             body = self.client.get('/api/v1/stations/IJPP:lj/statistics').json()['data']
             self.assertEqual(body['days'], [{'date': '2026-10-25', 'trains': 40, 'onTimeShare': 0.625, 'avgDelaySeconds': 90}])
+            self.assertEqual(body['hours'][8], {'trains': 0, 'onTimeShare': None, 'avgDelaySeconds': None})  # rows from before H3
             self.assertEqual(body['stopId'], 'IJPP:lj')
         self.assertEqual(self.client.get('/api/v1/stations/IJPP:none/statistics').status_code, 404)
+
+    def test_a_stations_trains_by_hour(self):
+        StationDay.objects.create(service_date=date(2026, 10, 25), stop_id='IJPP:lj', name='Ljubljana', trains=3, on_time_share=0.5, avg_delay=120,
+                                  hours={'7': [2, 1, 300], '8': [1, 1, 0]})
+        StationDay.objects.create(service_date=date(2026, 10, 24), stop_id='IJPP:lj', name='Ljubljana', trains=2, on_time_share=0.5, avg_delay=120,
+                                  hours={'7': [2, 0, 900], '25': [9, 9, 9]})  # an hour that cannot be is left out
+        with mock.patch.object(sources, 'stop_group', return_value=['IJPP:lj']):
+            body = self.client.get('/api/v1/stations/IJPP:lj/statistics').json()['data']
+        self.assertEqual(len(body['hours']), 24)
+        self.assertEqual(body['hours'][7], {'trains': 4, 'onTimeShare': 0.25, 'avgDelaySeconds': 300})
+        self.assertEqual(body['hours'][8], {'trains': 1, 'onTimeShare': 1.0, 'avgDelaySeconds': 0})
 
     def test_a_trains_run_today(self):
         run = {'id': 'IJPP:t310', 'route': {'gtfsId': 'IJPP:r310', 'shortName': 'RG 310', 'mode': 'RAIL'}, 'serviceDay': SERVICE_DAY,
