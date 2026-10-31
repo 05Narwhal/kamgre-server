@@ -198,6 +198,18 @@ class Joined(TestCase):
                             {'summary': 'ZIDANI MOST - LJUBLJANA:', 'body': NOTICE, 'source': 'sz', 'trainNumbers': [619, 631, 632]}]}
         return mock.patch('prestop_api.zamudil.copy', return_value={'data': data}), mock.patch('prestop_api.zamudil.enabled', return_value=True)
 
+    def test_a_later_date_takes_today_s_notice_until_further_notice(self):
+        from prestop_api import zamudil
+        data = {'notices': [{'summary': 'OBVESTILO: Združeni vlaki iz/do Zidanega Mosta (do nadaljnjega).', 'body': None, 'source': 'sz', 'trainNumbers': [619]},
+                            {'summary': 'ZIDANI MOST - LJUBLJANA:', 'body': NOTICE, 'source': 'sz', 'trainNumbers': [619]}]}
+        copies = {TODAY: {'data': data}, TODAY + timedelta(days=2): {'data': {'notices': []}}}
+        with mock.patch('prestop_api.zamudil.copy', side_effect=lambda endpoint, day: copies.get(day)),                 mock.patch('prestop_api.zamudil.enabled', return_value=True), mock.patch('prestop_api.zamudil.today', return_value=TODAY):
+            self.assertEqual(len(zamudil.joined_trains(TODAY + timedelta(days=2))), 2)
+            self.assertEqual(zamudil.joined_trains(TODAY - timedelta(days=1)), [])  # never backwards
+        data['notices'][0]['summary'] = 'OBVESTILO: Združeni vlaki iz/do Zidanega Mosta (1. 11. - 2. 11.).'
+        with mock.patch('prestop_api.zamudil.copy', side_effect=lambda endpoint, day: copies.get(day)),                 mock.patch('prestop_api.zamudil.enabled', return_value=True), mock.patch('prestop_api.zamudil.today', return_value=TODAY):
+            self.assertEqual(zamudil.joined_trains(TODAY + timedelta(days=2)), [])  # dated: only on its listed days
+
     def test_parses_two_trains_per_paragraph_and_the_sets(self):
         from prestop_api import zamudil
         a, b = self.notices()

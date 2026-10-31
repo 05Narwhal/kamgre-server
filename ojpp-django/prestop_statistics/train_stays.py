@@ -472,6 +472,25 @@ RUNS_TTL = 3600
 RETRY = 300  # s after a failed timetable read
 
 
+def _from_map(day: date) -> dict[str, dict]:
+    """The same as `timetable(day)` from the timetable the map already holds (the web process), {} when it has none."""
+    from prestop_api import mapping, scheduled, sz
+    cache = scheduled.timetable if day == scheduled.service_day() else scheduled._day_tables.get(day.isoformat())
+    snap = cache.peek() if cache else None
+    out: dict[str, dict] = {}
+    for t in (snap.value if snap else []):
+        if t['route'].get('mode') != 'RAIL' or scheduled._service_date(t) != day:
+            continue
+        name = mapping.route_name(t['route']) or ''
+        number = sz.train_parts(name)[1]
+        if number and number not in out:
+            arr, dep = t.get('scheduledArrivals') or t['arrivals'], t.get('scheduledDepartures') or t['departures']
+            out[number] = {'number': number, 'name': name, 'trip': t['id'],
+                           'stops': [{'id': s['gtfsId'], 'name': s.get('name') or '', 'arr': a - t['serviceDay'], 'dep': d - t['serviceDay']}
+                                     for s, a, d in zip(t['stops'], arr, dep)]}
+    return out
+
+
 def _runs(day: date) -> dict[str, dict]:
     """Train number -> run on `day` (timetable), from the map's timetable for today and the days it holds, else OTP."""
     key = day.isoformat()
@@ -479,7 +498,7 @@ def _runs(day: date) -> dict[str, dict]:
     if hit and time.monotonic() - hit[0] < RUNS_TTL:
         return hit[1]
     try:
-        runs = timetable(day)
+        runs = _from_map(day) or timetable(day)
     except Exception as e:  # noqa: BLE001 - asked again in RETRY s, not on every map refresh
         logger.info('Timetable of %s for train stays unavailable: %r', day, e)
         runs = hit[1] if hit else {}
@@ -500,6 +519,14 @@ def _coupled_by_timetable(runs: dict) -> list[dict]:
     return _coupled_memo['value']
 
 
+def replaced(day: date, trip_ids) -> bool:
+    """Whether buses run any part of these train trips on `day`, by the plan boards and journeys use (not waited for:
+    unknown counts as not replaced, as the timetable says)."""
+    from prestop_api import scheduled, trainlive
+    plan = scheduled.day_plan(day)
+    return bool(plan) and any(trainlive.replaced(plan, run) for t in trip_ids for run in (plan.get('trips') or {}).get(t) or ())
+
+
 def holds(stay: dict, day: date, runs: Optional[dict] = None) -> bool:
     """Whether a learned stay still fits `day`: both trains run with the times it was learned from (± 60 s), from
     the same station, and zamudil does not plan them in two series."""
@@ -510,6 +537,8 @@ def holds(stay: dict, day: date, runs: Optional[dict] = None) -> bool:
         return False
     if abs(a['stops'][-1]['arr'] - stay['arrival']) > 60 or abs(b['stops'][0]['dep'] - stay['departure']) > 60:
         return False
+    if replaced(day, (a['trip'], b['trip'])):
+        return False  # a bus runs part of either: the set does not go on as the other train (evidence skips such days too)
     ca, cb = ((zamudil.class_of(n, day) or {}).get('series') for n in (stay['from_number'], stay['to_number']))
     return not (ca and cb and ca != cb and 'unknown' not in (ca, cb))
 

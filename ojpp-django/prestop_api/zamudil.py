@@ -661,13 +661,19 @@ def joined_trains(day: date) -> list[dict]:
     names exactly two trains and says they run joined (združi, združeno): {'trains' (the two numbers as text, in the
     order named), 'sets' ({place: 1 | 2 | 3 | 'last'}, only where the notice says which set goes where: "prva
     garnitura: Smer Dobova"), 'notice' (its number)}. Which station and which way the timetable tells
-    (train_stays.notice_links); a paragraph naming one train or three is left out, never guessed."""
-    found = copy(NOTICES, day) if enabled() else None
-    data = (found or {}).get('data')
-    if not isinstance(data, dict):
+    (train_stays.notice_links); a paragraph naming one train or three is left out, never guessed. A date after today
+    also takes today's notices that hold "do nadaljnjega" (until further notice): zamudil lists a date only on the day."""
+    if not enabled():
         return []
+    data = (copy(NOTICES, day) or {}).get('data')
+    notices = train_notices([(day, data)]) if isinstance(data, dict) else []
+    if day > today():
+        # zamudil fills a date's list only on that day: a later date takes today's notices "until further notice"
+        now = (copy(NOTICES, today()) or {}).get('data')
+        notices += [n for n in (train_notices([(today(), now)]) if isinstance(now, dict) else [])
+                    if 'do nadaljnjega' in fold(n['title']) and n['number'] not in {m['number'] for m in notices}]
     out = []
-    for n in train_notices([(day, data)]):
+    for n in notices:
         for paragraph in re.split(r'\n\s*\n', n['text'] or ''):
             folded = fold(paragraph)
             if 'zdruz' not in folded:

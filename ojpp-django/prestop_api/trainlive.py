@@ -353,6 +353,8 @@ def carried_delay(plan: Optional[dict], run: dict, updates: dict, reports: dict,
     before = next((r for r in _by_number(plan).get(link['from_number'], ()) if abs(_times(r)[0][-1] - arrives) <= 120), None)
     if not before:
         return None
+    if replaced(plan, run) or replaced(plan, before):
+        return None  # a bus runs part of either: not the same set going on
     found, source, at, _ = station_delays(before, updates, reports)
     end = carried(found)[-1] if source else None
     if end is None:
@@ -361,6 +363,11 @@ def carried_delay(plan: Optional[dict], run: dict, updates: dict, reports: dict,
             return None
         end, source, at = earlier['delay'], earlier['source'], earlier['at']
     return {'delay': max(0, round(end - link['slack'])), 'source': source, 'at': at, 'from': link['from_number']}
+
+
+def replaced(plan: dict, run: dict) -> bool:
+    """Buses run some of train `run` in that day's plan (a replaced stretch, or a bus on from where it ends)."""
+    return bool((plan.get('sections') or {}).get(run['id'])) or any(replaced_by.beyond(plan, run))
 
 
 def number_of(run: dict) -> Optional[str]:
