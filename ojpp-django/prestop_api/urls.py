@@ -26,6 +26,7 @@ urlpatterns = [
     path('statistics/routes', views.statistics_routes),
     path('statistics/routes/<path:route_id>/daily', views.statistics_daily),
     path('statistics/overview', views.statistics_overview),
+    path('statistics/trains', views.statistics_trains),
     path('stations/<path:stop_id>/statistics', views.station_statistics),
     path('rail/works', views.rail_works),
     path('trains/<str:number>/history', views.train_history),

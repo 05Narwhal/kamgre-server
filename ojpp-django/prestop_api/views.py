@@ -1034,7 +1034,8 @@ def _day_param_named(request, name: str):
 def train_history(request, number):
     from . import scheduled, trains
     number, days = _number_param(number), _days_param(request)
-    data = _memo(('train-history', number, days), 600, lambda: trains.history(number, days, scheduled.service_day()))
+    today = scheduled.service_day()  # kept an hour; a new night's rows (the latest rollup day) start a new one
+    data = _memo(('train-history', number, days, today, trains.latest_rollup()), trains.TRENDS_TTL, lambda: trains.history(number, days, today))
     collector = _collector_source()
     return envelope(data, collector['status'], used=['otp:timetables'], source_updated=collector['updatedAt'])
 
@@ -1045,6 +1046,20 @@ def statistics_overview(request):
     from . import scheduled, trains
     data = trains.overview(scheduled.service_day())
     return envelope(data, snapshot_status(sources.positions, 60), used=['gtfs-rt:trip-updates', 'sz:live', 'sz:delays'], source_updated=mapping.iso(time.time()))
+
+
+@require_GET
+@api
+def statistics_trains(request):
+    """All SŽ trains over the last 7, 30 or 90 days from the nightly rollups (spec 2026-10-31 H2), kept an hour and
+    rebuilt by the warmer right after the night's rollup."""
+    from . import scheduled, trains
+    days = _days_param(request, 30)
+    if days not in trains.TREND_DAYS:
+        raise ApiError(422, 'INVALID_DAYS', 'days must be 7, 30 or 90')
+    data = trains.trends_cached(days, scheduled.service_day())
+    collector = _collector_source()
+    return envelope(data, collector['status'], used=['otp:timetables'], source_updated=collector['updatedAt'])
 
 
 @require_GET

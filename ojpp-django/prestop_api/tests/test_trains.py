@@ -91,3 +91,135 @@ class TrainEndpointTests(TestCase):
         with mock.patch.object(scheduled, 'day_timetable', return_value=fixed([run])) as day:
             self.assertEqual(trains.find_run('310', date(2026, 10, 27)), run)
         day.assert_called_once_with(date(2026, 10, 27))
+
+
+def train_day(day, number, final, *, avg=None, mx=None, category='RG', departure=8 * 3600, canceled=False, replaced='none', stops=()):
+    return TrainDay.objects.create(service_date=day, number=number, category=category, route_id=f'IJPP:r{number}', trip_id=f'IJPP:t{number}',
+                                   origin='Ljubljana', destination='Jesenice', final_delay=final, avg_delay=avg if avg is not None else final,
+                                   max_delay=mx if mx is not None else final, departure=departure, canceled=canceled, replaced=replaced,
+                                   stops=list(stops))
+
+
+def stops(*delays):
+    """Stops lj, kr, le, je with these delays (None: not reported) and the gain since the station reported before."""
+    out, before = [], None
+    for (stop, name), d in zip([('IJPP:lj', 'Ljubljana'), ('IJPP:kr', 'Kranj'), ('IJPP:le', 'Lesce-Bled'), ('IJPP:je', 'Jesenice')], delays):
+        out.append({'id': stop, 'name': name, 'delay': d, 'gained': d - before if d is not None and before is not None else None, 'track': None})
+        before = d if d is not None else before
+    return out
+
+
+@override_settings(ROOT_URLCONF='ojpp_core.urls_prestop')
+class TrainTrendsTests(TestCase):
+    """GET /statistics/trains (spec 2026-10-31 H2): all trains over 7, 30 or 90 days from the nightly rollups."""
+
+    def setUp(self):
+        trains._trends.clear()
+        trains._lost_days.clear()
+        views._derived.clear()
+        p = mock.patch.object(scheduled, 'service_day', return_value=TODAY)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def get(self, days='7'):
+        return self.client.get('/api/v1/statistics/trains', {'days': days})
+
+    def test_no_rows_yet(self):
+        body = self.get().json()['data']
+        self.assertEqual((body['since'], body['dates'], body['worstTrains'], body['timeLost'], body['categories']), (None, [], [], [], []))
+        self.assertEqual(body['headline'], {'trains': 0, 'onTimeShare': None, 'avgDelaySeconds': None,
+                                            'buckets': {'onTime': 0, 'slightlyLate': 0, 'late': 0}, 'canceled': 0, 'replaced': 0})
+        self.assertEqual(len(body['hours']), 24)
+        self.assertEqual((body['from'], body['to']), ('2026-10-19', '2026-10-25'))
+
+    def test_only_7_30_or_90_days(self):
+        self.assertEqual(self.get('14').status_code, 422)
+        self.assertEqual(self.get('90').status_code, 200)
+
+    def test_one_day_of_rows(self):
+        day = date(2026, 10, 25)
+        train_day(day, '310', 60, departure=8 * 3600 + 120, stops=stops(0, 60, None, 60))
+        train_day(day, '2428', 240, category='LPV', departure=8 * 3600, stops=stops(0, 240, 300, 240))
+        train_day(day, '480', 600, departure=25 * 3600, stops=stops(0, 300, 600, 600))   # after midnight: hour 1
+        train_day(day, '18', None, canceled=True, departure=None)
+        train_day(day, '20', None, replaced='whole')
+        train_day(TODAY, '310', 900)                                                     # today: not yet
+        body = self.get().json()['data']
+        self.assertEqual(body['since'], '2026-10-25')
+        self.assertEqual(body['headline'], {'trains': 3, 'onTimeShare': 0.3333, 'avgDelaySeconds': 300,
+                                            'buckets': {'onTime': 1, 'slightlyLate': 1, 'late': 1}, 'canceled': 1, 'replaced': 1})
+        self.assertEqual([(d['date'], d['trains']) for d in body['dates']], [('2026-10-25', 3)])
+        self.assertEqual((body['hours'][8]['trains'], body['hours'][8]['onTimeShare'], body['hours'][1]['trains']), (2, 0.5, 1))
+        self.assertEqual([(c['category'], c['trains']) for c in body['categories']], [('RG', 2), ('LPV', 1)])
+        self.assertEqual(body['worstTrains'], [])  # nobody has 3 runs
+        self.assertEqual(body['timeLost'], [])     # no stretch has 5 runs
+
+    def test_worst_trains_time_lost_and_the_period_before(self):
+        for back in range(1, 8):
+            day = date(2026, 10, 26 - back)
+            train_day(day, '480', 600, mx=900, stops=stops(0, 400, 600, 600))
+            train_day(day, '310', 0, stops=stops(0, 0, 0, 0))
+        for back in range(8, 15):  # the week before: everything on time
+            train_day(date(2026, 10, 26 - back), '480', 0)
+        body = self.get().json()['data']
+        self.assertEqual([(w['number'], w['name'], w['runs'], w['onTimeShare'], w['avgDelaySeconds'], w['maxDelaySeconds']) for w in body['worstTrains']],
+                         [('480', 'RG 480', 7, 0.0, 600, 900), ('310', 'RG 310', 7, 1.0, 0, 0)])
+        self.assertEqual([(s['fromName'], s['toName'], s['trains'], s['meanGainedSeconds']) for s in body['timeLost']],
+                         [('Ljubljana', 'Kranj', 14, 200), ('Kranj', 'Lesce-Bled', 14, 100)])  # RG 310 gains nothing; nobody Lesce-Bled - Jesenice
+        self.assertEqual((body['headline']['onTimeShare'], body['previous']['onTimeShare'], body['previous']['trains']), (0.5, 1.0, 7))
+
+    def test_kept_an_hour_and_renewed_by_a_new_nights_rows(self):
+        train_day(date(2026, 10, 24), '310', 0)
+        first = trains.trends_cached(7, TODAY, now=1000)
+        train_day(date(2026, 10, 24), '480', 0)
+        self.assertIs(trains.trends_cached(7, TODAY, now=1000 + 3000), first)       # same night: the kept copy
+        train_day(date(2026, 10, 25), '480', 0)
+        self.assertEqual(trains.trends_cached(7, TODAY, now=1000 + 3100)['headline']['trains'], 3)  # the night's rows landed
+
+    def test_time_lost_reads_only_the_days_whose_rows_changed(self):
+        for back in range(1, 8):
+            train_day(date(2026, 10, 26 - back), '480', 600, stops=stops(0, 600, 600, 600))
+        self.assertEqual(trains.time_lost(date(2026, 10, 19), TODAY, now=0)[0]['meanGainedSeconds'], 600)
+        TrainDay.objects.filter(service_date=date(2026, 10, 25)).delete()
+        train_day(date(2026, 10, 25), '480', 0, stops=stops(0, 0, 0, 0))  # re-rolled, as many rows: kept a day
+        self.assertEqual(trains.time_lost(date(2026, 10, 19), TODAY, now=60)[0]['trains'], 7)
+        self.assertEqual(trains.time_lost(date(2026, 10, 19), TODAY, now=60)[0]['meanGainedSeconds'], 600)
+        self.assertEqual(trains.time_lost(date(2026, 10, 19), TODAY, now=trains.LOST_KEEP + 1)[0]['meanGainedSeconds'], 514)  # 3600 / 7
+        train_day(date(2026, 10, 25), '310', 0, stops=stops(0, 600, 600, 600))  # another row that day: read again now
+        self.assertEqual(trains.time_lost(date(2026, 10, 19), TODAY, now=trains.LOST_KEEP + 2)[0]['trains'], 8)
+
+    def test_the_warmer_builds_every_period_even_when_idle(self):
+        from django.db import connection
+        from prestop_api import warm
+        with mock.patch.object(warm, 'caches', return_value=[]), mock.patch.object(warm, 'plans'),                 mock.patch.object(connection, 'close'):  # the warmer's thread closes its own connection; this test's is the test's
+            warm._last_request = 0
+            warm.tick(5000)
+        self.assertEqual(sorted(trains._trends), [7, 30, 90])
+
+
+@override_settings(ROOT_URLCONF='ojpp_core.urls_prestop')
+class TrainHistoryStationsTests(TestCase):
+    """GET /trains/{n}/history (spec 2026-10-31 H2): per station along the route, weekdays, canceled and replaced."""
+
+    def setUp(self):
+        views._derived.clear()
+        p = mock.patch.object(scheduled, 'service_day', return_value=TODAY)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_stations_weekdays_and_the_runs_that_did_not_run(self):
+        train_day(date(2026, 10, 25), '480', 600, mx=700, stops=stops(0, 300, 600, 600))   # Sunday
+        train_day(date(2026, 10, 24), '480', 120, mx=200, stops=stops(0, 60, 120, 120))    # Saturday
+        train_day(date(2026, 10, 23), '480', 60, stops=stops(0, None, 60, 60))             # Friday
+        train_day(date(2026, 10, 22), '480', None, canceled=True)
+        train_day(date(2026, 10, 21), '480', None, replaced='whole')
+        body = self.client.get('/api/v1/trains/480/history', {'days': '30'}).json()['data']
+        self.assertEqual(body['summary']['runs'], 3)  # canceled and wholly replaced runs did not run
+        self.assertEqual((body['canceled'], body['replaced'], body['medianDelaySeconds'], body['worstDelaySeconds']), (1, 1, 120, 700))
+        self.assertEqual([(s['name'], s['runs'], s['medianDelaySeconds'], s['p80DelaySeconds'], s['medianGainedSeconds']) for s in body['stations']],
+                         [('Ljubljana', 3, 0, 0, None), ('Kranj', 2, 60, 300, 60), ('Lesce-Bled', 3, 120, 600, 60), ('Jesenice', 3, 120, 600, 0)])
+        self.assertEqual([w['runs'] for w in body['weekdays']], [0, 0, 0, 0, 1, 1, 1])
+        self.assertEqual(body['weekdays'][6]['onTimeShare'], 0.0)
+        self.assertEqual((body['name'], body['origin'], body['destination'], body['since']), ('RG 480', 'Ljubljana', 'Jesenice', '2026-10-21'))
+        self.assertEqual([d.get('canceled') for d in body['days']], [None, None, None, True, None])
+        self.assertEqual(body['days'][4]['replaced'], 'whole')

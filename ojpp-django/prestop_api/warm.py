@@ -57,7 +57,16 @@ def plans():
 
 
 def tick(now: float):
-    """One round: refresh what is about to expire, if the app is in use."""
+    """One round: refresh what is about to expire, if the app is in use. The train trends (the database only) are
+    kept fresh either way, so the first look after the night's rollup does not wait on them."""
+    from . import scheduled, trains
+    try:
+        trains.warm_trends(scheduled.service_day(), now)
+    except Exception as e:  # noqa: BLE001 - the database away: the caches below still get their turn
+        logger.info('Train trends not warmed: %r', e)
+    finally:
+        from django.db import connection
+        connection.close()
     if now - _last_request > ACTIVE:
         return
     from . import predictions
