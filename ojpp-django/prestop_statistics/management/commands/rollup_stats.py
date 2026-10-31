@@ -3,6 +3,7 @@
     manage.py rollup_stats                                 # yesterday
     manage.py rollup_stats --day 2026-10-25
     manage.py rollup_stats --backfill 90 --until 02:50     # then earlier days without rows, newest first, until 02:50
+    manage.py rollup_stats --since 2026-10-20              # re-roll every day since then TripDelay still holds (new fields)
 
 The night window (systemd prestop-nightly.service, 02:05) runs both; a re-run replaces a day's rows."""
 import json
@@ -26,8 +27,9 @@ class Command(BaseCommand):
         parser.add_argument('--day', help='The service day (YYYY-MM-DD; default yesterday)')
         parser.add_argument('--backfill', type=int, default=0, help='Also earlier days without rows, this many days back')
         parser.add_argument('--until', default='', help='Stop the backfill at this local time (HH:MM)')
+        parser.add_argument('--since', default='', help='Also re-roll every earlier day from this one (YYYY-MM-DD) with delays')
 
-    def handle(self, day, backfill, until, **options):
+    def handle(self, day, backfill, until, since, **options):
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(message)s')
         now = datetime.now(LJUBLJANA)
         first = date.fromisoformat(day) if day else now.date() - timedelta(days=1)
@@ -35,9 +37,15 @@ class Command(BaseCommand):
             deadline = datetime.combine(now.date(), time.fromisoformat(until), LJUBLJANA) if until else None
         except ValueError as e:
             raise CommandError(f'--until must be HH:MM: {e}') from e
+        try:
+            since_day = date.fromisoformat(since) if since else None
+        except ValueError as e:
+            raise CommandError(f'--since must be YYYY-MM-DD: {e}') from e
         memo: dict = {}
         done = [self.one(first, memo)]
-        for older in rollup.days_to_backfill(first, backfill) if backfill else []:
+        older_days = rollup.days_since(since_day, first) if since_day else []
+        older_days += [d for d in (rollup.days_to_backfill(first, backfill) if backfill else []) if d not in older_days]
+        for older in older_days:
             if deadline and datetime.now(LJUBLJANA) >= deadline:
                 logger.info('backfill stopped at %s: the night window ends', deadline.strftime('%H:%M'))
                 break

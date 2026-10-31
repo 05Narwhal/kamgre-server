@@ -159,7 +159,12 @@ class TrainDay(models.Model):
     """One SŽ train's run on one service day, rolled up at night from TripDelay (rollup.py, `manage.py rollup_stats`):
     delays in seconds against the timetable (max, mean over its reported stations, at its last reported station), the
     share of those stations it passed on time (under rollup.ON_TIME_LATE late), and per station in order
-    `stops` [{'id', 'name', 'delay' (None: not reported), 'track' (as announced that day, None: unknown)}]."""
+    `stops` [{'id', 'name', 'delay' (None: not reported), 'gained' (s of delay since the previous reported station,
+    None at the first reported one or where not reported), 'track' (as announced that day, None: unknown)}].
+    Since spec 2026-10-31 H1 also `departure` (scheduled first departure, s after the service day's midnight),
+    `canceled` (SŽ canceled the whole run; no delays then) and `replaced` ('none', 'part', 'whole': buses ran instead
+    for that much of it that day). `departure` and `replaced` are null where not known (rows rolled up before, a day
+    whose plan could not be read); a null is never counted as on time."""
     service_date = models.DateField()
     number = models.CharField(max_length=16)
     category = models.CharField(max_length=8, blank=True, default='')
@@ -172,6 +177,9 @@ class TrainDay(models.Model):
     final_delay = models.IntegerField(null=True)
     on_time_share = models.FloatField(null=True)
     stops = models.JSONField(default=list)
+    departure = models.IntegerField(null=True)
+    canceled = models.BooleanField(default=False)  # rows rolled up before H1 left canceled runs out, so False holds
+    replaced = models.CharField(max_length=5, null=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['service_date', 'number'], name='prestop_train_day_unique')]
