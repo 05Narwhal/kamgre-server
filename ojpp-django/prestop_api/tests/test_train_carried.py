@@ -19,8 +19,20 @@ LINKS = {'3294': {'from_number': '3295', 'arrival': T0 + 1800 - DAY, 'slack': 36
 PLAN = plan_of([C, A, B])
 
 
-def links(table=LINKS):
-    return mock.patch.object(train_stays, 'sure_link_to', side_effect=lambda number, day: table.get(number))
+class links:
+    """The learned `sure` stays of LINKS, for sure_link_to and the boards' and journeys' quick look (comes_from)."""
+
+    def __init__(self, table=LINKS):
+        self.patches = [mock.patch.object(train_stays, 'sure_link_to', side_effect=lambda number, day: table.get(number)),
+                        mock.patch.object(train_stays, 'comes_from', side_effect=lambda number: table.get(number))]
+
+    def __enter__(self):
+        for p in self.patches:
+            p.start()
+
+    def __exit__(self, *exc):
+        for p in self.patches:
+            p.stop()
 
 
 class Carried(SimpleTestCase):
@@ -65,7 +77,7 @@ class Carried(SimpleTestCase):
                 mock.patch.object(trainlive, 'trip_updates', return_value=update(A, 'Ljubljana', 900)), \
                 mock.patch('prestop_api.sz.reports', return_value={}), mock.patch.object(trainlive.time, 'time', return_value=T0 + 600):
             row = trainlive.carried_rows([board_row(B, 0)])[0]
-            leg = {'mode': 'rail', 'tripId': B['id'], 'routeId': B['route']['gtfsId'], 'scheduledDeparture': mapping.iso(T0 + 2400),
+            leg = {'mode': 'rail', 'tripId': B['id'], 'routeId': B['route']['gtfsId'], 'routeName': 'LPV 3294', 'scheduledDeparture': mapping.iso(T0 + 2400),
                    'delaySeconds': None, 'canceled': False}
             raw = {'end': {'scheduledTime': mapping.iso(T0 + 4200)}, 'trip': {}}
             with override_settings(PRESTOP_PREDICTIONS=True):
@@ -73,6 +85,13 @@ class Carried(SimpleTestCase):
         self.assertEqual(row['effectiveAt'], mapping.iso(T0 + 2400 + 540))
         self.assertEqual((row['delayKind'], row['quality']), ('predicted', 'predicted'))
         self.assertEqual(predicted, (540, 'previous-trip'))
+
+    def test_boards_touch_no_plan_without_a_sure_stay(self):
+        with mock.patch('prestop_api.scheduled.plan_at') as plan_at, \
+                mock.patch.object(train_stays, 'comes_from', return_value={'level': 'likely', 'from_number': '3295'}):
+            row = board_row(B, 0)
+            self.assertIs(trainlive.carried_rows([row])[0], row)
+        plan_at.assert_not_called()
 
 
 class Shown(SimpleTestCase):

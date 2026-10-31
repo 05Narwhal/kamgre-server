@@ -394,13 +394,22 @@ def carried_for_trip(trip_id: str, when: float) -> Optional[dict]:
         return None
 
 
+def may_carry(route_name: Optional[str]) -> bool:
+    """Whether train `route_name` ("LPV 2002") has a learned `sure` stay before it at all: a dict lookup, so boards and
+    journeys touch a day's plan only for those."""
+    from prestop_statistics import train_stays
+    stay = train_stays.comes_from(sz.train_parts(route_name or '')[1])
+    return bool(stay and stay['level'] == 'sure')
+
+
 def carried_rows(rows: list[dict]) -> list[dict]:
     """Board rows of trains without a live time of their own get the carried delay (as SŽ's forecast: 'predicted');
     the rest as they are. New dicts, never the cached rows."""
     from datetime import datetime
     out = []
     for row in rows:
-        if row.get('mode') != 'rail' or row.get('replacement') or row.get('effectiveAt') or row.get('canceled') or not row.get('tripId'):
+        if row.get('mode') != 'rail' or row.get('replacement') or row.get('effectiveAt') or row.get('canceled') or not row.get('tripId') \
+                or not may_carry(row.get('routeName')):
             out.append(row)
             continue
         at = datetime.fromisoformat(row['scheduledAt']).timestamp()

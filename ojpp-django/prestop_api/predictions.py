@@ -137,6 +137,11 @@ def previous_trip(route_id: str, start: int, day, hops: int = CHAIN_HOPS, sure_o
     return {**before, 'delaySeconds': max(0, before['delaySeconds'] - max(0, before['slack'] or 0)), 'slack': slack}
 
 
+def _may_carry(leg: dict) -> bool:
+    from . import trainlive
+    return trainlive.may_carry(leg.get('routeName'))
+
+
 def _hhmm(seconds: int) -> str:
     return f'{seconds // 3600 % 24:02d}:{seconds % 3600 // 60:02d}'
 
@@ -152,7 +157,7 @@ def predict_leg(leg: dict, raw: dict, now: Optional[float] = None) -> tuple[Opti
         return None, None
     start = ((raw.get('trip') or {}).get('departureStoptime') or {}).get('scheduledDeparture')
     departs = _ts(leg['scheduledDeparture'])
-    if leg['mode'] == 'rail' and leg.get('tripId') and not leg.get('replacement'):
+    if leg['mode'] == 'rail' and leg.get('tripId') and not leg.get('replacement') and _may_carry(leg):
         # A train: the delay of the train whose set it is, through `sure` stays only (train_stays.py, trainlive),
         # as the map and boards show it
         from . import trainlive
