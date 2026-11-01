@@ -3,7 +3,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from prestop_api import border, geometry, raillines
+from prestop_api import border, geometry, mapping, raillines, railtrack
 
 SZ = 'IJPP:1161'
 HOME = {'gtfsId': 'IJPP:1122804', 'name': 'Ljubljana'}
@@ -12,6 +12,8 @@ DAY = date(2026, 11, 1)
 METRE = 1 / geometry.KY
 METRE_X = 1 / raillines._KX
 TRAIN = [{'gtfsId': 'IJPP:trip'}]
+# These lines lie near Ljubljana, where the real track would pull them onto itself: railtrack has its own tests.
+AS_DRAWN = mock.patch.object(raillines.railtrack, 'load', new=lambda: mock.Mock(follow=lambda coords: coords, left=[]))
 
 
 def east(lat: float, km: float, start: float = 14.5) -> list:
@@ -181,6 +183,16 @@ class UnshapedTests(SimpleTestCase):
         self.assertEqual(len(out), 1)
         self.assertGreater(length(out[0]), 5000)
 
+    def test_a_leg_drawn_to_a_stop_no_line_reaches_follows_the_track(self):
+        index = {}
+        raillines.merge([detailed(46.0)], index)
+        # The track to the lone stop bends 1 km east of the straight leg on its way north.
+        bend = [[14.5, 46.0], [14.5 + 1000 * METRE_X, 46.025], [14.5, 46.05]]
+        track = railtrack.Track([bend])
+        (out,) = raillines.merge_unshaped([[[14.5, 46.0], [14.5, 46.05]]], index, track.follow)
+        self.assertEqual(track.strays(out), [])
+        self.assertGreater(max(x for x, _ in out), 14.5 + 900 * METRE_X)
+
     def test_operators_keep_their_own_stretches(self):
         routes = [route(pattern('p')), route(pattern('q'), agency='IJPP:INTL-HZPP')]
         found = raillines.stretches(routes, {'p': shape(detailed(46.0)), 'q': shape(detailed(46.0))})
@@ -213,6 +225,7 @@ class BorderTests(SimpleTestCase):
 DETAILED = geometry.densify(TO_CROATIA, 100)
 
 
+@AS_DRAWN
 class WayOutTests(SimpleTestCase):
     def test_slovenias_own_international_stop_is_at_home_and_the_border_point_is_not(self):
         self.assertFalse(raillines._is_abroad(LENDAVA))
@@ -246,7 +259,7 @@ class WayOutTests(SimpleTestCase):
         client.query.return_value = {'routes': one + two}
         raillines._built.update(key=None, lines=[])
         with (mock.patch.object(raillines.scheduled, 'service_day', return_value=DAY), mock.patch.object(raillines, 'otp', return_value=client),
-              mock.patch.object(raillines.scheduled.shapes, 'get', return_value=mock.Mock(value={'p': shapes_one['p'], 'q': shapes_two['p']}))):
+              mock.patch.object(raillines.feed_shapes, 'get', return_value=mock.Mock(value={'p': shapes_one['p'], 'q': shapes_two['p']}))):
             lines = raillines._load()
         raillines._built.update(key=None, lines=[])
         self.assertEqual(len(lines), 1)  # one track, however many trains
@@ -334,13 +347,14 @@ class QueryTests(SimpleTestCase):
         self.assertNotIn('d8:', query)
 
 
+@AS_DRAWN
 class LoadTests(SimpleTestCase):
     def load(self, routes, shapes):
         client = mock.Mock()
         client.query.return_value = {'routes': routes}
         with (mock.patch.object(raillines.scheduled, 'service_day', return_value=DAY),
               mock.patch.object(raillines, 'otp', return_value=client),
-              mock.patch.object(raillines.scheduled.shapes, 'get', return_value=mock.Mock(value=shapes)),
+              mock.patch.object(raillines.feed_shapes, 'get', return_value=mock.Mock(value=shapes)),
               mock.patch.object(raillines, 'merge', wraps=raillines.merge) as merge):
             return raillines._load(), merge
 
@@ -382,3 +396,29 @@ class LoadTests(SimpleTestCase):
         self.assertEqual(len(lines), 2)  # the home line, and on from its last station
         self.assertAlmostEqual(sum(length(line['geometry']) for line in lines), 4570, delta=120)
         self.assertTrue(all(border.contains(*p) for line in lines for p in line['geometry']))
+
+
+class FeedShapeTests(SimpleTestCase):
+    """A long international train's shape as the feed gives it, not thinned to 400 points as the moving trains' are."""
+
+    def shapes(self, coords: list, stops: list) -> dict:
+        client = mock.Mock()
+        client.query.return_value = {'routes': [{'patterns': [
+            {'code': 'ic', 'patternGeometry': {'points': mapping.encode_polyline(coords)}, 'stops': [{'lat': s[1], 'lon': s[0]} for s in stops]}]}]}
+        with mock.patch.object(raillines, 'otp', return_value=client):
+            return raillines._load_shapes()
+
+    def test_a_long_winding_shape_keeps_its_detail_and_counts_as_detailed(self):
+        # 300 km winding gently every 300 m, as Koper - Hodos does: the thinning cut such corners by hundreds of metres.
+        coords = [[14.0 + k * 300 * METRE_X, 46.0 + (40 * METRE if k % 2 else 0)] for k in range(1000)]
+        stops = [coords[0], coords[500], coords[-1]]
+        shape = self.shapes(coords, stops)['ic']
+        self.assertGreater(len(shape['coords']), geometry.MAX_POINTS)
+        self.assertEqual(raillines._kind(shape, [HOME] * 3), 'detailed')
+        self.assertEqual(len(shape['distances']), 3)
+
+    def test_a_pattern_without_a_shape_is_its_stops(self):
+        stops = [[14.5, 46.0], [14.6, 46.0], [14.7, 46.1]]
+        shape = self.shapes([], stops)['ic']
+        self.assertEqual(shape['coords'], stops)
+        self.assertEqual(raillines._kind(shape, [HOME] * 3), 'unshaped')
