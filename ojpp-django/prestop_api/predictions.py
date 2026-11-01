@@ -148,6 +148,15 @@ def _hhmm(seconds: int) -> str:
 
 def predict_leg(leg: dict, raw: dict, now: Optional[float] = None) -> tuple[Optional[int], Optional[str]]:
     """(predictedDelaySeconds, predictionBasis) of one transit leg; `raw` is OTP's leg."""
+    departs = _ts(leg['scheduledDeparture'])
+    if settings.PRESTOP_PREDICTIONS and leg.get('routeId') and leg['mode'] == 'rail' and leg.get('tripId') and not leg.get('replacement') \
+            and not leg.get('canceled') and _may_carry(leg):
+        # A train: the delay of the train whose set it is, through `sure` stays only (train_stays.py, trainlive), as the
+        # map and boards show it; over a forecast of its own only when that is smaller (trainlive.expected)
+        from . import trainlive
+        came = trainlive.carried_for_trip(leg['tripId'], departs) if -trainlive.HOLD_AFTER <= departs - (now or time.time()) <= PREVIOUS_AHEAD else None
+        if came and (came.get('over') or leg.get('delaySeconds') is None):
+            return came['delay'], 'previous-trip'
     end_est = (raw['end'].get('estimated') or {}).get('time')
     if end_est:
         return round(_ts(end_est) - _ts(raw['end']['scheduledTime'])), 'live'
@@ -156,14 +165,6 @@ def predict_leg(leg: dict, raw: dict, now: Optional[float] = None) -> tuple[Opti
     if not settings.PRESTOP_PREDICTIONS or not leg.get('routeId') or leg.get('canceled'):
         return None, None
     start = ((raw.get('trip') or {}).get('departureStoptime') or {}).get('scheduledDeparture')
-    departs = _ts(leg['scheduledDeparture'])
-    if leg['mode'] == 'rail' and leg.get('tripId') and not leg.get('replacement') and _may_carry(leg):
-        # A train: the delay of the train whose set it is, through `sure` stays only (train_stays.py, trainlive),
-        # as the map and boards show it
-        from . import trainlive
-        came = trainlive.carried_for_trip(leg['tripId'], departs) if -trainlive.HOLD_AFTER <= departs - (now or time.time()) <= PREVIOUS_AHEAD else None
-        if came and came['delay'] > 0:
-            return came['delay'], 'previous-trip'
     day = (datetime.fromtimestamp(departs, LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()  # after midnight: yesterday's service
     now = now or time.time()
     if start is not None and 0 <= departs - now <= PREVIOUS_AHEAD:
@@ -188,6 +189,9 @@ def annotate(legs: list[dict], raws: list[Optional[dict]], now: Optional[float] 
             continue
         delay, basis = predict_leg(leg, raw, now) if raw else ((leg['delaySeconds'], 'live') if leg.get('delaySeconds') is not None else (None, None))
         leg['predictedDelaySeconds'], leg['predictionBasis'] = delay, basis
+        if basis == 'previous-trip' and leg['mode'] == 'rail' and leg.get('delaySeconds') is not None:
+            # the carried delay beat the train's own forecast (trainlive.expected): that forecast's times go, as on the board
+            leg.update(effectiveDeparture=leg['scheduledDeparture'], effectiveArrival=leg['scheduledArrival'], delaySeconds=None, delayProvenance=None)
 
 
 def transfer_shift(previous: dict, leg: dict) -> int:

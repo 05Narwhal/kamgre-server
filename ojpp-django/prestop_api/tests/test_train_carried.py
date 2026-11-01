@@ -39,20 +39,44 @@ class links:
 
 
 class Carried(SimpleTestCase):
-    def live(self, train, updates, now=T0 + 600):
+    def live(self, train, updates, now=T0 + 600, reports=None, plan=PLAN):
         with links(), mock.patch.object(trainlive.time, 'time', return_value=now):
-            return trainlive.of(PLAN, train, updates, {})
+            return trainlive.of(plan, train, updates, reports or {})
 
     def test_late_train_before_makes_it_leave_late_less_the_slack(self):
         got = self.live(B, update(A, 'Ljubljana', 900))
         self.assertEqual(got['delays'][0], 540)  # 15 min - 6 min slack
         self.assertEqual((got['kind'], got['source']), ('predicted', 'gtfs-rt'))  # said "expected", like SŽ's forecast
 
-    def test_its_own_report_comes_first(self):
-        updates = {**update(A, 'Ljubljana', 900), **update(B, 'Kranj', 120)}
-        got = self.live(B, updates)
-        self.assertEqual(got['delays'][1], 120)
-        self.assertEqual(got['kind'], 'actual')
+    def test_a_smaller_forecast_of_its_own_loses(self):
+        # LPV 2520 "+0" in the feed before it left while LPV 2010, its set, was 14 min late (1 Nov 2026)
+        for own in (0, 120):
+            got = self.live(B, {**update(A, 'Ljubljana', 900), **update(B, 'Ljubljana', own)})
+            self.assertEqual((got['delays'][0], got['kind']), (540, 'predicted'))
+
+    def test_a_larger_forecast_of_its_own_stays(self):
+        got = self.live(B, {**update(A, 'Ljubljana', 900), **update(B, 'Ljubljana', 600)})
+        self.assertEqual((got['delays'][0], got['kind']), (600, 'actual'))
+
+    def test_szs_measured_report_of_it_always_wins(self):
+        reports = {'3294': {'delay': 120, 'at': T0 + 600, 'next': 'Kranj', 'kind': 'actual'}}
+        got = self.live(B, update(A, 'Ljubljana', 900), reports=reports)
+        self.assertEqual((got['delays'][1], got['kind'], got['source']), (120, 'actual', 'sz'))
+        forecast = {'3294': {**reports['3294'], 'kind': 'predicted'}}  # SŽ's own forecast is still a forecast
+        self.assertEqual(self.live(B, update(A, 'Ljubljana', 900), reports=forecast)['delays'][0], 540)
+
+    def test_its_own_report_wins_once_past_a_later_station(self):
+        b3 = trip('3294', 'LPV 3294', ['Ljubljana', 'Kranj', 'Jesenice'], [T0 + 2400, T0 + 2700, T0 + 4200])
+        plan, updates = plan_of([C, A, b3]), {**update(A, 'Ljubljana', 900), **update(b3, 'Kranj', 60)}
+        self.assertEqual(self.live(b3, updates, now=T0 + 2700, plan=plan)['delays'][0], 540)  # due at Kranj at +1 min: not yet
+        got = self.live(b3, updates, now=T0 + 2760, plan=plan)
+        self.assertEqual((got['delays'][1], got['kind']), (60, 'actual'))
+
+    def test_its_own_report_wins_15_min_past_its_departure(self):
+        updates = {**update(A, 'Ljubljana', 900), **update(B, 'Ljubljana', 0)}
+        self.assertEqual(self.live(B, updates, now=T0 + 2400 + 900)['delays'][0], 540)
+        got = self.live(B, updates, now=T0 + 2400 + 901)
+        self.assertEqual((got['delays'][0], got['kind']), (0, 'actual'))
 
     def test_slack_absorbs_a_small_delay(self):
         self.assertIsNone(self.live(B, update(A, 'Ljubljana', 300)))  # 5 min late, 6 min slack: on time
@@ -89,6 +113,26 @@ class Carried(SimpleTestCase):
         self.assertEqual((row['delayKind'], row['quality']), ('predicted', 'predicted'))
         self.assertEqual(predicted, (540, 'previous-trip'))
 
+    def test_board_row_and_journey_leg_over_a_smaller_forecast(self):
+        updates = {**update(A, 'Ljubljana', 900), **update(B, 'Ljubljana', 0)}
+        own = {**board_row(B, 0), 'effectiveAt': mapping.iso(T0 + 2400), 'quality': 'predicted'}
+        leg = {'mode': 'rail', 'tripId': B['id'], 'routeId': B['route']['gtfsId'], 'routeName': 'LPV 3294', 'scheduledDeparture': mapping.iso(T0 + 2400),
+               'scheduledArrival': mapping.iso(T0 + 4200), 'effectiveDeparture': mapping.iso(T0 + 2400), 'effectiveArrival': mapping.iso(T0 + 4200),
+               'delaySeconds': 0, 'delayProvenance': 'predicted', 'canceled': False}
+        raw = {'end': {'scheduledTime': mapping.iso(T0 + 4200), 'estimated': {'time': mapping.iso(T0 + 4200)}}, 'trip': {}}
+        with links(), mock.patch('prestop_api.scheduled.plan_at', return_value=PLAN), mock.patch.object(trainlive, 'trip_updates', return_value=updates), \
+                mock.patch('prestop_api.sz.reports', return_value={}), mock.patch.object(trainlive.time, 'time', return_value=T0 + 600):
+            row = trainlive.carried_rows([own])[0]
+            larger = {**own, 'effectiveAt': mapping.iso(T0 + 2400 + 600)}
+            kept = trainlive.carried_rows([larger])[0]
+            with override_settings(PRESTOP_PREDICTIONS=True):
+                predictions.annotate([leg], [raw], now=T0 + 600)
+        self.assertEqual((row['effectiveAt'], row['delayKind']), (mapping.iso(T0 + 2400 + 540), 'predicted'))
+        self.assertIs(kept, larger)  # its own larger forecast stays (+10 min, not +9)
+        self.assertEqual((leg['predictedDelaySeconds'], leg['predictionBasis']), (540, 'previous-trip'))
+        # the forecast's "+0" goes, so the leg says "expected +9 min" rather than on time
+        self.assertEqual((leg['delaySeconds'], leg['delayProvenance'], leg['effectiveDeparture']), (None, None, mapping.iso(T0 + 2400)))
+
     def test_boards_touch_no_plan_without_a_sure_stay(self):
         with mock.patch('prestop_api.scheduled.plan_at') as plan_at, \
                 mock.patch.object(train_stays, 'comes_from', return_value={'level': 'likely', 'from_number': '3295'}):
@@ -102,10 +146,10 @@ class Held(SimpleTestCase):
     until B reports itself or 15 min past B's timetable departure."""
     AFTER_A = T0 + 1900  # A is in (10:50), B leaves at 11:00
 
-    def live(self, train=B, stored=None, updates=None, now=AFTER_A, plan=PLAN):
+    def live(self, train=B, stored=None, updates=None, now=AFTER_A, plan=PLAN, reports=None):
         stored = {A['id']: ({'1': 240, '2': 900}, T0 + 1800)} if stored is None else stored
         with links(), mock.patch.object(trainlive, '_stored_delays', return_value=stored), mock.patch.object(trainlive.time, 'time', return_value=now):
-            return trainlive.of(plan, train, updates or {}, {})
+            return trainlive.of(plan, train, updates or {}, reports or {})
 
     def test_a_dropped_out_and_its_last_delay_is_held(self):
         got = self.live()
@@ -121,9 +165,10 @@ class Held(SimpleTestCase):
         self.assertIsNone(self.live(now=leaves + 901))
 
     def test_b_reporting_itself_ends_it(self):
-        got = self.live(updates=update(B, 'Kranj', 120))
+        got = self.live(reports={'3294': {'delay': 120, 'at': self.AFTER_A, 'next': 'Kranj', 'kind': 'actual'}})
         self.assertEqual(got['delays'][1], 120)
         self.assertEqual(got['kind'], 'actual')
+        self.assertEqual(self.live(updates=update(B, 'Ljubljana', 0))['delays'][0], 540)  # a feed's "+0" before it leaves does not
 
     def test_a_still_reported_beats_what_was_stored(self):
         self.assertEqual(self.live(updates=update(A, 'Ljubljana', 1200))['delays'][0], 840)  # 20 min - 6 min, not the stored 15

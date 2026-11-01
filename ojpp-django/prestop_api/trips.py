@@ -284,18 +284,17 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
 
 
 def _carried_live(out: dict[str, dict]) -> None:
-    """A train with no live time of its own whose set comes from a late train (a `sure` stay, trainlive.carried_delay):
-    its stops get that delay as a prediction ('predictedDelay', spec 2026-11-01 I12/I13), as the map, the board and
-    journeys show it. Measured times always win: a train with any realtime stop is left alone."""
+    """A train with no live time of its own, or only a smaller forecast, whose set comes from a late train (a `sure`
+    stay, trainlive.expected): its stops get that delay as a prediction ('predictedDelay', spec 2026-11-01 I12/I13),
+    as the map, the board and journeys show it, in place of the forecast's times. Measured times always win."""
     from . import trainlive
     for trip_id, run in out.items():
         static, times = run['static'], run['times']
-        if static.get('mode') != 'rail' or static.get('replacement') or not times or any(t.get('realtime') for t in times) \
-                or not trainlive.may_carry(static.get('routeName')):
+        if static.get('mode') != 'rail' or static.get('replacement') or not times or not trainlive.may_carry(static.get('routeName')):
             continue
         came = trainlive.carried_for_trip(trip_id, times[0]['serviceDay'] + times[0]['scheduledDeparture'])
-        if came and came['delay'] >= 60:
-            run['times'] = [{**t, 'predictedDelay': came['delay']} if t.get('realtimeState') != 'CANCELED' else t for t in times]
+        if came and came['delay'] >= 60 and (came.get('over') or not any(t.get('realtime') for t in times)):
+            run['times'] = [{**t, 'realtime': False, 'predictedDelay': came['delay']} if t.get('realtimeState') != 'CANCELED' else t for t in times]
 
 
 def _placed(run: dict, update: Optional[dict]) -> dict:
