@@ -3,7 +3,9 @@
 A line counts when the timetable has a train on it on any day of the coming week: the Velenje and Ajdovščina lines have
 no train on a Sunday or a holiday, and the Koroška line none on a Saturday, and they are lines all the same. A closure
 does not take a line off the map either, while the feed still lists its trains: that is a disruption, not a line gone.
-Only what lies in Slovenia is drawn (abroad.py).
+Only what lies in Slovenia is drawn (border.py): a line going abroad runs from its last Slovenian station to the border
+and stops there, and a stretch between two Slovenian stations that crosses a neighbour's land (near Rogatec and
+Podčetrtek) has a gap where it does.
 
 All operators share one network for now, so a track two operators use is one line, all drawn in the railway's blue.
 Neighbouring countries' services (an S-Bahn, a Maribor - Graz train) will want a line of their own beside it: give each
@@ -12,7 +14,7 @@ such service its own `index` in `_load`, and the map a `line-offset` per service
 import math
 from datetime import timedelta
 
-from . import abroad, geometry, mapping, scheduled
+from . import abroad, border, geometry, mapping, scheduled
 from .upstream import Cached, otp
 
 DAYS = 8          # today and the same weekday next week, so a week's every weekday is seen even across a holiday
@@ -23,7 +25,9 @@ THINNED_WANDER = 1500.0  # m: such a shape cuts corners by this much, so it only
 STEP = 25.0       # m between the points compared
 MIN_LENGTH = 1000.0  # m: a shorter stretch with a loose end is a shape's approach to its platform, not a line
 _KX = 111_320 * math.cos(math.radians(46.1))
-ABROAD_STOPS = 'IJPP:INTL-'  # the international trains' stops abroad, which carry no country in their names
+ABROAD_STOPS = 'IJPP:INTL-'  # the international trains' stops, which carry no country in their names; a UIC code follows
+HOME_UIC = '79'              # Slovenia's: Lendava is one of them
+BORDER_POINT = 'drzavna meja'  # "Hodos Drzavna meja" has Slovenia's code too, but it is only the border, no station
 
 
 def _cell(x: float, y: float) -> tuple[int, int]:
@@ -51,7 +55,7 @@ def _spacing(shape: list) -> float:
     return geometry.cumulative(shape)[-1] / len(shape)
 
 
-def merge(shapes: list[list], index: dict | None = None, wander: float = WANDER) -> list[list]:
+def merge(shapes: list[list], index: dict | None = None, wander: float = WANDER, min_length: float = MIN_LENGTH) -> list[list]:
     """Lines covering `shapes` once: each shape adds only what lies off the lines kept so far (`index`, which it adds
     to), joined to them where it leaves and comes back. The most detailed shapes go first, so the lines follow them."""
     index = {} if index is None else index
@@ -72,7 +76,7 @@ def merge(shapes: list[list], index: dict | None = None, wander: float = WANDER)
             joined = i > 0 and j + 1 < len(points)
             away = any(not _near(index, *local[k], wander) for k in range(i, j + 1))
             run = points[i:j + 1]
-            if away and (joined or geometry.cumulative(run)[-1] >= MIN_LENGTH):
+            if away and (joined or geometry.cumulative(run)[-1] >= min_length):
                 # Where it leaves or rejoins a kept line, it starts from that line, so no gap shows at a junction.
                 before = [_nearest(index, *local[i - 1])] if i > 0 else []
                 after = [_nearest(index, *local[j + 1])] if j + 1 < len(points) else []
@@ -87,7 +91,10 @@ def merge(shapes: list[list], index: dict | None = None, wander: float = WANDER)
 
 
 def _is_abroad(stop: dict) -> bool:
-    return (stop.get('gtfsId') or '').startswith(ABROAD_STOPS) or abroad.is_abroad_stop(stop.get('name'))
+    stop_id, name = stop.get('gtfsId') or '', stop.get('name')
+    if stop_id.startswith(ABROAD_STOPS):
+        return not stop_id.startswith(ABROAD_STOPS + HOME_UIC) or BORDER_POINT in mapping.fold(name or '')
+    return abroad.is_abroad_stop(name)
 
 
 def home_parts(stops: list[dict]) -> list[tuple[int, int]]:
@@ -106,6 +113,12 @@ def home_parts(stops: list[dict]) -> list[tuple[int, int]]:
     return parts
 
 
+def ways_out(stops: list[dict]) -> list[tuple[int, int]]:
+    """Where a pattern crosses the border: (its stop in Slovenia, the stop abroad next to it), coming or going."""
+    return [(i, n) for i, stop in enumerate(stops) if not _is_abroad(stop)
+            for n in (i - 1, i + 1) if 0 <= n < len(stops) and _is_abroad(stops[n])]
+
+
 def _query(day) -> str:
     dates = ' '.join(f'd{n}: tripsForDate(serviceDate: "{day + timedelta(days=n):%Y%m%d}") {{ gtfsId }}' for n in range(DAYS))
     return '{ routes(transportModes: [RAIL]) { gtfsId shortName mode agency { gtfsId } patterns { code stops { gtfsId name } %s } } }' % dates
@@ -119,9 +132,8 @@ def _kind(shape: dict, stops: list[dict]) -> str:
     return 'unshaped' if len(shape['coords']) <= len(stops) else 'thinned'
 
 
-def stretches(routes: list[dict], shapes: dict, kind: str = 'detailed') -> dict[str, list[list]]:
-    """Operator -> the stretches of track in Slovenia of the patterns of this `kind` with a train in the coming week."""
-    seen: dict[str, list[list]] = {}
+def _running(routes: list[dict], shapes: dict):
+    """(operator, stops, shape) of each train pattern with a train in the coming week and a shape to place its stops on."""
     for route in routes:
         if mapping.is_replacement(route):
             continue
@@ -130,13 +142,36 @@ def stretches(routes: list[dict], shapes: dict, kind: str = 'detailed') -> dict[
             shape = shapes.get(pattern['code'])
             stops = pattern.get('stops') or []
             # Stops that do not match the shape's cannot be placed on it.
-            if (not shape or len(shape['distances']) != len(stops) or not any(pattern.get(f'd{n}') for n in range(DAYS))
-                    or _kind(shape, stops) != kind):
-                continue
-            for a, b in home_parts(stops):
-                coords = geometry.slice_between(shape['coords'], shape['cum'], shape['distances'][a], shape['distances'][b])
-                if len(coords) > 1:
-                    seen.setdefault(operator, []).append(coords)
+            if shape and len(shape['distances']) == len(stops) and any(pattern.get(f'd{n}') for n in range(DAYS)):
+                yield operator, stops, shape
+
+
+def stretches(routes: list[dict], shapes: dict, kind: str = 'detailed') -> dict[str, list[list]]:
+    """Operator -> the stretches of track in Slovenia of the patterns of this `kind` with a train in the coming week."""
+    seen: dict[str, list[list]] = {}
+    for operator, stops, shape in _running(routes, shapes):
+        if _kind(shape, stops) != kind:
+            continue
+        for a, b in home_parts(stops):
+            coords = geometry.slice_between(shape['coords'], shape['cum'], shape['distances'][a], shape['distances'][b])
+            if len(coords) > 1:
+                seen.setdefault(operator, []).append(coords)
+    return seen
+
+
+def to_the_border(routes: list[dict], shapes: dict, kind: str = 'detailed') -> dict[str, list[list]]:
+    """Operator -> from each pattern's last stop in Slovenia (`ways_out`) along the track, up to where it leaves. Never
+    from a shape of straight lines between stops: those say nothing about where the track meets the border."""
+    seen: dict[str, list[list]] = {}
+    for operator, stops, shape in _running(routes, shapes):
+        if _kind(shape, stops) != kind:
+            continue
+        for stop, neighbour in ways_out(stops):
+            a, b = sorted((stop, neighbour))
+            coords = geometry.slice_between(shape['coords'], shape['cum'], shape['distances'][a], shape['distances'][b])
+            inside = border.until_abroad(coords if stop == a else coords[::-1])
+            if len(inside) > 1:
+                seen.setdefault(operator, []).append(inside)
     return seen
 
 
@@ -150,6 +185,30 @@ def merge_unshaped(parts: list[list], index: dict) -> list[list]:
     return out
 
 
+def merge_to_border(parts: list[list], index: dict, ends: list, reach: float = WANDER) -> list[list]:
+    """Each way out of the country once: what lies between the last kept line and the border, joined to that line. Only
+    the end of a stretch counts, the rest is track a home line already draws (Maribor to the border, past Šentilj). A
+    stretch ending within `reach` of a crossing already drawn (`ends`, which it adds to) is that crossing: the second
+    track of a double line, or a thinned shape cutting the corner."""
+    out = []
+    for part in sorted(parts, key=_spacing):
+        end = (part[-1][0] * _KX, part[-1][1] * geometry.KY)
+        if any((end[0] - x) ** 2 + (end[1] - y) ** 2 <= reach ** 2 for x, y in ends):
+            continue
+        points = geometry.densify(part, STEP)
+        local = [(p[0] * _KX, p[1] * geometry.KY) for p in points]
+        last = next((k for k in range(len(points) - 1, -1, -1) if _near(index, *local[k])), None)
+        first = 0 if last is None else last + 1
+        if first >= len(points):
+            continue
+        joined = [] if last is None else [_nearest(index, *local[last])]
+        out.append(geometry.simplify([*joined, *points[first:]], geometry.SHAPE_POINTS))
+        for k in range(first, len(points)):
+            index.setdefault(_cell(*local[k]), []).append((*local[k], points[k]))
+        ends.append(end)
+    return out
+
+
 _built: dict = {'key': None, 'lines': []}
 
 
@@ -158,8 +217,11 @@ def _load() -> list[dict]:
     routes = otp().query(_query(scheduled.service_day()), timeout=(5, 90))['routes']
     shapes = scheduled.shapes.get().value
     steps = [('detailed', merge), ('thinned', lambda parts, index: merge(parts, index, THINNED_WANDER)), ('unshaped', merge_unshaped)]
-    found = [(stretches(routes, shapes, kind), add) for kind, add in steps]
-    key = [{operator: sorted(hash(repr(part)) for part in parts) for operator, parts in group.items()} for group, _ in found]
+    ends: list = []  # the border crossings drawn so far
+    found = [(stretches(routes, shapes, kind), add) for kind, add in steps] + [
+        (to_the_border(routes, shapes), lambda parts, index: merge_to_border(parts, index, ends)),
+        (to_the_border(routes, shapes, 'thinned'), lambda parts, index: merge_to_border(parts, index, ends, THINNED_WANDER))]
+    key =[{operator: sorted(hash(repr(part)) for part in parts) for operator, parts in group.items()} for group, _ in found]
     if key != _built['key']:
         index: dict = {}  # shared: see the top of this file
         lines: list[dict] = []
@@ -167,7 +229,9 @@ def _load() -> list[dict]:
             # The operator with the most stretches first: the others add only what it does not run.
             for operator, parts in sorted(group.items(), key=lambda item: (-len(item[1]), item[0])):
                 for coords in add(parts, index):
-                    lines.append({'id': f'{operator}#{len(lines)}', 'operatorId': operator, 'geometry': [[round(x, 5), round(y, 5)] for x, y in coords]})
+                    for part in border.inside_parts(coords):
+                        part = geometry.simplify(part, geometry.SHAPE_POINTS)
+                        lines.append({'id': f'{operator}#{len(lines)}', 'operatorId': operator, 'geometry': [[round(x, 5), round(y, 5)] for x, y in part]})
         _built.update(key=key, lines=lines)
     return _built['lines']
 

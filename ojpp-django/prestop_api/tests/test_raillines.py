@@ -3,7 +3,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
-from prestop_api import geometry, raillines
+from prestop_api import border, geometry, raillines
 
 SZ = 'IJPP:1161'
 HOME = {'gtfsId': 'IJPP:1122804', 'name': 'Ljubljana'}
@@ -187,6 +187,145 @@ class UnshapedTests(SimpleTestCase):
         self.assertEqual(sorted(found), [SZ, 'IJPP:INTL-HZPP'])
 
 
+LENDAVA = {'gtfsId': 'IJPP:INTL-7900070', 'name': 'Lendava / Lendva'}
+MURSKO = {'gtfsId': 'IJPP:INTL-7800106', 'name': 'Mursko Središće'}
+# R 7353 in the feed, 2026-11-01: from Lendava south over the Mura into Croatia.
+TO_CROATIA = [[16.44618, 46.55661], [16.44329, 46.51875], [16.44336, 46.5178], [16.44358, 46.51688], [16.44712, 46.50621]]
+
+
+class BorderTests(SimpleTestCase):
+    def test_the_border(self):
+        for name, lon, lat, inside in (('Ljubljana', 14.51, 46.05, True), ('Lendava', 16.44618, 46.55661, True), ('Koper', 13.73, 45.55, True),
+                                       ('Mursko Središće', 16.44712, 46.50621, False), ('Graz', 15.44, 47.07, False),
+                                       ('Zagreb', 15.98, 45.81, False), ('Trieste', 13.77, 45.65, False), ('Budapest', 19.04, 47.5, False)):
+            with self.subTest(name):
+                self.assertEqual(border.contains(lon, lat), inside)
+
+    def test_a_line_stops_where_it_leaves_slovenia_and_never_comes_back(self):
+        kept = border.until_abroad(TO_CROATIA + TO_CROATIA[::-1])
+        self.assertTrue(all(border.contains(*p) for p in kept))
+        self.assertAlmostEqual(geometry.cumulative(kept)[-1], 4570, delta=100)  # the crossing, from the feed's shape
+
+    def test_a_line_starting_abroad_has_nothing_in_slovenia(self):
+        self.assertEqual(border.until_abroad(TO_CROATIA[::-1]), [])
+
+
+DETAILED = geometry.densify(TO_CROATIA, 100)
+
+
+class WayOutTests(SimpleTestCase):
+    def test_slovenias_own_international_stop_is_at_home_and_the_border_point_is_not(self):
+        self.assertFalse(raillines._is_abroad(LENDAVA))
+        self.assertTrue(raillines._is_abroad(MURSKO))
+        self.assertTrue(raillines._is_abroad({'gtfsId': 'IJPP:INTL-7943778', 'name': 'Hodos Drzavna meja'}))
+
+    def test_every_crossing_of_a_pattern_is_a_way_out(self):
+        self.assertEqual(raillines.ways_out([MURSKO, LENDAVA]), [(1, 0)])
+        self.assertEqual(raillines.ways_out([LENDAVA, MURSKO]), [(0, 1)])
+        self.assertEqual(raillines.ways_out([AWAY, HOME, AWAY]), [(1, 0), (1, 2)])
+        self.assertEqual(raillines.ways_out([HOME, HOME, AWAY]), [(1, 2)])  # Jesenice, Šentilj: a line runs up to the station
+        self.assertEqual(raillines.ways_out([AWAY, HOME, HOME, AWAY]), [(1, 0), (2, 3)])
+        self.assertEqual(raillines.ways_out([HOME, HOME]), [])
+
+    def lendava(self, stops=(LENDAVA, MURSKO), coords=TO_CROATIA):
+        cum = geometry.cumulative(coords)
+        return [route(pattern(stops=list(stops)), agency='IJPP:INTL-HZPP')], {'p': {'coords': coords, 'cum': cum, 'distances': [0, cum[-1]]}}
+
+    def test_the_line_runs_from_the_station_to_the_border_either_way(self):
+        for stops, coords in (((LENDAVA, MURSKO), DETAILED), ((MURSKO, LENDAVA), DETAILED[::-1])):
+            routes, shapes = self.lendava(stops, coords)
+            [part] = raillines.to_the_border(routes, shapes)['IJPP:INTL-HZPP']
+            self.assertAlmostEqual(part[0][1], 46.55661, places=4)  # starts at Lendava
+            self.assertTrue(all(border.contains(*p) for p in part))
+
+    def test_every_point_drawn_lies_in_slovenia_when_trains_run_both_ways(self):
+        one, shapes_one = self.lendava()
+        two, shapes_two = self.lendava((MURSKO, LENDAVA), TO_CROATIA[::-1])
+        two[0]['patterns'][0]['code'] = 'q'
+        client = mock.Mock()
+        client.query.return_value = {'routes': one + two}
+        raillines._built.update(key=None, lines=[])
+        with (mock.patch.object(raillines.scheduled, 'service_day', return_value=DAY), mock.patch.object(raillines, 'otp', return_value=client),
+              mock.patch.object(raillines.scheduled.shapes, 'get', return_value=mock.Mock(value={'p': shapes_one['p'], 'q': shapes_two['p']}))):
+            lines = raillines._load()
+        raillines._built.update(key=None, lines=[])
+        self.assertEqual(len(lines), 1)  # one track, however many trains
+        self.assertEqual(lines[0]['operatorId'], 'IJPP:INTL-HZPP')
+        self.assertGreater(length(lines[0]['geometry']), 4000)
+        self.assertTrue(all(border.contains(*p) for p in lines[0]['geometry']))
+
+    def test_a_shape_of_straight_lines_between_stops_does_not_reach_the_border(self):
+        routes, shapes = self.lendava(coords=[TO_CROATIA[0], TO_CROATIA[-1]])
+        self.assertEqual(raillines.to_the_border(routes, shapes), {})
+        self.assertEqual(raillines.to_the_border(routes, shapes, 'thinned'), {})
+
+
+class MergeToBorderTests(SimpleTestCase):
+    def line(self, km: float) -> list:
+        return geometry.densify(east(46.0, km), 100)
+
+    def test_only_what_lies_past_the_last_kept_line_is_drawn_and_it_starts_on_that_line(self):
+        index = {}
+        raillines.merge([self.line(3)], index)
+        [added] = raillines.merge_to_border([self.line(5)], index, [])
+        self.assertAlmostEqual(length(added), 2000, delta=60)
+        self.assertAlmostEqual(added[0][0], 14.5 + 3000 * METRE_X, delta=60 * METRE_X)
+        self.assertAlmostEqual(added[-1][0], 14.5 + 5000 * METRE_X, delta=METRE_X)
+
+    def test_a_stretch_with_no_line_near_it_is_drawn_whole(self):
+        [added] = raillines.merge_to_border([self.line(5)], {}, [])
+        self.assertAlmostEqual(length(added), 5000, delta=60)
+
+    def test_a_short_stub_to_the_border_is_still_drawn(self):
+        """Holmec's station lies 80 m from it."""
+        index = {}
+        raillines.merge([self.line(3)], index)
+        [added] = raillines.merge_to_border([self.line(3.08)], index, [])
+        self.assertLess(length(added), 150)
+
+    def test_a_line_already_up_to_the_end_adds_nothing(self):
+        index = {}
+        raillines.merge([self.line(5)], index)
+        self.assertEqual(raillines.merge_to_border([self.line(5)], index, []), [])
+
+    def test_a_second_stretch_to_the_same_crossing_adds_nothing(self):
+        index, ends = {}, []
+        raillines.merge_to_border([self.line(5)], index, ends)
+        self.assertEqual(raillines.merge_to_border([geometry.densify(east(46.0 + 60 * METRE, 5), 100)], index, ends), [])
+
+    def test_a_thinned_shape_cutting_the_corner_to_a_crossing_adds_nothing(self):
+        index, ends = {}, []
+        raillines.merge_to_border([self.line(5)], index, ends)
+        corner = [[14.5, 46.0 + 900 * METRE], [14.5 + 5000 * METRE_X, 46.0 + 900 * METRE]]
+        self.assertEqual(raillines.merge_to_border([corner], index, ends, raillines.THINNED_WANDER), [])
+
+    def test_another_crossing_is_drawn(self):
+        index, ends = {}, []
+        raillines.merge_to_border([self.line(5)], index, ends)
+        self.assertEqual(len(raillines.merge_to_border([geometry.densify(east(46.2, 5), 100)], index, ends)), 1)
+        self.assertEqual(len(ends), 2)
+
+
+class InsidePartsTests(SimpleTestCase):
+    def test_a_line_that_stays_home_keeps_its_points(self):
+        line = geometry.densify(east(46.05, 2), 500)
+        self.assertEqual(border.inside_parts(line), [line])
+
+    def test_a_line_leaving_stops_short_of_the_border(self):
+        [part] = border.inside_parts(TO_CROATIA)
+        self.assertTrue(all(border.contains(*p) for p in part))
+        self.assertAlmostEqual(geometry.cumulative(part)[-1], 4570, delta=100)
+
+    def test_a_line_crossing_a_neighbour_has_a_gap_there(self):
+        there_and_back = [*TO_CROATIA, *TO_CROATIA[::-1]]
+        parts = border.inside_parts(there_and_back)
+        self.assertEqual(len(parts), 2)
+        self.assertTrue(all(border.contains(*p) for part in parts for p in part))
+
+    def test_a_line_wholly_abroad_has_nothing(self):
+        self.assertEqual(border.inside_parts([[15.44, 47.07], [15.45, 47.07]]), [])
+
+
 class QueryTests(SimpleTestCase):
     def test_it_asks_for_each_day_of_the_week_by_date(self):
         query = raillines._query(DAY)
@@ -229,3 +368,17 @@ class LoadTests(SimpleTestCase):
         shapes = {'a': shape(detailed(46.0)), 'b': shape(detailed(46.0)[::-1]), 'c': shape(detailed(46.0))}
         lines, _ = self.load(routes, shapes)
         self.assertEqual([line['operatorId'] for line in lines], [SZ])
+
+    def test_a_train_going_abroad_is_drawn_from_its_last_station_to_the_border(self):
+        coords = geometry.densify(TO_CROATIA, 100)
+        cum = geometry.cumulative(coords)
+        half = cum[-1] / 2
+        near_half = geometry.slice_between(coords, cum, 0, half)
+        shapes = {'home': {'coords': near_half, 'cum': geometry.cumulative(near_half), 'distances': [0, half]},
+                  'out': {'coords': coords, 'cum': cum, 'distances': [0, half, cum[-1]]}}
+        home = {'code': 'home', 'stops': [HOME, HOME], 'd1': TRAIN}
+        out = {'code': 'out', 'stops': [HOME, HOME, MURSKO], 'd1': TRAIN}
+        lines, _ = self.load([route(home, out)], shapes)
+        self.assertEqual(len(lines), 2)  # the home line, and on from its last station
+        self.assertAlmostEqual(sum(length(line['geometry']) for line in lines), 4570, delta=120)
+        self.assertTrue(all(border.contains(*p) for line in lines for p in line['geometry']))
