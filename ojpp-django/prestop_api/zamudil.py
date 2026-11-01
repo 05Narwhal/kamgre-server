@@ -438,7 +438,7 @@ _MONTH_WORD = re.compile(r'(\d{1,2})\.?\s*(' + '|'.join(MONTHS) + r'|may|aug|oct
 _GROUP = re.compile(r'\(([^()]*\d[^()]*)\)')
 PDF_LINK = re.compile(r'\[([^\]]*)\]\((https?://[^)\s]+?\.pdf)\)', re.I)
 MD_LINK = re.compile(r'\[([^\]]*)\]\((https?://[^)\s]+)\)')
-REPLACEMENT_TITLE = re.compile(r'nadomestn\w*\s+prevoz|avtobusn\w*\s+(?:\w+\s+)?prevoz\s+na\s+relaciji')
+REPLACEMENT_TITLE = re.compile(r'nadomest(?:n\w*|\.)\s+prevoz|avtobusn\w*\s+(?:\w+\s+)?prevoz\s+na\s+relaciji')
 _RELATION = re.compile(r'(?:.*:\s*|.*\bna relaciji\s+)?(.+?)\s+in obratno', re.I)
 
 

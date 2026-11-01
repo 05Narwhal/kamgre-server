@@ -216,6 +216,17 @@ def runs_on(data: dict, col: dict, day: date) -> bool:
     return True
 
 
+def _station_named(order: list[str], name: str) -> Optional[str]:
+    """The table's station a footnote means: its own words, or declined ("Ljubljano", "Lescami" for "Lesce Bled"): the
+    shortest name whose first word begins as this name does, but for its ending."""
+    if name in order:
+        return name
+    first = name.split(' ')[0]
+    stem = first[:max(4, len(first) - 3)]
+    found = [s for s in order if s.startswith(stem)]
+    return min(found, key=len) if found else None
+
+
 def calls_on(data: dict, table: dict, col: dict, calls: list[dict], day: date) -> list[dict]:
     """The calls the bus makes on `day`: on the days of a footnote "na relaciji A - B NE opravlja; VOZI VLAK!" it
     leaves out the stations from A up to (not including) B, in the order the table prints them, where the train
@@ -226,8 +237,8 @@ def calls_on(data: dict, table: dict, col: dict, calls: list[dict], day: date) -
         section = note.get('section')
         if note.get('rule') != 'train_runs_on' or not section or day.isoformat() not in (note.get('dates') or []):
             continue
-        a, b = (words(s) for s in section)
-        if a not in order or b not in order:
+        a, b = (_station_named(order, words(s)) for s in section)
+        if a is None or b is None:
             return []  # cannot tell where the cut is: trust "VOZI VLAK" for the whole bus
         i, j = order.index(a), order.index(b)
         gone = set(order[i:j] if i < j else order[j + 1:i + 1])
