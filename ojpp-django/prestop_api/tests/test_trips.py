@@ -162,6 +162,57 @@ class TripTests(SimpleTestCase):
 
 
 @override_settings(ROOT_URLCONF='ojpp_core.urls_prestop')
+def otp_train(realtime=False):
+    t = otp_trip('IJPP:3294', realtime=realtime)
+    return {**t, 'route': {**t['route'], 'gtfsId': 'IJPP:sz', 'shortName': 'LPV 3294', 'mode': 'RAIL', 'agency': {'gtfsId': 'IJPP:1161'}}}
+
+
+class ExpectedTripTimes(SimpleTestCase):
+    """I13: a train with nothing of its own, whose set comes from a late train, shows that delay as expected times in the
+    trip view, as on the map and the board; its own report always wins."""
+
+    def setUp(self):
+        trips._static._data.clear()
+        trips._times._data.clear()
+
+    def trip(self, otp, carried=540, may=True):
+        from prestop_api import trainlive, tracks
+        came = {'delay': carried, 'source': 'gtfs-rt', 'at': 0, 'from': '3295'} if carried is not None else None
+        with mock.patch.object(trips, '_query_trips', return_value={otp['gtfsId']: otp}), mock.patch.object(trainlive, 'may_carry', return_value=may), \
+                mock.patch.object(trainlive, 'carried_for_trip', return_value=came) as asked, mock.patch.object(tracks.tracks, 'track', return_value=(None, False)):
+            found = trips.load_trips([otp['gtfsId']], date(2026, 10, 9))
+            self.asked = asked
+            return trips.build_trip(found[otp['gtfsId']], {})
+
+    def test_expected_times_from_the_train_before(self):
+        trip = self.trip(otp_train())
+        self.assertFalse(trip['realtime'])  # a prediction is never called live
+        self.assertEqual([s.get('predicted') for s in trip['stops']], [True, True, True])
+        self.assertEqual(trip['stops'][0]['effectiveDeparture'], '2026-10-09T08:09:00Z')  # 10:00 local + 9 min
+        self.assertEqual(trip['stops'][2]['effectiveArrival'], '2026-10-09T08:13:00Z')
+        self.assertEqual(trip['stops'][0]['scheduledDeparture'], '2026-10-09T08:00:00Z')
+        self.assertNotIn('predictedDelay', trips._times.get(('IJPP:3294', date(2026, 10, 9)))[0])  # the cache is not changed
+
+    def test_its_own_live_times_win(self):
+        trip = self.trip(otp_train(realtime=True))
+        self.assertTrue(trip['realtime'])
+        self.assertNotIn('predicted', trip['stops'][1])
+        self.assertEqual(trip['stops'][1]['effectiveArrival'], '2026-10-09T08:03:00Z')
+        self.asked.assert_not_called()
+
+    def test_under_a_minute_or_nothing_carried_keeps_the_timetable(self):
+        for carried in (30, None):
+            trip = self.trip(otp_train(), carried=carried)
+            self.assertEqual([s['effectiveDeparture'] for s in trip['stops']], [None, None, None])
+            self.assertNotIn('predicted', trip['stops'][0])
+
+    def test_only_trains_with_a_sure_stay_before_them_are_asked(self):
+        self.trip(otp_train(), may=False)
+        self.asked.assert_not_called()
+        self.trip(otp_trip(realtime=False))  # a bus
+        self.asked.assert_not_called()
+
+
 class EndpointTests(TestCase):
     def test_unknown_trip_is_404(self):
         with mock.patch.object(trips, 'load_trips', return_value={}):

@@ -279,7 +279,23 @@ def load_trips(ids: list[str], day: Optional[date] = None) -> dict[str, dict]:
         if not overnight and (all(t in out for t in ids) or day != datetime.fromtimestamp(now, LJUBLJANA).date()):
             break
     _replacement_live(out)
+    _carried_live(out)
     return out
+
+
+def _carried_live(out: dict[str, dict]) -> None:
+    """A train with no live time of its own whose set comes from a late train (a `sure` stay, trainlive.carried_delay):
+    its stops get that delay as a prediction ('predictedDelay', spec 2026-11-01 I12/I13), as the map, the board and
+    journeys show it. Measured times always win: a train with any realtime stop is left alone."""
+    from . import trainlive
+    for trip_id, run in out.items():
+        static, times = run['static'], run['times']
+        if static.get('mode') != 'rail' or static.get('replacement') or not times or any(t.get('realtime') for t in times) \
+                or not trainlive.may_carry(static.get('routeName')):
+            continue
+        came = trainlive.carried_for_trip(trip_id, times[0]['serviceDay'] + times[0]['scheduledDeparture'])
+        if came and came['delay'] >= 60:
+            run['times'] = [{**t, 'predictedDelay': came['delay']} if t.get('realtimeState') != 'CANCELED' else t for t in times]
 
 
 def _placed(run: dict, update: Optional[dict]) -> dict:
@@ -358,12 +374,15 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True, dw
         canceled = st.get('realtimeState') == 'CANCELED'
         realtime = realtime or live
         nxt = static['stops'][i + 1]['stopId'] if i + 1 < len(static['stops']) else None
+        # The delay of the train whose set this is (_carried_live): expected times, never called live.
+        ahead = st.get('predictedDelay') if not live and not canceled else None
         stops.append({
             'stopId': stop['stopId'], 'name': stop['name'], 'latitude': stop['latitude'], 'longitude': stop['longitude'],
             'distance': stop['distance'],
             'scheduledArrival': mapping.iso(day + st['scheduledArrival']), 'scheduledDeparture': mapping.iso(day + st['scheduledDeparture']),
-            'effectiveArrival': mapping.iso(day + st['realtimeArrival']) if live and not canceled else None,
-            'effectiveDeparture': mapping.iso(day + st['realtimeDeparture']) if live and not canceled else None,
+            'effectiveArrival': mapping.iso(day + st['realtimeArrival']) if live and not canceled else mapping.iso(day + st['scheduledArrival'] + ahead) if ahead else None,
+            'effectiveDeparture': mapping.iso(day + st['realtimeDeparture']) if live and not canceled else mapping.iso(day + st['scheduledDeparture'] + ahead) if ahead else None,
+            **({'predicted': True} if ahead else {}),
             'canceled': canceled,
             'typicalSeconds': typical.get(f'{stop["stopId"]}>{nxt}') if nxt else None,
             'dwellSeconds': dwell_seconds((dwells or {}).get(stop['stopId'])),
