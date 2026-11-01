@@ -437,6 +437,12 @@ def city_buses(now: Optional[float] = None, skip_trips: frozenset = frozenset(),
     return out
 
 
+def _end_name(stop: dict) -> Optional[str]:
+    """A run's end as its destination text: a station abroad as riders read the place ('Dunaj / Wien')."""
+    name = stop.get('name')
+    return abroad.place(name) if abroad.is_abroad_stop(name, stop.get('gtfsId')) else name
+
+
 def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), live: Optional[dict] = None,
              updates: Optional[dict] = None, drops: Optional[list] = None) -> list[dict]:
     """Trains and SŽ replacement buses by their timetable, moved by their live delay (trainlive.py): SŽ's report
@@ -487,6 +493,13 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
         if not at or any(replaced_by.inside(s, at['stop']) for s in sections):
             coverage.note(drops, 'not on its way by its times' if not at else 'a bus runs this stretch', trip)
             continue
+        # Slovenia only (abroad.py): an international train is on the map from its first station in Slovenia to its
+        # last, never on its way to, from or between stations abroad.
+        ahead = timed['stops'][at['stop']]
+        behind = timed['stops'][at['stop'] - 1] if at['stop'] > 0 and not at['stopped'] else None
+        if any(s and abroad.is_abroad_stop(s.get('name'), s.get('gtfsId')) for s in (ahead, behind)):
+            coverage.note(drops, 'abroad', trip)
+            continue
         seen.update({trip['id'], train_run} - {None})
         quality = 'inferred' if report else 'scheduled'
         delay = timed['delays'][at['stop']]
@@ -514,8 +527,9 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             'latitude': round(lat, 6), 'longitude': round(lon, 6), 'mode': 'bus' if replacement else 'rail',
             'operatorId': (route.get('agency') or {}).get('gtfsId') or f'{feed}:unknown',
             'routeId': route['gtfsId'], 'routeName': mapping.route_name(route) or '?',
-            'destination': ends[1] or stops[-1].get('name') or trip.get('headsign') or '',
-            **({'comesFrom': ends[0]} if ends[0] else {}),
+            'destination': ends[1] or _end_name(stops[-1]) or trip.get('headsign') or '',
+            **({'comesFrom': ends[0]} if ends[0] else {'comesFrom': abroad.place(stops[0].get('name'))}
+               if abroad.is_abroad_stop(stops[0].get('name'), stops[0].get('gtfsId')) else {}),
             'nextStop': stops[i].get('name'), 'nextStopId': stops[i]['gtfsId'],
             'bearing': round(bearing, 1) if bearing is not None else None,
             'updatedAt': mapping.iso(report['at'] if report else now),

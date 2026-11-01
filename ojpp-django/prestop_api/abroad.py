@@ -44,9 +44,21 @@ def _words(name: str) -> list[str]:
     return re.findall(r'[a-z0-9]+', fold(_MARK.sub('', name or '')))
 
 
-def is_abroad_stop(name: Optional[str]) -> bool:
-    """A feed stop abroad, by the country the feed puts after its name."""
-    return bool(_MARK.search(name or ''))
+# The feed's international stations (since late Oct 2026): "IJPP:INTL-5500028" (Szombathely), their UIC country code
+# first: 55 Hungary, 78 Croatia, 81 Austria, 83 Italy. 79 is Slovenia's own (Lendava); "Hodos Drzavna meja" (79) is
+# only the border point, no station anyone gets on at.
+_INTL = re.compile(r':INTL-(\d{2})')
+HOME_UIC = '79'
+_BORDER = re.compile(r'dr[zž]avna meja', re.IGNORECASE)
+
+
+def is_abroad_stop(name: Optional[str], stop_id: Optional[str] = None) -> bool:
+    """A feed stop abroad: by the country the feed puts after its name, or an international station of another
+    country (or the border point) by its id."""
+    if _MARK.search(name or ''):
+        return True
+    found = _INTL.search(stop_id or '')
+    return bool(found) and (found.group(1) != HOME_UIC or bool(_BORDER.search(name or '')))
 
 
 def place(name: Optional[str]) -> str:
@@ -61,10 +73,11 @@ def place(name: Optional[str]) -> str:
     return _MARK.sub('', name or '').strip()
 
 
-def trim(items: Sequence[T], name_of: Callable[[T], Optional[str]]) -> tuple[int, int, Optional[str], Optional[str]]:
+def trim(items: Sequence[T], name_of: Callable[[T], Optional[str]],
+         id_of: Optional[Callable[[T], Optional[str]]] = None) -> tuple[int, int, Optional[str], Optional[str]]:
     """The stretch of `items` (a trip's stops, in order) in Slovenia, as (start, end) slice bounds, with the place
     abroad the trip comes from and goes to (None where it starts or ends in Slovenia). No stop in Slovenia: (0, 0)."""
-    inside = [i for i, s in enumerate(items) if not is_abroad_stop(name_of(s))]
+    inside = [i for i, s in enumerate(items) if not is_abroad_stop(name_of(s), id_of(s) if id_of else None)]
     if not inside:
         return 0, 0, None, None
     a, b = inside[0], inside[-1] + 1

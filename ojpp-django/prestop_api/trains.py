@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import leg_alerts, mapping, sources, sz, zamudil
+from . import abroad, leg_alerts, mapping, sources, sz, zamudil
 from .upstream import UpstreamError
 
 ON_TIME_LATE = 180   # s (prestop_statistics.aggregation.ON_TIME_LATE)
@@ -149,6 +149,8 @@ def history(number: str, days: int, today: date) -> dict:
     stations: dict[str, dict] = {}
     for r in ran:
         for s in r.stops or []:
+            if abroad.is_abroad_stop(s.get('name'), s.get('id')):
+                continue  # Slovenia only: rows rolled up before the feed's stations abroad were known keep them
             row = stations.setdefault(s['id'], {'name': s.get('name') or '', 'delays': [], 'gained': []})
             if s.get('delay') is not None:
                 row['delays'].append(s['delay'])
@@ -241,7 +243,8 @@ def time_lost(start: date, end: date, now: Optional[float] = None) -> list[dict]
             row = total.setdefault(key, [an, bn, 0, 0])
             row[2] += n
             row[3] += gained
-    ranked = sorted(((k, v) for k, v in total.items() if v[2] >= SEGMENT_RUNS and v[3] > 0),
+    ranked = sorted(((k, v) for k, v in total.items() if v[2] >= SEGMENT_RUNS and v[3] > 0
+                     and not abroad.is_abroad_stop(v[0], k[0]) and not abroad.is_abroad_stop(v[1], k[1])),
                     key=lambda kv: (-kv[1][3] / kv[1][2], -kv[1][2], kv[0]))[:SEGMENTS]
     return [{'fromStopId': a, 'fromName': an, 'toStopId': b, 'toName': bn, 'trains': n, 'meanGainedSeconds': round(g / n)}
             for (a, b), (an, bn, n, g) in ranked]
@@ -319,6 +322,7 @@ def overview(today: date, now: Optional[float] = None) -> dict:
     """Trains on their way (the map's), the share of them on time now (of those with a known delay), the biggest
     delays now, and the busiest stations of the last STATION_DAYS days with their share on time."""
     from prestop_statistics.models import StationDay
+    from . import scheduled
     snap = sources.vehicles.peek()
     trains = {}
     for v in (snap.value if snap else []):
@@ -331,12 +335,14 @@ def overview(today: date, now: Optional[float] = None) -> dict:
     for v in biggest:
         run = run_of.get(v.get('tripId') or '')
         late.append({'number': v['trainNumber'], 'name': v['routeName'], 'category': v.get('trainCategory'), 'tripId': v.get('tripId'),
-                     'vehicleId': v['id'], 'origin': (run['stops'][0].get('name') if run else None) or v.get('comesFrom'),
+                     'vehicleId': v['id'], 'origin': (scheduled._end_name(run['stops'][0]) if run else None) or v.get('comesFrom'),
                      'destination': v.get('destination'), 'nextStop': v.get('nextStop'), 'delaySeconds': v['delaySeconds'],
                      **({'delayKind': v['delayKind']} if v.get('delayKind') else {})})
     since = today - timedelta(days=STATION_DAYS)
     per_stop: dict[str, dict] = {}
     for s in StationDay.objects.filter(service_date__gte=since, service_date__lt=today):
+        if abroad.is_abroad_stop(s.name, s.stop_id):
+            continue
         row = per_stop.setdefault(s.stop_id, {'stopId': s.stop_id, 'name': s.name, 'trains': 0, 'onTime': 0.0, 'delay': 0.0})
         row['trains'] += s.trains
         row['onTime'] += (s.on_time_share or 0) * s.trains

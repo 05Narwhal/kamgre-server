@@ -41,6 +41,16 @@ class PlaceTests(SimpleTestCase):
         self.assertFalse(abroad.is_abroad_stop('Nova Gorica AP'))
         self.assertFalse(abroad.is_abroad_stop('Kidričeva (Center)'))
 
+    def test_international_stations_are_abroad_by_their_country_code(self):
+        self.assertTrue(abroad.is_abroad_stop('Szombathely', 'IJPP:INTL-5500028'))
+        self.assertTrue(abroad.is_abroad_stop('Rijeka', 'IJPP:INTL-7800013'))
+        self.assertTrue(abroad.is_abroad_stop('Villach Hauptbahnhof', 'IJPP:INTL-8100147'))
+        self.assertTrue(abroad.is_abroad_stop('Gorizia Centrale', 'IJPP:INTL-8300096'))
+        self.assertFalse(abroad.is_abroad_stop('Lendava / Lendva', 'IJPP:INTL-7900070'))  # 79: Slovenia's own
+        self.assertTrue(abroad.is_abroad_stop('Hodos Drzavna meja', 'IJPP:INTL-7943778'))  # only the border point
+        self.assertFalse(abroad.is_abroad_stop('Maribor', 'IJPP:1122913'))
+        self.assertFalse(abroad.is_abroad_stop('Maribor'))
+
     def test_places_read_as_riders_know_them(self):
         self.assertEqual(abroad.place('Gorizia Corso Italia 85/89 (I)'), 'Gorica / Gorizia')
         self.assertEqual(abroad.place('BELJAK'), 'Beljak / Villach')
@@ -72,6 +82,18 @@ class TripTests(SimpleTestCase):
     def test_a_trip_only_abroad_is_none(self):
         self.assertIsNone(_static(_trip([GORIZIA, CORSO])))
 
+    def test_a_train_to_wien_ends_at_its_last_station_in_slovenia(self):
+        """The feed's international stations (Nov 2026) carry no country mark, only their id."""
+        mb = _stop('IJPP:1122913', 'Maribor', 46.56, 15.66)
+        spilje = _stop('IJPP:INTL-8100082', 'Spielfeld-Straß', 46.71, 15.63)
+        wien = _stop('IJPP:INTL-8100001', 'Wien Hauptbahnhof', 48.18, 16.38)
+        lj = _stop('IJPP:1122804', 'Ljubljana', 46.05, 14.51)
+        with mock.patch.object(trips.tracks.tracks, 'track', return_value=(None, False)):
+            static = _static(_trip([lj, mb, spilje, wien], mode='RAIL', name='EC 70', headsign='Ljubljana - Wien'))
+        self.assertEqual([s['name'] for s in static['stops']], ['Ljubljana', 'Maribor'])
+        self.assertEqual(static['destination'], 'Dunaj / Wien')  # where it really goes, as text
+        self.assertEqual([round(x, 5) for x in static['geometry'][-1]], [mb['lon'], mb['lat']])
+
     def test_a_zagreb_ec_keeps_its_stops_in_slovenia_and_reads_zagreb(self):
         jes, lj, dob = _stop('IJPP:jes', 'Jesenice', 46.43, 14.06), _stop('IJPP:lj', 'Ljubljana', 46.05, 14.51), _stop('IJPP:dob', 'Dobova', 45.89, 15.65)
         with mock.patch.object(trips.tracks.tracks, 'track', return_value=(None, False)):
@@ -95,6 +117,14 @@ class BoardAndVehicleTests(SimpleTestCase):
                                               'stopId': 'IJPP:1167558', 'timestamp': 1}}]
         names = {'IJPP:1167558': CORSO['name']}
         routes = {'IJPP:r1': {'mode': 'BUS'}}
+        self.assertEqual(mapping.build_vehicles(positions, {}, {'IJPP:t1': {'routeId': 'IJPP:r1'}}, routes, names, now=10), [])
+
+
+    def test_no_vehicle_on_its_way_to_an_international_station(self):
+        positions = [{'id': 'v1', 'vehicle': {'trip': {'tripId': 'IJPP:t1'}, 'position': {'latitude': 47.75, 'longitude': 16.12},
+                                              'stopId': 'IJPP:INTL-8100035', 'timestamp': 1}}]
+        names = {'IJPP:INTL-8100035': 'Leibnitz'}
+        routes = {'IJPP:r1': {'mode': 'RAIL'}}
         self.assertEqual(mapping.build_vehicles(positions, {}, {'IJPP:t1': {'routeId': 'IJPP:r1'}}, routes, names, now=10), [])
 
 

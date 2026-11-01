@@ -62,7 +62,7 @@ def _load_stops():
         feeds = {s['gtfsId'].split(':', 1)[0] for s in extra}
         raw = [s for s in raw if s['gtfsId'].split(':', 1)[0] not in feeds] + extra
     # No stop abroad: KamGre shows Slovenia only (abroad.py).
-    raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'))]
+    raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'), s.get('gtfsId'))]
     built = mapping.build_stops(raw)
     # Stops that are the same physical stop or station become one (see stopgroups.py).
     ways, ends = _stop_directions(built)

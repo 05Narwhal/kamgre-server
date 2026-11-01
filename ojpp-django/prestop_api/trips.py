@@ -116,7 +116,7 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
     if not stoptimes:
         return None
     # A trip that runs abroad ends (starts) at its last (first) stop in Slovenia; the place abroad is text.
-    a, b, comes, goes = abroad.trim(stoptimes, lambda s: s['stop'].get('name'))
+    a, b, comes, goes = abroad.trim(stoptimes, lambda s: s['stop'].get('name'), lambda s: s['stop'].get('gtfsId'))
     if a == b:
         return None
     if mapping.mode_of(route.get('mode')) == 'rail' and not (comes or goes):
@@ -445,7 +445,7 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
     rail = mapping.mode_of(route.get('mode')) == 'rail'
     for p in route.get('patterns') or []:
         stops = _corrected(p.get('stops') or [], replacement)
-        a, b, _, goes = abroad.trim(stops, lambda s: s.get('name'))
+        a, b, _, goes = abroad.trim(stops, lambda s: s.get('name'), lambda s: s.get('gtfsId'))
         if a == b:
             continue
         if rail and not goes:

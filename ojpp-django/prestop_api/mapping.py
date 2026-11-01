@@ -459,7 +459,7 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
         speed = pos.get('speed')
         speed = float(speed) if isinstance(speed, (int, float)) and 0 <= speed < 70 else None
         stop_id = v.get('stopId')
-        if stop_id and abroad.is_abroad_stop(stop_names.get(stop_id)):
+        if stop_id and abroad.is_abroad_stop(stop_names.get(stop_id), stop_id):
             coverage.note(drops, 'abroad', e)
             continue  # on its way to or from its stops abroad: Slovenia only (abroad.py)
         report = (stamp, pos['latitude'], pos['longitude'])
@@ -652,7 +652,7 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         other_end = stopfix.renamed(end.get('gtfsId'), end.get('name'))
         if end.get('gtfsId') == stop_id:  # a loop: its own stop says nothing about where it goes, its headsign does
             other_end = st.get('headsign') or trip.get('tripHeadsign') or other_end
-        elif abroad.is_abroad_stop(other_end):
+        elif abroad.is_abroad_stop(other_end, end.get('gtfsId')):
             other_end = abroad.place(other_end)
         elif mode_of(route.get('mode')) == 'rail':  # an international train: its real end abroad
             ends = abroad.train_ends(route_name(route), *((other_end, None) if kind == 'arrival' else (None, other_end)))

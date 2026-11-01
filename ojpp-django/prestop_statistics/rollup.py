@@ -19,7 +19,7 @@ from typing import Callable, Optional
 
 from django.db import transaction
 
-from prestop_api import sz
+from prestop_api import abroad, sz
 from prestop_api.upstream import UpstreamError, otp
 from prestop_statistics.aggregation import ON_TIME_LATE
 from prestop_statistics.models import StationDay, TrainDay, TripDelay
@@ -66,6 +66,12 @@ def scraper_tracks(day: date) -> dict[str, dict[str, str]]:
     return found
 
 
+def _end(trip: dict, position: int) -> str:
+    """A run's first or last station by name; one abroad as riders read the place ('Beljak / Villach')."""
+    stop_id, name = trip['stops'][position]
+    return abroad.place(name) if abroad.is_abroad_stop(name, stop_id) else name
+
+
 def train_row(day: date, delay: Optional[TripDelay], trip: dict, tracks: dict, replaced: Optional[str] = None,
               trip_id: str = '') -> Optional[dict]:
     """The TrainDay fields of one SŽ train's run, or None for a bus (replacement) or a run with nothing to say: no
@@ -77,6 +83,8 @@ def train_row(day: date, delay: Optional[TripDelay], trip: dict, tracks: dict, r
     reported = {int(k): v for k, v in (raw or {}).items() if str(k).lstrip('-').isdigit() and v is not None}
     stops, before = [], None
     for p in sorted(trip['stops']):
+        if abroad.is_abroad_stop(trip['stops'][p][1], trip['stops'][p][0]):
+            continue  # Slovenia only: a station abroad is neither a station of its own nor a stretch time is lost on
         d = reported.get(p)
         stops.append({'id': trip['stops'][p][0], 'name': trip['stops'][p][1], 'delay': d,
                       'gained': d - before if d is not None and before is not None else None,
@@ -87,7 +95,7 @@ def train_row(day: date, delay: Optional[TripDelay], trip: dict, tracks: dict, r
     if not stops or not (delays or canceled or replaced in ('part', 'whole')):
         return None
     return {'service_date': day, 'number': number, 'category': category or '', 'route_id': delay.route_id if delay else trip['route'],
-            'trip_id': delay.trip_id if delay else trip_id, 'origin': stops[0]['name'], 'destination': stops[-1]['name'],
+            'trip_id': delay.trip_id if delay else trip_id, 'origin': _end(trip, min(trip['stops'])), 'destination': _end(trip, max(trip['stops'])),
             'max_delay': max(delays) if delays else None, 'avg_delay': round(sum(delays) / len(delays)) if delays else None,
             'final_delay': delays[-1] if delays else None,
             'on_time_share': round(sum(1 for d in delays if d < ON_TIME_LATE) / len(delays), 4) if delays else None, 'stops': stops,
