@@ -10,12 +10,19 @@ Podčetrtek) has a gap where it does.
 All operators share one network for now, so a track two operators use is one line, all drawn in the railway's blue.
 Neighbouring countries' services (an S-Bahn, a Maribor - Graz train) will want a line of their own beside it: give each
 such service its own `index` in `_load`, and the map a `line-offset` per service.
+
+Lines follow the track (railtrack.py): the feed's shapes are taken as the feed gives them, not thinned as the moving
+trains' are (scheduled.shapes keeps 400 points, cutting corners by hundreds of metres on a long international train),
+and where a shape still leaves the track, the way along the track replaces it before the merge.
 """
+import logging
 import math
 from datetime import timedelta
 
-from . import abroad, border, geometry, mapping, scheduled
+from . import abroad, border, geometry, mapping, railtrack, scheduled
 from .upstream import Cached, otp
+
+log = logging.getLogger(__name__)
 
 DAYS = 8          # today and the same weekday next week, so a week's every weekday is seen even across a holiday
 TOLERANCE = 35.0  # m: closer than this to a line already kept is that line (double track, station tracks)
@@ -175,13 +182,14 @@ def to_the_border(routes: list[dict], shapes: dict, kind: str = 'detailed') -> d
     return seen
 
 
-def merge_unshaped(parts: list[list], index: dict) -> list[list]:
-    """Stops joined by straight lines can cut across a mountain, so a leg is drawn only to reach a stop no line reaches."""
+def merge_unshaped(parts: list[list], index: dict, follow=lambda leg: leg) -> list[list]:
+    """Stops joined by straight lines can cut across a mountain, so a leg is drawn only to reach a stop no line reaches,
+    and then along the track (`follow`)."""
     out = []
     for part in parts:
         for a, b in zip(part, part[1:]):
             if not all(_near(index, c[0] * _KX, c[1] * geometry.KY, WANDER) for c in (a, b)):
-                out += merge([[a, b]], index)
+                out += merge([follow([a, b])], index)
     return out
 
 
@@ -209,18 +217,52 @@ def merge_to_border(parts: list[list], index: dict, ends: list, reach: float = W
     return out
 
 
+def _load_shapes() -> dict[str, dict]:
+    """pattern code -> the feed's shape (Douglas-Peucker at 3 m, as trip and line shapes), its lengths and the stops'
+    distances along it."""
+    out = {}
+    for route in otp().query(scheduled.SHAPES_Q, timeout=(5, 90))['routes']:
+        for p in route.get('patterns') or []:
+            stops = p.get('stops') or []
+            coords = geometry.trim_spurs(mapping.decode_polyline((p.get('patternGeometry') or {}).get('points') or ''))
+            if len(coords) < 2:
+                coords = [[s['lon'], s['lat']] for s in stops]
+            if len(coords) < 2:
+                continue
+            coords = geometry.simplify(coords, geometry.SHAPE_POINTS)
+            out[p['code']] = {'coords': coords, 'cum': geometry.cumulative(coords), 'distances': geometry.stop_distances(coords, stops)}
+    return out
+
+
+feed_shapes = Cached(_load_shapes, ttl=6 * 3600, max_stale=48 * 3600, revalidate=6 * 3600)
 _built: dict = {'key': None, 'lines': []}
 
 
 def _load() -> list[dict]:
     """The coming week's lines. The merge takes seconds, so it runs again only when the stretches have changed."""
     routes = otp().query(_query(scheduled.service_day()), timeout=(5, 90))['routes']
-    shapes = scheduled.shapes.get().value
-    steps = [('detailed', merge), ('thinned', lambda parts, index: merge(parts, index, THINNED_WANDER)), ('unshaped', merge_unshaped)]
+    shapes = feed_shapes.get().value
+    followed: dict = {}
+    track: list = []  # loaded for a rebuild only, and let go after it
+
+    def follow(coords: list) -> list:
+        # Many patterns share a stretch: each is taken along the track once.
+        key = repr(coords)
+        if key not in followed:
+            track[:] = track or [railtrack.load()]
+            followed[key] = track[0].follow(coords)
+        return followed[key]
+
+    def along(add):
+        return lambda parts, index: add([follow(part) for part in parts], index)
+
     ends: list = []  # the border crossings drawn so far
-    found = [(stretches(routes, shapes, kind), add) for kind, add in steps] + [
-        (to_the_border(routes, shapes), lambda parts, index: merge_to_border(parts, index, ends)),
-        (to_the_border(routes, shapes, 'thinned'), lambda parts, index: merge_to_border(parts, index, ends, THINNED_WANDER))]
+    found = [(stretches(routes, shapes), along(merge)),
+             (stretches(routes, shapes, 'thinned'), along(lambda parts, index: merge(parts, index, THINNED_WANDER))),
+             # Unshaped legs are taken along the track only where one is drawn.
+             (stretches(routes, shapes, 'unshaped'), lambda parts, index: merge_unshaped(parts, index, follow)),
+             (to_the_border(routes, shapes), along(lambda parts, index: merge_to_border(parts, index, ends))),
+             (to_the_border(routes, shapes, 'thinned'), along(lambda parts, index: merge_to_border(parts, index, ends, THINNED_WANDER)))]
     key =[{operator: sorted(hash(repr(part)) for part in parts) for operator, parts in group.items()} for group, _ in found]
     if key != _built['key']:
         index: dict = {}  # shared: see the top of this file
@@ -232,6 +274,11 @@ def _load() -> list[dict]:
                     for part in border.inside_parts(coords):
                         part = geometry.simplify(part, geometry.SHAPE_POINTS)
                         lines.append({'id': f'{operator}#{len(lines)}', 'operatorId': operator, 'geometry': [[round(x, 5), round(y, 5)] for x, y in part]})
+        # The track file lacks a way there (a new line OpenStreetMap does not have yet), so it is drawn as the feed has
+        # it. Where the track crosses a neighbour's land (Dobovec) the file has none either, but nothing is drawn there.
+        left = {repr(sorted(s)): s for s in (track[0].left if track else []) if all(border.contains(*p) for p in s)}
+        if left:
+            log.warning('rail lines: %d stretches off the track with no way along it, e.g. %s', len(left), list(left.values())[:3])
         _built.update(key=key, lines=lines)
     return _built['lines']
 
