@@ -16,9 +16,15 @@ The upstream Django app runs unmodified inside the `kali-linux` WSL distro, agai
 From the repository root in Windows, the quick way:
 
 ```powershell
-yarn backend    # starts PostGIS + Redis, stops any running server/collector, then opens two windows: API server and delay collector
-yarn dev:live   # in the same terminal: the app with live data
+yarn backend    # starts PostGIS + Redis, stops any running server/collector, then runs the API server, delay collector
+                # and push sender in the background, with their status and logs in this terminal
+yarn live       # the same plus the app with live data on https over the network (`yarn dev:live --host`)
 ```
+
+Both show a status screen: one line per service (API health, sources live, collector state, the app's network
+URLs) and the latest log lines. Keys: `1`-`9` one service's log, `a` all logs, `r` restart the shown service(s),
+`c` clear, `q` (or Ctrl+C, or closing the window) stops everything they started except Valhalla. Full logs are in
+`%TEMP%\kamgre-backend\<service>.log`. Extra arguments to `yarn live` go to Vite, e.g. `yarn live --port 5174`.
 
 The individual commands (`up` is needed once per WSL boot, e.g. after a reboot or `wsl --shutdown`; repeating it is harmless):
 
