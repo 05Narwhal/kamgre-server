@@ -1,4 +1,5 @@
-"""SŽ train and station rollups for one day (rollup.py), plus a backfill of earlier days while time allows.
+"""SŽ train and station rollups for one day (rollup.py), then every other line and its stops (bus_rollup.py), plus a
+backfill of earlier days while time allows (days without train rows, days without line rows).
 
     manage.py rollup_stats                                 # yesterday
     manage.py rollup_stats --day 2026-10-25
@@ -14,7 +15,7 @@ from datetime import date, datetime, time, timedelta
 from django.core.management import BaseCommand, CommandError
 
 from prestop_api.upstream import UpstreamError
-from prestop_statistics import rollup
+from prestop_statistics import bus_rollup, rollup
 from prestop_statistics.collector import LJUBLJANA
 
 logger = logging.getLogger('prestop rollup_stats')
@@ -42,14 +43,18 @@ class Command(BaseCommand):
         except ValueError as e:
             raise CommandError(f'--since must be YYYY-MM-DD: {e}') from e
         memo: dict = {}
-        done = [self.one(first, memo)]
+        self.routes = bus_rollup.route_info()
+        done = [self.one(first, memo) | self.buses(first)]
         older_days = rollup.days_since(since_day, first) if since_day else []
         older_days += [d for d in (rollup.days_to_backfill(first, backfill) if backfill else []) if d not in older_days]
-        for older in older_days:
+        # Lines and bus stops (bus_rollup.py) of days that have none yet; a --since re-roll redoes them too.
+        bus_days = set(older_days if since_day else []) | set(bus_rollup.days_to_backfill(first, backfill) if backfill else [])
+        for older in sorted(set(older_days) | bus_days, reverse=True):
             if deadline and datetime.now(LJUBLJANA) >= deadline:
                 logger.info('backfill stopped at %s: the night window ends', deadline.strftime('%H:%M'))
                 break
-            done.append(self.one(older, memo))
+            row = self.one(older, memo) if older in older_days else {'day': older.isoformat()}
+            done.append(row | (self.buses(older) if older in bus_days else {}))
         result = {'days': done, 'maxRssMb': round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)}
         logger.info('rollup: %s', json.dumps(result, default=str))
         self.stdout.write(json.dumps(result, default=str))
@@ -62,3 +67,9 @@ class Command(BaseCommand):
             return {'day': day.isoformat(), 'error': str(e)}
         rollup.write(day, trains, stations)
         return {'day': day.isoformat(), 'stations': len(stations), **counts}
+
+    def buses(self, day: date) -> dict:
+        """The day's lines and bus stops (bus_rollup.py); the database only, so it cannot be left half done by OTP."""
+        lines, stops, counts = bus_rollup.build(day, self.routes)
+        bus_rollup.write(day, lines, stops)
+        return counts

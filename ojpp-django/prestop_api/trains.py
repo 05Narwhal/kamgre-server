@@ -340,7 +340,7 @@ def overview(today: date, now: Optional[float] = None) -> dict:
                      **({'delayKind': v['delayKind']} if v.get('delayKind') else {})})
     since = today - timedelta(days=STATION_DAYS)
     per_stop: dict[str, dict] = {}
-    for s in StationDay.objects.filter(service_date__gte=since, service_date__lt=today):
+    for s in StationDay.objects.filter(service_date__gte=since, service_date__lt=today, mode='rail'):
         if abroad.is_abroad_stop(s.name, s.stop_id):
             continue
         row = per_stop.setdefault(s.stop_id, {'stopId': s.stop_id, 'name': s.name, 'trains': 0, 'onTime': 0.0, 'delay': 0.0})
@@ -365,11 +365,11 @@ def _runs_by_id() -> dict[str, dict]:
     return {t['id']: t for t in (snap.value if snap else [])}
 
 
-def station(stop_ids: list[str], days: int, today: date) -> Optional[dict]:
+def station(stop_ids: list[str], days: int, today: date, mode: str = 'rail') -> Optional[dict]:
     """A station's last `days` days (StationDay rows of any of its stop ids, merged per day), newest first, and a
-    summary over them; None when the rollups have no train there."""
+    summary over them; None when the rollups have no train there. `mode` 'bus': its buses instead (bus_rollup.py)."""
     from prestop_statistics.models import StationDay
-    rows = list(StationDay.objects.filter(stop_id__in=stop_ids, service_date__gte=today - timedelta(days=days), service_date__lt=today))
+    rows = list(StationDay.objects.filter(stop_id__in=stop_ids, mode=mode, service_date__gte=today - timedelta(days=days), service_date__lt=today))
     if not rows:
         return None
     per_day: dict[date, dict] = {}

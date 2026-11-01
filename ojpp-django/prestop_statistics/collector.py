@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from prestop_api import mapping
 from prestop_api.upstream import UpstreamError, get_json, otp
-from prestop_statistics.models import CollectorState, TripDelay
+from prestop_statistics.models import CollectorState, TripDelay, TripStops
 
 logger = logging.getLogger(__name__)
 LJUBLJANA = ZoneInfo('Europe/Ljubljana')
@@ -34,6 +34,7 @@ class ScheduleCache:
     def __init__(self):
         self._data: dict[tuple[str, str], Optional[dict]] = {}
         self.updates: dict = {}  # the last poll's trip updates (mapping.trip_update_index)
+        self._kept: set[str] = set()  # trips whose stops are in TripStops (this process wrote or tried them)
 
     def get_many(self, keys: list[tuple[str, str]]) -> dict[tuple[str, str], Optional[dict]]:
         missing = [k for k in dict.fromkeys(keys) if k not in self._data]
@@ -42,7 +43,7 @@ class ScheduleCache:
         return {k: self._data.get(k) for k in keys}
 
     def _fetch(self, keys):
-        fields = 'directionId blockId route { gtfsId agency { gtfsId } } stoptimesForDate(serviceDate: %s) { stopPosition scheduledArrival scheduledDeparture serviceDay stop { gtfsId lat lon } }'
+        fields = 'directionId blockId route { gtfsId mode agency { gtfsId } } stoptimesForDate(serviceDate: %s) { stopPosition scheduledArrival scheduledDeparture serviceDay stop { gtfsId name lat lon } }'
         query = ' '.join(f't{i}: trip(id: {json.dumps(trip)}) {{ {fields % json.dumps(day)} }}' for i, (trip, day) in enumerate(keys))
         try:
             data = otp().query('{ ' + query + ' }')
@@ -58,6 +59,27 @@ class ScheduleCache:
                 'bySequence': {s['stopPosition']: s for s in stoptimes},
                 'byStop': {s['stop']['gtfsId']: s for s in stoptimes},
             } if stoptimes else None
+        self._keep_stops([(trip, data.get(f't{i}')) for i, (trip, _) in enumerate(keys)])
+
+    def _keep_stops(self, found: list[tuple[str, Optional[dict]]]):
+        """Each trip's stops, once (TripStops): the night's bus rollup reads them to know which stop a recorded
+        position is. Never fails the poll: without them a bus stop's day is only missing from the statistics."""
+        rows = []
+        for trip_id, t in found:
+            stoptimes = (t or {}).get('stoptimesForDate') or []
+            if not stoptimes or trip_id in self._kept:
+                continue
+            self._kept.add(trip_id)
+            rows.append(TripStops(trip_id=trip_id, route_id=t['route']['gtfsId'], mode=mapping.mode_of(t['route'].get('mode')) or '',
+                                  stops=[[s['stopPosition'], s['stop']['gtfsId'], s['stop'].get('name') or '', s.get('scheduledArrival')]
+                                         for s in sorted(stoptimes, key=lambda s: s['stopPosition'])],
+                                  seen=datetime.now(LJUBLJANA).date()))
+        if not rows:
+            return
+        try:
+            TripStops.objects.bulk_create(rows, ignore_conflicts=True)
+        except Exception as e:  # noqa: BLE001 - see the docstring
+            logger.warning('Trip stops not kept: %r', e)
 
     def forget_before(self, day: str):
         self._data = {k: v for k, v in self._data.items() if k[1] >= day}

@@ -204,7 +204,7 @@ def write(day: date, trains: list[dict], stations: list[dict]) -> None:
     """Replace the day's rows (a re-run of a night gives the same table)."""
     with transaction.atomic():
         TrainDay.objects.filter(service_date=day).delete()
-        StationDay.objects.filter(service_date=day).delete()
+        StationDay.objects.filter(service_date=day, mode='rail').delete()  # bus stops are bus_rollup.py's
         TrainDay.objects.bulk_create([TrainDay(**t) for t in trains])
         StationDay.objects.bulk_create([StationDay(**s) for s in stations])
 

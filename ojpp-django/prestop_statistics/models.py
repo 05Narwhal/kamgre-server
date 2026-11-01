@@ -190,9 +190,11 @@ class StationDay(models.Model):
     """One railway station on one service day, from that day's TrainDay rows: trains with a reported delay there,
     the share of them on time (under rollup.ON_TIME_LATE late) and their mean delay in seconds. `hours` (spec
     2026-10-31 H3): by the hour of the scheduled time there, {"7": [trains, on time, sum of their delays in s]}; {} on
-    rows rolled up before."""
+    rows rolled up before. Since Nov 2026 also bus stops (`mode` 'bus', bus_rollup.py): `trains` then counts the buses
+    with a delay recorded there."""
     service_date = models.DateField()
     stop_id = models.CharField(max_length=200)
+    mode = models.CharField(max_length=4, default='rail')
     name = models.CharField(max_length=200, blank=True, default='')
     trains = models.IntegerField(default=0)
     on_time_share = models.FloatField(null=True)
@@ -200,8 +202,45 @@ class StationDay(models.Model):
     hours = models.JSONField(default=dict)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['service_date', 'stop_id'], name='prestop_station_day_unique')]
-        indexes = [models.Index(fields=['stop_id', 'service_date'], name='prestop_sta_station_day_idx')]
+        constraints = [models.UniqueConstraint(fields=['service_date', 'stop_id', 'mode'], name='prestop_station_day_mode_unique')]
+        indexes = [models.Index(fields=['stop_id', 'service_date'], name='prestop_sta_station_day_idx'),
+                   models.Index(fields=['mode', 'service_date'], name='prestop_sta_station_mode_idx')]
+
+
+class TripStops(models.Model):
+    """A trip's stops as the planner listed them when the collector first met the trip (collector.ScheduleCache):
+    `stops` [[position, stop id, name, scheduled arrival in s after midnight]]. The night's bus rollup maps a recorded
+    stop position to its stop with it, without asking the planner again (bus_rollup.py)."""
+    trip_id = models.CharField(max_length=200, unique=True)
+    route_id = models.CharField(max_length=200)
+    mode = models.CharField(max_length=8, blank=True, default='')
+    stops = models.JSONField(default=list)
+    seen = models.DateField()
+
+
+class RouteDay(models.Model):
+    """One line's measured trips on one service day, every line but SŽ's trains (bus_rollup.py, `rollup_stats`): the
+    trips with recorded delays, of them on time (less than aggregation.ON_TIME_LATE late on average, as the line pages
+    count a trip) and 5+ min late, the sum of their mean delays (s, the late part) and the worst delay recorded, the
+    canceled trips, and `hours` by the hour of the trip's first scheduled departure {"7": [trips, on time, delay sum]}."""
+    service_date = models.DateField()
+    route_id = models.CharField(max_length=200)
+    operator_id = models.CharField(max_length=100, blank=True, default='')
+    mode = models.CharField(max_length=8, blank=True, default='')
+    name = models.CharField(max_length=60, blank=True, default='')
+    origin = models.CharField(max_length=200, blank=True, default='')
+    destination = models.CharField(max_length=200, blank=True, default='')
+    trips = models.IntegerField(default=0)
+    on_time = models.IntegerField(default=0)
+    late = models.IntegerField(default=0)
+    delay_sum = models.IntegerField(default=0)
+    max_delay = models.IntegerField(null=True)
+    canceled = models.IntegerField(default=0)
+    hours = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['service_date', 'route_id'], name='prestop_route_day_unique')]
+        indexes = [models.Index(fields=['route_id', 'service_date'], name='prestop_sta_route_day_idx')]
 
 
 class TrainLinkDay(models.Model):

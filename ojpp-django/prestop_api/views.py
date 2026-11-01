@@ -1043,9 +1043,51 @@ def train_history(request, number):
 @require_GET
 @api
 def statistics_overview(request):
-    from . import scheduled, trains
-    data = trains.overview(scheduled.service_day())
+    from . import buses, scheduled, trains
+    data = {**trains.overview(scheduled.service_day()), 'buses': buses.now()}
     return envelope(data, snapshot_status(sources.positions, 60), used=['gtfs-rt:trip-updates', 'sz:live', 'sz:delays'], source_updated=mapping.iso(time.time()))
+
+
+@require_GET
+@api
+def statistics_buses(request):
+    """Every line but SŽ's trains over the last 7, 30 or 90 days from the nightly RouteDay rows (bus_rollup.py)."""
+    from . import buses, scheduled
+    days = _days_param(request, 30)
+    if days not in buses.TREND_DAYS:
+        raise ApiError(422, 'INVALID_DAYS', 'days must be 7, 30 or 90')
+    data = buses.trends_cached(days, scheduled.service_day())
+    collector = _collector_source()
+    return envelope(data, collector['status'], used=['gtfs-rt:trip-updates'], source_updated=collector['updatedAt'])
+
+
+@require_GET
+@api
+def statistics_departure(request):
+    """One bus departure (the line, direction and first time of `tripId`) on each of the last days."""
+    from . import buses, scheduled
+    trip_id = (request.GET.get('tripId') or '').strip()
+    if not trip_id or len(trip_id) > 200:
+        raise ApiError(422, 'INVALID_TRIP', 'tripId is required')
+    days = _days_param(request)
+    data = _memo(('departure', trip_id, days), 600, lambda: buses.departure(trip_id, days, scheduled.service_day()))
+    if not data:
+        raise ApiError(404, 'NO_STATISTICS', 'Nothing is known about this departure yet.')
+    collector = _collector_source()
+    return envelope(data, collector['status'], used=['gtfs-rt:trip-updates'], source_updated=collector['updatedAt'])
+
+
+@require_GET
+@api
+def statistics_stations(request):
+    """The busiest stations (`mode` rail) or bus stops (`mode` bus) of the last days, or those matching `q`."""
+    from . import buses, scheduled
+    mode = request.GET.get('mode', 'bus')
+    if mode not in ('rail', 'bus'):
+        raise ApiError(422, 'INVALID_MODE', 'mode must be rail or bus')
+    data = buses.station_list(mode, request.GET.get('q', '')[:80], scheduled.service_day())
+    collector = _collector_source()
+    return envelope(data, collector['status'], used=['otp:timetables'], source_updated=collector['updatedAt'])
 
 
 @require_GET
@@ -1067,9 +1109,12 @@ def statistics_trains(request):
 def station_statistics(request, stop_id):
     from . import scheduled, trains
     days = _days_param(request)
+    mode = request.GET.get('mode', 'rail')  # 'bus': the stop's buses (bus_rollup.py)
+    if mode not in ('rail', 'bus'):
+        raise ApiError(422, 'INVALID_MODE', 'mode must be rail or bus')
     members = sorted(set(sources.stop_group(stop_id, wait=True)) | {stop_id})
-    data = _memo(('station-stats', tuple(members), days), 600, lambda: trains.station(members, days, scheduled.service_day()))
+    data = _memo(('station-stats', tuple(members), days, mode), 600, lambda: trains.station(members, days, scheduled.service_day(), mode))
     if not data:
-        raise ApiError(404, 'NO_STATISTICS', 'No train statistics for this stop yet.')
+        raise ApiError(404, 'NO_STATISTICS', 'No statistics for this stop yet.')
     collector = _collector_source()
     return envelope({**data, 'stopId': stop_id}, collector['status'], used=['otp:timetables'], source_updated=collector['updatedAt'])

@@ -57,11 +57,12 @@ def plans():
 
 
 def tick(now: float):
-    """One round: refresh what is about to expire, if the app is in use. The train trends (the database only) are
-    kept fresh either way, so the first look after the night's rollup does not wait on them."""
-    from . import scheduled, trains
+    """One round: refresh what is about to expire, if the app is in use. The train and bus trends (the database only)
+    are kept fresh either way, so the first look after the night's rollup does not wait on them."""
+    from . import buses, scheduled, trains
     try:
         trains.warm_trends(scheduled.service_day(), now)
+        buses.warm_trends(scheduled.service_day())
     except Exception as e:  # noqa: BLE001 - the database away: the caches below still get their turn
         logger.info('Train trends not warmed: %r', e)
     finally:
