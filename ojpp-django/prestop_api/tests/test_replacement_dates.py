@@ -37,6 +37,32 @@ class NamedTrainsTests(SimpleTestCase):
         self.assertEqual(closures.trains_of(named('99002', {'2400', '2402'}, on=on), '20261015'), frozenset({'2400', '2402'}))
         self.assertIsNone(closures.trains_of(named('99002'), '20261014'))
 
+    def test_a_kind_of_day_whose_list_was_never_read_does_not_filter(self):
+        # Jesenice - Vintgar was read on Saturday and Sunday only: SŽ's weekday trains on it are not "unnamed", just unread
+        weekend = {'20261031': frozenset({'2400'}), '20261101': frozenset({'2402'})}
+        alert = named('99002', {'2400', '2402'}, on=weekend)
+        self.assertIsNone(closures.trains_of(alert, '20261102'))  # Monday: not read
+        self.assertEqual(closures.trains_of(alert, '20261107'), frozenset({'2400', '2402'}))  # another Saturday: read
+        self.assertEqual(closures.trains_of(alert, '20261108'), frozenset({'2400', '2402'}))  # another Sunday: read
+        weekday = named('99002', {'2400'}, on={'20261102': frozenset({'2400'})})
+        self.assertEqual(closures.trains_of(weekday, '20261106'), frozenset({'2400'}))  # Monday's list speaks for Friday
+
+    def test_a_notice_running_for_months_keeps_its_names_on_an_unread_kind_of_day(self):
+        # Ljubljana - Celje: read on a Sunday, naming IC 36; its timetable lists every bus of the line
+        alert = named('99002', {'36'}, on={'20261101': frozenset({'36'})})
+        alert.update(_from=closures.datetime(2026, 11, 1, tzinfo=closures.LOCAL).timestamp(), _to=closures.datetime(2026, 12, 12, tzinfo=closures.LOCAL).timestamp())
+        self.assertEqual(closures.trains_of(alert, '20261102'), frozenset({'36'}))
+
+    def test_an_unread_kind_of_day_runs_the_timetables_buses_but_guesses_none(self):
+        monday_read = {'20261012': frozenset({'38'})}  # 2026-10-14 in the fixtures is a Wednesday
+        sunday_read = {'20261011': frozenset({'38'})}
+        kept = timetabled(build('20261014', alerts=[named('11147', {'38'}, on=monday_read)]))
+        every = timetabled(build('20261014', alerts=[named('11147', {'38'}, on=sunday_read)]))
+        self.assertGreater(len(every), len(kept))
+        self.assertEqual(len(every), len(timetabled(build('20261014', alerts=[named('11147')]))))
+        # no timetable: only the trains the notice names, never every train on the section
+        self.assertEqual(numbers(build('20261014', tables=None, alerts=[named('99002', {'2400'}, on={'20261011': frozenset({'2400'})})])), set())
+
     def test_a_timetable_runs_the_buses_of_the_named_trains_only(self):
         every = timetabled(build('20261014', alerts=[named('11147')]))
         only = timetabled(build('20261014', alerts=[named('11147', {'38'})]))

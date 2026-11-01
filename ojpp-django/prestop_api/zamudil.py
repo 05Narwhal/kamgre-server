@@ -48,6 +48,7 @@ SOURCE_URL = 'https://zamudil.si'
 NOTICES, CLASSES, WORKS = 'notices', 'assignments', 'maintenance'
 PATHS = {NOTICES: '/notices', CLASSES: '/rollingstock/assignments', WORKS: '/map/maintenance'}
 DAYS_AHEAD = 13        # notices of today … today + 13 (the planner's date window)
+PAST_LISTS = 8         # days a past date's notices stay on disk: enough to have read every kind of day (notice_records)
 ON_DEMAND_AGE = 6 * 3600  # s: a plan for another date asks for that date's notices when its copy is older
 RETRY = 600            # s before the first new attempt at one copy after a failure (shared through the copy's `retryAt`)
 MAX_RETRY = 3600       # s: … doubling with each failure in a row up to this
@@ -177,16 +178,17 @@ def _store(endpoint: str, day: Optional[str], value: dict):
 
 
 def prune(now: Optional[float] = None):
-    """Copies of dates before today go (from memory and the directory)."""
+    """Copies of dates before today go (from memory and the directory), notices PAST_LISTS days later (notice_records)."""
     first = today().isoformat()
-    for key in [k for k in _copies if k[1] and k[1] < first]:
+    notices_from = (today() - timedelta(days=PAST_LISTS)).isoformat()
+    for key in [k for k in _copies if k[1] and k[1] < (notices_from if k[0] == NOTICES else first)]:
         _copies.pop(key, None)
         _looked.pop(key, None)
     where = directory()
     if where is None or not where.exists():
         return
     for path in where.glob('*-????-??-??.json'):
-        if path.stem[-10:] < first:
+        if path.stem[-10:] < (notices_from if path.stem[:-11] == NOTICES else first):
             try:
                 path.unlink()
             except OSError:
@@ -390,6 +392,18 @@ def copies(endpoint: str, now: Optional[float] = None) -> list[tuple[date, dict]
         day = first + timedelta(days=ahead)
         found = copy(endpoint, day, now)
         if found and isinstance(found.get('data'), dict):
+            out.append((day, found['data']))
+    return out
+
+
+def past_lists(now: Optional[float] = None) -> list[tuple[date, dict]]:
+    """(date, data) of the notice lists read on the PAST_LISTS days before today, oldest first; empty lists left out."""
+    first = today()
+    out = []
+    for back in range(PAST_LISTS, 0, -1):
+        day = first - timedelta(days=back)
+        found = copy(NOTICES, day, now)
+        if found and isinstance(found.get('data'), dict) and found['data'].get('notices'):
             out.append((day, found['data']))
     return out
 
@@ -826,13 +840,41 @@ _records: dict = {'version': None, 'value': None}
 
 def notice_records() -> Optional[list[dict]]:
     """`records` of every date's copy from today on, worked out again only when a copy changed; None when zamudil is
-    off or no copy has data."""
+    off or no copy has data. Past lists (`past_lists`) add what today's cannot say: see `_with_past`."""
     if not enabled():
         return None
-    lists = copies(NOTICES)
-    if not lists:
+    lists, past = copies(NOTICES), past_lists()
+    if not lists and not past:
         return None
-    stamp = tuple((d.isoformat(), id(data)) for d, data in lists)
+    stamp = tuple((d.isoformat(), id(data)) for d, data in past + lists)
     if _records['version'] != stamp:
-        _records.update(version=stamp, value=records(lists))
+        _records.update(version=stamp, value=_with_past(lists, past))
     return _records['value']
+
+
+def _with_past(lists: list[tuple[date, dict]], past: list[tuple[date, dict]]) -> list[dict]:
+    """`records(lists)` and the past lists' readings. Each record keeps the trains its notice named on past dates, so
+    closures.trains_of knows which kinds of day were read. zamudil's day turns at midnight with an empty list and fills
+    later (00:06 on 2026-11-02 answered `{"notices": []}`): until today's list has notices, notices of the past lists
+    whose days still run stay too, or every SŽ replacement would be gone overnight. Once it has them it decides which
+    notices there are, as a notice SŽ took back is simply no longer listed."""
+    current = records(lists)
+    if not past:
+        return current
+    first = today()
+    earlier = {r['ID_ovire'][0]: r for r in records(past)}
+    for record in current:
+        old = earlier.pop(record['ID_ovire'][0], None)
+        if old:
+            record['VlakiPoDnevih'] = [{**old['VlakiPoDnevih'][0], **record['VlakiPoDnevih'][0]}]
+            record['Vlaki'] = [sorted({*old['Vlaki'][0], *record['Vlaki'][0]})]
+    if any(d == first and (data or {}).get('notices') for d, data in lists):
+        return current
+    return sorted(current + [r for r in earlier.values() if _still_runs(r, first)], key=lambda r: r['ID_ovire'][0])
+
+
+def _still_runs(record: dict, first: date) -> bool:
+    """A record whose title's dates reach `first`; unreadable dates ('listed') stay, as its timetable may give them."""
+    if record['CasVir'][0] == 'listed':
+        return True
+    return any(date(int(y), int(m), int(d)) >= first for d, m, y in re.findall(r'(\d{2})\.(\d{2})\.(\d{4})', record['Cas'][0]))

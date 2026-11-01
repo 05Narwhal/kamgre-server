@@ -127,10 +127,40 @@ class KeepsTheLastCopyTests(ZamudilCase):
         self.assertEqual(health['status'], 'unavailable')
 
     def test_past_dates_are_pruned(self):
-        zamudil._write(Path(self.dir.name) / 'notices-2026-10-26.json', {'data': {'notices': []}, 'fetchedAt': 1, 'checkedAt': 1})
+        for name in ('notices-2026-10-26', 'notices-2026-10-19', 'notices-2026-10-18', 'assignments-2026-10-26'):
+            zamudil._write(Path(self.dir.name) / f'{name}.json', {'data': {'notices': []}, 'fetchedAt': 1, 'checkedAt': 1})
         self.fetched()
         zamudil.prune()
-        self.assertEqual(sorted(p.name for p in Path(self.dir.name).glob('*.json')), ['notices-2026-10-27.json'])
+        # notices stay PAST_LISTS days (notice_records), other copies only from today on
+        self.assertEqual(sorted(p.name for p in Path(self.dir.name).glob('*.json')),
+                         ['notices-2026-10-19.json', 'notices-2026-10-26.json', 'notices-2026-10-27.json'])
+
+    def stored(self, day: date, data: dict):
+        zamudil._write(Path(self.dir.name) / f'notices-{day.isoformat()}.json', {'data': data, 'fetchedAt': 1, 'checkedAt': 1})
+
+    def test_until_todays_list_is_filled_the_last_read_notices_stay(self):
+        # zamudil's day turns at midnight with an empty list: 00:06 on 2026-11-02 answered {"notices": []}
+        self.stored(DAY, {'serviceDate': DAY.isoformat(), 'notices': []})
+        self.stored(date(2026, 10, 26), fixture('notices') | {'serviceDate': '2026-10-26'})
+        lines = {r['Relacija'][0]: r for r in zamudil.notice_records()}
+        self.assertIn('Ljubljana - Celje', lines)  # its title runs to 12 Dec
+        self.assertEqual(list(lines['Ljubljana - Celje']['VlakiPoDnevih'][0]), ['2026-10-26'])
+
+    def test_a_notice_whose_days_ended_does_not_come_back(self):
+        ended = {'notices': [{'summary': 'Vozni red nadomestnega prevoza: Ljubljana - Borovnica in obratno (24. 10. - 26. 10.).', 'trainNumbers': [1]},
+                             {'summary': 'Povezava: [Vozni red](https://x.si/b.pdf)', 'trainNumbers': [1]}]}
+        self.stored(DAY, {'serviceDate': DAY.isoformat(), 'notices': []})
+        self.stored(date(2026, 10, 26), ended | {'serviceDate': '2026-10-26'})
+        self.assertEqual(zamudil.notice_records(), [])
+
+    def test_once_todays_list_is_filled_it_decides_which_notices_there_are(self):
+        self.stored(date(2026, 10, 26), fixture('notices') | {'serviceDate': '2026-10-26'})
+        only = {'notices': [n for n in fixture('notices')['notices'] if 36 in (n.get('trainNumbers') or [])]}
+        self.stored(DAY, only | {'serviceDate': DAY.isoformat()})
+        records = zamudil.notice_records()
+        self.assertEqual([r['Relacija'][0] for r in records], ['Ljubljana - Celje'])
+        # and the days read before stay known: which kinds of day its train list covers
+        self.assertEqual(sorted(records[0]['VlakiPoDnevih'][0]), ['2026-10-26', '2026-10-27'])
 
     def test_off_without_urls(self):
         with override_settings(PRESTOP_ZAMUDIL_URL=[]):

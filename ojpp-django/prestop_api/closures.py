@@ -129,11 +129,29 @@ def _days(alert: dict) -> set[str]:
 
 def trains_of(alert: dict, day: str) -> Optional[frozenset]:
     """The train numbers a notice replaces on service day `day` (YYYYMMDD): the ones zamudil.si lists with it that
-    date, or on any date when that date's list was not read; None: the notice names none (every train crossing its
-    section)."""
+    date, or on any date when that date's list was not read. None: the notice names none (every train crossing its
+    section), or a short closure whose lists were read only on other kinds of day and so say nothing of this day's
+    trains: zamudil lists a date's notices only on that date, so a notice read at the weekend has not named its weekday
+    trains (Jesenice - Vintgar: 4201 and others run on weekdays, and its timetable has their buses). A notice running
+    for months keeps its names until then: it replaces only some trains (Ljubljana - Celje's timetable lists every bus
+    of the line, its notice IC 36 alone), and a week of lists reads every kind of day."""
     if alert.get('_trains') is None:
         return None
-    return (alert.get('_trains_on') or {}).get(day, alert['_trains'])
+    read = alert.get('_trains_on') or {}
+    if day in read:
+        return read[day]
+    short = alert.get('_to') is not None and alert['_to'] - alert['_from'] <= SHORT_NOTICE
+    if read and short and _day_kind(day) not in {_day_kind(d) for d in read}:
+        return None
+    return alert['_trains']
+
+
+SHORT_NOTICE = 28 * 86400  # s: a closure up to this long replaces every train its timetable lists (trains_of)
+
+
+def _day_kind(day: str) -> int:
+    """Monday to Friday, Saturday or Sunday (SŽ's timetable days) of YYYYMMDD."""
+    return max(date(int(day[:4]), int(day[4:6]), int(day[6:8])).weekday(), 4)
 
 
 def in_effect(alert: dict, start: float, end: float) -> bool:
