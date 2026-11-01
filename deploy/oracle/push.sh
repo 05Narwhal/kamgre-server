@@ -54,5 +54,9 @@ fi
 
 echo "==> Applying on the server"
 remote 'sudo bash /opt/prestop/deploy/server/update.sh'
+
+# The server may not reach arriva.si, this PC does. The deploy has worked either way.
+bash "$HERE/notices-remote.sh" || echo "Arriva's notices were not updated; the deploy itself is fine. Try again with: yarn server:update" >&2
+
 echo
 echo "Deployed. Check anytime with: ssh $SSH_TARGET sudo prestop-status"

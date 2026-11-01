@@ -80,13 +80,17 @@ class FacadeTests(TestCase):
         self.assertEqual(set(items[0]), {'id', 'title', 'message', 'operatorId', 'stopIds', 'routeIds', 'validFrom', 'validTo', 'sourceUrl', 'kind', 'source', 'from', 'to'})
 
     def test_far_future_alerts_wait_until_they_are_near(self):
-        soon, far = (time.time() + 86400, time.time() + 10 * 86400)
+        """The whole list reaches weeks ahead, for planning; a line's only its next days."""
+        now = time.time()
         raw = [{'id': name, 'feed': 'IJPP', 'alertUrl': None, 'effectiveStartDate': start, 'effectiveEndDate': None,
                 'alertHeaderTextTranslations': [{'language': 'en', 'text': name}], 'alertDescriptionTextTranslations': [],
-                'agency': None, 'entities': []} for name, start in (('soon', soon), ('far', far))]
+                'agency': None, 'entities': [{'__typename': 'Route', 'gtfsId': 'IJPP:r1', 'agency': {'gtfsId': 'IJPP:1161'}}]}
+               for name, start in (('soon', now + 86400), ('weeks', now + 10 * 86400), ('months', now + 60 * 86400))]
         with mock.patch.object(sources, 'alerts_raw', fixed(raw)):
-            items = self.client.get('/api/v1/alerts').json()['data']
-        self.assertEqual([a['title'] for a in items], ['soon'])
+            listed = self.client.get('/api/v1/alerts').json()['data']
+            line = self.client.get('/api/v1/alerts', {'routeId': 'IJPP:r1'}).json()['data']
+        self.assertEqual([a['title'] for a in listed], ['soon', 'weeks'])
+        self.assertEqual([a['title'] for a in line], ['soon'])
 
     def test_station_search_does_not_call_the_geocoder(self):
         with mock.patch.object(sources, 'geocode') as geocode:

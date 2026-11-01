@@ -41,6 +41,9 @@ PRESTOP_SZ_TIMETABLES_DIR = '/var/lib/prestop/sz-timetables'
 PRESTOP_SZ_NOTICES_FILE = '/var/lib/prestop/sz-notices.json'
 # zamudil.si's last good copies (notices per date, planned classes, line works), shared by the API workers and szpdf.
 PRESTOP_ZAMUDIL_DIR = '/var/lib/prestop/zamudil'
+# Arriva's posts as read from the deployer's PC (`yarn server:update`): its site has blocked this server's network.
+PRESTOP_ARRIVA_UPLOAD_FILE = '/var/lib/prestop/arriva-posts.json'
+PRESTOP_SZ_LIST_FILE = '/var/lib/prestop/sz-list.json'
 # Each train's usual track, rebuilt on Sundays by the night window (server/nightly.sh); the app's copy until then.
 PRESTOP_SZ_USUAL_TRACKS_FILE = '/var/lib/prestop/sz_tracks.json'
 

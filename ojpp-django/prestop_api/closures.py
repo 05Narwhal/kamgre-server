@@ -35,7 +35,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
-from . import geometry, leg_alerts, maplinks, mapping, platforms, stopfix, sz, szstops, sztimetables, zamudil
+from . import geometry, leg_alerts, maplinks, mapping, operator_notices, platforms, stopfix, sz, sz_list, szstops, sztimetables, zamudil
 from .upstream import Cached, Mirrors, Snapshot, UpstreamError, otp
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ PREFIX = 'sub-'           # synthetic trip ids: "IJPP:sub-20261010-453228-0"; th
 LINE_PREFIX = PREFIX + 'r-'
 NOTICE_WALK = 1500        # m: a linked or hand-checked replacement stop further than this is another station's
 NEAR_STOP = 500           # m: a bus stop this close and named like the station is where the bus stops
-CLOSURE = re.compile(r'nad(?:omestn\w*|\.)\s+prevoz|avtobusn\w*\s+(?:\w+\s+)?prevoz\s+na\s+relaciji')
+CLOSURE = re.compile(r'nad(?:omest(?:n\w*|\.)|\.)\s+prevoz|avtobusn\w*\s+(?:\w+\s+)?prevoz\s+na\s+relaciji')
 LINK = re.compile(r'href="(https?://(?:maps\.app\.goo\.gl|goo\.gl/maps|(?:www\.)?google\.[a-z.]+/maps)[^"]*)"')
 NOTICE_ID = re.compile(r'SZ-OVIRA-(\d+)')
 
@@ -742,14 +742,32 @@ _points_of: dict = {'raw': None, 'value': None}
 
 def read_notices() -> tuple[Optional[list], str]:
     """SŽ's notices as records of its old notices feed, from the first source that has them: zamudil.si's copies of
-    today on (zamudil.notice_records; a list without closures is an answer too), else PRESTOP_SZ_NOTICES_URL.
-    (None, '') when neither is set up; UpstreamError when the notices URLs fail and zamudil has no copy."""
+    today on (zamudil.notice_records; a list without closures is an answer too), else PRESTOP_SZ_NOTICES_URL. With
+    them the timetables SŽ's own posts link for days ahead, which zamudil.si lists only on their day. (None, '') when
+    no source is set up; UpstreamError when the notices URLs fail and zamudil has no copy."""
     found = zamudil.notice_records()
     if found is not None:
-        return found, 'zamudil'
-    if not notice_urls.urls:
-        return None, ''
-    return notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20)), 'feed'
+        return _with_posted_timetables(found), 'zamudil'
+    if notice_urls.urls:
+        return _with_posted_timetables(notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20))), 'feed'
+    posted = _with_posted_timetables([])
+    return (posted, 'posts') if posted else (None, '')
+
+
+def _with_posted_timetables(raw):
+    """`raw` and the timetables SŽ's list (uploaded, sz_list.py) and its posts link that no record of `raw` has: a notice
+    with its trains named is the better record of the same PDF, and the list's the better one of a post's."""
+    if not isinstance(raw, list):
+        return raw
+    today = datetime.now(LOCAL).date()
+    have = {html.unescape(href) for item in raw if isinstance(item, dict)
+            for text in (item.get('Opis') or []) if isinstance(text, str) for href in re.findall(r'href="([^"]+)"', text)}
+    listed = [r for r in sz_list.records(today) if r['Povezava'][0] not in have]
+    have |= {r['Povezava'][0] for r in listed}
+    snap = operator_notices.sz_news.peek()
+    posted = [r for r in operator_notices.sz_timetable_records(snap.value, today) if r['Povezava'][0] not in have] if snap else []
+    extra = listed + posted
+    return [*raw, *extra] if extra else raw
 
 
 def _load_points() -> dict[str, list]:
@@ -775,12 +793,19 @@ def _load_points() -> dict[str, list]:
     return _points_of['value']
 
 
+def _notices_version() -> tuple:
+    """Changes when a source of the notices does: zamudil's copies, SŽ's posts (one object until the feed changes), or an
+    upload of its list."""
+    posts, listed = operator_notices.sz_news.peek(), sz_list.loaded()
+    return zamudil.version(), id(posts.value) if posts else None, listed['stamp'] if listed else None
+
+
 def notices_changed():
-    """zamudil's copies changed since the notices were read (a poll every 10 minutes): read them again in the
-    background, so boards and plans follow within a minute without a request waiting."""
+    """A source changed since the notices were read (a poll every 10 minutes): read them again in the background, so
+    boards and plans follow within a minute without a request waiting."""
     if not zamudil.enabled():
         return
-    stamp = zamudil.version()
+    stamp = _notices_version()
     if stamp != _notices['version']:
         _notices['version'] = stamp
         points._refresh_in_background()
@@ -788,7 +813,7 @@ def notices_changed():
 
 def refresh_notices():
     """Reads the notices again now (a date's copy just came on demand, zamudil.ensure)."""
-    _notices['version'] = zamudil.version()
+    _notices['version'] = _notices_version()
     try:
         points._refresh(force=True)
     except UpstreamError:
@@ -914,7 +939,7 @@ def sz_notice_alerts(raw_notices, known: list[dict], tables: Optional[sztimetabl
             alert_id = notice_alert_id(number)
             alert = {'id': alert_id, 'title': title[:300], 'message': '\n\n'.join(p for p in (f'Proga: {line}' if line else '', text) if p),
                      'operatorId': 'IJPP:1161', 'stopIds': [], 'routeIds': [], 'validFrom': mapping.iso(start), 'validTo': mapping.iso(end),
-                     'sourceUrl': SZ_NOTICES_PAGE, 'kind': mapping.alert_kind(f'{title} {text}'), 'source': 'sz',
+                     'sourceUrl': _cell(item, 'Povezava', i) or SZ_NOTICES_PAGE, 'kind': mapping.alert_kind(f'{title} {text}'), 'source': 'sz',
                      'from': mapping.iso(start), 'to': mapping.iso(end),
                      '_from': start, '_to': end, '_aliases': [alert_id], '_line': line}
             if len(spans) > 1 or _cell(item, 'CasVir', i) == 'listed':

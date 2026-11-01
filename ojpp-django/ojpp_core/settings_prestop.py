@@ -103,8 +103,12 @@ PRESTOP_ZAMUDIL_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_ZAMUDIL_DI
 PRESTOP_SZ_NOTICES_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NOTICES_URL', default=['https://api.modra.ninja/sz/ovire_raw?lang=sl'])
 # The last good notices, so a restart while every notices URL fails keeps today's closures (closures.py).
 PRESTOP_SZ_NOTICES_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_FILE', default=str(root / 'data/sz-notices.json'))
-# SŽ's own RSS (news and "Obvestila za potnike"; no bot check): text alerts while no notices source works.
-PRESTOP_SZ_NEWS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NEWS_URL', default=['https://potniski.sz.si/feed/'])
+# SŽ's own RSS (its "Obvestila za potnike"; no bot check): every post in effect, and the timetables they link ahead.
+PRESTOP_SZ_NEWS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NEWS_URL', default=['https://potniski.sz.si/feed/?category_name=obvestila-za-potnike'])
+# Arriva's posts read elsewhere and uploaded (manage.py arriva_notices, `yarn server:update`), for when its site blocks the server.
+PRESTOP_ARRIVA_UPLOAD_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_ARRIVA_UPLOAD_FILE', default=str(root / 'data/arriva-posts.json'))
+# SŽ's list of disruptions as last saved from a browser and uploaded (sz_list.py).
+PRESTOP_SZ_LIST_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIST_FILE', default=str(root / 'data/sz-list.json'))
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))

@@ -465,7 +465,7 @@ def _build_alerts(raw: list[dict], language: str) -> list[dict]:
     # SŽ's replacement notices OTP doesn't carry yet, where we have their timetables (closures.sz_notice_alerts).
     out = closures.notice_alerts(mapping.build_alerts(raw, language))
     from . import operator_notices
-    out += operator_notices.alerts()  # notices on operators' own websites (Arriva)
+    out += operator_notices.alerts(out)  # notices on operators' own websites (Arriva, SŽ)
     if not settings.PRESTOP_DETECTED_ALERTS:
         return out
     try:  # vehicles standing where they shouldn't (detected.py)
