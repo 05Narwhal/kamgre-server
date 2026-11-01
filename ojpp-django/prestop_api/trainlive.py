@@ -270,10 +270,10 @@ def run_delays(plan: dict, run: dict, updates: dict, reports: dict) -> dict[str,
     before anything is known), 'source', 'at', 'reported' (its last stop reported itself; None when it only carries
     the delay of the vehicle before it), 'kind' ('actual' | 'predicted')}."""
     found, source, at, kind = station_delays(run, updates, reports)
-    if source is None and not mapping.is_replacement(run['route']):
-        # Nothing of its own yet: the delay of the train whose set it is (a `sure` stay), as SŽ's forecast would be
-        came = carried_delay(plan, run, updates, reports)
-        if came and came['delay'] > 0:
+    if not mapping.is_replacement(run['route']):
+        # Nothing of its own yet, or only a smaller forecast: the delay of the train whose set it is (a `sure` stay)
+        came = expected(plan, run, updates, reports, own=(found, source))
+        if came:
             found = [came['delay']] + [None] * (len(run['stops']) - 1)
             source, at, kind = came['source'], came['at'], 'predicted'
     if source is None:
@@ -385,7 +385,7 @@ def carried_delay(plan: Optional[dict], run: dict, updates: dict, reports: dict,
     That train's live delay minus the slack in the turn; once it has dropped out of the feeds, its last delay as the
     collector stored it (`held_delay`), until HOLD_AFTER past `run`'s timetable departure; when it has nothing reported
     either, its own carried delay, up to CHAIN_HOPS trains back, only through `sure` stays and for a train leaving within
-    CHAIN_AHEAD. It never beats a train's own report or SŽ's forecast for it (run_delays asks only when there is none)."""
+    CHAIN_AHEAD. Whether it beats what is reported of `run` itself is `expected`'s to say."""
     from prestop_statistics import train_stays
     if not plan or hops <= 0 or not run.get('serviceDay'):
         return None
@@ -414,6 +414,37 @@ def carried_delay(plan: Optional[dict], run: dict, updates: dict, reports: dict,
     return {'delay': max(0, round(end - link['slack'])), 'source': source, 'at': at, 'from': link['from_number']}
 
 
+GUESS_AFTER = HOLD_AFTER  # s past a train's timetable departure what the feed says of it may still be its forecast from before
+
+
+def expected(plan: Optional[dict], run: dict, updates: dict, reports: dict, now: Optional[float] = None,
+             own: Optional[tuple[list[Optional[int]], Optional[str]]] = None) -> Optional[dict]:
+    """The carried delay (carried_delay, at least 1 s) where it is shown for train `run`, else None: when nothing is
+    reported of `run` itself, or only a forecast smaller than it (the user's call, 1 Nov 2026, after I13). Before a train
+    leaves, the feed often has a forecast for it already, usually +0, that knows nothing of the late train whose set it
+    is: LPV 2520 'on time' while LPV 2010, its set, was 14 min late. The feed does not say which of its numbers are
+    measured, so what it says counts as a forecast until `run` is past a station after its first by those numbers, and
+    at most until GUESS_AFTER past its timetable departure. SŽ's own report of `run` as measured (sz-live, sz-delays)
+    always wins, and so does a larger forecast. `own`: station_delays' (delays, source) of `run` when the caller has
+    them. 'over' in the answer: it replaces a forecast (the caller drops that one's live times)."""
+    now = time.time() if now is None else now
+    delays, source = own if own is not None else station_delays(run, updates, reports)[:2]
+    if source is not None:
+        t_arr, t_dep = _times(run)
+        if now - t_dep[0] > GUESS_AFTER or any(d is not None and t_arr[j] + d <= now for j, d in enumerate(delays) if j):
+            return None
+        if any(c['source'] == 'sz' and c['kind'] == 'actual' for c in candidates(run, updates, reports)):
+            return None
+    came = carried_delay(plan, run, updates, reports, now)
+    if not came or came['delay'] <= 0:
+        return None
+    if source is not None:
+        mine = next((d for d in carried(delays) if d is not None), None)
+        if mine is not None and mine >= came['delay']:
+            return None
+    return {**came, 'over': source is not None}
+
+
 def replaced(plan: dict, run: dict) -> bool:
     """Buses run some of train `run` in that day's plan (a replaced stretch, or a bus on from where it ends)."""
     return bool((plan.get('sections') or {}).get(run['id'])) or any(replaced_by.beyond(plan, run))
@@ -430,14 +461,14 @@ def _run_in(plan: Optional[dict], trip_id: str, when: float) -> Optional[dict]:
 
 
 def carried_for_trip(trip_id: str, when: float) -> Optional[dict]:
-    """carried_delay for the run of a train trip with a stop at `when` (journeys, boards), from the plan of that time,
-    never waiting for one."""
+    """`expected` for the run of a train trip with a stop at `when` (journeys, boards, the trip view, the train page),
+    from the plan of that time, never waiting for one."""
     from . import scheduled
     run = _run_in(plan := scheduled.plan_at(when), trip_id, when)
     if not run or mapping.is_replacement(run['route']):
         return None
     try:
-        return carried_delay(plan, run, trip_updates(), sz.reports())
+        return expected(plan, run, trip_updates(), sz.reports())
     except (KeyError, IndexError, TypeError) as e:  # a plan we cannot read must not take the answer down
         logger.warning('Carried delay of %s failed: %r', trip_id, e)
         return None
@@ -452,18 +483,19 @@ def may_carry(route_name: Optional[str]) -> bool:
 
 
 def carried_rows(rows: list[dict]) -> list[dict]:
-    """Board rows of trains without a live time of their own get the carried delay (as SŽ's forecast: 'predicted');
-    the rest as they are. New dicts, never the cached rows."""
+    """Board rows of trains without a live time of their own, or with only a smaller forecast (`expected`), get the
+    carried delay (as SŽ's forecast: 'predicted'); the rest as they are. New dicts, never the cached rows."""
     from datetime import datetime
     out = []
     for row in rows:
-        if row.get('mode') != 'rail' or row.get('replacement') or row.get('effectiveAt') or row.get('canceled') or not row.get('tripId') \
+        if row.get('mode') != 'rail' or row.get('replacement') or row.get('canceled') or not row.get('tripId') \
                 or not may_carry(row.get('routeName')):
             out.append(row)
             continue
         at = datetime.fromisoformat(row['scheduledAt']).timestamp()
         came = carried_for_trip(row['tripId'], at)
-        if not came or came['delay'] < 60:
+        mine = datetime.fromisoformat(row['effectiveAt']).timestamp() - at if row.get('effectiveAt') else None
+        if not came or came['delay'] < 60 or (mine is not None and (not came.get('over') or mine >= came['delay'])):
             out.append(row)
             continue
         out.append({**row, 'effectiveAt': mapping.iso(at + came['delay']), 'updatedAt': mapping.iso(time.time()), 'quality': 'predicted',

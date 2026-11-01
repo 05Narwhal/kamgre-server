@@ -175,9 +175,9 @@ class ExpectedTripTimes(SimpleTestCase):
         trips._static._data.clear()
         trips._times._data.clear()
 
-    def trip(self, otp, carried=540, may=True):
+    def trip(self, otp, carried=540, may=True, over=False):
         from prestop_api import trainlive, tracks
-        came = {'delay': carried, 'source': 'gtfs-rt', 'at': 0, 'from': '3295'} if carried is not None else None
+        came = {'delay': carried, 'source': 'gtfs-rt', 'at': 0, 'from': '3295', 'over': over} if carried is not None else None
         with mock.patch.object(trips, '_query_trips', return_value={otp['gtfsId']: otp}), mock.patch.object(trainlive, 'may_carry', return_value=may), \
                 mock.patch.object(trainlive, 'carried_for_trip', return_value=came) as asked, mock.patch.object(tracks.tracks, 'track', return_value=(None, False)):
             found = trips.load_trips([otp['gtfsId']], date(2026, 10, 9))
@@ -198,7 +198,12 @@ class ExpectedTripTimes(SimpleTestCase):
         self.assertTrue(trip['realtime'])
         self.assertNotIn('predicted', trip['stops'][1])
         self.assertEqual(trip['stops'][1]['effectiveArrival'], '2026-10-09T08:03:00Z')
-        self.asked.assert_not_called()
+
+    def test_a_smaller_forecast_of_its_own_gives_way(self):
+        trip = self.trip(otp_train(realtime=True), over=True)  # trainlive.expected: its live times are only a forecast
+        self.assertFalse(trip['realtime'])
+        self.assertEqual([s.get('predicted') for s in trip['stops']], [True, True, True])
+        self.assertEqual(trip['stops'][0]['effectiveDeparture'], '2026-10-09T08:09:00Z')
 
     def test_under_a_minute_or_nothing_carried_keeps_the_timetable(self):
         for carried in (30, None):
