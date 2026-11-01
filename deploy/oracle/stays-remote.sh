@@ -4,9 +4,12 @@
 # so it works before the next deploy.
 # With --trains: staying on the train instead (manage.py train_stay_backtest, read-only), sending the local
 # train_stays.py with it, so it also works before the deploy (spec 2026-10-31 H6).
+# With --trains --status: why train stays do or do not show (manage.py train_stays --status, read-only; spec 2026-11-01
+# I14). It reads the tables of migration 0009, so it needs the deploy.
 #
 #   yarn server:stays [--lines] [--feed IJPP]
 #   yarn server:stays --trains [--pairs 40]
+#   yarn server:stays --trains --status
 #   bash backend/deploy/oracle/stays-remote.sh [--lines] [--feed IJPP]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,9 +20,11 @@ CONFIG="$HERE/config.local"
 : "${SSH_TARGET:?set SSH_TARGET in config.local}"
 args=""
 trains=""
+command=train_stay_backtest
 for arg in "$@"; do
-  [[ $arg =~ ^[A-Za-z0-9_-]{1,40}$ ]] || { echo "Arguments: --lines, --feed <feed>, --trains [--pairs N] [--days N]." >&2; exit 1; }
+  [[ $arg =~ ^[A-Za-z0-9_-]{1,40}$ ]] || { echo "Arguments: --lines, --feed <feed>, --trains [--status | --pairs N --days N]." >&2; exit 1; }
   if [ "$arg" = "--trains" ]; then trains=1; continue; fi
+  if [ "$arg" = "--status" ]; then command=train_stays; fi
   args+="'$arg', "
 done
 
@@ -34,7 +39,7 @@ if [ -n "$trains" ]; then
   { printf 'import sys, types\n_m = types.ModuleType("prestop_statistics.train_stays")\n'
     printf 'sys.modules["prestop_statistics.train_stays"] = _m\nexec(compile(%s, "train_stays.py", "exec"), _m.__dict__)\n' \
       "$(tr -d '\r' < "$STATS/train_stays.py" | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read()))')"
-    tr -d '\r' < "$STATS/management/commands/train_stay_backtest.py"
+    tr -d '\r' < "$STATS/management/commands/$command.py"
     printf '\nfrom django.core.management import call_command\ncall_command(Command(), %s)\n' "$args"
   } | ssh "${ssh_opts[@]}" "$SSH_TARGET" "cd /tmp && sudo prestop-manage shell"
   exit

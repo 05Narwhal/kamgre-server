@@ -2,8 +2,10 @@
 nightly record and relearn, and joined trains from SŽ's notices. A synthetic week: a real pair, a coincidence, a class
 mismatch and a replaced day."""
 from datetime import date, timedelta
+from io import StringIO
 from unittest import mock
 
+from django.core.management import call_command
 from django.test import TestCase
 
 from prestop_statistics import train_stays as ts
@@ -174,6 +176,115 @@ class Week(TestCase):
         # 3295/3294: 3 agreeing days stored so far. 700/701: zamudil keeps no class for past dates, so the backfilled
         # days count for it (holds() refuses it while today's classes differ).
         self.assertEqual({(s.from_number, s.level) for s in TrainStay.objects.all()}, {('3295', 'likely'), ('700', 'sure')})
+
+
+FULL = 86_000       # the collector ran almost all of a day (≥ 95 %)
+SHORT = 40_000      # only about half of it
+
+
+class Status(TestCase):
+    """I14: `manage.py train_stays --status` on synthetic weeks. RUNS has 8 trains: 8 reported is 100 %, 7 is 87.5 %."""
+
+    def cover(self, ago, collector=FULL, reported=8, trains=8):
+        return TrainCoverDay.objects.create(day=TODAY - timedelta(days=ago), trains=trains, reported=reported, collector_seconds=collector)
+
+    def status(self):
+        return ts.status(TODAY, runs_of=lambda day: RUNS)
+
+    def test_gate_open(self):
+        for ago in range(1, 8):
+            self.cover(ago)
+        stay = {'station': 'IJPP:x', 'station_name': 'Ivančna Gorica', 'kind': 'continues', 'arrival': 0, 'departure': 600, 'slack': 0, 'informative_days': 4,
+                'agree_days': 4, 'last_seen': TODAY, 'learned_on': TODAY}
+        TrainStay.objects.create(from_number='3295', to_number='3294', level='sure', **stay)
+        TrainStay.objects.create(from_number='700', to_number='701', level='likely', **stay)
+        s = self.status()
+        self.assertEqual((s['streak'], s['open'], s['opens'], s['sure'], s['likely']), (7, True, TODAY, 1, 1))
+        self.assertEqual(len(s['days']), 7)
+        self.assertTrue(all(d['counts'] for d in s['days']))
+        self.assertNotIn('unreported', s)
+        self.assertEqual(s['sentence'], f'The gate is open since {TODAY}, and riders can see 1 sure and 1 likely train stays.')
+
+    def test_gate_open_with_nothing_learned_says_so(self):
+        for ago in range(1, 8):
+            self.cover(ago)
+        s = self.status()
+        self.assertTrue(s['open'])
+        self.assertIn('riders see no train stay', s['sentence'])
+
+    def test_gate_closed_on_the_collector(self):
+        for ago in range(2, 8):
+            self.cover(ago)
+        self.cover(1, collector=SHORT)
+        s = self.status()
+        self.assertEqual((s['streak'], s['open']), (0, False))
+        self.assertEqual(s['opens'], TODAY + timedelta(days=7))
+        self.assertEqual(s['days'][-1]['misses'], ['collector'])
+        self.assertNotIn('unreported', s)  # SŽ's reports are not what holds it shut
+        self.assertIn('the collector ran only 46%', s['sentence'])
+
+    def test_gate_closed_on_reported_lists_who_is_never_reported(self):
+        for ago in range(1, 8):
+            self.cover(ago, reported=7)
+            day = TODAY - timedelta(days=ago)
+            for number in RUNS:
+                if number != '801':
+                    rollup(day, number, [0, 60])
+        s = self.status()
+        self.assertEqual((s['streak'], s['open']), (0, False))
+        self.assertEqual(s['days'][-1]['misses'], ['reported'])
+        self.assertEqual([n['number'] for n in s['unreported']['never']], ['801'])
+        self.assertEqual(s['unreported']['categories']['RG'], [7, 8])
+        self.assertEqual(s['unreported']['trains'], 8)
+        self.assertIn('SŽ reported too few trains', s['sentence'])
+
+    def test_streak_counts_towards_the_earliest_opening(self):
+        for ago in range(1, 4):
+            self.cover(ago)
+        self.cover(4, reported=7)
+        s = self.status()
+        self.assertEqual((s['streak'], s['open']), (3, False))
+        self.assertEqual(s['opens'], TODAY + timedelta(days=4))  # 4 more days from today, open the day after the last
+        self.assertIn('3 of 7 days in a row', s['sentence'])
+
+    def test_tonights_run_not_done_yet_keeps_the_streak(self):
+        for ago in range(2, 5):
+            self.cover(ago)  # yesterday has no row before 04:30
+        s = self.status()
+        self.assertEqual(s['streak'], 3)
+        self.assertEqual(s['opens'], TODAY + timedelta(days=3))
+
+    def test_a_day_rolled_up_but_not_recorded_is_worked_out_without_storing_it(self):
+        RecorderDay.objects.create(day=TODAY - timedelta(days=1), feed='*', seconds=FULL, version=2)
+        for number in RUNS:
+            rollup(TODAY - timedelta(days=1), number, [0, 60])
+        s = self.status()
+        self.assertEqual(s['days'][-1]['recorded'], False)
+        self.assertEqual((s['days'][-1]['counts'], s['streak'], s['open']), (True, 1, False))  # does not open the gate by itself
+        self.assertEqual(TrainCoverDay.objects.count(), 0)
+
+    def test_nothing_recorded_at_all(self):
+        s = self.status()
+        self.assertEqual((s['days'], s['streak'], s['open'], s['opens']), ([], 0, False, TODAY + timedelta(days=7)))
+        self.assertIn('no day has been recorded yet', s['sentence'])
+
+    def test_it_changes_nothing(self):
+        self.cover(1)
+        before = (TrainCoverDay.objects.count(), TrainLinkDay.objects.count(), TrainStay.objects.count())
+        with self.assertNumQueries(4):  # four SELECTs, none per row
+            ts.status(TODAY, runs_of=lambda day: RUNS)
+        self.assertEqual(before, (TrainCoverDay.objects.count(), TrainLinkDay.objects.count(), TrainStay.objects.count()))
+
+    def test_the_command_prints_the_table_and_the_sentence(self):
+        self.cover(1, reported=7)
+        out = StringIO()
+        with mock.patch.object(ts, '_runs', return_value=RUNS), mock.patch('prestop_api.trips.service_day', return_value=TODAY):
+            call_command('train_stays', '--status', stdout=out)
+        text = out.getvalue()
+        self.assertIn('no (reported)', text)
+        self.assertIn('Streak: 0/7', text)
+        self.assertIn('Reported / in the timetable, by category', text)
+        self.assertEqual(text.strip().splitlines()[-1], f'The gate is closed and stays closed while this holds: none of the last 1 days counted, because SŽ reported too few trains on every one of them.')
 
 
 NOTICE = ('Garnitura vlaka RG 619 iz Maribora se v Zidanem Mostu združi z garnituro vlaka RG 630 iz Dobove in nadaljuje vožnjo '

@@ -627,3 +627,134 @@ def report(day: Optional[date] = None) -> dict:
         links = list(TrainLinkDay.objects.filter(day=day).values())
         out['day'] = Counter(outcome(x) for x in links)
     return json.loads(json.dumps(out, default=str))
+
+
+# ---------------------------------------------------------------- "why isn't it showing?" (spec 2026-11-01 I14)
+
+STATUS_DAYS = 10    # days listed
+NEVER_DAYS = 3      # the latest days looked at for trains SŽ never reported
+TOP_PAIRS = 8
+SHORT_TRAIN = 3     # stops: "short" in the list of trains never reported
+
+
+def _misses(cover: dict) -> list[str]:
+    """What keeps a day from counting (`complete`): 'collector', 'reported'."""
+    return [name for name, ok in (('collector', cover['collector_seconds'] >= stays.FULL_DAY),
+                                  ('reported', cover['trains'] and cover['reported'] >= COVERED * cover['trains'])) if not ok]
+
+
+def _estimated(day: date, runs_of) -> Optional[dict]:
+    """A day rolled up but not recorded yet (the nightly job backfills it): its cover worked out as `record` would."""
+    from prestop_statistics.models import RecorderDay
+    try:
+        runs = runs_of(day)
+    except Exception as e:  # noqa: BLE001 - OTP may no longer have the day: the list goes on without it
+        logger.info('Timetable of %s for the status unavailable: %r', day, e)
+        return None
+    cover = observe(day, runs, rollups(day))[1]
+    seconds = RecorderDay.objects.filter(day=day, feed='*').values_list('seconds', flat=True).first() or 0
+    return {**cover, 'collector_seconds': seconds}
+
+
+def never_reported(days: list[date], runs_of) -> dict:
+    """The timetable's trains with no reported delay on any of `days`: {'trains' (in the timetable), 'categories'
+    {category: [reported, in the timetable]}, 'never' [{'number', 'name', 'from', 'to', 'stops', 'abroad'}]}."""
+    from prestop_api import abroad, sz
+    runs: dict[str, dict] = {}
+    seen: set[str] = set()
+    for day in days:
+        try:
+            runs = {**runs_of(day), **runs}
+        except Exception as e:  # noqa: BLE001 - see _estimated
+            logger.info('Timetable of %s for the status unavailable: %r', day, e)
+        seen |= {n for n, row in rollups(day).items() if any(s.get('delay') is not None for s in row['stops'])}
+    categories: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    never = []
+    for number, r in runs.items():
+        cell = categories[sz.train_parts(r['name'])[0] or '?']
+        cell[1] += 1
+        if number in seen:
+            cell[0] += 1
+            continue
+        first, last = r['stops'][0]['name'], r['stops'][-1]['name']
+        never.append({'number': number, 'name': r['name'], 'from': first, 'to': last, 'stops': len(r['stops']),
+                      'abroad': any(abroad.train_ends(r['name'], first, last)) or any(abroad.is_abroad_stop(s['name']) or (abroad.place(s['name']) in abroad.PLACES.values() and 'gorica' not in s['name'].lower())  # not Nova Gorica
+                                                                                                for s in r['stops'])})
+    return {'trains': len(runs), 'categories': {k: categories[k] for k in sorted(categories)}, 'never': sorted(never, key=lambda x: x['name'])}
+
+
+def status(today: Optional[date] = None, runs_of=None) -> dict:
+    """What `manage.py train_stays --status` says: the last days against the gate, the streak, when the gate can open,
+    what was learned, and which trains SŽ never reports when that is what holds it shut. It only reads."""
+    from prestop_api import trips
+    from prestop_statistics.models import TrainCoverDay, TrainDay, TrainLinkDay, TrainStay
+    today = today or trips.service_day()
+    runs_of = runs_of or _runs
+    since = today - timedelta(days=KEEP_DAYS)
+    covers = list(TrainCoverDay.objects.filter(day__gte=since, day__lt=today).values('day', 'trains', 'reported', 'collector_seconds'))
+    recorded = {c['day'] for c in covers}
+    # The first look after a deploy: stored days not recorded yet, which the coming nights backfill and then count.
+    recent = {today - timedelta(days=k) for k in range(1, STATUS_DAYS + 1)}
+    rolled = set(TrainDay.objects.filter(service_date__in=recent).values_list('service_date', flat=True).distinct())
+    estimated = [e for e in (_estimated(d, runs_of) for d in sorted(rolled - recorded)) if e]
+    rows = {c['day']: c for c in covers + estimated}
+    counted = complete(list(rows.values()))
+
+    opens = stays.gate_opens(complete(covers))
+    is_open = bool(opens and opens <= today)
+    latest = max((d for d in rows if d >= today - timedelta(days=2)), default=None)  # before tonight's run, yesterday has no row yet
+    streak = 0
+    if latest:
+        while latest - timedelta(days=streak) in counted:
+            streak += 1
+    # Every day from the first free one must count; the gate opens the day after the last of them (stays.gate_opens).
+    first_free = latest + timedelta(days=1) if latest else today
+    earliest = opens if is_open else max(today, first_free + timedelta(days=max(0, GATE_DAYS - streak)))
+
+    days = [{'day': d, 'trains': rows[d]['trains'], 'reported': rows[d]['reported'], 'collector': rows[d]['collector_seconds'] / 86400,
+             'counts': d in counted, 'recorded': d in recorded, 'misses': _misses(rows[d])} for d in sorted(recent & set(rows))]
+    learned = list(TrainStay.objects.values('from_number', 'to_number', 'level'))
+    levels = Counter(s['level'] for s in learned)
+
+    links = list(TrainLinkDay.objects.filter(day__gte=since, day__lt=today).values())
+    groups = histories(links, station_turns([x for x in links if x['day'] in counted]))
+    level_of = {(s['from_number'], s['to_number']): s['level'] for s in learned}
+    names = {(x['from_number'], x['to_number']): x['station_name'] for x in links}
+    tally = {pair: Counter(r for _, r in hist) for pair, hist in groups.items()}
+    ranked = sorted((p for p, c in tally.items() if c[AGREE]), key=lambda p: (p not in level_of, -tally[p][AGREE], tally[p][CONTRADICT], p))
+    top = [{'from': p[0], 'to': p[1], 'station': names[p], 'level': level_of.get(p, ''), 'agree': tally[p][AGREE], 'contradict': tally[p][CONTRADICT],
+            'later': tally[p][LATER]} for p in ranked[:TOP_PAIRS]]
+
+    out = {'today': today, 'days': days, 'streak': streak, 'needs': GATE_DAYS, 'open': is_open, 'opens': earliest, 'sure': levels['sure'],
+           'likely': levels['likely'], 'top': top, 'pairs': len(groups)}
+    if any('reported' in d['misses'] for d in days):
+        out['looked'] = [d['day'] for d in days if d['trains']][-NEVER_DAYS:]
+        out['unreported'] = never_reported(out['looked'], runs_of)
+    out['sentence'] = status_sentence(out)
+    return out
+
+
+def status_sentence(s: dict) -> str:
+    """The state in one plain sentence. It says what is, and proposes no threshold."""
+    if s['open']:
+        if s['sure'] or s['likely']:
+            return f'The gate is open since {s["opens"]}, and riders can see {s["sure"]} sure and {s["likely"]} likely train stays.'
+        return f'The gate is open since {s["opens"]}, but no pair has enough agreeing days yet, so riders see no train stay.'
+    if not s['days']:
+        return f'The gate is closed: no day has been recorded yet, and {s["opens"]} is the earliest it can open.'
+    if not any(d['counts'] for d in s['days']):
+        blames = {name: all(name in d['misses'] for d in s['days']) for name in ('collector', 'reported')}
+        why = ('the collector did not run enough of them and SŽ reported too few trains on every one' if blames['reported'] and blames['collector'] else
+               'SŽ reported too few trains on every one of them' if blames['reported'] else
+               'the collector did not run enough of every one of them' if blames['collector'] else
+               'the collector or SŽ\'s reports fell short on each of them')
+        return f'The gate is closed and stays closed while this holds: none of the last {len(s["days"])} days counted, because {why}.'
+    last = s['days'][-1]
+    if not last['counts']:
+        share = last['reported'] / last['trains'] if last['trains'] else 0
+        why = {'collector': f'the collector ran only {last["collector"]:.0%} of it', 'reported': f'SŽ reported only {share:.0%} of its trains'}
+        return (f'The gate is closed: {last["day"]} did not count because {" and ".join(why[m] for m in last["misses"])}, '
+                f'so the streak is 0 of {s["needs"]}, and {s["opens"]} is the earliest it can open.')
+    if not s['streak']:
+        return f'The gate is closed: nothing has been recorded since {last["day"]}, and {s["opens"]} is the earliest it can open.'
+    return f'The gate is closed but on its way: {s["streak"]} of {s["needs"]} days in a row, and it can open on {s["opens"]} if every day until then counts.'
