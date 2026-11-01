@@ -161,7 +161,7 @@ def predict_leg(leg: dict, raw: dict, now: Optional[float] = None) -> tuple[Opti
         # A train: the delay of the train whose set it is, through `sure` stays only (train_stays.py, trainlive),
         # as the map and boards show it
         from . import trainlive
-        came = trainlive.carried_for_trip(leg['tripId'], departs) if 0 <= departs - (now or time.time()) <= PREVIOUS_AHEAD else None
+        came = trainlive.carried_for_trip(leg['tripId'], departs) if -trainlive.HOLD_AFTER <= departs - (now or time.time()) <= PREVIOUS_AHEAD else None
         if came and came['delay'] > 0:
             return came['delay'], 'previous-trip'
     day = (datetime.fromtimestamp(departs, LOCAL) - timedelta(hours=SERVICE_DAY_ENDS_HOUR)).date()  # after midnight: yesterday's service

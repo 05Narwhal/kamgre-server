@@ -1,13 +1,16 @@
 """The delay of the train before (spec 2026-10-31 H8, trainlive.carried_delay): a train whose set comes from a late
 train (a `sure` stay, train_stays.py) leaves late by that delay less the slack in the turn; its own report and SŽ's
 forecast for it come first; it chains through `sure` stays only; the map, boards and journeys show the same value."""
+from datetime import timedelta
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 
 from prestop_api import mapping, predictions, trainlive
 from prestop_api.tests.test_train_live import T0, board_row, plan_of, trip, update
 from prestop_statistics import train_stays
+from prestop_statistics.models import TripDelay
 
 # LPV 3293 Jesenice 09:40 -> Kranj 10:10; LPV 3295 Kranj 10:20 -> Ljubljana 10:50; LPV 3294 Ljubljana 11:00 -> Kranj
 C = trip('3293', 'LPV 3293', ['Jesenice', 'Kranj'], [T0 - 2400, T0 - 600])
@@ -92,6 +95,125 @@ class Carried(SimpleTestCase):
             row = board_row(B, 0)
             self.assertIs(trainlive.carried_rows([row])[0], row)
         plan_at.assert_not_called()
+
+
+class Held(SimpleTestCase):
+    """I11: A reaches its turn station and drops out of SŽ's feeds, so its delay comes from what the collector stored,
+    until B reports itself or 15 min past B's timetable departure."""
+    AFTER_A = T0 + 1900  # A is in (10:50), B leaves at 11:00
+
+    def live(self, train=B, stored=None, updates=None, now=AFTER_A, plan=PLAN):
+        stored = {A['id']: ({'1': 240, '2': 900}, T0 + 1800)} if stored is None else stored
+        with links(), mock.patch.object(trainlive, '_stored_delays', return_value=stored), mock.patch.object(trainlive.time, 'time', return_value=now):
+            return trainlive.of(plan, train, updates or {}, {})
+
+    def test_a_dropped_out_and_its_last_delay_is_held(self):
+        got = self.live()
+        self.assertEqual(got['delays'][0], 540)  # 15 min - 6 min slack, as while A was still reported
+        self.assertEqual((got['kind'], got['source'], got['at']), ('predicted', 'gtfs-rt', T0 + 1800))
+
+    def test_nothing_stored_nothing_carried(self):
+        self.assertIsNone(self.live(stored={}))
+
+    def test_expires_15_min_after_b_should_have_left(self):
+        leaves = T0 + 2400
+        self.assertEqual(self.live(now=leaves + 900)['delays'][0], 540)
+        self.assertIsNone(self.live(now=leaves + 901))
+
+    def test_b_reporting_itself_ends_it(self):
+        got = self.live(updates=update(B, 'Kranj', 120))
+        self.assertEqual(got['delays'][1], 120)
+        self.assertEqual(got['kind'], 'actual')
+
+    def test_a_still_reported_beats_what_was_stored(self):
+        self.assertEqual(self.live(updates=update(A, 'Ljubljana', 1200))['delays'][0], 840)  # 20 min - 6 min, not the stored 15
+
+    def test_slack_absorbs_a_small_held_delay(self):
+        self.assertIsNone(self.live(stored={A['id']: ({'2': 300}, T0 + 1800)}))  # 5 min late, 6 min slack
+
+    def test_never_earlier_than_the_timetable(self):
+        self.assertIsNone(self.live(stored={A['id']: ({'2': -240}, T0 + 1800)}))
+
+    def test_a_likely_stay_holds_nothing(self):
+        stay = {**LINKS['3294'], 'level': 'likely'}
+        stored = mock.Mock(return_value={A['id']: ({'2': 900}, T0 + 1800)})
+        with mock.patch.object(train_stays, 'comes_from', return_value=stay), mock.patch.object(train_stays, 'holds', return_value=True), \
+                mock.patch.object(trainlive, '_stored_delays', stored), mock.patch.object(trainlive.time, 'time', return_value=self.AFTER_A):
+            self.assertIsNone(trainlive.of(PLAN, B, {}, {}))
+        stored.assert_not_called()
+
+    def test_a_train_lost_far_from_its_end_holds_nothing(self):
+        far = trip('3295', 'LPV 3295', ['Jesenice', 'Lesce-Bled', 'Podnart', 'Kranj', 'Ljubljana'], [T0 + 450 * k for k in range(4)] + [T0 + 1800])
+        plan = plan_of([C, far, B])
+        self.assertIsNone(self.live(stored={far['id']: ({'1': 900, '2': 900}, T0)}, plan=plan))  # Lesce-Bled is not near its end
+        self.assertEqual(self.live(stored={far['id']: ({'1': 60, '3': 900}, T0)}, plan=plan)['delays'][0], 540)  # Podnart is
+
+    def test_a_numbering_it_cannot_read_holds_nothing(self):
+        self.assertIsNone(self.live(stored={A['id']: ({'12': 900}, T0 + 1800)}))
+        self.assertIsNone(self.live(stored={A['id']: ({'0': 900}, T0 + 1800)}))
+
+    def test_holds_through_a_chain_of_sure_stays(self):
+        got = self.live(stored={C['id']: ({'2': 1500}, T0 - 600)}, now=T0 + 600)  # C is in at Kranj, A has said nothing yet
+        self.assertEqual(got['delays'][0], 1140)
+
+    def test_map_board_and_journey_say_the_same(self):
+        stored = {A['id']: ({'2': 900}, T0 + 1800)}
+        for now in (self.AFTER_A, T0 + 2400 + 600):  # before B's time, and past it with B still not reported
+            with links(), mock.patch('prestop_api.scheduled.plan_at', return_value=PLAN), mock.patch.object(trainlive, 'trip_updates', return_value={}), \
+                    mock.patch('prestop_api.sz.reports', return_value={}), mock.patch.object(trainlive, '_stored_delays', return_value=stored), \
+                    mock.patch.object(trainlive.time, 'time', return_value=now):
+                seen = trainlive.of(PLAN, B)['delays'][0]
+                row = trainlive.carried_rows([board_row(B, 0)])[0]
+                leg = {'mode': 'rail', 'tripId': B['id'], 'routeId': B['route']['gtfsId'], 'routeName': 'LPV 3294', 'scheduledDeparture': mapping.iso(T0 + 2400),
+                       'delaySeconds': None, 'canceled': False}
+                raw = {'end': {'scheduledTime': mapping.iso(T0 + 4200)}, 'trip': {}}
+                with override_settings(PRESTOP_PREDICTIONS=True):
+                    predicted = predictions.predict_leg(leg, raw, now=now)
+            self.assertEqual(seen, 540)
+            self.assertEqual(row['effectiveAt'], mapping.iso(T0 + 2400 + 540))
+            self.assertEqual(predicted, (540, 'previous-trip'))
+
+
+class HeldStorage(TestCase):
+    """I11: one read for all trains however many rows ask (47454d5 fixed per-row work on boards once)."""
+
+    def setUp(self):
+        trainlive._held.clear()
+        self.addCleanup(trainlive._held.clear)
+        table = {'from': {'3295': {'level': 'sure'}, '3293': {'level': 'sure'}, '3294': {'level': 'likely'}}, 'to': {}}
+        patch = mock.patch.object(train_stays, 'table', return_value=table)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.day = trainlive._service_date(A)
+
+    def row(self, run, delays, day=None, canceled=False):
+        seen = timezone.now()
+        TripDelay.objects.create(service_date=day or self.day, trip_id=run['id'], route_id='IJPP:r', operator_id='IJPP:sz', direction='0', stop_delays=delays,
+                                 canceled=canceled, first_seen=seen, last_seen=seen)
+
+    def test_one_read_for_all_rows(self):
+        self.row(A, {'2': 900})
+        self.row(C, {'2': 60})
+        with self.assertNumQueries(1):
+            for _ in range(5):
+                self.assertEqual(trainlive.held_delay(PLAN, A)[0], 900)
+                self.assertEqual(trainlive.held_delay(PLAN, C)[0], 60)
+
+    def test_only_trains_with_a_sure_stay_after_them_are_read(self):
+        self.row(B, {'2': 900})  # 3294 only has a `likely` stay after it
+        self.assertIsNone(trainlive.held_delay(PLAN, B))
+
+    def test_a_canceled_train_or_another_day_holds_nothing(self):
+        self.row(A, {'2': 900}, canceled=True)
+        self.row(C, {'2': 900}, day=self.day - timedelta(days=1))
+        self.assertIsNone(trainlive.held_delay(PLAN, A))
+        self.assertIsNone(trainlive.held_delay(PLAN, C))
+
+    def test_a_failed_read_is_nothing_held_and_is_not_retried_on_every_row(self):
+        with mock.patch.object(TripDelay.objects, 'filter', side_effect=RuntimeError('down')) as read:
+            self.assertIsNone(trainlive.held_delay(PLAN, A))
+            self.assertIsNone(trainlive.held_delay(PLAN, A))
+        self.assertEqual(read.call_count, 1)
 
 
 class Shown(SimpleTestCase):

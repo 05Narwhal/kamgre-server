@@ -333,13 +333,59 @@ def _service_date(run: dict):
     return datetime.fromtimestamp(run['serviceDay'] + 12 * 3600, ZoneInfo('Europe/Ljubljana')).date()
 
 
+HOLD_AFTER = 15 * 60  # s after a train's timetable departure: the last delay of the train before says nothing more about it
+HELD_TTL = 30         # s between reads of the delays the collector stored (one read for all trains, never one per row)
+_held: dict = {}      # service date -> (monotonic time, {trip id: (stop_delays, last_seen timestamp)})
+
+
+def _stored_delays(plan: dict, day) -> dict[str, tuple[dict, float]]:
+    """Trip id -> (TripDelay.stop_delays, its last_seen) on service day `day`, for the trains with a `sure` stay after
+    them. A failed read is nothing held: a stay is optional, and a board must stand without it."""
+    from prestop_statistics import train_stays
+    from prestop_statistics.models import TripDelay
+    hit = _held.get(day)
+    if hit and time.monotonic() - hit[0] < HELD_TTL:
+        return hit[1]
+    by_number = _by_number(plan)
+    ids = {r['id'] for number, stay in train_stays.table()['from'].items() if stay['level'] == 'sure' for r in by_number.get(number, ())}
+    rows: dict[str, tuple[dict, float]] = {}
+    try:
+        if ids:
+            rows = {t: (delays, seen.timestamp()) for t, delays, seen in TripDelay.objects.filter(service_date=day, trip_id__in=ids, canceled=False)
+                    .values_list('trip_id', 'stop_delays', 'last_seen')}
+    except Exception as e:  # noqa: BLE001 - see above
+        logger.warning('Stored delays of %s unavailable: %r', day, e)
+    if len(_held) > 3:
+        _held.clear()
+    _held[day] = (time.monotonic(), rows)
+    return rows
+
+
+def held_delay(plan: dict, before: dict) -> Optional[tuple[int, float]]:
+    """(delay, when it was seen) of train `before` near its end from what the collector stored, for when it has reached
+    its turn station and dropped out of SŽ's feeds. Read as the learning reads it (train_stays.end_delay: the last
+    reported of its last NEAR stations), so a train lost far from its end holds nothing. A position this train does not
+    have means the numbering is not the 1..n of SŽ's feed: nothing, rather than a delay from the wrong station."""
+    from prestop_statistics import train_stays
+    stored = _stored_delays(plan, _service_date(before)).get(before['id'])
+    if not stored:
+        return None
+    delays, seen = stored
+    n = len(before['stops'])
+    if not all(str(k).isdigit() and 1 <= int(k) <= n for k in delays):
+        return None
+    end = train_stays.end_delay([{'delay': mapping.believable(delays.get(str(i + 1)), False)} for i in range(n)])
+    return None if end is None else (end, seen)
+
+
 def carried_delay(plan: Optional[dict], run: dict, updates: dict, reports: dict, now: Optional[float] = None,
                   hops: int = CHAIN_HOPS) -> Optional[dict]:
     """How late train `run` will leave because the train whose set it is (a `sure` stay, train_stays.py) is late:
     {'delay' (s, never below 0), 'source', 'at' (of the report it comes from), 'from' (that train's number)}, or None.
-    That train's live delay minus the slack in the turn; when it has nothing reported yet either, its own carried delay,
-    up to CHAIN_HOPS trains back, only through `sure` stays and for a train leaving within CHAIN_AHEAD. It never beats a
-    train's own report or SŽ's forecast for it (run_delays asks only when there is none)."""
+    That train's live delay minus the slack in the turn; once it has dropped out of the feeds, its last delay as the
+    collector stored it (`held_delay`), until HOLD_AFTER past `run`'s timetable departure; when it has nothing reported
+    either, its own carried delay, up to CHAIN_HOPS trains back, only through `sure` stays and for a train leaving within
+    CHAIN_AHEAD. It never beats a train's own report or SŽ's forecast for it (run_delays asks only when there is none)."""
     from prestop_statistics import train_stays
     if not plan or hops <= 0 or not run.get('serviceDay'):
         return None
@@ -357,6 +403,9 @@ def carried_delay(plan: Optional[dict], run: dict, updates: dict, reports: dict,
         return None  # a bus runs part of either: not the same set going on
     found, source, at, _ = station_delays(before, updates, reports)
     end = carried(found)[-1] if source else None
+    if end is None and now - _times(run)[1][0] <= HOLD_AFTER and (held := held_delay(plan, before)):
+        end, at = held
+        source = 'gtfs-rt'  # the collector stores what the GTFS-Realtime feed said
     if end is None:
         earlier = carried_delay(plan, before, updates, reports, now, hops - 1)
         if not earlier:
