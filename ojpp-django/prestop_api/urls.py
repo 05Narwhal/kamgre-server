@@ -29,6 +29,7 @@ urlpatterns = [
     path('statistics/trains', views.statistics_trains),
     path('stations/<path:stop_id>/statistics', views.station_statistics),
     path('rail/works', views.rail_works),
+    path('rail/lines', views.rail_lines),
     path('trains/<str:number>/history', views.train_history),
     path('trains/<str:number>', views.train_detail),
 ]

@@ -1019,6 +1019,16 @@ def rail_works(request):
     return envelope(zamudil.works_between(first, last), 'scheduled', used=['sz:zamudil-works'])
 
 
+@require_GET
+@api
+def rail_lines(request):
+    """The railway lines with a train in the coming week, each stretch of track once (raillines.py)."""
+    from . import raillines
+    response = envelope(raillines.network.get().value, 'scheduled', used=['otp:timetables'])
+    response['Cache-Control'] = 'public, max-age=1800'
+    return response
+
+
 def _day_param_named(request, name: str):
     raw = request.GET.get(name)
     if not raw:
