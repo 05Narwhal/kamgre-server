@@ -334,3 +334,34 @@ class GoldenTests(SimpleTestCase):
                 self.assertEqual(doc, golden)
                 labels = [' '.join(c['label'] for c in t['columns']) for t in golden['tables']]
                 self.assertEqual(labels, VERIFIED[pid], 'columns checked against the rendered page')
+
+
+class TablesWithTheirOwnValidityTests(SimpleTestCase):
+    """3240668341: Jesenice – Vintgar / Bohinjska Bistrica, a table for 31. 10. - 8. 11. and others for 9. - 11. 11."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.doc = szpdf.parse(FIXTURES.parent / 'szpdf-tables' / '3240668341.pdf')
+
+    def test_the_file_covers_every_table_and_each_column_has_the_days_of_its_table(self):
+        self.assertEqual(self.doc['status'], 'ok', self.doc['problems'])
+        self.assertEqual((self.doc['valid']['from'], self.doc['valid']['to']), ('2026-10-31', '2026-11-11'))
+        days = [{(c['valid']['from'], c['valid']['to']) for c in t['columns']} for t in self.doc['tables']]
+        first, then = {('2026-10-31', '2026-11-08')}, {('2026-11-09', '2026-11-11')}
+        self.assertEqual(days, [first, first, then, then, then, then])  # Vintgar; Vintgar, Bohinjska Bistrica
+
+    def test_a_validity_is_the_last_one_above_the_table_in_its_column(self):
+        left, right, under = {'from': 'a'}, {'from': 'b'}, {'from': 'c'}
+        readings, places = [left, right, under], [(0, 90.0, 55.0), (0, 90.0, 462.0), (0, 180.0, 462.0)]
+        self.assertIs(szpdf.validity_above(readings, places, 0, (55.0, 126.0, 409.0, 166.0)), left)
+        self.assertIs(szpdf.validity_above(readings, places, 0, (462.0, 126.0, 723.0, 166.0)), right)
+        self.assertIs(szpdf.validity_above(readings, places, 0, (462.0, 217.0, 687.0, 289.0)), under)
+        self.assertIs(szpdf.validity_above(readings, places, 1, (800.0, 10.0, 900.0, 20.0)), under)  # none in its column
+        self.assertIsNone(szpdf.validity_above(readings, places, 0, (55.0, 10.0, 409.0, 20.0)))
+
+    def test_days_with_a_gap_between_tables_are_listed(self):
+        whole = szpdf.whole_validity([{'from': '2026-11-01', 'to': '2026-11-02', 'dates': None}, {'from': '2026-11-05', 'to': '2026-11-05', 'dates': ['2026-11-05']}])
+        self.assertEqual(whole['dates'], ['2026-11-01', '2026-11-02', '2026-11-05'])
+        whole = szpdf.whole_validity([{'from': '2026-11-01', 'to': '2026-11-02', 'dates': None}, {'from': '2026-11-03', 'to': '2026-11-04', 'dates': None}])
+        self.assertEqual((whole['from'], whole['to'], whole['dates']), ('2026-11-01', '2026-11-04', None))

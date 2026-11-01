@@ -324,3 +324,13 @@ class StationTests(SimpleTestCase):
         vintgar = fixture(VINTGAR)
         calls, why = self.stations().resolve(vintgar, column(vintgar, '4292'))
         self.assertEqual([c['stop']['gtfsId'] for c in calls], ['IJPP:vintgar', 'IJPP:kocna', 'IJPP:jes'])
+
+    def test_a_column_runs_in_the_validity_of_its_own_table(self):
+        data = {'valid': {'from': '2026-10-31', 'to': '2026-11-11', 'dates': None}, 'footnotes': {}}
+        early = {'footnotes': [], 'valid': {'from': '2026-10-31', 'to': '2026-11-08', 'dates': None}}
+        late = {'footnotes': [], 'valid': {'from': '2026-11-09', 'to': '2026-11-11', 'dates': None}}
+        self.assertTrue(sztimetables.runs_on(data, early, date(2026, 11, 8)))
+        self.assertFalse(sztimetables.runs_on(data, early, date(2026, 11, 9)))
+        self.assertFalse(sztimetables.runs_on(data, late, date(2026, 11, 8)))
+        self.assertTrue(sztimetables.runs_on(data, late, date(2026, 11, 9)))
+        self.assertTrue(sztimetables.runs_on(data, {'footnotes': []}, date(2026, 11, 8)))

@@ -4,14 +4,14 @@ fetch fields; `sync` (manage.py szpdf_sync) fetches, caches and writes the files
 
 Never imported by the web workers: only the prestop-szpdf timer and the tests use it (pdfplumber is heavy).
 """
-from datetime import date
+from datetime import date, timedelta
 
 import pdfplumber
 
 from . import layout, ocr, tables, texts
 
 SCHEMA = 1
-PARSER = 3 # bump when parsing changes: every cached PDF is parsed again
+PARSER = 4 # bump when parsing changes: every cached PDF is parsed again
 
 
 def parse(path) -> dict:
@@ -28,6 +28,28 @@ def parse(path) -> dict:
     return assemble(grids, lines, problems)
 
 
+def validity_above(readings: list, places: list, page: int, box: tuple) -> dict | None:
+    """The last validity printed above a table, in its column where tables stand side by side (`places`: the (page,
+    top, x0) of each of `readings`; `box`: the table's), or None."""
+    above = [(r, p) for r, p in zip(readings, places) if p[:2] <= (page, box[1])]
+    beside = [r for r, p in above if box[0] - 20 <= p[2] <= box[2]]
+    return (beside or [r for r, _ in above] or [None])[-1]
+
+
+def _days(reading: dict) -> set[str]:
+    if reading.get('dates'):
+        return set(reading['dates'])
+    first, last = date.fromisoformat(reading['from']), date.fromisoformat(reading['to'])
+    return {(first + timedelta(days=k)).isoformat() for k in range((last - first).days + 1)}
+
+
+def whole_validity(readings: list) -> dict:
+    """All the days of a file whose tables have validities of their own: from - to, or the dates where there is a gap."""
+    days = sorted(set().union(*(_days(r) for r in readings)))
+    first, last = date.fromisoformat(days[0]), date.fromisoformat(days[-1])
+    return {'from': days[0], 'to': days[-1], 'dates': None if (last - first).days + 1 == len(days) else days}
+
+
 def assemble(grids, lines, problems) -> dict:
     blocks = texts.blocks(lines)
     doc = {'schema': SCHEMA, 'parser': PARSER, 'status': 'ok', 'problems': problems, 'valid': None,
@@ -35,9 +57,8 @@ def assemble(grids, lines, problems) -> dict:
     readings = [texts.validity(v) for v in blocks['valid']]
     if not readings or readings[0] is None:
         problems.append(f'validity unreadable: {blocks["valid"]}')
-    elif any(r != readings[0] for r in readings):
-        problems.append(f'tables differ in validity: {blocks["valid"]}')
-    doc['valid'] = readings[0] if readings else None
+    several = bool(readings) and None not in readings and any(r != readings[0] for r in readings)
+    doc['valid'] = whole_validity(readings) if several else readings[0] if readings else None
     start = date.fromisoformat(doc['valid']['from']) if doc['valid'] else date.today()
 
     for number, text in blocks['footnotes']:
@@ -47,7 +68,15 @@ def assemble(grids, lines, problems) -> dict:
 
     for grid in sorted(grids, key=lambda g: (g.page, round(g.bbox[1]), g.bbox[0])):
         heading = _heading(grid, blocks['directions'])
-        doc['tables'] += tables.directions(grid, heading, blocks['additional_legend'], blocks['connecting'])
+        found = tables.directions(grid, heading, blocks['additional_legend'], blocks['connecting'])
+        if several:  # "Od 31. 10. do 8. 11." and "Od 9. do 11. 11." in one file: a table runs in the validity above it
+            own = validity_above(readings, blocks['valid_at'], grid.page, grid.bbox)
+            if own is None:
+                problems.append(f'no validity above the table on page {grid.page + 1}: {blocks["valid"]}')
+            for t in found:
+                for col in t['columns']:
+                    col['valid'] = own or doc['valid']
+        doc['tables'] += found
 
     # A footnote "*" with no "*…" line: SŽ's red unnumbered note under OPOMBA (11159).
     used = {f for t in doc['tables'] for c in t['columns'] for f in c['footnotes']}

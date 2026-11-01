@@ -203,7 +203,7 @@ def _star_explained(data: dict, col: dict) -> bool:
 
 def runs_on(data: dict, col: dict, day: date) -> bool:
     """Whether the column's bus runs on service day `day`: in the validity, on every footnote's days."""
-    if not valid_on(data, day):
+    if not valid_on(col if col.get('valid') else data, day):  # a table can have a validity of its own (szpdf.assemble)
         return False
     notes = data.get('footnotes') or {}
     for key in col.get('footnotes') or []:

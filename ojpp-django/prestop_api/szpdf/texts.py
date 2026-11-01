@@ -136,7 +136,7 @@ def clean(text: str) -> str:
 
 def blocks(lines: list) -> dict:
     """Walk the text lines in reading order. `lines` have .page .top .x0 .text .red .blue (layout.Line)."""
-    out = {'valid': [], 'directions': [], 'footnotes': [], 'starred': [], 'unnumbered': [], 'stops': [],
+    out = {'valid': [], 'valid_at': [], 'directions': [], 'footnotes': [], 'starred': [], 'unnumbered': [], 'stops': [],
            'stationNotes': [], 'notes': [], 'additional_legend': False, 'connecting': False}
     state = None
     pending_direction = []
@@ -151,6 +151,7 @@ def blocks(lines: list) -> dict:
         kind = heading_of(text)
         if kind == 'valid':
             out['valid'].append(text.split(':', 1)[1].strip() if ':' in text else '')
+            out['valid_at'].append((line.page, line.top, line.x0))
             continue
         if kind == 'direction':
             pending_direction.append(line)
