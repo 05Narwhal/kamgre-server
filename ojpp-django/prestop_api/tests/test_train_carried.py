@@ -216,6 +216,62 @@ class HeldStorage(TestCase):
         self.assertEqual(read.call_count, 1)
 
 
+def runs_of(*trips):
+    """train_stays._runs of these plan trips (times after their service day's midnight, DAY)."""
+    return {trainlive.number_of(t): {'number': trainlive.number_of(t), 'name': t['route']['shortName'], 'trip': t['id'],
+                                     'stops': [{'id': s['gtfsId'], 'name': s['name'], 'arr': a - DAY, 'dep': d - DAY}
+                                               for s, a, d in zip(t['stops'], t['arrivals'], t['departures'])]} for t in trips}
+
+
+class ContinuesOnBoards(SimpleTestCase):
+    """I12: A's board rows say what its set goes on as, from the learned table, only while the stay fits the day."""
+    STAY = {'from_number': '3295', 'to_number': '3294', 'station': 'IJPP:Ljubljana', 'station_name': 'Ljubljana', 'kind': 'continues',
+            'level': 'sure', 'arrival': T0 + 1800 - DAY, 'departure': T0 + 2400 - DAY, 'slack': 360}
+
+    def setUp(self):
+        trainlive._stays_memo.clear()
+        self.addCleanup(trainlive._stays_memo.clear)
+
+    def rows(self, rows, stay=None, runs=None, replaced=False):
+        stay = {**self.STAY, **(stay or {})}
+        table = {'from': {stay['from_number']: stay}, 'to': {}}
+        with mock.patch.object(train_stays, 'table', return_value=table), mock.patch.object(train_stays, '_runs', return_value=runs or runs_of(C, A, B)), \
+                mock.patch.object(train_stays, 'replaced', return_value=replaced), mock.patch('prestop_api.zamudil.class_of', return_value=None):
+            return trainlive.stay_rows(rows)
+
+    def test_sure_stay_on_the_row_of_the_train_before(self):
+        row = self.rows([board_row(A, 0)])[0]
+        self.assertEqual(row['continuesAs'], {'name': 'LPV 3294', 'destination': 'Kranj', 'level': 'sure'})
+
+    def test_likely_says_likely(self):
+        self.assertEqual(self.rows([board_row(A, 0)], {'level': 'likely'})[0]['continuesAs']['level'], 'likely')
+
+    def test_a_coupled_join_is_left_out(self):
+        self.assertNotIn('continuesAs', self.rows([board_row(A, 0)], {'kind': 'coupled'})[0])
+
+    def test_nothing_when_the_stay_no_longer_fits_the_day(self):
+        moved = runs_of(C, A, B)
+        moved['3294']['stops'][0]['dep'] += 600  # B leaves 10 min later today
+        self.assertNotIn('continuesAs', self.rows([board_row(A, 0)], runs=moved)[0])
+        self.assertNotIn('continuesAs', self.rows([board_row(A, 0)], replaced=True)[0])  # a bus runs part of either
+
+    def test_other_rows_untouched(self):
+        rows = [board_row(B, 0), board_row(C, 0), {**board_row(A, 0), 'canceled': True}]
+        for before, after in zip(rows, self.rows(rows)):
+            self.assertIs(after, before)
+
+    def test_one_look_per_train_and_day(self):
+        with mock.patch.object(train_stays, 'holds', wraps=train_stays.holds) as holds:
+            out = self.rows([board_row(A, 0), board_row(A, 0), board_row(A, 0)])
+        self.assertEqual(holds.call_count, 1)
+        self.assertTrue(all('continuesAs' in r for r in out))
+
+    def test_a_failed_look_leaves_the_board_standing(self):
+        with mock.patch.object(train_stays, 'holds', side_effect=RuntimeError('down')):
+            row = board_row(A, 0)
+            self.assertIs(self.rows([row])[0], row)
+
+
 class Shown(SimpleTestCase):
     """H9: journeys and the train page."""
 

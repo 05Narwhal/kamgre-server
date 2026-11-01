@@ -471,6 +471,49 @@ def carried_rows(rows: list[dict]) -> list[dict]:
     return out
 
 
+STAY_TTL = 600  # s a board row's "continues as" is reused (the learned table itself is reloaded at most every 10 min)
+_stays_memo: dict[tuple, tuple[float, Optional[dict]]] = {}
+
+
+def continues_as(number: Optional[str], day) -> Optional[dict]:
+    """A board row's "continues as" (spec 2026-11-01 I12): {'name', 'destination', 'level'} when train `number`'s set
+    goes on as another train on service day `day` by a learned stay that still fits the day (train_stays.holds), else
+    None. Only a set that goes on alone ('continues'): a `coupled` join is left out, since which car goes where is said
+    only by SŽ's notice. A dict lookup for every other train; memoised per train and day for those with a stay."""
+    from prestop_statistics import train_stays
+    stay = train_stays.continues_as(number)
+    if not stay or stay['kind'] != 'continues' or stay['level'] not in ('sure', 'likely'):
+        return None
+    key = (number, day, stay['to_number'], stay['level'])
+    hit = _stays_memo.get(key)
+    if hit and time.monotonic() - hit[0] < STAY_TTL:
+        return hit[1]
+    found = None
+    try:
+        runs = train_stays._runs(day)
+        b = runs.get(stay['to_number'])
+        if b and train_stays.holds(stay, day, runs):
+            found = {'name': b['name'], 'destination': b['stops'][-1]['name'], 'level': stay['level']}
+    except Exception as e:  # noqa: BLE001 - optional: the board stands without it
+        logger.info('Train stay of %s unavailable: %r', number, e)
+    if len(_stays_memo) > 2000:
+        _stays_memo.clear()
+    _stays_memo[key] = (time.monotonic(), found)
+    return found
+
+
+def stay_rows(rows: list[dict]) -> list[dict]:
+    """Board rows of trains whose set goes on as another train get `continuesAs` (new dicts; the rest as they are)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    out = []
+    for row in rows:
+        number =sz.train_parts(row.get('routeName') or '')[1] if row.get('mode') == 'rail' and not row.get('replacement') and not row.get('canceled') else None
+        found = continues_as(number, (datetime.fromisoformat(row['scheduledAt']).astimezone(ZoneInfo('Europe/Ljubljana')) - timedelta(hours=4)).date()) if number else None
+        out.append({**row, 'continuesAs': found} if found else row)
+    return out
+
+
 def train_of(plan: dict, bus: dict) -> Optional[dict]:
     """The run of the train a replacement bus runs for, in a day's plan."""
     for train_id, sections in (plan.get('sections') or {}).items():
