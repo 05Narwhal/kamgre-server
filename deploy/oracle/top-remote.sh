@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Live server view in your own terminal: runs server/top.sh on the Oracle server over SSH
-# (q or Ctrl+C quits). Sends the local copy of the script, so it works before the next deploy.
+# Live server view in your own terminal: runs server/top.py on the Oracle server over SSH
+# (q quits, ? lists the keys). Sends the local copy of the script, so it works before the next deploy.
 #
-#   yarn server:top [seconds between updates, default 2]
-#   bash backend/deploy/oracle/top-remote.sh [seconds]
+#   yarn server:top [seconds between updates, default 2] [tab]
+#   yarn server:top logs            open on a tab: overview system services traffic data learning logs
+#   bash backend/deploy/oracle/top-remote.sh [seconds] [tab]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="$HERE/config.local"
@@ -11,13 +12,19 @@ CONFIG="$HERE/config.local"
 # shellcheck source=/dev/null
 . <(tr -d '\r' < "$CONFIG")
 : "${SSH_TARGET:?set SSH_TARGET in config.local}"
-INTERVAL=${1:-2}
-[[ $INTERVAL =~ ^[0-9]+$ ]] || { echo "Interval must be whole seconds." >&2; exit 1; }
+args=()
+for a in "$@"; do
+  [[ $a =~ ^([0-9]+|overview|system|services|traffic|data|learning|logs|--once)$ ]] \
+    || { echo "Usage: yarn server:top [seconds] [overview|system|services|traffic|data|learning|logs]" >&2; exit 1; }
+  args+=("$a")
+done
 
 ssh_opts=(-t -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30)
 if [ -n "${SSH_KEY:-}" ]; then
   [ -f "$SSH_KEY" ] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
   ssh_opts+=(-i "$SSH_KEY")
 fi
-script=$(tr -d '\r' < "$HERE/server/top.sh")
-exec ssh "${ssh_opts[@]}" "$SSH_TARGET" "sudo bash -c $(printf %q "$script") prestop-top $INTERVAL"
+# The script travels gzipped and base64-encoded inside the command line: no quoting trouble, well under ARG_MAX.
+payload=$(tr -d '\r' < "$HERE/server/top.py" | gzip -9n | base64 -w0)
+launch="import base64,sys,zlib; exec(compile(zlib.decompress(base64.b64decode('$payload'), 31), 'prestop-top', 'exec'))"
+exec ssh "${ssh_opts[@]}" "$SSH_TARGET" "sudo python3 -c $(printf %q "$launch") ${args[*]:-}"

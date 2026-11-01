@@ -50,10 +50,14 @@ class Command(BaseCommand):
     def notices(self, source: str) -> list:
         if source:
             return json.loads(Path(source).read_text(encoding='utf-8'))
-        from prestop_api import closures, zamudil
+        from prestop_api import closures, operator_notices, zamudil
         # zamudil.si's notices of today on (the copies the API keeps; today's asked for here only when due), then
-        # PRESTOP_SZ_NOTICES_URL, then the notices the API saved last.
+        # PRESTOP_SZ_NOTICES_URL, then the notices the API saved last; with them the timetables SŽ's posts link ahead.
         zamudil.poll(endpoints=(zamudil.NOTICES,))
+        try:
+            operator_notices.sz_news.get()
+        except UpstreamError as e:
+            self.stderr.write(f"SŽ's posts unavailable ({e}); the timetables they link ahead wait for the next run.")
         try:
             raw, found = closures.read_notices()
             if not found:

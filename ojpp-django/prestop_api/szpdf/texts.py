@@ -65,14 +65,18 @@ _RULES = [
     (r'vlak st\. \d+ vozi do postajalisca [a-z ]+\. potniki v smeri [a-z ]+ prestopijo na postaji [a-z ]+!?', 'info'),
 ]
 _TRAIN_RUNS = re.compile(r'dne (?P<days>[\d. ,]+(?:(?:in|ter) [\d. ,]+)*) se nadomestni prevoz '
-                         r'(?:na relaciji (?P<a>[a-z .]+?) ?- ?(?P<b>[a-z .]+?) )?ne opravlja; vozi vlak!?')
+                         r'(?:na relaciji (?P<a>[a-z .]+?) ?- ?(?P<b>[a-z .]+?) |med (?P<c>[a-z .]+?) in (?P<d>[a-z .]+?) )?ne opravlja; vozi vlak ?!?'
+                         r'(?: vlaki vozijo po objavljenem voznem redu vlakov in ne po voznem redu nadomestnega prevoza!?)?')
 
 
 def footnote_section(text: str) -> list[str] | None:
-    """"dne 19. 10. se nadomestni prevoz na relaciji Ljubljana - Lesce Bled NE opravlja; VOZI VLAK!" → the two
-    stations (folded) between which the bus does not run on those days; None when the whole bus does not run."""
+    """"dne 19. 10. se nadomestni prevoz na relaciji Ljubljana - Lesce Bled NE opravlja; VOZI VLAK!", or "… med
+    Ljubljano in Lescami NE opravlja; …" → the two stations (folded, as written: the second wording declines them)
+    between which the bus does not run on those days; None when the whole bus does not run."""
     m = _TRAIN_RUNS.fullmatch(fold(text).rstrip('.').strip())
-    return [m['a'].strip(), m['b'].strip()] if m and m['a'] else None
+    if not m or not (m['a'] or m['c']):
+        return None
+    return [m['a'].strip(), m['b'].strip()] if m['a'] else [m['c'].strip(), m['d'].strip()]
 
 
 def footnote_rule(text: str, valid_from: date) -> tuple[str | None, list[str] | None]:

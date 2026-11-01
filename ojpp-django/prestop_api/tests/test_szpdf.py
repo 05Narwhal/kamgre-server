@@ -285,6 +285,12 @@ class TextTests(SimpleTestCase):
         self.assertEqual(texts.footnote_section(text), ['ljubljana', 'lesce bled'])
         self.assertIsNone(texts.footnote_section('dne 19. 10. se nadomestni prevoz NE opravlja; VOZI VLAK!'))
 
+    def test_the_same_day_in_the_wording_of_november_2026(self):
+        text = ('dne 2. 11. se nadomestni prevoz med Ljubljano in Lescami NE opravlja; VOZI VLAK ! Vlaki vozijo po objavljenem '
+                'voznem redu vlakov in NE po voznem redu nadomestnega prevoza!')
+        self.assertEqual(texts.footnote_rule(text, date(2026, 11, 2)), ('train_runs_on', ['2026-11-02']))
+        self.assertEqual(texts.footnote_section(text), ['ljubljano', 'lescami'])
+
 
 # Every column of every golden, as checked against the rendered page on 2026-10-14 (395 columns; 200–300 dpi crops,
 # 400 dpi for the pasted image in 11056 and 600 dpi where a label looked overprinted).

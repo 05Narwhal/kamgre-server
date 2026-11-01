@@ -5,42 +5,55 @@ Checked 2026-10-14, each site's robots.txt and terms first:
 - Arriva (arriva.si): robots.txt allows everything but /wp-admin/; its WordPress REST API is public
   (`/wp-json/wp/v2/posts`, a post per notice: road closures, detours, timetable changes, by region); the site's
   terms (splosni-pogoji-uporabe, PDFs on ticket sales and carriage) don't restrict reading or showing its notices.
-  Read here, every 15 minutes, with a link back to each post.
+  Read here, every 15 minutes, with a link back to each post. The site has blocked networks abroad at times, the
+  Oracle server's among them (2026-10-15), so `yarn server:update` also reads the posts from the deployer's PC and
+  uploads them (manage.py arriva_notices, PRESTOP_ARRIVA_UPLOAD_FILE); the newest read of the two is the one shown.
 - LPP (lpp.si): publishes detours as pages (detour-sitemap.xml) and robots.txt allows them, but its REST API is
   closed and its legal notice (pravno-obvestilo-2) forbids copying, distributing or republishing any of the site's
   material without prior written permission: not used. LPP's own alerts in the GTFS-RT feed still come through OTP.
-- Marprom (marprom.si): no notices posts or feed on the site. Nomago (nomago.si): no notices page. Others: none found.
-- SŽ (potniski.sz.si, checked 2026-10-26): robots.txt allows all but /wp-admin/; everything but its RSS answers a
-  Cloudflare challenge. The RSS (`/feed/`, the 10 newest posts) needs none: its "Obvestila za potnike" posts become
-  text alerts (`sz_news_alerts`, Slovenian only, a link to each post), read every 15 minutes with a conditional GET.
-  They name no train ids, so they never make a replacement bus, and they show only while SŽ's closure notices don't
-  reach us (closures.notices_source): a partial fallback that keeps the app from going silent, not a second copy.
+- Marprom (marprom.si) and Nomago (nomago.si) both publish detours as pages (marprom.si/aktualno, checked 2026-11-01),
+  but Marprom's terms (jhmb.si/splosni-pogoji/marprom) forbid copying, showing or publishing them and Nomago's
+  (nomago.si/splosni-pogoji) reproducing or distributing them without permission: not read. The app links to those
+  pages and LPP's instead (DisruptionsPanel); a written permission from any of them would unlock reading it here.
+- SŽ (potniski.sz.si, checked 2026-11-01): robots.txt allows all but /wp-admin/; everything but its RSS answers a
+  Cloudflare challenge (or blocks by client). The RSS needs none: the feed of its "Obvestila za potnike" category,
+  SZ_PAGES pages of it (each 10 posts; a notice running for months is far down), read every 15 minutes with a
+  conditional GET. Every post still in effect is a text alert (`sz_news_alerts`, Slovenian only, a link to the post),
+  whatever other notices we have. The dated timetables a post links ("od 2. do 6. novembra", weeks before zamudil.si
+  lists them for their day) are notices for closures.py and szpdf_sync (`sz_timetable_records`), so the planner has
+  those days' replacement buses in advance. SŽ's "ovire-in-izredne-spremembe" page itself is in no open feed: it can
+  only be saved by hand and uploaded (sz_list.py).
 
 None of them gives a detour's changed trips in machine form, so the planner and line view keep the feed's times
 and paths (what the GTFS-RT feed itself changes reaches OTP as before).
 """
 import hashlib
 import html
+import json
 import logging
+import os
 import re
 import threading
 import time
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
 import requests
 from django.conf import settings
 
-from . import mapping
+from . import mapping, sz_list, zamudil
 from .upstream import Cached, UpstreamError, get_json, session, url_list
 
 logger = logging.getLogger(__name__)
 LOCAL = ZoneInfo('Europe/Ljubljana')
 ARRIVA_POSTS = 'https://arriva.si/wp-json/wp/v2/posts'
-MAX_AGE_DAYS = 45      # posts older than this are history
+ARRIVA_LIMIT = 4 * 1024 * 1024
+MAX_AGE_DAYS = 100     # posts older than this are history; a road closure can run for months after its post
+ARRIVA_POSTS_READ = 100  # Arriva posts about one a day (2026-11-01: 47 in 45 days), so this reaches that far back
 UNDATED_DAYS = 7       # a notice that names no day stays this long after it was posted
 MAX_TEXT = 1500
 WIDE = 30              # a single place more routes than this pass (Ljubljana) doesn't pick routes
@@ -52,7 +65,7 @@ NAMED = re.compile(r'(?<![\d.])(\d{1,2})\.\s*(januar|februar|marc|april|maj|juni
 SPAN = re.compile(r'(?<![\d.])(\d{1,2})\.\s*(?:in|–|-|do)\s*(\d{1,2})\.\s*(\d{1,2})\s*\.')
 TAGS = re.compile(r'<[^>]+>')
 CASE_ENDINGS = {'', 'a', 'e', 'i', 'o', 'u', 'ah', 'am', 'ami', 'em', 'ih', 'im', 'om', 'ov', 'ja', 'je', 'ji', 'jo', 'ju', 'na', 'ne', 'ni', 'no'}
-NOTICE = re.compile(r'sprememb|zapor|obvoz|odpoved|ne vozi|ukin|prestavlj|nadomestn|postajalisc|zamud')
+NOTICE = re.compile(r'sprememb|zapor|obvoz|odpoved|ne vozi|ukin|prestavlj|nadomestn|postajalisc|zamud|dodatn\w*( \w+)? odhod')
 
 
 def _fold(text: str) -> str:
@@ -86,12 +99,15 @@ def _days(text: str, posted: date) -> list[tuple[date, str]]:
         d, name, y = match.groups()
         add(match, d, next(v for k, v in MONTHS.items() if name.startswith(k[:5]) or k.startswith(name)), y)
     for match in SPAN.finditer(folded):
-        add(match, match.group(1), match.group(3), None)
+        # "31. 10. in 1. 11." is two whole dates (NUMERIC has them), not the 10th of November.
+        if not re.search(r'\d{1,2}\.\s*$', folded[max(0, match.start() - 6):match.start()]):
+            add(match, match.group(1), match.group(3), None)
     return sorted(set(found))
 
 
-UNTIL = re.compile(r'\bdo( vkljucno)?\s*(\w+,\s*)?$')
-FROM = re.compile(r'\b(od|z dnem|s)( dne)?\s*(\w+,\s*)?$')
+# Whole words: "v sredo, 28. 10." is that day, not "s" + "redo" (from then on), nor "dopoldne" until then.
+UNTIL = re.compile(r'\bdo\b( vkljucno)?\s*(\w+,\s*)?$')
+FROM = re.compile(r'\b(od|z dnem|s)\b( dne)?\s*(\w+,\s*)?$')
 FROM_DAYS = 14  # "from 12 October" with no end: shown for two weeks
 
 
@@ -116,8 +132,8 @@ def _load_arriva() -> list[dict]:
     """Arriva's posts of the last MAX_AGE_DAYS. Something that is not a list of posts, or none at all after there were
     some, is a failed read: the cache keeps the last posts (each notice still ends on its own day, see alerts())."""
     after = (datetime.now(LOCAL) - timedelta(days=MAX_AGE_DAYS)).strftime('%Y-%m-%dT00:00:00')
-    posts = get_json(ARRIVA_POSTS, params={'per_page': 50, 'after': after, '_fields': 'id,date,link,title,content'},
-                     limit=4 * 1024 * 1024, timeout=(5, 20))
+    posts = get_json(ARRIVA_POSTS, params={'per_page': ARRIVA_POSTS_READ, 'after': after, '_fields': 'id,date,link,title,content'},
+                     limit=ARRIVA_LIMIT, timeout=(5, 20))
     if not isinstance(posts, list):
         logger.warning('Arriva notices: the site answered %s, not a list of posts; keeping the last ones', type(posts).__name__)
         raise UpstreamError('Arriva posts: unexpected answer')
@@ -133,6 +149,60 @@ def _load_arriva() -> list[dict]:
 arriva = Cached(_load_arriva, ttl=15 * 60, max_stale=MAX_AGE_DAYS * 86400, revalidate=15 * 60)
 _routes_memo: dict = {}
 _lock = threading.Lock()
+_uploaded: dict = {'stamp': None, 'value': None}
+
+
+def check_arriva_posts(posts) -> list[dict]:
+    """`posts` as the site's list of posts, or ValueError: nothing else may replace the notices people see."""
+    if not isinstance(posts, list) or not all(isinstance(p, dict) and p.get('id') and p.get('date') and isinstance(p.get('title'), dict) for p in posts):
+        raise ValueError("not Arriva's list of posts")
+    if not posts:
+        raise ValueError('no posts (the site always has some)')
+    return posts
+
+
+def save_arriva_upload(posts: list[dict], now: Optional[float] = None) -> None:
+    """Posts read elsewhere (`yarn server:update`) for every worker of the API: written to a temporary file, then moved
+    over the old one, so nobody reads half a file."""
+    path = Path(settings.PRESTOP_ARRIVA_UPLOAD_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps({'uploadedAt': now or time.time(), 'posts': check_arriva_posts(posts)}, ensure_ascii=False), encoding='utf-8')
+    os.replace(tmp, path)
+
+
+def arriva_upload() -> Optional[dict]:
+    """{'at', 'posts'} of the last upload, read again only when the file changed (this runs for every alert list)."""
+    path = getattr(settings, 'PRESTOP_ARRIVA_UPLOAD_FILE', '')
+    try:
+        info = os.stat(path) if path else None
+    except OSError:
+        info = None
+    stamp = (path, info.st_mtime_ns, info.st_size) if info else None
+    if stamp != _uploaded['stamp']:
+        value = None
+        if stamp:
+            try:
+                body = json.loads(Path(path).read_text(encoding='utf-8'))
+                value = {'at': float(body['uploadedAt']), 'posts': check_arriva_posts(body['posts'])}
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                logger.warning('Arriva upload %s unreadable: %r', path, e)
+        _uploaded.update(stamp=stamp, value=value)
+    return _uploaded['value']
+
+
+def arriva_read_at() -> Optional[float]:
+    """When the posts shown were read, from the site or by an upload; None when neither has any."""
+    snap, upload = arriva.peek(), arriva_upload()
+    return max([*([snap.fetched_at] if snap else []), *([upload['at']] if upload else [])], default=None)
+
+
+def _arriva_posts() -> Optional[list[dict]]:
+    """The newest read of Arriva's posts: this server's own, or the last upload."""
+    snap, upload = arriva.peek(), arriva_upload()
+    if upload and (not snap or upload['at'] > snap.fetched_at):
+        return upload['posts']
+    return snap.value if snap else None
 
 
 def _place_routes(operator_routes: dict[str, set[str]]) -> dict[str, set[str]]:
@@ -214,6 +284,7 @@ def _read_later(cache) -> None:
 SZ_CATEGORY = 'Obvestila za potnike'
 SZ_OPERATOR = 'IJPP:1161'
 RSS_LIMIT = 2 * 1024 * 1024
+SZ_PAGES = 5           # of the category's feed, 10 posts each: about half a year of notices
 CONTENT = '{http://purl.org/rss/1.0/modules/content/}encoded'
 _rss: dict = {'url': None, 'etag': None, 'modified': None}  # validators of the last full answer
 
@@ -239,8 +310,33 @@ def rss_items(body: bytes) -> list[dict]:
     return out
 
 
+def _rss_body(url: str, resp) -> list[dict]:
+    if resp.status_code != 200:
+        raise UpstreamError(f'{url} returned HTTP {resp.status_code}')
+    body = resp.raw.read(RSS_LIMIT + 1, decode_content=True)
+    if len(body) > RSS_LIMIT:
+        raise UpstreamError(f'{url} exceeds {RSS_LIMIT} bytes')
+    return rss_items(body)
+
+
+def _older_posts(url: str) -> list[dict]:
+    """Pages 2 to SZ_PAGES of the feed; WordPress answers 404 past its last page."""
+    out: list[dict] = []
+    for page in range(2, SZ_PAGES + 1):
+        address = f'{url}{"&" if "?" in url else "?"}paged={page}'
+        with session().get(address, headers={'Accept': 'application/rss+xml, application/xml'}, timeout=(5, 20), stream=True) as resp:
+            if resp.status_code == 404:
+                break
+            items = _rss_body(address, resp)
+        if not items:
+            break
+        out += items
+    return out
+
+
 def _load_sz_news() -> list[dict]:
-    """SŽ's RSS items, asked with the last answer's validators: unchanged (HTTP 304) keeps the items read before."""
+    """SŽ's RSS items, asked with the last answer's validators: unchanged (HTTP 304) keeps the items read before, so the
+    older pages are read only when the feed changed. A page that fails leaves the validators, so it is tried again."""
     urls = url_list(getattr(settings, 'PRESTOP_SZ_NEWS_URL', ''))
     if not urls:
         return []
@@ -254,14 +350,11 @@ def _load_sz_news() -> list[dict]:
             with session().get(url, headers=headers, timeout=(5, 20), stream=True) as resp:
                 if resp.status_code == 304 and last:
                     return last.value
-                if resp.status_code != 200:
-                    raise UpstreamError(f'{url} returned HTTP {resp.status_code}')
-                body = resp.raw.read(RSS_LIMIT + 1, decode_content=True)
-                if len(body) > RSS_LIMIT:
-                    raise UpstreamError(f'{url} exceeds {RSS_LIMIT} bytes')
-                items = rss_items(body)
-                _rss.update(url=url, etag=resp.headers.get('ETag'), modified=resp.headers.get('Last-Modified'))
-                return items
+                items = _rss_body(url, resp)
+                validators = {'url': url, 'etag': resp.headers.get('ETag'), 'modified': resp.headers.get('Last-Modified')}
+            items += _older_posts(url)
+            _rss.update(validators)
+            return items
         except (requests.RequestException, UpstreamError, ValueError, ET.ParseError) as e:
             error = e
     raise UpstreamError(f'SŽ RSS: {error!r}')
@@ -270,8 +363,25 @@ def _load_sz_news() -> list[dict]:
 sz_news = Cached(_load_sz_news, ttl=15 * 60, max_stale=MAX_AGE_DAYS * 86400, revalidate=15 * 60)
 
 
+def _spans(text: str, seen: date) -> Optional[list[tuple[date, date]]]:
+    """The days in brackets at the end of a title or link (zamudil.title_spans), also as "(od 2. do 6. novembra)" and
+    with SŽ's own dashes, "(26. 9. – 11. 11. 2026)", which folding would drop."""
+    text = re.sub('[‐-―]', '-', text or '')
+    return zamudil.title_spans(re.sub(r'\(\s*od\s+([^()]*?)\s+do\s+', r'(\1 - ', text, flags=re.I), seen)
+
+
+def _post_window(title: str, text: str, posted: datetime) -> tuple[float, float]:
+    """The days a post is in effect: those its title gives, read closely ("(10., 11., 17. 10. ter 1. 11.)" is not
+    10 November, as `window` would have it), else what `window` finds in its first lines."""
+    spans = _spans(title, posted.date())
+    if not spans:
+        return window(title, text, posted)
+    first, last = min(a for a, _ in spans), max(b for _, b in spans)
+    return datetime(first.year, first.month, first.day, tzinfo=LOCAL).timestamp(), datetime(last.year, last.month, last.day, 23, 59, tzinfo=LOCAL).timestamp()
+
+
 def sz_news_alerts(items: list[dict], now: Optional[float] = None) -> list[dict]:
-    """SŽ's "Obvestila za potnike" posts as text alerts for the days they name (`window`), Slovenian only."""
+    """SŽ's "Obvestila za potnike" posts as text alerts for the days they name, Slovenian only."""
     now = now or time.time()
     out = []
     for p in items:
@@ -283,7 +393,7 @@ def sz_news_alerts(items: list[dict], now: Optional[float] = None) -> list[dict]
             continue
         title, text = _plain(p['title']), _plain(p.get('text') or '')
         text = re.sub(r'\s*\[(…|&#8230;|\.\.\.)\]\s*$', '…', text)
-        start, end = window(title, text, posted)
+        start, end = _post_window(title, text, posted)
         if end < now:
             continue
         alert_id = 'sz-news:' + hashlib.sha1((p.get('link') or title).encode()).hexdigest()[:12]
@@ -297,34 +407,74 @@ def sz_news_alerts(items: list[dict], now: Optional[float] = None) -> list[dict]
     return out
 
 
-def sz_alerts() -> list[dict]:
-    """SŽ's RSS notices while its closure notices don't reach us (never waits for the site)."""
+ANCHOR = re.compile(r'''<a\b[^>]*?href\s*=\s*["']([^"']+?\.pdf)["'][^>]*>(.*?)</a>''', re.I | re.S)
+TIMETABLE_LABEL = re.compile(r'vozni\s+red\s+nadomest[^\s:(]*(?:\s+prevoza)?\s*:?\s*([^()]*)', re.I)
+
+
+def sz_timetable_records(items: list[dict], today: date) -> list[dict]:
+    """The replacement timetables SŽ's posts link, as records of its notices feed (closures.py, szpdf_sync), one per
+    timetable still in effect: `Cas` from the link's own days, else the post's (`CasVir` 'listed': the timetable's
+    validity decides, closures.notice_spans). They name no trains: every bus of the timetable runs, as with SŽ's old
+    feed, and only where the PDF could be read (closures.sz_notice_alerts)."""
+    out = []
+    for p in items:
+        title = _plain(p.get('title') or '')
+        if SZ_CATEGORY not in p.get('categories', []) or not zamudil.REPLACEMENT_TITLE.search(mapping.fold(title)):
+            continue
+        try:
+            posted = datetime.fromisoformat(p['date']).date()
+        except (KeyError, ValueError, TypeError):
+            continue
+        for href, words in ANCHOR.findall(p.get('text') or ''):
+            url, label = html.unescape(href).strip(), _plain(words)
+            named = TIMETABLE_LABEL.search(label)
+            if not named:
+                continue
+            own = _spans(label, posted)
+            spans = own or _spans(title, posted)
+            if not spans or max(b for _, b in spans) < today:
+                continue
+            line = re.sub(r'\s+in obratno\s*$', '', named.group(1).strip(), flags=re.I) or zamudil.relation(title) or title
+            days = re.search(r'\([^()]*\d[^()]*\)\s*$', label)
+            name = f'Vozni red nadomestnega prevoza: {line}{" " + days.group(0).strip() if days else ""}'
+            out.append({'ID_ovire': [zamudil.notice_number(url, line)], 'Naslov': [name[:300]], 'Relacija': [line], 'Cas': [zamudil._cas(spans)],
+                        'Opis': [f'<p><a href="{html.escape(url)}">{html.escape(label)}</a></p>'], 'CasVir': ['title' if own else 'listed'],
+                        'Povezava': [url], 'Vir': ['potniski.sz.si']})
+    return sorted(out, key=lambda r: r['ID_ovire'][0])
+
+
+def sz_alerts(known: list[dict]) -> list[dict]:
+    """SŽ's passenger notices as last read, but for those `known` already has by title (never waits for the site)."""
     from . import closures
     snap = sz_news.peek()
     if snap is None:
         _read_later(sz_news)
         return []
-    found = sz_news_alerts(snap.value)
-    return found if found and closures.notices_source()['status'] != 'live' else []
+    titles = {closures.title_key(a.get('title') or '') for a in known if a.get('source') == 'sz'}
+    return [a for a in sz_news_alerts(snap.value) if closures.title_key(a['title']) not in titles]
 
 
-def alerts() -> list[dict]:
-    """The operators' site notices as last read (never waits for a site; warm.py keeps them fresh)."""
-    return arriva_site_alerts() + sz_alerts()
+def alerts(known: list[dict]) -> list[dict]:
+    """The operators' site notices as last read (never waits for a site; warm.py keeps them fresh). `known`: the
+    alerts from other sources."""
+    listed = sz_list.alerts(known)  # first: it can retitle what `known` has, and the posts are checked against both
+    return arriva_site_alerts() + listed + sz_alerts([*known, *listed])
 
 
 def arriva_site_alerts() -> list[dict]:
-    snap = arriva.peek()
+    posts = _arriva_posts()
     from . import sources
     routes, pats = sources.routes.peek(), sources.patterns.peek()
-    if snap is None or not routes:
-        # Not read yet (or the last read failed): read in the background, so the next request has them.
-        _read_later(arriva if snap is None else sources.routes)
+    if arriva.peek() is None:
+        _read_later(arriva)  # not read yet (or the last read failed): in the background, so the next request has them
+    if posts is None or not routes:
+        if posts is not None:
+            _read_later(sources.routes)
         return []
     ids = sorted({r['agencyId'] for r in routes.value.values() if r.get('agencyId') and 'arriva' in mapping.fold(r.get('agencyName') or '')})
     if not ids:
         return []
-    key = (id(snap.value), id(routes.value), id(pats.value) if pats else None)
+    key = (id(posts), id(routes.value), id(pats.value) if pats else None)
     with _lock:
         if _routes_memo.get('key') != key:
             names = sources.stop_names()
@@ -332,5 +482,5 @@ def arriva_site_alerts() -> list[dict]:
             for pat in (pats.value['patterns'] if pats else []):
                 if (routes.value.get(pat['routeId']) or {}).get('agencyId') in ids:
                     served.setdefault(pat['routeId'], set()).update(w for s in pat['stops'] for w in re.findall(r'[a-z]{4,}', mapping.fold(names.get(s, '')))[:1])
-            _routes_memo.update(key=key, value=arriva_alerts(snap.value, ids[0], _place_routes(served)))
+            _routes_memo.update(key=key, value=arriva_alerts(posts, ids[0], _place_routes(served)))
         return [a for a in _routes_memo['value'] if a['_to'] >= time.time()]

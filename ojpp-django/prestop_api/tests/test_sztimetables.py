@@ -134,8 +134,22 @@ class DayTests(SimpleTestCase):
             self.assertNotIn('dep', cut[-1])
             self.assertEqual(sztimetables.calls_on(data, data['tables'][ti], col, col['calls'], tue), col['calls'])
 
+    def test_a_footnote_declining_the_stations_cuts_the_same_stretch(self):
+        # "… med Ljubljano in Lescami NE opravlja; VOZI VLAK": the train runs to Lesce, the bus only from there on.
+        data = fixture(GORENJSKA)
+        data['footnotes']['98'] = {**data['footnotes']['98'], 'section': ['ljubljano', 'lescami']}
+        col = next(c for c in data['tables'][0]['columns'] if c['label'] == '2400')
+        cut = sztimetables.calls_on(data, data['tables'][0], col, col['calls'], date(2026, 10, 19))
+        self.assertEqual((cut[0]['station'], cut[-1]['station']), ('Lesce Bled', 'JESENICE'))
+
+    def test_a_station_nobody_can_place_leaves_the_whole_bus_to_the_train(self):
+        data = fixture(GORENJSKA)
+        data['footnotes']['98'] = {**data['footnotes']['98'], 'section': ['atlantido', 'lescami']}
+        col = next(c for c in data['tables'][0]['columns'] if c['label'] == '2400')
+        self.assertEqual(sztimetables.calls_on(data, data['tables'][0], col, col['calls'], date(2026, 10, 19)), [])
+
     def test_a_list_of_days(self):
-        data = {**fixture(LESCE), 'valid': {'from': None, 'to': None, 'dates': ['2026-10-10', '2026-10-17']}}
+        data = {**fixture(LESCE),'valid': {'from': None, 'to': None, 'dates': ['2026-10-10', '2026-10-17']}}
         self.assertTrue(sztimetables.runs_on(data, column(data, '318/1'), date(2026, 10, 17)))
         self.assertFalse(sztimetables.runs_on(data, column(data, '318/1'), date(2026, 10, 16)))
 

@@ -22,13 +22,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
-from . import citytt, coverage, geometry, mapping, maplinks, operator_notices, sources, stopservice, supplement, trips, variants, warm
+from . import citytt, coverage, geometry, mapping, maplinks, operator_notices, sources, stopservice, supplement, sz_list, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
 logger = logging.getLogger(__name__)
 STOPS_PAGE = 4000
-ALERT_HORIZON = 3 * 86400
+ALERT_HORIZON = 3 * 86400       # a station or line: what concerns it now, and its next days
+ALERT_LIST_HORIZON = 45 * 86400  # the list of disruptions, for planning ahead: SŽ posts its closures weeks before
+ARRIVA_UPLOAD_LIVE = 3 * 86400  # s an upload of Arriva's notices counts as live: it comes when someone runs it
 # Planning waits seconds on OTP; with gunicorn's few threads per worker, unbounded plans could take them all and
 # stall every other request. At most PLAN_SLOTS plans per worker at once; one waits PLAN_WAIT s for a slot, then
 # gets a retryable 503 (spec 2026-10-18 A6). Expanding a pasted short link (up to a few hops) gets one slot.
@@ -116,9 +118,10 @@ def all_sources():
         _sz_notices_source(),
         *_zamudil_sources(),
         _sz_news_source(),
+        *sz_list.health(),
         # Arriva's site notices: the server can be shut out of the site (ConnectTimeout from Oracle on 2026-10-15),
         # so /health says when they are missing instead of the disruptions list just lacking them.
-        _source('operator-site:arriva', "Arriva's website notices", operator_notices.arriva, ['alerts'], 3600),
+        _arriva_source(),
         *_gbfs_sources(),
         # City bus timetables built from the operators' pages on a PC (citytt): a failed build or one near its end.
         *citytt.health(datetime.now(supplement.LOCAL).date()),
@@ -144,8 +147,19 @@ def _sz_source():
     return sz_feed_source('sz:live', 'SŽ live train delays (community feed)', sz.live, ['vehicles'])
 
 
+def _arriva_source():
+    """Arriva's notices: live while the server reads the site. An upload newer than that (`yarn server:update`, the site
+    blocks the server at times) counts as live for ARRIVA_UPLOAD_LIVE; it is then as fresh as whoever last ran it."""
+    entry = _source('operator-site:arriva', "Arriva's website notices", operator_notices.arriva, ['alerts'], 3600)
+    upload, snap = operator_notices.arriva_upload(), operator_notices.arriva.peek()
+    if upload and (not snap or upload['at'] > snap.fetched_at):
+        fresh = time.time() - upload['at'] < ARRIVA_UPLOAD_LIVE
+        return {**entry, 'status': 'live' if fresh else 'stale', 'updatedAt': mapping.iso(upload['at'])}
+    return entry
+
+
 def _sz_news_source():
-    """SŽ's RSS (its passenger notices: text alerts while the closure notices are down); `since`: its last answer."""
+    """SŽ's RSS (every passenger notice in effect, and the timetables they link ahead); `since`: its last answer."""
     entry = _source('sz:news', "SŽ news and passenger notices (RSS)", operator_notices.sz_news, ['alerts'], 3600)
     snap = operator_notices.sz_news.peek()
     return {**entry, 'since': mapping.iso(snap.fetched_at) if snap else None}
@@ -577,10 +591,11 @@ def pricing_catalog(request):
 @require_GET
 @api
 def alerts(request):
-    # Notices in effect now or starting within the horizon; far-off planned works would bury today's.
-    horizon = time.time() + ALERT_HORIZON
-    items = [a for a in sources.alerts(language(request)) if a['_from'] <= horizon]
+    # Notices in effect now or starting within the horizon. The whole list reaches further than one station's or line's:
+    # the app lists what is still to come apart from what is in effect, so it does not bury today's.
     stop_id, route_id = request.GET.get('stopId'), request.GET.get('routeId')
+    horizon = time.time() + (ALERT_HORIZON if stop_id or route_id else ALERT_LIST_HORIZON)
+    items = [a for a in sources.alerts(language(request)) if a['_from'] <= horizon]
     if stop_id:
         serving = sources.stops.get().value['routes'].get(stop_id, set())
         members = set(sources.stop_group(stop_id))
@@ -1017,6 +1032,16 @@ def rail_works(request):
     if last < first or (last - first).days > zamudil.WORKS_AHEAD or last > today + timedelta(days=zamudil.WORKS_AHEAD):
         raise ApiError(422, 'INVALID_DATES', f'from..to must be in order, at most {zamudil.WORKS_AHEAD} days and at most {zamudil.WORKS_AHEAD} days ahead')
     return envelope(zamudil.works_between(first, last), 'scheduled', used=['sz:zamudil-works'])
+
+
+@require_GET
+@api
+def rail_lines(request):
+    """The railway lines with a train in the coming week, each stretch of track once (raillines.py)."""
+    from . import raillines
+    response = envelope(raillines.network.get().value, 'scheduled', used=['otp:timetables'])
+    response['Cache-Control'] = 'public, max-age=1800'
+    return response
 
 
 def _day_param_named(request, name: str):
