@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from . import abroad, closures, mapping, platforms, roads, stopfix, stopgroups, supplement, tracks
+from . import abroad, closures, mapping, platforms, railtrack, roads, stopfix, stopgroups, supplement, tracks
 from .geometry import MAX_POINTS, SHAPE_POINTS, cumulative, simplify, slice_between, stop_distances, trim_spurs  # noqa: F401
 from .upstream import UpstreamError, otp
 
@@ -91,14 +91,20 @@ def road_shape(raw: list, stops: list[dict], mode: str, deadline: Optional[float
     """The shape to draw and move vehicles on: bus shapes are repaired where the feed's is
     missing or wrong (see roads.py); an SŽ replacement bus's is routed on the roads between its
     stops, because the feed gives it the railway's; a bus leaving from a bay (platforms.py) drives
-    out of it to its second stop; (geometry, complete)."""
+    out of it to its second stop; a train's follows the railway (railtrack.py), also when the feed gives it no shape
+    at all, stop to stop; (geometry, complete)."""
     complete = True
     if mode == 'bus':
         raw, complete = roads.repair(raw, stops, deadline, road_only=replacement, reroute=(0,) if from_bay else ())
     elif mode == 'rail':
         raw = trim_spurs(raw)  # no sideways step onto the station's point (geometry.trim_spurs)
+        from . import raillines
+        if len(raw) <= raillines.SPARSE * len(stops):  # no shape, or only its stops joined: another train's over the same stops
+            raw = raillines.shape_from_others(stops) or raw
     if len(raw) < 2:
         raw = [[s['lon'], s['lat']] for s in stops]
+    if mode == 'rail' and len(raw) >= 2:
+        raw = railtrack.along(raw)
     return simplify(raw, SHAPE_POINTS), complete
 
 

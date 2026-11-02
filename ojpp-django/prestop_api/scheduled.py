@@ -24,7 +24,7 @@ from .upstream import Cached, otp
 
 logger = logging.getLogger(__name__)
 
-_PATTERN_SHAPES = 'patterns { code patternGeometry { points } stops { lat lon } }'
+_PATTERN_SHAPES = 'patterns { code patternGeometry { points } stops { name lat lon } }'
 _PATTERN_TIMES = '''gtfsId shortName longName mode agency { gtfsId }
   patterns { code tripsForDate(serviceDate: $date) { gtfsId tripHeadsign
     stoptimesForDate(serviceDate: $date) { scheduledArrival scheduledDeparture realtimeArrival realtimeDeparture realtime

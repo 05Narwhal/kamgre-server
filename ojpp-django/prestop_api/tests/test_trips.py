@@ -11,6 +11,45 @@ STREET = [[14.50, 46.05], [14.51, 46.05], [14.52, 46.05]]
 
 
 class GeometryTests(SimpleTestCase):
+    def test_a_trains_shape_follows_the_track_even_with_no_shape_in_the_feed(self):
+        stops = [{'lon': 14.5, 'lat': 46.0}, {'lon': 14.6, 'lat': 46.1}]
+        on_track = [[14.5, 46.0], [14.55, 46.02], [14.6, 46.1]]
+        with mock.patch('prestop_api.railtrack.along', return_value=on_track) as along:
+            shape, _ = trips.road_shape([], stops, 'rail', None)
+        along.assert_called_once_with([[14.5, 46.0], [14.6, 46.1]])  # stop to stop, then along the track
+        self.assertEqual(shape, on_track)
+
+    def test_a_train_given_only_its_stops_takes_another_trains_shape_over_them(self):
+        from prestop_api import raillines
+        from prestop_api.sz import station_key
+        stop = lambda i, lon: {'name': f'S{i}', 'lon': lon, 'lat': 46.0}  # noqa: E731
+        stops = [stop(1, 14.0), stop(2, 14.1), stop(3, 14.2), stop(4, 14.3)]
+        coords = [[14.0, 46.0], [14.03, 46.01], [14.06, 46.01], [14.1, 46.0], [14.13, 46.01], [14.15, 46.01], [14.2, 46.0]]
+        shape = {'coords': coords, 'cum': trips.cumulative(coords), 'distances': trips.stop_distances(coords, stops[:3]), 'stops': [station_key(n) for n in ('S1', 'S2', 'S3')]}
+        joined = {'coords': [[14.2, 46.0], [14.3, 46.0]], 'cum': [0.0, 1.0], 'distances': [0.0, 1.0], 'stops': [station_key(n) for n in ('S3', 'S4')]}  # no real shape either
+        with mock.patch.object(raillines.feed_shapes, 'peek', return_value=mock.Mock(value={'a': shape, 'b': joined})):
+            found = raillines.shape_from_others(stops)
+            turned = raillines.shape_from_others([stops[2], stops[1]])
+        def near(line):
+            rounded = [[round(x, 4), round(y, 4)] for x, y in line]
+            return [q for k, q in enumerate(rounded) if not k or q != rounded[k - 1]]
+
+        self.assertEqual(near(found), coords + [[14.3, 46.0]])  # S1 - S3 from the train that has them, S3 - S4 straight: nobody has it
+        self.assertEqual(near(turned), [[14.2, 46.0], [14.15, 46.01], [14.13, 46.01], [14.1, 46.0]])  # the other way
+
+    def test_only_trains_follow_the_track(self):
+        stops = [{'lon': 14.5, 'lat': 46.0}, {'lon': 14.6, 'lat': 46.1}]
+        with mock.patch('prestop_api.railtrack.along') as along:
+            trips.road_shape([[14.5, 46.0], [14.6, 46.1]], stops, 'ferry', None)
+        along.assert_not_called()
+
+    def test_a_train_is_still_drawn_when_the_track_cannot_be_read(self):
+        from prestop_api import railtrack
+        coords = [[14.5, 46.0], [14.6, 46.1]]
+        with mock.patch.object(railtrack, 'load', side_effect=OSError('gone')), mock.patch.dict(railtrack._held, track=None), \
+                mock.patch.object(railtrack, '_stored', return_value=None):
+            self.assertEqual(railtrack.along(coords), coords)
+
     def test_simplify_keeps_corners_and_drops_collinear_points(self):
         dense = [[14.50 + i * 0.0005, 46.05] for i in range(41)] + [[14.52, 46.06]]
         simple = trips.simplify(dense)
@@ -261,3 +300,39 @@ class EndpointTests(TestCase):
         self.assertEqual(departures[0]['observedDelaySeconds'], 420)
         self.assertNotIn('observedDelaySeconds', departures[1])
         self.assertNotIn('observedDelaySeconds', line['patterns'][0]['departures'][0])
+
+
+class StoredRailShapeTests(TestCase):
+    COORDS = [[14.5, 46.0], [14.6, 46.1]]
+    ON_TRACK = [[14.5, 46.0], [14.55, 46.02], [14.6, 46.1]]
+
+    def setUp(self):
+        from prestop_api import railtrack
+        self.railtrack = railtrack
+        self.track = mock.Mock(left=[])
+        self.track.follow.return_value = self.ON_TRACK
+        self.load = mock.patch.object(railtrack, 'load', return_value=self.track)
+        self.load.start()
+        self.addCleanup(self.load.stop)
+        self.addCleanup(railtrack._let_go)
+
+    def test_a_shape_is_worked_out_once_and_read_without_the_track_after(self):
+        self.assertEqual(self.railtrack.along(self.COORDS), self.ON_TRACK)
+        self.railtrack._held['timer'].cancel()
+        self.railtrack._let_go()  # another worker, or a restart: no track in memory
+        self.assertEqual(self.railtrack.along(self.COORDS), self.ON_TRACK)
+        self.assertEqual(self.railtrack.load.call_count, 1)
+        self.assertEqual(self.track.follow.call_count, 1)
+
+    def test_a_new_track_file_means_new_shapes(self):
+        self.railtrack.along(self.COORDS)
+        self.railtrack._held['timer'].cancel()
+        with mock.patch.dict(self.railtrack._version, value='another track'):
+            self.railtrack.along(self.COORDS)
+        self.assertEqual(self.track.follow.call_count, 2)
+
+    def test_a_shape_that_cannot_be_read_from_the_track_is_not_stored(self):
+        from prestop_api.models import RoadLeg
+        self.railtrack.load.side_effect = OSError('gone')
+        self.assertEqual(self.railtrack.along(self.COORDS), self.COORDS)
+        self.assertFalse(RoadLeg.objects.filter(key__startswith=self.railtrack.STORE_PREFIX).exists())

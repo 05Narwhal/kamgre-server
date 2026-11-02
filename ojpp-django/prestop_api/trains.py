@@ -73,7 +73,7 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
     if not run:
         return None
     found = trips.load_trips([run['id']], day).get(run['id'])
-    trip = trips.build_trip(found, {}, geometry=False) if found else None
+    trip = trips.build_trip(found, {}, geometry=False) if found else None  # polled: the shape comes once, from /trips
     if trip and trip['stops']:
         from . import replacement
         # the stretches a bus runs instead that day, from the plan boards, lines and journeys use

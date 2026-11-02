@@ -87,10 +87,11 @@ class TrainEndpointTests(TestCase):
         trip = {'id': 'IJPP:t310', 'realtime': True, 'stops': []}
         with mock.patch.object(scheduled, 'timetable', fixed([yesterday, bus, run])), \
                 mock.patch('prestop_api.trips.load_trips', return_value={'IJPP:t310': {'static': {}}}), \
-                mock.patch('prestop_api.trips.build_trip', return_value=trip), \
+                mock.patch('prestop_api.trips.build_trip', return_value=trip) as built, \
                 mock.patch.object(sources, 'alerts', return_value=[{'id': 'a', 'title': '', 'routeIds': ['IJPP:r310'], '_from': 0, '_to': None}, {'id': 'b', 'title': '', 'routeIds': ['x'], '_from': 0, '_to': None},
                                                                        {'id': 'old', 'title': '', 'routeIds': ['IJPP:r310'], '_from': 0, '_to': 1}]):
             body = self.client.get('/api/v1/trains/0310').json()
+        self.assertIs(built.call_args.kwargs.get('geometry'), False)  # polled: the app asks /trips for the shape, once
         data = body['data']
         self.assertEqual((data['number'], data['category'], data['tripId'], data['date'], data['trip'], body['meta']['status']),
                          ('310', 'RG', 'IJPP:t310', '2026-10-26', trip, 'live'))

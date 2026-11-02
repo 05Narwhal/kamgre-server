@@ -19,7 +19,7 @@ import logging
 import math
 from datetime import timedelta
 
-from . import abroad, border, geometry, mapping, railtrack, scheduled
+from . import abroad, border, geometry, mapping, railtrack, scheduled, sz
 from .upstream import Cached, otp
 
 log = logging.getLogger(__name__)
@@ -230,11 +230,55 @@ def _load_shapes() -> dict[str, dict]:
             if len(coords) < 2:
                 continue
             coords = geometry.simplify(coords, geometry.SHAPE_POINTS)
-            out[p['code']] = {'coords': coords, 'cum': geometry.cumulative(coords), 'distances': geometry.stop_distances(coords, stops)}
+            out[p['code']] = {'coords': coords, 'cum': geometry.cumulative(coords), 'distances': geometry.stop_distances(coords, stops),
+                              'stops': [sz.station_key(s.get('name') or '') for s in stops]}
     return out
 
 
 feed_shapes = Cached(_load_shapes, ttl=6 * 3600, max_stale=48 * 3600, revalidate=6 * 3600)
+_legs: dict = {'shapes': None, 'index': {}}
+SPARSE = 2     # points per stop: at most this many is no real shape, only its stops joined (a real one has hundreds a leg)
+LEG_GAP = 4    # stops apart a leg is looked for in another train's shape
+
+
+def _leg_index(shapes: dict) -> dict:
+    """(station, a later station) -> (a pattern with a real shape between them, their indices there, reversed), for
+    `shape_from_others`: this direction before the other, and neighbouring stops before ones a few apart (a train
+    that skips a station another calls at). By the station's name: the feed has Solkan under two stop ids."""
+    if _legs['shapes'] is not shapes:
+        index: dict = {}
+        real = [s for s in shapes.values() if s.get('stops') and all(s['stops']) and len(s['coords']) > SPARSE * len(s['stops'])]
+        for turned in (False, True):
+            for gap in range(1, LEG_GAP + 1):
+                for shape in real:
+                    names = shape['stops']
+                    for k in range(len(names) - gap):
+                        index.setdefault((names[k + gap], names[k]) if turned else (names[k], names[k + gap]), (shape, k, k + gap, turned))
+        _legs.update(shapes=shapes, index=index)
+    return _legs['index']
+
+
+def shape_from_others(stops: list[dict]) -> list | None:
+    """The shape of a pattern the feed gives only its stops for (some runs of LP 4208 and 4292, whose sibling runs have a
+    shape), leg by leg from any train with a real shape over the same two stops, either way. Stops stay joined straight
+    where no train has one; None when none has any, or the shapes are not read yet. The track file cannot do this: it has
+    gaps (the Bohinj line), where a real shape lies on it yet no way along it is found."""
+    snap = feed_shapes.peek()
+    if not snap or len(stops) < 2:
+        return None
+    index = _leg_index(snap.value)
+    out: list = []
+    found = False
+    for a, b in zip(stops, stops[1:]):
+        hit = index.get((sz.station_key(a.get('name') or ''), sz.station_key(b.get('name') or '')))
+        leg = [[a['lon'], a['lat']], [b['lon'], b['lat']]]
+        if hit:
+            shape, k, m, turned = hit
+            part = geometry.slice_between(shape['coords'], shape['cum'], shape['distances'][k], shape['distances'][m])
+            if len(part) >= 2:
+                leg, found = part[::-1] if turned else part, True
+        out += leg if not out else leg[1:]
+    return out if found else None
 _built: dict = {'key': None, 'lines': []}
 
 

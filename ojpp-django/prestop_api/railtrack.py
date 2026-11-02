@@ -7,12 +7,17 @@ pattern with no shape is its stops joined by straight lines. `follow` keeps a sh
 where it leaves it, takes the way along the track from where it left to where it comes back. The track is read from
 the file only; nothing here asks OpenStreetMap.
 """
+import hashlib
 import heapq
 import json
+import logging
 import math
+import threading
 from pathlib import Path
 
 from . import geometry
+
+logger = logging.getLogger(__name__)
 
 DATA = Path(__file__).resolve().parent / 'data' / 'slovenia_rail.json'
 STEP = 25.0     # m between the track's points
@@ -223,3 +228,86 @@ def _decode(flat: list[int]) -> list[list[float]]:
 def load() -> Track:
     """The track from the file: about a second and 75 MB, so a caller keeps it only while it needs it."""
     return Track([_decode(t) for t in json.loads(DATA.read_text(encoding='utf-8'))['tracks']])
+
+
+KEEP = 120.0  # s the track stays loaded after its last use by `along`: only while new shapes are being worked out
+STORE_PREFIX = 't:'  # RoadLeg keys of shapes along the track
+_held: dict = {'track': None, 'timer': None}
+_holding = threading.Lock()
+_version: dict = {'value': None}
+
+
+def _let_go() -> None:
+    with _holding:
+        _held.update(track=None, timer=None)
+
+
+def _track_version() -> str:
+    """Changes with the track file, so a new track means new shapes, and the old rows are simply no longer asked for."""
+    if _version['value'] is None:
+        _version['value'] = hashlib.sha1(DATA.read_bytes()).hexdigest()
+    return _version['value']
+
+
+def store_key(coords: list) -> str:
+    """RoadLeg key of a shape along this track: a hash of the track file and the shape's points (5 decimals)."""
+    text = ';'.join(f'{x:.5f},{y:.5f}' for x, y in coords)
+    return STORE_PREFIX + hashlib.sha1(f'{_track_version()}|{text}'.encode()).hexdigest()
+
+
+def _stored(key: str) -> list | None:
+    try:
+        from .models import RoadLeg
+        row = RoadLeg.objects.filter(key=key).first()
+        return row.geometry if row and len(row.geometry) >= 2 else None
+    except Exception as e:  # worked out again: slower, nothing more
+        logger.warning('Rail shapes unavailable: %r', e)
+        return None
+
+
+def _store(key: str, coords: list) -> None:
+    try:
+        from .models import RoadLeg
+        RoadLeg.objects.bulk_create([RoadLeg(key=key, geometry=coords)], ignore_conflicts=True)
+    except Exception as e:
+        logger.warning('Could not store a rail shape: %r', e)
+
+
+def _follow(coords: list) -> list | None:
+    """Track.follow with the track held only while new shapes are being worked out (75 MB, see `load`); None when the
+    file cannot be read."""
+    with _holding:
+        track = _held['track']
+        if track is None:
+            try:
+                track = _held['track'] = load()
+            except (OSError, ValueError, KeyError) as e:
+                logger.warning('Rail track not read: %r', e)
+                return None
+        if _held['timer']:
+            _held['timer'].cancel()
+        _held['timer'] = threading.Timer(KEEP, _let_go)
+        _held['timer'].daemon = True
+        _held['timer'].start()
+    found = track.follow(coords)
+    track.left.clear()  # kept for raillines' rebuild; here it would only grow
+    return found
+
+
+def along(coords: list) -> list:
+    """`coords` along the track for a train's shape, worked out once and kept in the RoadLeg table: every worker and
+    restart after that reads it without loading the track. As they are when the track cannot be read: a line drawn off
+    the track beats no line."""
+    try:
+        key = store_key(coords)
+    except OSError as e:
+        logger.warning('Rail track not read: %r', e)
+        return coords
+    found = _stored(key)
+    if found is not None:
+        return found
+    found = _follow(coords)
+    if found is None:
+        return coords
+    _store(key, found)
+    return found
