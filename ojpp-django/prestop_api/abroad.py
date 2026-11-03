@@ -205,16 +205,31 @@ def _end(stop: dict) -> Optional[str]:
     return place(stop.get('name')) if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else None
 
 
+def _running_through(run: dict, legs: Sequence[dict]) -> tuple[Optional[dict], int]:
+    """A longer leg that calls at all of `run`'s stations at the same moments, and where `run` starts in it: SŽ lists
+    the minutes after midnight of a train from abroad as its own trip of the next day (RG 873, Graz – Maribor: Šentilj
+    00:17 – Maribor 00:27), inside the foreign leg of the evening before. By name: the two feeds' stop ids differ."""
+    names = [s.get('name') for s in run['stops']]
+    for leg in legs:
+        for at in range(len(leg['stops']) - len(names) + 1 if len(leg['stops']) > len(names) else 0):
+            if leg['scheduledDepartures'][at] == run['scheduledDepartures'][0] and [s.get('name') for s in leg['stops'][at:at + len(names)]] == names:
+                return leg, at
+    return None, 0
+
+
 def whole_run(run: dict, legs: Sequence[dict], kept: Optional[dict] = None) -> dict:
     """`run`, a timetable trip, with its other `legs` (legs_of): {'before', 'after'}, the stops either side of its
     stretch in Slovenia, and {'comes', 'goes'}, the places abroad it really starts and ends at (None in Slovenia).
     `kept`: the delays kept for the legs' stops (kept_delays)."""
-    before, after = _joined(run, legs)
+    through, at = _running_through(run, legs)
+    before, after = _joined(through or run, legs)
     a, b, _, _ = trim(run['stops'], lambda s: s.get('name'), lambda s: s.get('gtfsId'))
+    lead = [_row(through, i, kept) for i in range(at)] if through else []
+    tail = [_row(through, i, kept) for i in range(at + len(run['stops']), len(through['stops']))] if through else []
     return {
-        'before': [_row(t, i, kept) for t in before for i in range(len(t['stops']) - 1)] + [_row(run, i, kept) for i in range(a)],
-        'after': [_row(run, i, kept) for i in range(b, len(run['stops']))] + [_row(t, i, kept) for t in after for i in range(1, len(t['stops']))],
-        'comes': _end((before[0] if before else run)['stops'][0]), 'goes': _end((after[-1] if after else run)['stops'][-1]),
+        'before': [_row(t, i, kept) for t in before for i in range(len(t['stops']) - 1)] + lead + [_row(run, i, kept) for i in range(a)],
+        'after': [_row(run, i, kept) for i in range(b, len(run['stops']))] + tail + [_row(t, i, kept) for t in after for i in range(1, len(t['stops']))],
+        'comes': _end((before[0] if before else through or run)['stops'][0]), 'goes': _end((after[-1] if after else through or run)['stops'][-1]),
     }
 
 
@@ -242,6 +257,10 @@ def kept_delays(legs: Sequence[dict]) -> dict[tuple[str, int], dict[str, int]]:
     return out
 
 
+def _a_day_earlier(leg: dict) -> dict:
+    return {**leg, 'scheduledDepartures': [t - 86400 for t in leg['scheduledDepartures']], 'scheduledArrivals': [t - 86400 for t in leg['scheduledArrivals']]}
+
+
 def learn(trips: Sequence[dict]) -> None:
     """Each train's real ends from a day's timetable, for whatever reads only a name (board rows, vehicles, lines,
     journeys: train_ends). Kept between days: a train that runs on Saturdays is still known on Monday."""
@@ -253,7 +272,7 @@ def learn(trips: Sequence[dict]) -> None:
     for (_, number), legs in sorted(days.items(), key=lambda item: item[0][0]):
         run = main_run(legs)
         if run:
-            whole = whole_run(run, legs)
+            whole = whole_run(run, [*legs, *map(_a_day_earlier, legs)])  # a run just after midnight goes on from last evening's leg
             _feed_ends[number] = (whole['comes'], whole['goes'])
 
 

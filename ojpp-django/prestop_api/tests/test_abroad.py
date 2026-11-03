@@ -260,6 +260,29 @@ class WholeRunTests(SimpleTestCase):
         legs = [_leg('IJPP:2', 'EC 79', ('Ljubljana', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 79', ('Dobova', 600 + 61), ('Zagreb Glavni kolodvor', 700))]
         self.assertEqual(abroad.whole_run(legs[0], legs)['after'], [])
 
+    def test_a_run_inside_the_foreign_leg_of_the_evening_before_has_its_stops_abroad(self):
+        # RG 873: SŽ's 00:17 Šentilj – Maribor lies inside the Graz leg that left the service day before.
+        run = _leg('IJPP:453112', 'RG 873', ('Šentilj', 17), ('Maribor', 27))
+        graz = _leg('IJPP:INTL-d976', 'RG 873', ('Graz Hauptbahnhof', 23 - 60), ('Spielfeld-Straß', 12), ('Šentilj', 17), ('Maribor', 27))
+        whole = abroad.whole_run(run, [run, graz])
+        self.assertEqual([r['name'] for r in whole['before']], ['Graz Hauptbahnhof', 'Spielfeld-Straß'])
+        self.assertTrue(all(r['abroad'] for r in whole['before']))
+        self.assertEqual((whole['comes'], whole['goes'], whole['after']), ('Gradec / Graz', None, []))
+
+    def test_a_day_alone_says_a_run_after_midnight_comes_from_abroad(self):
+        # learn reads one service day: there the Graz leg leaves that evening, 24 hours after the run it holds.
+        legs = [_leg('IJPP:453112', 'RG 8730', ('Šentilj', 17), ('Maribor', 27)),
+                _leg('IJPP:INTL-d976', 'RG 8730', ('Graz Hauptbahnhof', 1408), ('Šentilj', 1457), ('Maribor', 1467))]
+        abroad.learn(legs)
+        self.addCleanup(abroad._feed_ends.pop, '8730', None)
+        self.assertTrue(abroad.crosses('RG 8730'))
+        self.assertEqual(abroad.train_ends('RG 8730'), ('Gradec / Graz', None))
+
+    def test_a_longer_leg_at_another_time_is_not_the_same_run(self):
+        run = _leg('IJPP:453112', 'RG 873', ('Šentilj', 17), ('Maribor', 27))
+        tonight = _leg('IJPP:INTL-d976', 'RG 873', ('Graz Hauptbahnhof', 1400), ('Šentilj', 1457), ('Maribor', 1467))
+        self.assertEqual(abroad.whole_run(run, [run, tonight])['before'], [])
+
     def test_a_leg_that_left_before_it_arrived_is_not_joined(self):
         legs = [_leg('IJPP:2', 'EC 79', ('Ljubljana', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 79', ('Dobova', 590), ('Zagreb Glavni kolodvor', 640))]
         self.assertEqual(abroad.whole_run(legs[0], legs)['goes'], None)
