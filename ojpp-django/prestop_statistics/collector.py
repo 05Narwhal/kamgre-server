@@ -138,6 +138,32 @@ def position_pass(schedule: dict, at: Optional[tuple], stamp: float) -> dict[str
     return {str(best[0]): best[1]} if best else {}
 
 
+LEFT_FIRST = 150  # m: further than this from its first stop a vehicle has left it (GPS wanders at a stand)
+_at_first: dict[tuple, Optional[int]] = {}  # (service date, trip) -> delay at its last report at the first stop; None: left
+
+
+def first_stop_left(key: tuple, schedule: dict, passed: dict, at: Optional[tuple]) -> dict:
+    """`passed` (position_pass) without the wait at the first stop: a bus parked there, still logged on to its trip, reads
+    later with every report and has not left. Its last report there counts once a later one shows it gone."""
+    from prestop_statistics.dwell import _metres
+    if not schedule.get('bySequence'):
+        return passed
+    first = min(schedule['bySequence'])
+    if str(first) in passed:
+        rest = {k: v for k, v in passed.items() if k != str(first)}
+        if key not in _at_first or _at_first[key] is not None:  # back at it later (a loop) is not a new departure
+            _at_first[key] = passed[str(first)]
+        return rest
+    held = _at_first.get(key)
+    stop = schedule['bySequence'][first].get('stop') or {}
+    if held is None or not at or at[0] is None or at[1] is None or stop.get('lat') is None or stop.get('lon') is None:
+        return passed
+    if _metres(at, (stop['lat'], stop['lon'])) <= LEFT_FIRST:
+        return passed
+    _at_first[key] = None
+    return {str(first): held, **passed}
+
+
 def store_passes(passes: dict) -> int:
     """Write position-derived stop delays ({(service date, trip id): (schedule, {stopPosition: delay})}) into
     TripDelay where the feed gave none: a feed value always wins. A first stop keeps updating while the vehicle waits
@@ -171,8 +197,9 @@ def store_passes(passes: dict) -> int:
         TripDelay.objects.bulk_create(new, ignore_conflicts=True)
         TripDelay.objects.bulk_update(changed, ['stop_delays', 'segments', 'last_seen'])
     cutoff = timezone.localdate() - timedelta(days=2)
-    for key in [k for k in _first_ours if k[0] < cutoff]:
-        del _first_ours[key]
+    for kept in (_first_ours, _at_first):
+        for key in [k for k in kept if k[0] < cutoff]:
+            del kept[key]
     return written
 
 
