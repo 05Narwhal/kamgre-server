@@ -84,6 +84,68 @@ class JourneyPriceTests(SimpleTestCase):
     def test_slovene_basis(self):
         self.assertIn('prestopi', price(leg('LPP', 0), language='sl')[2]['legs'][0]['price']['basis'])
 
+    def test_a_bus_or_train_without_its_trip_says_price_unknown(self):
+        cents, total, j = price({**leg('IJPP', 0), 'tripId': None}, {**leg('IJPP', 30, mode='rail'), 'tripId': None}, walk(50))
+        self.assertEqual(cents, [None, None, '-'])
+        self.assertIsNone(total)
+        self.assertEqual(j['legs'][0]['price']['basis'], 'Price unknown')
+
+
+class FullPriceTests(SimpleTestCase):
+    """K9: every leg says what it costs; the card and total keep the one ticket."""
+
+    def test_bus_train_and_city_bus_with_no_profile_each_have_a_price(self):
+        legs = [leg('IJPP', 0, km=12), walk(20), leg('IJPP', 30, km=19, mode='rail', name='RG 2410'), leg('LPP', 60)]
+        j = pricing.price_journey({'legs': legs}, None)
+        bus, _, train, city = j['legs']
+        self.assertEqual((bus['price']['singleCents'], train['price']['singleCents']), (pricing.ijpp_cents(12), pricing.sz_cents(19)))
+        self.assertEqual((bus['price']['amountCents'], train['price']['amountCents']), (450, 0))
+        self.assertEqual(train['price']['ticket'], bus['price']['ticket'])
+        self.assertEqual(city['price']['amountCents'], 150)
+        self.assertEqual(j['price']['totalCents'], 600)
+        self.assertNotIn('coveredBy', bus['price'])
+
+    def test_one_ride_on_its_ticket_has_no_separate_price(self):
+        self.assertNotIn('singleCents', price(leg('IJPP', 0, km=12))[2]['legs'][0]['price'])
+
+    def test_one_ticket_tip_says_what_separate_tickets_would_cost(self):
+        tip = price(leg('IJPP', 0, km=12), walk(20), leg('IJPP', 30, km=19, mode='rail', name='RG 2410'))[2]['price']['tips'][0]
+        self.assertEqual((tip['kind'], tip['amountCents'], tip['savedCents']), ('through', 450, 80))
+        self.assertIn('5,30 €', tip['text'])
+
+    def test_a_short_trip_has_no_day_ticket_tip(self):
+        # Twice 2.50 is what the day ticket costs: nothing saved.
+        self.assertNotIn('tips', price(leg('IJPP', 0, km=12))[2]['price'])
+
+    def test_a_long_trip_coming_back_saves_with_the_capped_day_ticket(self):
+        tip = price(leg('IJPP', 0, km=99))[2]['price']['tips'][0]  # Monday; 11 € each way
+        self.assertEqual((tip['kind'], tip['amountCents'], tip['savedCents']), ('day', 1800, 400))
+
+    def test_a_train_only_trip_counts_the_supplement_on_both_rides(self):
+        tip = price(leg('IJPP', 0, km=160, mode='rail', name='ICS 20'))[2]['price']['tips'][0]  # 14.40 + 2 each way
+        self.assertEqual((tip['amountCents'], tip['savedCents']), (1800 + 400, 2 * (1440 + 200) - 2200))
+
+    def test_weekend_ticket_replaces_the_day_ticket_over_75_km(self):
+        saturday = 5 * 24 * 60
+        tip = price(leg('IJPP', saturday, km=99))[2]['price']['tips'][0]
+        self.assertEqual((tip['amountCents'], tip['savedCents']), (1340, 2200 - 1340))
+        self.assertIsNone(pricing.weekend_ticket_cents(75, START + saturday * 60))
+
+    def test_a_holiday_counts_as_a_weekend(self):
+        # A plain Monday, then Christmas on a Friday.
+        self.assertIsNone(pricing.weekend_ticket_cents(100, sharing._ts('2026-10-26T08:00:00+01:00')))
+        self.assertEqual(pricing.weekend_ticket_cents(100, sharing._ts('2026-12-25T08:00:00+01:00')), 1340)  # a Friday
+
+    def test_a_card_covering_the_ride_gets_no_tips_and_no_separate_prices(self):
+        cents, total, j = price(leg('IJPP', 0, km=100), walk(100), leg('IJPP', 110, km=60), cards=['slovenia-free'])
+        self.assertEqual(cents, [0, '-', 0])
+        self.assertNotIn('tips', j['price'])
+        self.assertNotIn('singleCents', j['legs'][0]['price'])
+
+    def test_tips_in_slovene(self):
+        tip = price(leg('IJPP', 0, km=99), language='sl')[2]['price']['tips'][0]
+        self.assertIn('Se danes vračaš', tip['text'])
+
 
 class TownBusPriceTests(SimpleTestCase):
     """E12: Jesenice and Škofja Loka (E9's price lists), Postojna free."""
