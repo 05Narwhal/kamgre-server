@@ -407,7 +407,28 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True, dw
         'geometry': static['geometry'] if geometry else [], 'stops': stops,
         **{k: static[k] for k in ('originArea', 'destinationArea', 'originBays', 'comesFrom') if static.get(k)},
         **({'replacement': True} if static.get('replacement') else {}),
+        **(_outside_slovenia(static, stops, entry['serviceDate']) if static['mode'] == 'rail' else {}),
     }
+
+
+def _outside_slovenia(static: dict, stops: list[dict], day: date) -> dict:
+    """An international train's whole run (abroad.whole_run): its stops abroad as text beside `stops`, its real ends
+    and the name they make. From the timetable in memory, never waiting: until it's there, the table's ends."""
+    out = {}
+    if abroad.crosses(static['routeName']):
+        from . import scheduled
+        legs = abroad.legs_of(static['routeName'], scheduled.loaded_trips(day))
+        run = next((t for t in legs if t['id'] == static['id']), None)
+        if run:
+            whole = abroad.whole_run(run, legs)
+            out.update({'stopsBefore': whole['before']} if whole['before'] else {})
+            out.update({'stopsAfter': whole['after']} if whole['after'] else {})
+            out.update({'comesFrom': whole['comes']} if whole['comes'] else {})
+            out.update({'destination': whole['goes']} if whole['goes'] else {})
+    origin, destination = out.get('comesFrom') or static.get('comesFrom'), out.get('destination') or static['destination']
+    if stops and (origin or destination != stops[-1]['name']):
+        out['longName'] = f'{origin or stops[0]["name"]} – {destination}'
+    return out
 
 
 # ---------------------------------------------------------------- lines
@@ -477,7 +498,7 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
     if rail:  # an international train's line: its real ends abroad (abroad.train_ends)
         comes, goes = abroad.train_ends(mapping.route_name(route), origin, destination)
         origin, destination = comes or origin, goes or destination
-    long_name = route.get('longName') or ''
+    long_name = (f'{origin} – {destination}' if rail and (comes or goes) else route.get('longName')) or ''
     ends = None if rail else mapping.popular_ends(patterns, (origin, destination))
     if ends and not (stopgroups.similar(ends[0], origin) and stopgroups.similar(ends[1], destination)):
         origin, destination = ends  # named by where most of its buses go, not by the feed's long name

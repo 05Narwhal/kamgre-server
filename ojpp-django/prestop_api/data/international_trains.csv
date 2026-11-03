@@ -1,5 +1,6 @@
-# International trains' real first and last stations (abroad.train_ends). The feed ends them at the border
-# station ("EC 115 Jesenice - Dobova"); only the ends abroad are shown, as destination or origin text.
+# The fallback for international trains' real first and last stations (abroad.train_ends): the feed's own legs come
+# first (abroad.learn), this fills an end they don't reach or a train not seen yet (EN 414, MV 1470 to Pula).
+# Only the ends abroad are shown, as destination or origin text.
 # Source: vagonweb.cz train pages, 2026 timetable (www.vagonweb.cz/razeni/vlak.php?zeme=SZ&kategorie=EC&cislo=115&rok=2026),
 # read 2026-10-15 for every SŽ EC/EN/MV train and every RG/IC train that ends at a border station in the feed.
 # Check again after each December timetable change. An empty column: that end is in Slovenia.

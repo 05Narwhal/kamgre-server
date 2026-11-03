@@ -118,7 +118,15 @@ def _trips_for(day) -> list[dict]:
                     'scheduledDepartures': [s['serviceDay'] + s['scheduledDeparture'] for s in st],
                     'serviceDay': st[0]['serviceDay'],
                 })
+    abroad.learn(out)
     return out
+
+
+def loaded_trips(day: date) -> list[dict]:
+    """The trips in memory that hold service day `day`, never waiting or loading; none yet: []."""
+    cache = None if day == service_day() else _day_tables.get(day.isoformat())
+    snap = (cache or timetable).peek()
+    return snap.value if snap else []
 
 
 def _service_date(trip: dict) -> date:

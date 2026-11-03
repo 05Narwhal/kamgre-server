@@ -55,8 +55,10 @@ def runs_on(day: date) -> list[dict]:
 
 
 def find_run(number: str, day: date) -> Optional[dict]:
-    """The run of train `number` that day; a number listed on two routes (LP 4208) is one train, the first found."""
-    return next((t for t in runs_on(day) if number_of(t['route']) == number), None)
+    """The run of train `number` that day: of an international train's legs the one in Slovenia (abroad.main_run); a
+    number listed on two routes (LP 4208) is one train, the first found."""
+    runs = [t for t in runs_on(day) if number_of(t['route']) == number]
+    return (abroad.main_run(runs) if len(runs) > 1 else None) or next(iter(runs), None)
 
 
 def vehicle_of(number: str) -> Optional[dict]:

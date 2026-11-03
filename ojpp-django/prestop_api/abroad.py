@@ -5,8 +5,10 @@ the place abroad as its destination (or origin) text: the RG train to Villach is
 Jesenice, BUS 415 reads "from Beljak / Villach". Where the real end comes from, most trustworthy first:
 - the trip's own stops abroad (the IJPP feed marks them with their country: "Gorizia Corso Italia 85/89 (I)");
 - for SŽ's replacement buses, the station abroad in SŽ's timetable column (sztimetables.Stations.resolve);
-- for trains, `data/international_trains.csv`: the feed's international trains end at the border station
-  ("EC 115 Jesenice - Dobova") and SŽ's live feed has no relation, so the train's real route is kept there.
+- for trains, the feed's other legs of the same train number: the national feed splits an international train at
+  the border stations ("EC 115" is three trips, München - Jesenice, Jesenice - Dobova, Dobova - Zagreb), joined
+  here by their shared station and times (whole_run, learn); the timetable cache is the sync, no call of its own;
+- for trains the feed doesn't take that far, `data/international_trains.csv`, the fallback.
 """
 import csv
 import os
@@ -14,7 +16,8 @@ import re
 from functools import lru_cache
 from typing import Callable, Optional, Sequence, TypeVar
 
-from .mapping import fold
+from .mapping import fold, iso, route_name as _route_name
+from .sz import train_parts
 
 T = TypeVar('T')
 TRAINS_CSV = os.path.join(os.path.dirname(__file__), 'data', 'international_trains.csv')
@@ -50,6 +53,9 @@ def _words(name: str) -> list[str]:
 _INTL = re.compile(r':INTL-(\d{2})')
 HOME_UIC = '79'
 _BORDER = re.compile(r'dr[zž]avna meja', re.IGNORECASE)
+# 'Stuttgart Hauptbahnhof' is the town of Stuttgart as a train's end.
+_MAIN_STATION = re.compile(r'\s+(?:hauptbahnhof|hbf|glavni kolodvor)$', re.IGNORECASE)
+MAX_GAP = 3600  # s: the longest stand at a border station between two legs of one train; longer, they aren't joined
 
 
 def is_abroad_stop(name: Optional[str], stop_id: Optional[str] = None) -> bool:
@@ -70,7 +76,7 @@ def place(name: Optional[str]) -> str:
             found = PLACES.get(' '.join(words[i:i + n]))
             if found:
                 return found
-    return _MARK.sub('', name or '').strip()
+    return _MAIN_STATION.sub('', _MARK.sub('', name or '').strip()).strip()
 
 
 def trim(items: Sequence[T], name_of: Callable[[T], Optional[str]],
@@ -100,14 +106,117 @@ def train_ends(route_name: Optional[str], first: Optional[str] = None, last: Opt
     """An international train's places abroad: (where it comes from, where it goes), each None in Slovenia.
     'EC 115' -> ('München', 'Zagreb'). `first`/`last`: the trip's own end stations in the feed; a start or end
     the table puts in Slovenia, or at a station the feed has, is no place abroad."""
+    feed = _feed_ends.get(_number(route_name), (None, None))
     found = _trains().get(re.sub(r'\s+', ' ', (route_name or '').strip().upper()))
     if not found:
-        return None, None
+        return feed
     ends = []
     for real, own in zip(found, (first, last)):
         label = place(real) if real else ''
         ends.append(label if label and label in PLACES.values() and fold(real) not in fold(own or '') else None)
-    return ends[0], ends[1]
+    return feed[0] or ends[0], feed[1] or ends[1]
+
+
+# ---------------------------------------------------------------- the whole run, from the feed's legs
+
+_feed_ends: dict[str, tuple[Optional[str], Optional[str]]] = {}  # train number -> its places abroad (learn)
+
+
+def _number(route_name: Optional[str]) -> Optional[str]:
+    """A train's number, whatever the category each leg's operator gives it ('RG 678' and 'IR 678' are one train)."""
+    category, number = train_parts(route_name or '')
+    return None if category == 'BUS' else number
+
+
+def _inside(run: dict) -> int:
+    return sum(not is_abroad_stop(s.get('name'), s.get('gtfsId')) for s in run['stops'])
+
+
+def main_run(runs: Sequence[dict]) -> Optional[dict]:
+    """The leg with most stations in Slovenia, the one a train's page shows; on a tie the first found, SŽ's own
+    (their ids have no INTL). None: no leg in Slovenia."""
+    best = max(runs, key=lambda t: (_inside(t), 'INTL' not in t['id']), default=None)
+    return best if best and _inside(best) else None
+
+
+def legs_of(route_name: Optional[str], trips: Sequence[dict]) -> list[dict]:
+    """The timetable's trips (scheduled._trips_for) of this train's number."""
+    number = _number(route_name)
+    return [t for t in trips if number and t['route'].get('mode') == 'RAIL' and _number(_route_name(t['route'])) == number]
+
+
+def _joined(run: dict, legs: Sequence[dict]) -> tuple[list[dict], list[dict]]:
+    """The legs before and after `run`, in running order: each starts at the station the last one ended at, within
+    MAX_GAP. A train that divides takes the part leaving soonest."""
+    seen, before, after = {run['id']}, [], []
+    now = run
+    while True:
+        end, at = now['stops'][-1]['gtfsId'], now['scheduledArrivals'][-1]
+        found = [t for t in legs if t['id'] not in seen and t['stops'][0]['gtfsId'] == end and 0 <= t['scheduledDepartures'][0] - at <= MAX_GAP]
+        if not found:
+            break
+        now = min(found, key=lambda t: t['scheduledDepartures'][0])
+        seen.add(now['id'])
+        after.append(now)
+    now = run
+    while True:
+        start, at = now['stops'][0]['gtfsId'], now['scheduledDepartures'][0]
+        found = [t for t in legs if t['id'] not in seen and t['stops'][-1]['gtfsId'] == start and 0 <= at - t['scheduledArrivals'][-1] <= MAX_GAP]
+        if not found:
+            break
+        now = max(found, key=lambda t: t['scheduledArrivals'][-1])
+        seen.add(now['id'])
+        before.insert(0, now)
+    return before, after
+
+
+def _row(trip: dict, i: int) -> dict:
+    """A stop outside the trip's stretch in Slovenia, as text: no coordinates, so nothing can draw it, and an id only
+    for a station in Slovenia. Times by the timetable; a delay only where the feed itself reports one, never guessed.
+    A live 0 counts as none: the feed marks stops abroad live at 0 in bulk, and that must not read as on time."""
+    stop, delay = trip['stops'][i], trip['delays'][i]
+    return {
+        'name': stop.get('name') or '',
+        **({'abroad': True} if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else {'stopId': stop.get('gtfsId')}),
+        'scheduledArrival': iso(trip['scheduledArrivals'][i]), 'scheduledDeparture': iso(trip['scheduledDepartures'][i]),
+        **({'effectiveArrival': iso(trip['arrivals'][i]), 'effectiveDeparture': iso(trip['departures'][i]), 'delaySeconds': delay} if delay else {}),
+    }
+
+
+def _end(stop: dict) -> Optional[str]:
+    return place(stop.get('name')) if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else None
+
+
+def whole_run(run: dict, legs: Sequence[dict]) -> dict:
+    """`run`, a timetable trip, with its other `legs` (legs_of): {'before', 'after'}, the stops either side of its
+    stretch in Slovenia, and {'comes', 'goes'}, the places abroad it really starts and ends at (None in Slovenia)."""
+    before, after = _joined(run, legs)
+    a, b, _, _ = trim(run['stops'], lambda s: s.get('name'), lambda s: s.get('gtfsId'))
+    return {
+        'before': [_row(t, i) for t in before for i in range(len(t['stops']) - 1)] + [_row(run, i) for i in range(a)],
+        'after': [_row(run, i) for i in range(b, len(run['stops']))] + [_row(t, i) for t in after for i in range(1, len(t['stops']))],
+        'comes': _end((before[0] if before else run)['stops'][0]), 'goes': _end((after[-1] if after else run)['stops'][-1]),
+    }
+
+
+def learn(trips: Sequence[dict]) -> None:
+    """Each train's real ends from a day's timetable, for whatever reads only a name (board rows, vehicles, lines,
+    journeys: train_ends). Kept between days: a train that runs on Saturdays is still known on Monday."""
+    days: dict[tuple, list[dict]] = {}
+    for t in trips:
+        number = _number(_route_name(t['route'])) if t['route'].get('mode') == 'RAIL' else None
+        if number:
+            days.setdefault((t['serviceDay'], number), []).append(t)
+    for (_, number), legs in sorted(days.items(), key=lambda item: item[0][0]):
+        run = main_run(legs)
+        if run:
+            whole = whole_run(run, legs)
+            _feed_ends[number] = (whole['comes'], whole['goes'])
+
+
+def crosses(route_name: Optional[str]) -> bool:
+    """A train known to run abroad (learn); a domestic train needs no look at its legs."""
+    return any(_feed_ends.get(_number(route_name), ()))
 
 
 def scheduled_ends(trip: dict) -> tuple[Optional[str], Optional[str]]:

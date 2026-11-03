@@ -150,3 +150,152 @@ class OneStopBusTests(SimpleTestCase):
         rows = replacement.timetable_rows(plan, 'arrival', {'IJPP:sez'}, 0, 2000, {}, merged=False)
         self.assertEqual([r['destination'] for r in rows], ['Opčine'])
         self.assertEqual(replacement.timetable_rows(plan, 'departure', {'IJPP:sez'}, 0, 2000, {}, merged=False), [])
+
+
+# Stations as the national feed has them: Slovenia's own ids, others by UIC country (81 Austria, 78 Croatia, ...).
+S = {name: {'gtfsId': sid, 'name': name, 'lat': 46.0, 'lon': 15.0} for name, sid in {
+    'München Hauptbahnhof': 'IJPP:INTL-8000261', 'Stuttgart Hauptbahnhof': 'IJPP:INTL-8000096', 'Villach Hauptbahnhof': 'IJPP:INTL-8100147',
+    'Graz Hauptbahnhof': 'IJPP:INTL-8100173', 'Spielfeld-Straß': 'IJPP:INTL-8100999', 'Wien Hauptbahnhof': 'IJPP:INTL-8103000',
+    'Zagreb Glavni kolodvor': 'IJPP:INTL-7800020', 'Zaprešić': 'IJPP:INTL-7800021', 'Rijeka': 'IJPP:INTL-7800013', 'Vinkovci': 'IJPP:INTL-7800050',
+    'Budapest-Déli': 'IJPP:INTL-5500007', 'Szombathely': 'IJPP:INTL-5500028',
+    'Jesenice': 'IJPP:1122836', 'Ljubljana': 'IJPP:1122804', 'Dobova': 'IJPP:1122782', 'Maribor': 'IJPP:1122913', 'Šentilj': 'IJPP:1122935',
+    'Ilirska Bistrica': 'IJPP:1123053', 'Hodoš': 'IJPP:1122962',
+}.items()}
+DAY = 1_793_000_000  # a service day's midnight
+
+
+def _leg(trip_id, name, *calls, delays=None):
+    """A timetable trip (scheduled._trips_for): `calls` are (station, minutes after midnight)."""
+    seconds = [DAY + at * 60 for _, at in calls]
+    delays = delays or [None] * len(calls)
+    live = [at + (d or 0) for at, d in zip(seconds, delays)]
+    return {'id': trip_id, 'route': {'shortName': name, 'mode': 'RAIL', 'gtfsId': f'r-{name}'}, 'stops': [S[s] for s, _ in calls], 'serviceDay': DAY,
+            'scheduledArrivals': seconds, 'scheduledDepartures': seconds, 'arrivals': live, 'departures': live, 'delays': delays}
+
+
+# One train per family and direction, cut as the feed cuts it (leg names and categories as it gives them).
+FAMILIES = {
+    'RG out': ([_leg('IJPP:1', 'RG 678', ('Maribor', 1232), ('Šentilj', 1242)), _leg('IJPP:INTL-2', 'IR 678', ('Šentilj', 1243), ('Spielfeld-Straß', 1250), ('Graz Hauptbahnhof', 1293))],
+               ['Maribor', 'Šentilj'], [], ['Spielfeld-Straß', 'Graz Hauptbahnhof'], None, 'Gradec / Graz'),
+    'RG back': ([_leg('IJPP:INTL-1', 'IR 679', ('Graz Hauptbahnhof', 400), ('Spielfeld-Straß', 440), ('Šentilj', 450)), _leg('IJPP:2', 'RG 679', ('Šentilj', 451), ('Maribor', 461))],
+                ['Šentilj', 'Maribor'], ['Graz Hauptbahnhof', 'Spielfeld-Straß'], [], 'Gradec / Graz', None),
+    'EC out': ([_leg('IJPP:INTL-1', 'EC 115', ('München Hauptbahnhof', 616), ('Villach Hauptbahnhof', 880), ('Jesenice', 930)), _leg('IJPP:2', 'EC 115', ('Jesenice', 935), ('Ljubljana', 1000), ('Dobova', 1114)),
+                _leg('IJPP:INTL-3', 'EC 115', ('Dobova', 1135), ('Zaprešić', 1150), ('Zagreb Glavni kolodvor', 1160))],
+               ['Jesenice', 'Ljubljana', 'Dobova'], ['München Hauptbahnhof', 'Villach Hauptbahnhof'], ['Zaprešić', 'Zagreb Glavni kolodvor'], 'München', 'Zagreb'),
+    'EC back': ([_leg('IJPP:INTL-1', 'EC 78', ('Zagreb Glavni kolodvor', 426), ('Zaprešić', 440), ('Dobova', 451)), _leg('IJPP:2', 'EC 78', ('Dobova', 466), ('Maribor', 615)),
+                 _leg('IJPP:INTL-3', 'EC 78', ('Maribor', 624), ('Graz Hauptbahnhof', 700), ('Wien Hauptbahnhof', 847))],
+                ['Dobova', 'Maribor'], ['Zagreb Glavni kolodvor', 'Zaprešić'], ['Graz Hauptbahnhof', 'Wien Hauptbahnhof'], 'Zagreb', 'Dunaj / Wien'),
+    'EN out': ([_leg('IJPP:2', 'EN 40414', ('Ljubljana', 1100), ('Maribor', 1249)), _leg('IJPP:INTL-3', 'EN 40414', ('Maribor', 1258), ('Graz Hauptbahnhof', 1320), ('Stuttgart Hauptbahnhof', 1958))],
+               ['Ljubljana', 'Maribor'], [], ['Graz Hauptbahnhof', 'Stuttgart Hauptbahnhof'], None, 'Stuttgart'),
+    'EN back': ([_leg('IJPP:INTL-1', 'EN 40465', ('Stuttgart Hauptbahnhof', 100), ('Graz Hauptbahnhof', 500), ('Maribor', 539)), _leg('IJPP:2', 'EN 40465', ('Maribor', 545), ('Ljubljana', 700))],
+                ['Maribor', 'Ljubljana'], ['Stuttgart Hauptbahnhof', 'Graz Hauptbahnhof'], [], 'Stuttgart', None),
+    'MV in': ([_leg('IJPP:INTL-1', '480', ('Vinkovci', 900), ('Rijeka', 1146), ('Ilirska Bistrica', 1218)), _leg('IJPP:2', 'MV 480', ('Ilirska Bistrica', 1220), ('Ljubljana', 1324))],
+              ['Ilirska Bistrica', 'Ljubljana'], ['Vinkovci', 'Rijeka'], [], 'Vinkovci', None),
+    'MV out': ([_leg('IJPP:2', 'MV 481', ('Ljubljana', 500), ('Ilirska Bistrica', 604)), _leg('IJPP:INTL-1', '481', ('Ilirska Bistrica', 606), ('Rijeka', 650), ('Vinkovci', 900))],
+               ['Ljubljana', 'Ilirska Bistrica'], [], ['Rijeka', 'Vinkovci'], None, 'Vinkovci'),
+    'IC in': ([_leg('IJPP:INTL-1', 'IC 246', ('Budapest-Déli', 540), ('Szombathely', 700), ('Hodoš', 787)), _leg('IJPP:2', 'MV 246', ('Hodoš', 799), ('Ljubljana', 1004))],
+              ['Hodoš', 'Ljubljana'], ['Budapest-Déli', 'Szombathely'], [], 'Budimpešta / Budapest', None),
+    # One trip that runs on abroad itself: the feed's IC 351, no other leg.
+    'IC one trip': ([_leg('IJPP:INTL-1', 'IC 351', ('Maribor', 300), ('Šentilj', 310), ('Graz Hauptbahnhof', 360), ('Szombathely', 480), ('Budapest-Déli', 640))],
+                    ['Maribor', 'Šentilj'], [], ['Graz Hauptbahnhof', 'Szombathely', 'Budapest-Déli'], None, 'Budimpešta / Budapest'),
+}
+
+
+class WholeRunTests(SimpleTestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(abroad._feed_ends, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_every_family_both_ways_reads_its_whole_route(self):
+        for label, (legs, inside, before, after, comes, goes) in FAMILIES.items():
+            with self.subTest(label):
+                run = abroad.main_run(legs)
+                self.assertEqual([s['name'] for s in run['stops'] if not abroad.is_abroad_stop(s['name'], s['gtfsId'])], inside)
+                whole = abroad.whole_run(run, legs)
+                self.assertEqual([r['name'] for r in whole['before']], before)
+                self.assertEqual([r['name'] for r in whole['after']], after)
+                self.assertEqual((whole['comes'], whole['goes']), (comes, goes))
+                self.assertTrue(all(r['abroad'] for r in whole['before'] + whole['after']))
+
+    def test_every_name_learns_its_ends_from_the_feed(self):
+        for label, (legs, *_, comes, goes) in FAMILIES.items():
+            with self.subTest(label):
+                abroad.learn(legs)
+                for leg in legs:
+                    self.assertEqual(abroad.train_ends(leg['route']['shortName'], 'Maribor', 'Ljubljana'), (comes, goes))
+
+    def test_a_stop_abroad_is_text_only_by_the_timetable(self):
+        legs = FAMILIES['EC out'][0]
+        row = abroad.whole_run(legs[1], legs)['after'][-1]
+        self.assertEqual(set(row), {'name', 'abroad', 'scheduledArrival', 'scheduledDeparture'})
+
+    def test_a_delay_abroad_only_where_the_feed_is_live(self):
+        legs = [_leg('IJPP:2', 'EC 79', ('Ljubljana', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 79', ('Dobova', 620), ('Zaprešić', 635), ('Zagreb Glavni kolodvor', 650), delays=[None, 120, None])]
+        rows = abroad.whole_run(legs[0], legs)['after']
+        self.assertEqual(rows[0]['delaySeconds'], 120)
+        self.assertEqual(rows[0]['effectiveDeparture'], mapping.iso(DAY + 635 * 60 + 120))
+        self.assertNotIn('delaySeconds', rows[1])
+
+    def test_a_live_zero_abroad_does_not_read_as_on_time(self):
+        legs = [_leg('IJPP:2', 'EC 79', ('Ljubljana', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 79', ('Dobova', 620), ('Zaprešić', 635), delays=[None, 0])]
+        row = abroad.whole_run(legs[0], legs)['after'][0]
+        self.assertNotIn('delaySeconds', row)
+        self.assertNotIn('effectiveDeparture', row)
+
+    def test_a_leg_too_long_after_is_not_the_same_train(self):
+        legs = [_leg('IJPP:2', 'EC 79', ('Ljubljana', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 79', ('Dobova', 600 + 61), ('Zagreb Glavni kolodvor', 700))]
+        self.assertEqual(abroad.whole_run(legs[0], legs)['after'], [])
+
+    def test_a_leg_that_left_before_it_arrived_is_not_joined(self):
+        legs = [_leg('IJPP:2', 'EC 79', ('Ljubljana', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 79', ('Dobova', 590), ('Zagreb Glavni kolodvor', 640))]
+        self.assertEqual(abroad.whole_run(legs[0], legs)['goes'], None)
+
+    def test_the_table_fills_an_end_the_feed_does_not_reach(self):
+        self.assertEqual(abroad.train_ends('EC 115', 'Jesenice', 'Dobova'), ('München', 'Zagreb'))  # feed silent
+        abroad.learn([_leg('IJPP:2', 'EC 115', ('Jesenice', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 115', ('Dobova', 610), ('Vinkovci', 900))])
+        self.assertEqual(abroad.train_ends('EC 115', 'Jesenice', 'Dobova'), ('München', 'Vinkovci'))  # the feed wins, the table fills
+
+    def test_a_replacement_bus_is_no_train_of_that_number(self):
+        abroad.learn(FAMILIES['EN back'][0])
+        self.assertFalse(abroad.crosses('BUS 40465'))
+        self.assertEqual(abroad.train_ends('BUS 40465', 'Maribor', 'Ljubljana'), (None, None))
+
+    def test_a_domestic_train_has_no_whole_run(self):
+        legs = [_leg('IJPP:9', 'LPV 2400', ('Ljubljana', 500), ('Jesenice', 560))]
+        abroad.learn(legs)
+        self.assertFalse(abroad.crosses('LPV 2400'))
+        self.assertEqual(abroad.whole_run(legs[0], legs), {'before': [], 'after': [], 'comes': None, 'goes': None})
+
+    def test_stuttgart_reads_as_the_town(self):
+        self.assertEqual(abroad.place('Stuttgart Hauptbahnhof'), 'Stuttgart')
+        self.assertEqual(abroad.place('Zagreb Glavni kolodvor'), 'Zagreb')
+
+    def test_the_train_page_takes_the_leg_in_slovenia(self):
+        from prestop_api import trains
+        legs = FAMILIES['EC out'][0]
+        with mock.patch.object(trains, 'runs_on', return_value=legs):
+            self.assertEqual(trains.find_run('115', None)['id'], 'IJPP:2')
+
+    def test_the_trip_keeps_its_stops_in_slovenia_and_adds_the_rest_beside_them(self):
+        legs = FAMILIES['MV in'][0]
+        abroad.learn(legs)
+        static = {'id': 'IJPP:2', 'routeName': 'MV 480', 'destination': 'Ljubljana', 'mode': 'rail'}
+        stops = [{'name': 'Ilirska Bistrica'}, {'name': 'Ljubljana'}]
+        with mock.patch('prestop_api.scheduled.loaded_trips', return_value=legs):
+            out = trips._outside_slovenia(static, stops, None)
+        self.assertEqual([r['name'] for r in out['stopsBefore']], ['Vinkovci', 'Rijeka'])
+        self.assertNotIn('stopsAfter', out)
+        self.assertEqual(out['comesFrom'], 'Vinkovci')
+        self.assertEqual(out['longName'], 'Vinkovci – Ljubljana')
+
+    def test_with_the_timetable_not_in_memory_the_table_still_names_the_route(self):
+        abroad.learn(FAMILIES['MV in'][0])
+        static = {'id': 'IJPP:2', 'routeName': 'MV 480', 'destination': 'Ljubljana', 'mode': 'rail', 'comesFrom': 'Reka / Rijeka'}
+        with mock.patch('prestop_api.scheduled.loaded_trips', return_value=[]):
+            out = trips._outside_slovenia(static, [{'name': 'Ilirska Bistrica'}, {'name': 'Ljubljana'}], None)
+        self.assertEqual(out, {'longName': 'Reka / Rijeka – Ljubljana'})
+
+    def test_a_domestic_trip_gets_nothing_new(self):
+        static = {'id': 'IJPP:9', 'routeName': 'LPV 2400', 'destination': 'Jesenice', 'mode': 'rail'}
+        self.assertEqual(trips._outside_slovenia(static, [{'name': 'Ljubljana'}, {'name': 'Jesenice'}], None), {})
