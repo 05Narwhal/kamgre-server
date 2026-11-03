@@ -8,6 +8,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from prestop_api import platforms, roads
+from prestop_api.management.commands import platform_bays
 from prestop_api.models import PlatformSeen
 
 AP = 'IJPP:1168813'  # Ljubljana AP in the feed (was IJPP:1126954 until Nov 2026)
@@ -139,18 +140,79 @@ class PlaceTests(SimpleTestCase):
         self.assertNotIn('ref', parks[0])  # an arrival's bay is never named
         self.assertEqual(platforms.destination_bays('IJPP:other', seen), [])
 
-    def test_an_unknown_departure_or_another_station_stays_put(self):
+    def test_a_departure_nothing_names_a_bay_for_waits_in_a_free_one_with_no_number(self):
         stops = [{'gtfsId': AP, 'name': 'Ljubljana AP', 'lat': 46.0, 'lon': 14.0}]
-        with mock.patch.object(platforms, 'departure_platform', return_value=None):
-            self.assertEqual(platforms.place(stops, AT_13, 'Nowhere'), (stops, None))
+        with mock.patch.object(platforms, 'platform_for', return_value=(None, False)), \
+                mock.patch.object(platforms, 'station_seen', return_value=[SimpleNamespace(platform='13')]):
+            placed, bay = platforms.place(stops, AT_13, 'Nowhere')
+        self.assertEqual((placed[0]['lat'], placed[0]['lon']), (BAYS['27']['lat'], BAYS['27']['lon']))
+        self.assertNotIn('bay', placed[0])  # no number: the board shows nothing and the leg names no bay
+        self.assertFalse(bay['named'])
+        self.assertEqual([b['ref'] for b in bay['alternates']], ['28', '29', '37', '13'])  # the busiest last
+
+    def test_a_stop_that_is_no_station_with_bays_stays_put(self):
         other = [{'gtfsId': 'IJPP:other', 'name': 'Kranj', 'lat': 46.2, 'lon': 14.3}]
         self.assertEqual(platforms.place(other, AT_13, 'x'), (other, None))
+
+    def test_only_a_station_with_a_board_announces_bays(self):
+        self.assertTrue(platforms.announces(AP))
+        self.assertFalse(platforms.announces('kranj-ap'))
+        self.assertFalse(platforms.announces('IJPP:other'))
 
     def test_sz_replacement_buses_use_the_bays_their_notice_names_at_the_bus_station_next_door(self):
         station = [{'gtfsId': 'IJPP:1122804', 'name': 'Ljubljana', 'lat': 46.058, 'lon': 14.5137, 'replacementLabel': 'Nova Avtobusna postaja Ljubljana (peroni 37, 38 in 39).'}]
         placed, bay = platforms.place(station, AT_13, 'Jesenice')
         self.assertEqual(bay['ref'], '37')
         self.assertEqual((placed[0]['lat'], placed[0]['lon']), (46.0581476, 14.5143907))
+
+
+class PlainNameTests(SimpleTestCase):
+    def test_a_plain_station_is_its_place_name_and_the_others_must_say_bus_station(self):
+        plain, named = platforms.STATIONS['idrija-ap'], platforms.STATIONS['kranj-ap']
+        self.assertTrue(platforms._station_name('Idrija', plain))
+        self.assertFalse(platforms._station_name('Idrija Uta', plain))
+        self.assertTrue(platforms._station_name('Kranj AP', named))
+        self.assertFalse(platforms._station_name('Kranj', named))
+
+
+def _way(ref, points, **tags):
+    return {'type': 'way', 'tags': {'public_transport': 'platform', **({'ref': ref} if ref else {}), **tags},
+            'geometry': [{'lon': x, 'lat': y} for x, y in points]}
+
+
+class BaysFromTests(SimpleTestCase):
+    ROAD = {'type': 'way', 'tags': {'highway': 'service'}, 'geometry': [{'lon': 15.6, 'lat': 46.0}, {'lon': 15.601, 'lat': 46.0}]}
+
+    def test_a_platform_way_is_the_bay_and_the_bus_faces_the_nearer_road(self):
+        bays = platform_bays.bays_from([self.ROAD, _way('7', [(15.6005, 46.0006), (15.6005, 46.0004)]), _way('8', [(15.6006, 46.0004), (15.6006, 46.0006)])])
+        self.assertEqual(sorted(bays), ['7', '8'])
+        self.assertEqual((bays['7']['lat'], bays['7']['lon'], bays['7']['heading']), (46.0005, 15.6005, 180.0))
+        self.assertEqual(bays['8']['heading'], 180.0)  # drawn the other way round: still facing the road
+        self.assertEqual(bays['7']['path'], [[15.6005, 46.0006], [15.6005, 46.0004]])
+
+    def test_bays_in_a_row_face_the_same_way_whichever_end_is_nearer_a_road(self):
+        north = {'type': 'way', 'tags': {'highway': 'service'}, 'geometry': [{'lon': 15.6009, 'lat': 46.00065}, {'lon': 15.601, 'lat': 46.00065}]}
+        bays = platform_bays.bays_from([self.ROAD, north, _way('1', [(15.6003, 46.0003), (15.6003, 46.0001)]), _way('2', [(15.6004, 46.0003), (15.6004, 46.0001)]),
+                                        _way('3', [(15.6009, 46.0004), (15.6009, 46.0006)])])  # 3's nearer road is the north one
+        self.assertEqual([bays[r]['heading'] for r in '123'], [180.0, 180.0, 180.0])
+        self.assertEqual(bays['3']['path'], [[15.6009, 46.0006], [15.6009, 46.0004]])
+
+    def test_a_bay_drawn_as_an_outline_is_stood_in_along_its_long_side(self):
+        box = [(15.6005, 46.0004), (15.60056, 46.0004), (15.60056, 46.00055), (15.6005, 46.00055), (15.6005, 46.0004)]
+        bay = platform_bays.bays_from([self.ROAD, _way('1', box, area='yes')])['1']
+        self.assertAlmostEqual(bay['lat'], 46.000475, places=6)
+        self.assertAlmostEqual(bay['lon'], 15.60053, places=6)
+        self.assertEqual(bay['heading'], 180.0)
+
+    def test_railway_platforms_shared_refs_and_stop_nodes_are_no_bays(self):
+        line = [(15.6005, 46.0006), (15.6005, 46.0004)]
+        self.assertEqual(platform_bays.bays_from([self.ROAD, _way('1', line, railway='platform'), _way('2;3', line), _way('', line),
+                                                  {'type': 'node', 'lat': 46.0, 'lon': 15.6005, 'tags': {'public_transport': 'platform', 'ref': '001'}}]), {})
+
+    def test_a_platform_way_is_no_road_for_a_numbered_node(self):
+        node = {'type': 'node', 'lat': 46.0005, 'lon': 15.6005, 'tags': {'public_transport': 'platform', 'local_ref': '5'}}
+        self.assertEqual(platform_bays.bays_from([node, _way('', [(15.6005, 46.0006), (15.6005, 46.0004)])]), {})
+        self.assertEqual(platform_bays.bays_from([node, self.ROAD]), {})  # 55 m from the road: nowhere to stand
 
 
 @override_settings(PRESTOP_AP_LJUBLJANA_URL='https://ap.test/api/upcoming')
@@ -201,7 +263,7 @@ class ResolveTests(SimpleTestCase):
             self.assertEqual(platforms.station_key('IJPP:9999'), KEY)
             self.assertEqual(platforms.station_key(OLD_AP), KEY)  # rows and links under the old id still count
             self.assertIsNone(platforms.station_key('LPP:1'))
-            self.assertEqual(platforms.unresolved(), [])
+            self.assertNotIn(KEY, platforms.unresolved())
             self.assertEqual(platforms.origin_area('IJPP:9999')['radius'], 130)
 
     def test_a_moved_stop_is_found_inside_the_radius_and_a_railway_station_is_never_the_bus_station(self):
@@ -211,7 +273,7 @@ class ResolveTests(SimpleTestCase):
         self.assertEqual(platforms.resolve([RAIL, far])[KEY]['ids'], [])
 
     def test_a_station_matching_no_stop_is_reported(self):
-        with self.resolved([RAIL, _stop('IJPP:1', 'Kranj AP', 46.24, 14.35)]):
+        with self.resolved([RAIL, _stop('IJPP:1', 'Kranj AP', 46.2463, 14.3547), _stop('IJPP:2', 'Maribor AP', 46.55956, 15.65575), _stop('IJPP:3', 'Idrija', 46.00098, 14.02571)]):
             self.assertEqual(platforms.unresolved(), [KEY])
         with mock.patch.object(platforms, '_resolved', return_value=None):  # no stop index yet: nothing to report
             self.assertEqual(platforms.unresolved(), [])

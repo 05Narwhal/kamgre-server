@@ -45,11 +45,19 @@ OVERRIDES = DATA / 'platform_overrides.csv'
 # `PlatformSeen` keyed by an old id are still read). Which feed stop the station is now is found by place and name
 # when the stop index loads (`resolve`); a station that finds none is reported in /health (`unresolved`).
 # `next_door`: a railway station whose replacement buses leave from this station's bays, when SŽ names them
-# ("peroni 37, 38 in 39").
+# ("peroni 37, 38 in 39"). A station without `board` has bays in OSM but no source for which departure uses which: its
+# buses wait in a free bay on the map and no bay is named (Kranj, Maribor, Idrija; checked 2026-11-03: no station
+# there publishes bays per departure). `plain`: its feed stop is named just the place ("Idrija"), not "... AP".
 STATIONS = {
     'ljubljana-ap': {'name': 'Avtobusna postaja Ljubljana', 'place': 'Ljubljana', 'lat': 46.05805, 'lon': 14.51475, 'radius': 200, 'ground': 130,
                      'board': 'ap-ljubljana', 'ids': ['IJPP:1168813', 'IJPP:1126954'],
                      'next_door': {'place': 'Ljubljana', 'lat': 46.058509, 'lon': 14.512924, 'radius': 150, 'ids': ['IJPP:1122804']}},
+    'kranj-ap': {'name': 'Avtobusna postaja Kranj', 'place': 'Kranj', 'lat': 46.2463, 'lon': 14.3547, 'radius': 120, 'ground': 90,
+                 'ids': ['IJPP:1121237', 'IJPP:1121238']},
+    'maribor-ap': {'name': 'Avtobusna postaja Maribor', 'place': 'Maribor', 'lat': 46.55956, 'lon': 15.65575, 'radius': 120, 'ground': 110,
+                   'ids': ['IJPP:1127365']},
+    'idrija-ap': {'name': 'Avtobusna postaja Idrija', 'place': 'Idrija', 'lat': 46.00098, 'lon': 14.02571, 'radius': 80, 'ground': 60,
+                  'plain': True, 'ids': ['IJPP:1120993']},
 }
 BUS_STATION = re.compile(r'(^|\W)(ap|avtobusna postaja|avt\.? ?post\.?)(\W|$)')
 LEARN_EVERY = 180   # s between polls of a departure board
@@ -91,10 +99,17 @@ def resolve(stops: list[dict]) -> dict:
     its radius whose name says bus station ("Ljubljana AP", "Avtobusna postaja Ljubljana"), nearest first."""
     out = {}
     for key, spec in STATIONS.items():
-        ids = [s['id'] for s in _nearby(stops, spec, 'bus') if BUS_STATION.search(mapping.fold(s.get('name') or ''))]
+        ids = [s['id'] for s in _nearby(stops, spec, 'bus') if _station_name(s.get('name') or '', spec)]
         door = spec.get('next_door')
         out[key] = {'ids': ids, 'nextDoor': [s['id'] for s in _nearby(stops, door, 'rail')][:1] if door else []}
     return out
+
+
+def _station_name(name: str, spec: dict) -> bool:
+    """Whether a stop's name says it is the bus station: "Kranj AP", "Avtobusna postaja Maribor"; for a `plain`
+    station also the bare place name ("Idrija", not "Idrija Uta")."""
+    folded = mapping.fold(name)
+    return bool(BUS_STATION.search(folded)) or (bool(spec.get('plain')) and _words(name) == _words(spec['place']))
 
 
 def _resolved() -> Optional[dict]:
@@ -214,7 +229,7 @@ def learn(now: Optional[float] = None) -> int:
     now = now or time.time()
     stored = 0
     for station_id, spec in STATIONS.items():
-        url = _board_url(spec['board'])
+        url = _board_url(spec.get('board') or '')
         if not url or now - _last_learn.get(station_id, 0) < LEARN_EVERY:
             continue
         _last_learn[station_id] = now
@@ -351,11 +366,18 @@ def bay_for(stop: dict, departure: Optional[float], destination: str, label: str
         seen = station_seen(station)
         platform, usual = platform_for(station, departure, destination, seen)
         refs = bay_refs(platform or '', known)
-    if not refs:
-        return None
+    if not refs:  # nothing says which bay: it waits in a free one, and none is named
+        free = least_used(station, known)
+        alternates = [{'ref': r, 'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in free[1:PARK_BAYS]]
+        return {**known[free[0]], 'ref': free[0], 'usual': True, 'named': False, 'station': station, 'alternates': alternates}
     # The other bays the board names for it ("27-29"): a bus finding its bay taken stands in a free one of them.
     alternates = [{'ref': r, 'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in refs[1:]]
-    return {**known[refs[0]], 'ref': refs[0], 'usual': usual, 'station': station, 'alternates': alternates}
+    return {**known[refs[0]], 'ref': refs[0], 'usual': usual, 'named': True, 'station': station, 'alternates': alternates}
+
+
+def announces(station_id: str) -> bool:
+    """Whether a station's departure board says which bay a departure leaves from."""
+    return bool(STATIONS.get(station_key(station_id) or '', {}).get('board'))
 
 
 def origin_area(station_id: str) -> Optional[dict]:
@@ -366,7 +388,18 @@ def origin_area(station_id: str) -> Optional[dict]:
     return {'latitude': spec['lat'], 'longitude': spec['lon'], 'radius': spec['ground']} if spec else None
 
 
-PARK_BAYS = 8  # bays a bus ending at a bus station may park in
+PARK_BAYS = 8  # bays a bus ending at a bus station may park in (or one waiting for a bay nothing names)
+
+
+def least_used(station: str, known: dict, seen: Optional[Iterable] = None) -> list[str]:
+    """A station's bays, those departures use least first (by the board's history; none: by number)."""
+    if seen is None:
+        seen = station_seen(station) or []
+    used = {ref: 0 for ref in known}
+    for s in seen:
+        for ref in bay_refs(getattr(s, 'platform', '') or '', known):
+            used[ref] += 1
+    return sorted(known, key=lambda r: (used[r], int(r) if r.isdigit() else 10**6, r))
 
 
 def destination_bays(station_id: str, seen: Optional[Iterable] = None) -> list[dict]:
@@ -377,13 +410,7 @@ def destination_bays(station_id: str, seen: Optional[Iterable] = None) -> list[d
     known = bays(station)
     if not known:
         return []
-    if seen is None:
-        seen = station_seen(station) or []
-    used = {ref: 0 for ref in known}
-    for s in seen:
-        for ref in bay_refs(getattr(s, 'platform', '') or '', known):
-            used[ref] += 1
-    order = sorted(known, key=lambda r: (used[r], int(r) if r.isdigit() else 10**6, r))
+    order = least_used(station, known, seen)
     return [{'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in order[:PARK_BAYS]]
 
 
@@ -394,5 +421,5 @@ def place(stops: list[dict], departure: Optional[float], destination: str) -> tu
     bay = bay_for(stops[0], departure, destination, stops[0].get('replacementLabel') or '')
     if not bay:
         return stops, None
-    first = {**stops[0], 'lat': bay['lat'], 'lon': bay['lon'], 'bay': bay['ref'], 'bayUsual': bay['usual']}
+    first = {**stops[0], 'lat': bay['lat'], 'lon': bay['lon'], **({'bay': bay['ref'], 'bayUsual': bay['usual']} if bay.get('named', True) else {})}
     return [first, *stops[1:]], bay

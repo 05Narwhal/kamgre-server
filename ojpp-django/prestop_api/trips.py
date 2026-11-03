@@ -168,7 +168,7 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
         **({'originBays': [{'platform': b['ref'], 'latitude': round(b['lat'], 7), 'longitude': round(b['lon'], 7),
                             **({'heading': round(b['heading'], 1)} if b.get('heading') is not None else {})}
                            for b in bay['alternates']]} if bay and bay.get('alternates') else {}),
-        'bayPending': bool(origin) and (not bay or bay['usual']) and departure is not None,
+        'bayPending': bool(origin) and (not bay or bay['usual']) and departure is not None and platforms.announces(bay['station'] if bay else stops[0].get('gtfsId') or ''),
         'departure': departure,
     }
 

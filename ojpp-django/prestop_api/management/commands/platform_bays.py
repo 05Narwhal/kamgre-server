@@ -3,8 +3,9 @@
     manage.py platform_bays                      # every station in platforms.STATIONS
     manage.py platform_bays --station ljubljana-ap    # a station's key (or its feed stop)
 
-For each platform node with a `local_ref` (the bay number riders see) the command finds where a
-bus stands at it: a bay with a short driveway of its own (sawtooth bays, like bays 1-29 at
+For each platform with a bay number riders see (a node's `local_ref`, or a platform way's
+`local_ref` or `ref`; never a railway platform or a shared "2;3") the command finds where a bus
+stands at it. A platform way is the bay itself: the bus stands along it, facing the nearer road. At a node: a bay with a short driveway of its own (sawtooth bays, like bays 1-29 at
 Ljubljana AP) has the bus on that driveway, facing the way it is drawn (one-way, entry to exit);
 a bay along an aisle has the bus on the aisle beside it. Each bay keeps the points of its piece of
 road, so a departing bus's line starts in the bay. The file is checked in: re-run when the station
@@ -19,9 +20,11 @@ from django.core.management.base import BaseCommand, CommandError
 from prestop_api import geometry, platforms
 from prestop_api.upstream import USER_AGENT
 
-OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']
+OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']
 QUERY = '''[out:json][timeout:90];
 (node["public_transport"="platform"]["local_ref"](around:{r},{lat},{lon});
+ way["public_transport"="platform"](around:{r},{lat},{lon});
+ way["highway"="platform"](around:{r},{lat},{lon});
  way["highway"~"^(service|bus_guideway|unclassified|residential|tertiary)$"](around:{r},{lat},{lon}););
 out geom tags;'''
 NEAR = 15         # m: the bus stands on a road this close to the bay's platform
@@ -34,8 +37,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--station', default='', help='only this station (key in platforms.STATIONS, or its feed stop)')
+        parser.add_argument('--force', action='store_true', help='take an answer with fewer bays than the file has')
 
-    def handle(self, *args, station='', **options):
+    def handle(self, *args, station='', force=False, **options):
         out = platforms.read_bays()
         only = platforms.station_key(station) if station else None
         if station and not only:
@@ -45,6 +49,10 @@ class Command(BaseCommand):
                 continue
             data = self._overpass(QUERY.format(r=spec['radius'], lat=spec['lat'], lon=spec['lon']))
             bays = bays_from(data['elements'])
+            on_file = len(out.get(key, {}).get('bays') or {})
+            if len(bays) < on_file and not force:  # a server with old or partial data (seen: 1 of Kranj's 9)
+                self.stderr.write(f'{spec["name"]}: {len(bays)} bays in this answer, kept the {on_file} on file (--force to take it)')
+                continue
             out[key] = {'name': spec['name'], 'bays': bays}
             self.stdout.write(f'{spec["name"]}: {len(bays)} bays ({", ".join(sorted(bays, key=_num))})')
         platforms.BAYS.write_text(json.dumps(out, ensure_ascii=False, indent=1, sort_keys=True), encoding='utf-8')
@@ -69,12 +77,64 @@ def bearing(a: list, b: list) -> float:
     return (math.degrees(math.atan2((b[0] - a[0]) * kx, b[1] - a[1])) + 360) % 360
 
 
+def is_platform(e: dict) -> bool:
+    tags = e.get('tags') or {}
+    return tags.get('public_transport') == 'platform' or tags.get('highway') == 'platform' or 'railway' in tags
+
+
+def platform_ref(e: dict) -> str:
+    """The bay number on a platform, or '': a node's `local_ref`, a way's `local_ref` or `ref`."""
+    tags = e.get('tags') or {}
+    if e['type'] == 'way' and not (is_platform(e) and e.get('geometry')):
+        return ''
+    ref = (tags.get('local_ref') or (tags.get('ref') if e['type'] == 'way' else '') or '').strip()
+    return '' if ';' in ref or 'railway' in tags else ref
+
+
+def platform_line(e: dict) -> list:
+    """The line a bus stands along at a platform way ([lon, lat]): the way itself, or for a bay drawn as an outline
+    the line through its middle along its long side."""
+    line = [[p['lon'], p['lat']] for p in e['geometry']]
+    if len(line) < 4 or line[0] != line[-1]:
+        return line
+    a, b = max(zip(line, line[1:]), key=lambda side: geometry.cumulative(list(side))[-1])
+    corners = line[:-1]
+    x, y = sum(c[0] for c in corners) / len(corners), sum(c[1] for c in corners) / len(corners)
+    dx, dy = (b[0] - a[0]) / 2, (b[1] - a[1]) / 2
+    return [[x - dx, y - dy], [x + dx, y + dy]]
+
+
+def stands_along(line: list, roads: list) -> dict:
+    """A bay mapped as a way is where the bus stands, whatever the mapped roads do (they often stop short of the bays):
+    along it, facing the road it drives out to."""
+    def to_road(point: list) -> float:
+        return min((geometry.project_stops(r, [{'lat': point[1], 'lon': point[0]}])[0][1] for r in roads), default=0.0)
+    if to_road(line[0]) < to_road(line[-1]):
+        line = line[::-1]
+    cum = geometry.cumulative(line)
+    at = geometry.point_at(line, cum, cum[-1] / 2)
+    return {'lat': round(at[1], 7), 'lon': round(at[0], 7), 'heading': round(bearing(line[0], line[-1]), 1),
+            'path': [[round(x, 7), round(y, 7)] for x, y in line]}
+
+
+def same_way_round(bays: dict) -> dict:
+    """Bays side by side have their buses facing the same way: one against most of them is turned round (which end of a
+    bay is nearer a road differs along a row)."""
+    x = sum(math.sin(math.radians(b['heading'])) for b in bays.values())
+    y = sum(math.cos(math.radians(b['heading'])) for b in bays.values())
+    out = {}
+    for ref, bay in bays.items():
+        against = math.sin(math.radians(bay['heading'])) * x + math.cos(math.radians(bay['heading'])) * y < 0
+        out[ref] = {**bay, 'heading': round((bay['heading'] + 180) % 360, 1), 'path': bay['path'][::-1]} if against else bay
+    return out
+
+
 def bays_from(elements: list) -> dict:
     """ref -> {'lat', 'lon', 'heading', 'path'}: where a bus stands at each bay, facing which way,
     and the piece of road it stands on ([lon, lat] in driving order)."""
     roads = []
     for e in elements:
-        if e['type'] == 'way' and e.get('geometry'):
+        if e['type'] == 'way' and e.get('geometry') and not is_platform(e):
             line = [[p['lon'], p['lat']] for p in e['geometry']]
             if (e.get('tags') or {}).get('oneway') == '-1':
                 line.reverse()
@@ -83,7 +143,7 @@ def bays_from(elements: list) -> dict:
     # sawtooth driveways, so each driveway goes to one bay only; an aisle serves any number.
     pairs = []
     for e in elements:
-        ref = (e.get('tags') or {}).get('local_ref', '').strip() if e['type'] == 'node' else ''
+        ref = platform_ref(e) if e['type'] == 'node' else ''
         if not ref:
             continue
         for k, line in enumerate(roads):
@@ -113,4 +173,5 @@ def bays_from(elements: list) -> dict:
         behind = geometry.point_at(line, cum, max(0.0, middle - 2))
         out[ref] = {'lat': round(at[1], 7), 'lon': round(at[0], 7), 'heading': round(bearing(behind, ahead), 1),
                     'path': [[round(x, 7), round(y, 7)] for x, y in path]}
-    return out
+    ways = {platform_ref(e): stands_along(platform_line(e), roads) for e in elements if e['type'] == 'way' and platform_ref(e)}
+    return {**out, **same_way_round(ways)}
