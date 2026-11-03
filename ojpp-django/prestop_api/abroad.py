@@ -191,7 +191,7 @@ def _row(trip: dict, i: int, kept: Optional[dict] = None) -> dict:
     `kept` (kept_delays): what the feed reported for this stop earlier, still there once it stops reporting the leg."""
     stop, delay = trip['stops'][i], trip['delays'][i]
     country = country_of(stop.get('name'), stop.get('gtfsId'))
-    observed = ((kept or {}).get(trip.get('id')) or {}).get(stop.get('gtfsId'))
+    observed = (kept or {}).get((trip.get('id'), trip.get('serviceDay')), {}).get(stop.get('gtfsId'))
     return {
         'name': stop.get('name') or '',
         **({'abroad': True, **({'country': country} if country else {})} if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else {'stopId': stop.get('gtfsId')}),
@@ -218,26 +218,27 @@ def whole_run(run: dict, legs: Sequence[dict], kept: Optional[dict] = None) -> d
     }
 
 
-def kept_delays(legs: Sequence[dict]) -> dict[str, dict[str, int]]:
-    """{trip id: {stop id: seconds}}: the delays the collector kept for these timetable trips (TripDelay, by stop
-    sequence; TripStops says which stop that is), so a delay outlives the feed's report of it. A kept 0 is left out, as
+def kept_delays(legs: Sequence[dict]) -> dict[tuple[str, int], dict[str, int]]:
+    """{(trip id, service day): {stop id: seconds}}: the delays the collector kept for these timetable trips (TripDelay,
+    by stop sequence; TripStops says which stop that is), so a delay outlives the feed's report of it. By day: the
+    timetable in memory holds several service days, so one trip id comes once per day. A kept 0 is left out, as
     in _row: the feed's bulk 0 abroad is no measurement. Optional: without the database the live delays still stand."""
     from datetime import datetime
     from zoneinfo import ZoneInfo
     from prestop_statistics.models import TripDelay, TripStops
-    days = {t['id']: datetime.fromtimestamp(t['serviceDay'] + 12 * 3600, ZoneInfo('Europe/Ljubljana')).date() for t in legs}
+    days = {(t['id'], datetime.fromtimestamp(t['serviceDay'] + 12 * 3600, ZoneInfo('Europe/Ljubljana')).date()): t['serviceDay'] for t in legs}
     try:
-        rows = [r for r in TripDelay.objects.filter(trip_id__in=days, service_date__in=set(days.values())) if r.service_date == days[r.trip_id]]
+        rows = [r for r in TripDelay.objects.filter(trip_id__in={k[0] for k in days}, service_date__in={k[1] for k in days}) if (r.trip_id, r.service_date) in days]
         stops = {s.trip_id: s.stops for s in TripStops.objects.filter(trip_id__in=[r.trip_id for r in rows])} if rows else {}
     except Exception as e:  # noqa: BLE001 - optional, see above
         logging.getLogger(__name__).warning('Kept delays unavailable: %r', e)
         return {}
-    out: dict[str, dict[str, int]] = {}
+    out: dict[tuple[str, int], dict[str, int]] = {}
     for r in rows:
         ids = {str(s[0]): s[1] for s in stops.get(r.trip_id) or []}
         found = {ids[seq]: delay for seq, delay in r.stop_delays.items() if delay and seq in ids}
         if found:
-            out[r.trip_id] = found
+            out[(r.trip_id, days[(r.trip_id, r.service_date)])] = found
     return out
 
 

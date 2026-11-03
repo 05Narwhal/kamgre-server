@@ -426,7 +426,7 @@ def _outside_slovenia(static: dict, stops: list[dict], day: date) -> dict:
     if abroad.crosses(static['routeName']):
         from . import scheduled
         legs = abroad.legs_of(static['routeName'], scheduled.loaded_trips(day))
-        run = next((t for t in legs if t['id'] == static['id']), None)
+        run = next((t for t in legs if t['id'] == static['id'] and scheduled._service_date(t) == day), None)
         if run:
             whole = abroad.whole_run(run, legs, abroad.kept_delays(legs))
             out.update({'stopsBefore': whole['before']} if whole['before'] else {})

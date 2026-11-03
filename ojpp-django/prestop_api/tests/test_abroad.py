@@ -296,7 +296,7 @@ class WholeRunTests(SimpleTestCase):
         static = {'id': 'IJPP:2', 'routeName': 'MV 480', 'destination': 'Ljubljana', 'mode': 'rail'}
         stops = [{'name': 'Ilirska Bistrica'}, {'name': 'Ljubljana'}]
         with mock.patch('prestop_api.scheduled.loaded_trips', return_value=legs):
-            out = trips._outside_slovenia(static, stops, None)
+            out = trips._outside_slovenia(static, stops, datetime.fromtimestamp(DAY + 12 * 3600, ZoneInfo('Europe/Ljubljana')).date())
         self.assertEqual([r['name'] for r in out['stopsBefore']], ['Vinkovci', 'Rijeka'])
         self.assertNotIn('stopsAfter', out)
         self.assertEqual(out['comesFrom'], 'Vinkovci')
@@ -414,6 +414,26 @@ class KeptDelayTests(TestCase):
     def test_another_days_run_is_not_this_run(self):
         self._keep('IJPP:INTL-2', {'2': 240}, day=self.SERVICE_DATE - timedelta(days=1))
         self.assertEqual(abroad.kept_delays(self.LEGS), {})
+
+    def _next_day(self):
+        """The timetable in memory holds several service days, so one trip id comes once per day (EC 115, 3 Nov)."""
+        return [{**t, 'serviceDay': t['serviceDay'] + 86400, **{k: [x + 86400 for x in t[k]] for k in ('scheduledArrivals', 'scheduledDepartures', 'arrivals', 'departures')}} for t in self.LEGS]
+
+    def test_the_same_trip_on_the_next_day_does_not_hide_todays_delays(self):
+        self._keep('IJPP:INTL-2', {'3': 300})
+        tomorrow = self._next_day()
+        legs = self.LEGS + tomorrow
+        kept = abroad.kept_delays(legs)
+        self.assertEqual(abroad.whole_run(self.LEGS[0], legs, kept)['after'][-1]['observedDelaySeconds'], 300)
+        self.assertNotIn('observedDelaySeconds', abroad.whole_run(tomorrow[0], legs, kept)['after'][-1])  # only that day's run
+
+    def test_the_trip_takes_the_run_of_its_own_day(self):
+        self._keep('IJPP:INTL-2', {'3': 300})
+        static = {'id': 'IJPP:1', 'routeName': 'RG 678', 'destination': 'Šentilj'}
+        with mock.patch.object(abroad, 'crosses', return_value=True), mock.patch('prestop_api.scheduled.loaded_trips', return_value=self._next_day() + self.LEGS):
+            out = trips._outside_slovenia(static, [{'name': 'Maribor'}, {'name': 'Šentilj'}], self.SERVICE_DATE)
+        self.assertEqual(out['stopsAfter'][-1]['observedDelaySeconds'], 300)
+        self.assertEqual(out['stopsAfter'][-1]['scheduledArrival'], abroad.whole_run(self.LEGS[0], self.LEGS)['after'][-1]['scheduledArrival'])
 
     def test_the_trip_serves_them(self):
         self._keep('IJPP:INTL-2', {'3': 300})
