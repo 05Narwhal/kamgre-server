@@ -112,6 +112,70 @@ def passed_stop_delays(updates: list[dict], schedule: dict, now: float) -> dict[
     return out
 
 
+MAX_EARLY_PASS = 15 * 60  # s: a vehicle at a stop earlier than this is at another visit of it (a loop), not passing it
+_first_ours: dict[tuple, int] = {}  # (service date, trip) -> first stop position whose stored delay came from positions
+
+
+def position_pass(schedule: dict, at: Optional[tuple], stamp: float) -> dict[str, int]:
+    """{stopPosition: delay} for the scheduled stop a vehicle report `at` (lat, lon) is within dwell.NEAR of, timed
+    `stamp`. The trip-updates feed leaves some passed stops out (MARPROM drops a few, LPP and city buses often start at
+    the second stop), so positions fill those in. At a stop the trip visits twice, the visit planned nearest `stamp`."""
+    from prestop_statistics.dwell import NEAR, _metres
+    if not at or at[0] is None or at[1] is None or not schedule.get('bySequence'):
+        return {}
+    first = min(schedule['bySequence'])
+    best = None
+    for pos, s in schedule['bySequence'].items():
+        stop = s.get('stop') or {}
+        if stop.get('lat') is None or stop.get('lon') is None or _metres(at, (stop['lat'], stop['lon'])) > NEAR:
+            continue
+        # Its first stop is left, so the last report there counts (its departure); any other is reached (arrival).
+        delay = int(stamp - s['serviceDay'] - (s['scheduledDeparture'] if pos == first else s['scheduledArrival']))
+        if (pos != first and delay < -MAX_EARLY_PASS) or delay > MAX_ABS_DELAY:
+            continue
+        if best is None or abs(delay) < abs(best[1]):
+            best = (pos, delay)
+    return {str(best[0]): best[1]} if best else {}
+
+
+def store_passes(passes: dict) -> int:
+    """Write position-derived stop delays ({(service date, trip id): (schedule, {stopPosition: delay})}) into
+    TripDelay where the feed gave none: a feed value always wins. A first stop keeps updating while the vehicle waits
+    there (it is timed by when it leaves); other stops keep the first report (when it got there)."""
+    if not passes:
+        return 0
+    stamp = timezone.now()
+    written = 0
+    with transaction.atomic():
+        existing = {(r.service_date, r.trip_id): r for r in TripDelay.objects.select_for_update().filter(
+            service_date__in={k[0] for k in passes}, trip_id__in={k[1] for k in passes})}
+        new, changed = [], []
+        for key, (schedule, delays) in passes.items():
+            first = str(min(schedule['bySequence']))
+            current = existing.get(key)
+            known = current.stop_delays if current else {}
+            add = {k: v for k, v in delays.items() if k not in known or (k == first and _first_ours.get(key) == k and known[k] != v)}
+            if not add:
+                continue
+            if first in add:
+                _first_ours[key] = first
+            merged = {**known, **add}
+            if current:
+                current.stop_delays, current.segments, current.last_seen = merged, segment_times(merged, schedule), stamp
+                changed.append(current)
+            else:
+                new.append(TripDelay(service_date=key[0], trip_id=key[1], route_id=schedule['routeId'], operator_id=schedule['operatorId'],
+                                     direction=schedule['direction'], stop_delays=merged, segments=segment_times(merged, schedule),
+                                     first_seen=stamp, last_seen=stamp))
+            written += len(add)
+        TripDelay.objects.bulk_create(new, ignore_conflicts=True)
+        TripDelay.objects.bulk_update(changed, ['stop_delays', 'segments', 'last_seen'])
+    cutoff = timezone.localdate() - timedelta(days=2)
+    for key in [k for k in _first_ours if k[0] < cutoff]:
+        del _first_ours[key]
+    return written
+
+
 MAX_SEGMENT = 3600
 
 
@@ -178,6 +242,8 @@ def collect_once(schedules: ScheduleCache, now: Optional[float] = None, entities
         new, changed = [], []
         for (day, trip_id), row in rows.items():
             current = existing.get((day, trip_id))
+            if _first_ours.get((day, trip_id)) in row['delays']:  # the feed now gives its first stop: the feed's wins
+                del _first_ours[(day, trip_id)]
             if current:
                 merged = {**current.stop_delays, **row['delays']}
                 segments = segment_times(merged, row['schedule'])

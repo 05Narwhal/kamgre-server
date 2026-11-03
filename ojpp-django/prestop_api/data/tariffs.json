@@ -313,6 +313,13 @@
    "stepKm": 5,
    "stepCents": 50,
    "over150Cents": 1650,
+   "dayTicket": {
+    "about": "Unlimited rides that day on the route by bus and train: multiple × the route's single, at most capCents. Saturdays, Sundays and holidays, over weekendOverKm: weekendCents (the article gives no weekend price for shorter routes).",
+    "multiple": 2,
+    "capCents": 1800,
+    "weekendCents": 1340,
+    "weekendOverKm": 75
+   },
    "source": "IJPP single fares from 1. 8. 2025 (Uredba, UL RS 56/2025), reported by Siol 28. 7. 2025",
    "sourceUrl": "https://siol.net/novice/digisvet/adijo-zelo-ugodne-vikend-vozovnice-slovenskega-javnega-potniskega-prometa-668472/print",
    "checked": "2026-10-18"

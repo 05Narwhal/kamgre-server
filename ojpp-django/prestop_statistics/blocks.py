@@ -176,7 +176,7 @@ def _covered(feeds: set, now: float):
 def record(schedules, positions: list[dict], updates: dict, now: Optional[float] = None) -> dict:
     """Write who serves which trip now, what vehicles do between trips (VehicleGap) and how much of the day was
     recorded (RecorderDay). `schedules`: collector.ScheduleCache; `updates`: mapping.trip_update_index."""
-    from prestop_statistics.collector import _service_days
+    from prestop_statistics.collector import _service_days, position_pass, store_passes
     now = now or time.time()
     seen: dict[str, tuple] = {}
     between: dict[str, Optional[tuple]] = {}  # vehicle -> (lat, lon): in the feed without a trip ("MARPROM:")
@@ -203,6 +203,7 @@ def record(schedules, positions: list[dict], updates: dict, now: Optional[float]
     off = {t for t, (_, trip, _, _) in seen.items() if (s := found.get((t, trip.get('startDate')))) and not _on_run(s, now)}
     found.update(schedules.get_many([(t, d) for t in off for d in _service_days({}, now)]))
     rows = {}
+    passes: dict = {}  # (service date, trip) -> (schedule, {stopPosition: delay}) from where the vehicle is now
     gaps: list[VehicleGap] = []
     for trip_id, (vehicle_id, trip, v, at) in seen.items():
         days = _service_days(trip, now) + (_service_days({}, now) if trip_id in off else [])
@@ -222,6 +223,9 @@ def record(schedules, positions: list[dict], updates: dict, now: Optional[float]
         rows[(service_date, trip_id)] = {
             'vehicle_id': vehicle_id, 'route_id': schedule['routeId'], 'block_id': schedule.get('blockId') or '',
             'start': start, 'end': end, 'delay': delay, 'start_delay': delay if starting else None, 'pattern': pattern_key(schedule)}
+        passed = position_pass(schedule, at, int(v.get('timestamp') or now))
+        if passed:
+            passes[(service_date, trip_id)] = (schedule, passed)
         closed = _tracker.observe(vehicle_id, trip_id, service_date, _terminus(schedule), at, now)
         if closed:
             gaps.append(closed)
@@ -252,7 +256,8 @@ def record(schedules, positions: list[dict], updates: dict, now: Optional[float]
         VehicleTrip.objects.bulk_update(changed, ['vehicle_id', 'end_delay', 'start_delay', 'pattern', 'version', 'last_seen'])
         VehicleGap.objects.bulk_create(gaps)
         _covered(feeds, now)
-    return {'vehicles': len(rows), 'new': len(new), 'between': len(between), 'gaps': len(gaps), 'pruned': prune(now)}
+    return {'vehicles': len(rows), 'new': len(new), 'between': len(between), 'gaps': len(gaps), 'passes': store_passes(passes),
+            'pruned': prune(now)}
 
 
 def prune(now: Optional[float] = None) -> int:

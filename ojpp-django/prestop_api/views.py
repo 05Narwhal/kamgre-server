@@ -898,6 +898,22 @@ def _with_observed(data: list[dict], found: dict[str, dict]) -> None:
             queue = positions.get(stop['stopId']) or [None]
             position = queue.pop(0) if len(queue) > 1 else queue[0]
             stop['observedDelaySeconds'] = delays.get(str(position)) if position is not None else None
+        _with_carried(trip['stops'])
+
+
+def _with_carried(stops: list[dict]) -> None:
+    """A stop the vehicle surely passed (a later stop has an observed delay) but with none of its own gets
+    `carriedDelaySeconds`: the delay of the last observed stop before it (or, before the first one, of that first one),
+    shown as estimated. Stops after the last observed one get none: the live estimate covers them."""
+    seen = [i for i, s in enumerate(stops) if s.get('observedDelaySeconds') is not None]
+    if not seen:
+        return
+    carried = stops[seen[0]]['observedDelaySeconds']
+    for stop in stops[:seen[-1]]:
+        if stop.get('observedDelaySeconds') is not None:
+            carried = stop['observedDelaySeconds']
+        else:
+            stop['carriedDelaySeconds'] = carried
 
 
 @require_GET

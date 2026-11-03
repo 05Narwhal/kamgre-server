@@ -16,13 +16,18 @@ from functools import lru_cache
 from typing import Optional
 
 from . import driving, geometry, sharing
+from .sztimetables import holiday
 
 REGULATED = ('petrol', 'diesel')  # fuels with a government price (gov.si); LPG: the usual station price (goriva.si)
 MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 TEXT = {
     'en': {'unknown': 'Price unknown', 'covered': 'Covered by your {card}', 'routeBound': 'Covered by your pass, if it is for this route',
            'ijpp': 'Integrated ticket (IJPP), {km} km', 'sz': 'SŽ train ticket, {km} km', 'szRank': 'SŽ train ticket, {km} km, with the {rank} supplement',
-           'supplement': '{rank} supplement', 'sameTicket': 'On the same ticket', 'city': '{name} single fare, changes free for {minutes} min',
+           'supplement': '{rank} supplement', 'sameTicket': 'On the same ticket',
+           'tipThrough': 'One ticket for all {rides} rides: {amount} (bought separately {separate})',
+           'tipDay': 'Coming back today? An IJPP day ticket for this route, bus and train: {amount} instead of {twice}',
+           'tipWeekend': 'Weekend or holiday: an IJPP day ticket, bus and train, all day: {amount}. One way on a single ticket: {single}',
+           'city': '{name} single fare, changes free for {minutes} min',
            'cityDay': '{name} day ticket', 'citySingle': '{name}: single ticket', 'cityFree': '{name}: free', 'cityChange': 'Free change on the same ticket', 'rideMember': '{name} with your membership',
            'rideJoin': '{name}: membership needed (from {cents}), then the ride', 'rideUnknown': '{name}: price list incomplete',
            'scooter': '{name}: unlock {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name} with your {card}: {minutes} min × {perMinute}',
@@ -36,7 +41,11 @@ TEXT = {
            'fuels': {'petrol': 'petrol', 'diesel': 'diesel', 'lpg': 'LPG, price unknown', 'electric': 'public charging, estimate'}},
     'sl': {'unknown': 'Cena ni znana', 'covered': 'Velja tvoja vozovnica: {card}', 'routeBound': 'Velja tvoja vozovnica, če je za to relacijo',
            'ijpp': 'Enotna vozovnica IJPP, {km} km', 'sz': 'Vozovnica SŽ, {km} km', 'szRank': 'Vozovnica SŽ, {km} km, z doplačilom za {rank}',
-           'supplement': 'Doplačilo za {rank}', 'sameTicket': 'Na isti vozovnici', 'city': '{name}, enkratna vožnja, prestopi brezplačni {minutes} min',
+           'supplement': 'Doplačilo za {rank}', 'sameTicket': 'Na isti vozovnici',
+           'tipThrough': 'Ena vozovnica za vseh {rides} voženj: {amount} (posamezne skupaj {separate})',
+           'tipDay': 'Se danes vračaš? Dnevna vozovnica IJPP za to relacijo, avtobus in vlak: {amount} namesto {twice}',
+           'tipWeekend': 'Vikend ali praznik: dnevna vozovnica IJPP, avtobus in vlak, ves dan: {amount}. V eno smer z enkratno vozovnico: {single}',
+           'city': '{name}, enkratna vožnja, prestopi brezplačni {minutes} min',
            'cityDay': '{name}, dnevna vozovnica', 'citySingle': '{name}: vozovnica za eno vožnjo', 'cityFree': '{name}: brezplačno', 'cityChange': 'Brezplačen prestop na isti vozovnici', 'rideMember': '{name} z naročnino',
            'rideJoin': '{name}: potrebna je naročnina (od {cents}), nato vožnja', 'rideUnknown': '{name}: cenik ni popoln',
            'scooter': '{name}: odklep {unlock} + {minutes} min × {perMinute}', 'ridePass': '{name}, velja tvoj paket {card}: {minutes} min × {perMinute}',
@@ -95,10 +104,33 @@ def sz_cents(km: float) -> int:
     return t['over150Cents']
 
 
+def day_ticket_cents(km: float) -> int:
+    """IJPP day ticket for a route: unlimited rides on it that day by bus and train, twice the single, at most the cap."""
+    t = tariffs()['transit']['ijpp']['dayTicket']
+    return min(t['multiple'] * ijpp_cents(km), t['capCents'])
+
+
+def weekend_ticket_cents(km: float, when: float) -> Optional[int]:
+    """The IJPP weekend day ticket on a Saturday, Sunday or holiday, for a route long enough to have a known price."""
+    t = tariffs()['transit']['ijpp']['dayTicket']
+    day = datetime.fromtimestamp(when, driving.LOCAL).date()
+    return t['weekendCents'] if km > t['weekendOverKm'] and (day.weekday() >= 5 or holiday(day)) else None
+
+
+def single_cents(leg: dict) -> int:
+    """One intercity ride bought on its own: a train (or its replacement bus) at SŽ's tariff with its supplement, a bus
+    at the IJPP tariff."""
+    km = _km(leg)
+    if leg.get('mode') == 'rail' or leg.get('replacement'):
+        return sz_cents(km) + (tariffs()['transit']['sz']['supplementCents'] if _rank(leg) else 0)
+    return ijpp_cents(km)
+
+
 def system_of(leg: dict) -> Optional[str]:
     """'ijpp', a city feed with a known fare, 'unknown' for other public transport, None for walking, riding, driving."""
     if not leg.get('tripId'):
-        return None
+        # A bus or train the planner gave without its trip still costs something: "price unknown", never left out.
+        return 'unknown' if leg.get('mode') in ('bus', 'rail') else None
     if leg.get('replacement'):
         return 'ijpp'  # SŽ's replacement bus: the train's ticket
     city = tariffs()['transit']['city']
@@ -193,6 +225,7 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             current = []
     if current:
         groups.append(current)
+    tips: list[dict] = []  # journey price tips (contract journeyPriceSchema.tips), only when nothing covers the ticket
     for n, group in enumerate(groups):
         ticket = f'ijpp-{n}'
         km = sum(_km(l) for l in group)
@@ -217,9 +250,28 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
             cents = ijpp_cents(km) + (sz['supplementCents'] if ranks else 0)
             basis = text['ijpp'].format(km=round(km)) + (f" + {text['supplement'].format(rank=ranks[0])}" if ranks else '')
             source = data['transit']['ijpp']
-        put(group[0], cents, basis, source, ticket=ticket)
-        for leg in group[1:]:
-            put(leg, 0, text['sameTicket'], source, ticket=ticket)
+        if len(group) < 2:
+            put(group[0], cents, basis, source, ticket=ticket)
+        else:
+            # The card and total keep the one ticket; each ride also says what it costs on its own, so the rides after
+            # the first never look free (K9).
+            singles = [single_cents(l) for l in group]
+            put(group[0], cents, basis, source, ticket=ticket, singleCents=singles[0])
+            for leg, single in zip(group[1:], singles[1:]):
+                put(leg, 0, text['sameTicket'], source, ticket=ticket, singleCents=single)
+            if sum(singles) > cents:
+                tips.append({'kind': 'through', 'amountCents': cents, 'savedCents': sum(singles) - cents,
+                             'text': text['tipThrough'].format(rides=len(group), amount=_euro(cents), separate=_euro(sum(singles)))})
+        # An IJPP day ticket (bus and train), when cheaper. Standard: only if coming back, one way the single always wins.
+        extra = 2 * sz['supplementCents'] if ranks else 0  # the supplement is per ride
+        weekend = weekend_ticket_cents(km, _ts(group[0]['effectiveDeparture']))
+        day = day_ticket_cents(km) + extra
+        if weekend is not None and weekend + extra < 2 * cents:
+            tips.append({'kind': 'day', 'amountCents': weekend + extra, 'savedCents': 2 * cents - weekend - extra,
+                         'text': text['tipWeekend'].format(amount=_euro(weekend + extra), single=_euro(cents))})
+        elif day < 2 * cents:
+            tips.append({'kind': 'day', 'amountCents': day, 'savedCents': 2 * cents - day,
+                         'text': text['tipDay'].format(amount=_euro(day), twice=_euro(2 * cents))})
 
     # City buses: one fare, free changes within the window from the first boarding (none where a ticket is for one ride).
     windows: dict[str, tuple[float, str, int]] = {}
@@ -297,7 +349,7 @@ def price_journey(journey: dict, profile: Optional[dict], language: str = 'en') 
 
     priced = [l['price']['amountCents'] for l in legs if 'price' in l]
     total = None if any(c is None for c in priced) else sum(priced)
-    journey['price'] = {'totalCents': total, 'note': text['note'].format(date=data['checked'])}
+    journey['price'] = {'totalCents': total, 'note': text['note'].format(date=data['checked']), **({'tips': tips} if tips else {})}
     return journey
 
 
