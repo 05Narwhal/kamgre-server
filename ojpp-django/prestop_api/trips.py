@@ -484,6 +484,7 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
         patterns.append({
             'id': p['code'], 'directionId': mapping.direction_key(p.get('directionId')),
             'headsign': goes or p.get('headsign') or (stops[-1]['name'] if stops else ''),
+            **({'goesTo': goes} if goes else {}),
             'tripCount': len(p.get('tripsForDate') or []),
             'departures': _departures(p.get('tripsForDate') or []),
             'length': round(cumulative(geometry)[-1], 1) if len(geometry) > 1 else 0.0,

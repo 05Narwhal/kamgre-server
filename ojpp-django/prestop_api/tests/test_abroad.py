@@ -1,4 +1,5 @@
 """Slovenia only: places abroad are text, never stops, shapes or vehicles (abroad.py)."""
+from datetime import date
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -228,7 +229,16 @@ class WholeRunTests(SimpleTestCase):
     def test_a_stop_abroad_is_text_only_by_the_timetable(self):
         legs = FAMILIES['EC out'][0]
         row = abroad.whole_run(legs[1], legs)['after'][-1]
-        self.assertEqual(set(row), {'name', 'abroad', 'scheduledArrival', 'scheduledDeparture'})
+        self.assertEqual(set(row), {'name', 'abroad', 'country', 'scheduledArrival', 'scheduledDeparture'})
+        self.assertEqual(row['country'], 'HR')
+
+    def test_a_stop_abroad_knows_its_country_from_the_feed(self):
+        self.assertEqual(abroad.country_of('Villach Hauptbahnhof', 'IJPP:INTL-8100147'), 'AT')
+        self.assertEqual(abroad.country_of('München Hauptbahnhof', 'IJPP:INTL-8000261'), 'DE')
+        self.assertEqual(abroad.country_of('Szombathely', 'IJPP:INTL-5500028'), 'HU')
+        self.assertEqual(abroad.country_of('Tarvisio autostazione (I)'), 'IT')
+        self.assertEqual(abroad.country_of('Hodos Drzavna meja', 'IJPP:INTL-7943778'), None)  # 79: no country to name
+        self.assertEqual(abroad.country_of('Nowhere', 'IJPP:INTL-9900001'), None)  # one we don't know: no mark, no guess
 
     def test_a_delay_abroad_only_where_the_feed_is_live(self):
         legs = [_leg('IJPP:2', 'EC 79', ('Ljubljana', 500), ('Dobova', 600)), _leg('IJPP:INTL-3', 'EC 79', ('Dobova', 620), ('Zaprešić', 635), ('Zagreb Glavni kolodvor', 650), delays=[None, 120, None])]
@@ -299,3 +309,73 @@ class WholeRunTests(SimpleTestCase):
     def test_a_domestic_trip_gets_nothing_new(self):
         static = {'id': 'IJPP:9', 'routeName': 'LPV 2400', 'destination': 'Jesenice', 'mode': 'rail'}
         self.assertEqual(trips._outside_slovenia(static, [{'name': 'Ljubljana'}, {'name': 'Jesenice'}], None), {})
+
+
+class LineTests(SimpleTestCase):
+    def test_a_line_to_zagreb_says_so_and_keeps_its_stops_in_slovenia(self):
+        jes, dob = _stop('IJPP:jes', 'Jesenice', 46.43, 14.06), _stop('IJPP:dob', 'Dobova', 45.89, 15.65)
+        route = {'gtfsId': 'IJPP:r', 'shortName': 'EC 115', 'mode': 'RAIL', 'agency': {'gtfsId': 'IJPP:a', 'name': 'SŽ'},
+                 'patterns': [{'code': 'p', 'directionId': 0, 'headsign': 'Dobova', 'stops': [jes, dob], 'tripsForDate': [],
+                               'shapeCoordinates': [[jes['lon'], jes['lat']], [dob['lon'], dob['lat']]]}]}
+        with mock.patch.object(trips, '_corrected', side_effect=lambda stops, replacement=False: stops), \
+                mock.patch.object(trips, 'road_shape', side_effect=lambda raw, *a, **k: (raw, True)), \
+                mock.patch.object(trips.stopfix, 'renamed', side_effect=lambda sid, name: name), \
+                mock.patch.object(trips.mapping, 'route_ends', return_value=('Jesenice', 'Dobova')):
+            line, _ = trips.build_line(route, date(2026, 11, 3))
+        pattern = line['patterns'][0]
+        self.assertEqual(line['longName'], 'München – Zagreb')
+        self.assertEqual(pattern['goesTo'], 'Zagreb')
+        self.assertEqual([s['name'] for s in pattern['stops']], ['Jesenice', 'Dobova'])
+
+
+class OnTheMapTests(SimpleTestCase):
+    """The map by the timetable: an international train is one vehicle, in Slovenia only."""
+
+    def setUp(self):
+        patcher = mock.patch.dict(abroad._feed_ends, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def vehicles(self, legs, minute, drops=None):
+        from prestop_api import scheduled
+        abroad.learn(legs)
+        table = [{**t, 'pattern': t['id'], 'alertIds': [], 'headsign': ''} for t in legs]
+        with mock.patch.object(scheduled.timetable, 'get', return_value=mock.Mock(value=table)), \
+                mock.patch.object(scheduled.shapes, 'get', return_value=mock.Mock(value={})), \
+                mock.patch.object(scheduled, '_derive', return_value={'sections': {}, 'synthetic': []}), \
+                mock.patch.object(scheduled.closures, 'train_alert_ids', return_value=[]), \
+                mock.patch.object(scheduled.zamudil, 'class_of', return_value=None), \
+                mock.patch.object(scheduled.tracks.tracks, 'track', return_value=(None, False)):
+            return scheduled.vehicles(now=DAY + minute * 60, live={}, updates={}, drops=drops)
+
+    def test_a_train_from_muenchen_shows_from_its_first_station_in_slovenia(self):
+        legs = FAMILIES['EC out'][0]
+        self.assertEqual(self.vehicles(legs, 700), [])  # between München and Villach
+        self.assertEqual(self.vehicles(legs, 900), [])  # Villach to Jesenice, still abroad
+        [train] = self.vehicles(legs, 960)
+        self.assertEqual((train['tripId'], train['comesFrom'], train['destination']), ('IJPP:2', 'München', 'Zagreb'))
+
+    def test_a_train_to_zagreb_goes_at_its_last_station_in_slovenia(self):
+        legs = FAMILIES['EC out'][0]
+        [standing] = self.vehicles(legs, 1134)  # the stand at Dobova, its last minutes
+        self.assertEqual((standing['nextStop'], standing['stopped'], standing['destination']), ('Dobova', True, 'Zagreb'))
+        self.assertEqual(self.vehicles(legs, 1140), [])  # on its way to Zaprešić
+
+    def test_where_it_changes_legs_at_the_border_it_is_one_train(self):
+        legs = FAMILIES['RG out'][0]  # arrives at Šentilj 1242 on one leg, leaves 1243 on the other
+        drops = []
+        [train] = self.vehicles(legs, 1242, drops)
+        self.assertEqual(train['tripId'], 'IJPP:1')
+        self.assertEqual(len(drops), 1)
+
+    def test_it_comes_back_when_it_re_enters(self):
+        legs = FAMILIES['RG back'][0]
+        self.assertEqual(self.vehicles(legs, 420), [])  # Graz to Spielfeld
+        self.assertEqual(self.vehicles(legs, 445), [])  # Spielfeld to Šentilj
+        [train] = self.vehicles(legs, 455)
+        self.assertEqual((train['tripId'], train['comesFrom']), ('IJPP:2', 'Gradec / Graz'))
+
+    def test_two_parts_of_one_number_both_in_slovenia_stay_two(self):
+        """EN 415: a part from Jesenice and one from Maribor run at the same time under one number."""
+        legs = [_leg('IJPP:1', 'EN 415', ('Jesenice', 414), ('Ljubljana', 480), ('Dobova', 593)), _leg('IJPP:INTL-2', 'EN 415', ('Maribor', 539), ('Ljubljana', 600), ('Dobova', 670))]
+        self.assertEqual(len(self.vehicles(legs, 560)), 2)

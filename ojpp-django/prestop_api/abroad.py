@@ -22,7 +22,9 @@ from .sz import train_parts
 T = TypeVar('T')
 TRAINS_CSV = os.path.join(os.path.dirname(__file__), 'data', 'international_trains.csv')
 # The IJPP feed's stops abroad end in their country: "Tarvisio autostazione (I)", "Bleiburg Bahnhof (A)".
-_MARK = re.compile(r'\((?:I|A|HR|H|D|CH|SRB|BIH)\)\s*$')
+_MARK = re.compile(r'\((I|A|HR|H|D|CH|SRB|BIH)\)\s*$')
+_MARK_COUNTRY = {'I': 'IT', 'A': 'AT', 'HR': 'HR', 'H': 'HU', 'D': 'DE', 'CH': 'CH', 'SRB': 'RS', 'BIH': 'BA'}
+_UIC_COUNTRY = {'55': 'HU', '78': 'HR', '80': 'DE', '81': 'AT', '83': 'IT', '85': 'CH'}  # see _INTL
 # A place abroad as riders read it: Slovenian name / local name, the way SŽ and the stations sign it.
 PLACES = {
     'beljak': 'Beljak / Villach', 'villach': 'Beljak / Villach',
@@ -65,6 +67,12 @@ def is_abroad_stop(name: Optional[str], stop_id: Optional[str] = None) -> bool:
         return True
     found = _INTL.search(stop_id or '')
     return bool(found) and (found.group(1) != HOME_UIC or bool(_BORDER.search(name or '')))
+
+
+def country_of(name: Optional[str], stop_id: Optional[str] = None) -> Optional[str]:
+    """The country code (ISO) of a stop abroad, from the feed's own mark or id; None when they don't say."""
+    mark, found = _MARK.search(name or ''), _INTL.search(stop_id or '')
+    return _MARK_COUNTRY[mark.group(1)] if mark else _UIC_COUNTRY.get(found.group(1)) if found else None
 
 
 def place(name: Optional[str]) -> str:
@@ -132,6 +140,11 @@ def _inside(run: dict) -> int:
     return sum(not is_abroad_stop(s.get('name'), s.get('gtfsId')) for s in run['stops'])
 
 
+def only_touches_slovenia(run: dict) -> bool:
+    """A leg abroad with one station here, the border station it leaves from or arrives at."""
+    return _inside(run) == 1
+
+
 def main_run(runs: Sequence[dict]) -> Optional[dict]:
     """The leg with most stations in Slovenia, the one a train's page shows; on a tie the first found, SŽ's own
     (their ids have no INTL). None: no leg in Slovenia."""
@@ -175,9 +188,10 @@ def _row(trip: dict, i: int) -> dict:
     for a station in Slovenia. Times by the timetable; a delay only where the feed itself reports one, never guessed.
     A live 0 counts as none: the feed marks stops abroad live at 0 in bulk, and that must not read as on time."""
     stop, delay = trip['stops'][i], trip['delays'][i]
+    country = country_of(stop.get('name'), stop.get('gtfsId'))
     return {
         'name': stop.get('name') or '',
-        **({'abroad': True} if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else {'stopId': stop.get('gtfsId')}),
+        **({'abroad': True, **({'country': country} if country else {})} if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else {'stopId': stop.get('gtfsId')}),
         'scheduledArrival': iso(trip['scheduledArrivals'][i]), 'scheduledDeparture': iso(trip['scheduledDepartures'][i]),
         **({'effectiveArrival': iso(trip['arrivals'][i]), 'effectiveDeparture': iso(trip['departures'][i]), 'delaySeconds': delay} if delay else {}),
     }

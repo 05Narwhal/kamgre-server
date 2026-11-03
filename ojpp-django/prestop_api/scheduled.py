@@ -467,6 +467,7 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
     suppressed = derived.get('suppressed') or {}  # the feed's buses a replacement timetable runs instead
     out, seen = [], {(mapping.route_name(t['route']), (t.get('scheduledDepartures') or t['departures'])[0]) for t in trips
                      if t['id'] in skip_trips and not mapping.is_replacement(t['route'])}
+    stands = {}  # vehicle id -> the leg abroad it stands at the border station on (see the end)
     for trip in trips + derived['synthetic']:
         times = trip.get('scheduledDepartures') or trip['departures']
         if not times[0] - BOARDING <= now <= times[-1] + ARRIVED + mapping.MAX_UNCONFIRMED_DELAY:
@@ -568,4 +569,12 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             out[-1]['alertIds'] = trip['alertIds']
         elif not replacement and (notices := closures.train_alert_ids(route['gtfsId'], now)):
             out[-1]['alertIds'] = notices  # zamudil.si's notices on this train today (closures.train_alerts)
-    return out
+        if not replacement and abroad.only_touches_slovenia(trip):
+            stands[out[-1]['id']] = trip
+    # One train, one vehicle: where it changes legs at the border, its leg abroad stands at the station while its leg
+    # in Slovenia is still arriving or already boarding. Alone, that stand is the train.
+    running = {v['trainNumber'] for v in out if v['id'] not in stands}
+    for v in out:
+        if v['id'] in stands and v['trainNumber'] in running:
+            coverage.note(drops, 'listed twice', stands[v['id']])
+    return [v for v in out if v['id'] not in stands or v['trainNumber'] not in running]
