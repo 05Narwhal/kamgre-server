@@ -14,7 +14,9 @@ departure would start at the same point. Two sources fix that:
 
 A trip that starts at such a station starts in its bay (`place`): its first stop is moved there
 and its line begins with the bay's road, so a waiting bus is drawn in the right bay, facing out.
-Rows in `data/platform_overrides.csv` (station, time, destination, bay) win over the board.
+Rows in `data/platform_overrides.csv` (station, time, destination, bay) are the hand route for stations with no
+board: a row with a time is that one departure's bay and wins over the board; a row with an empty time is the bay
+"every departure to this destination" usually uses, read as `usual` (after the board, before the board's history).
 """
 import csv
 import json
@@ -70,6 +72,7 @@ STOPWORDS = {'ap', 'avtobusna', 'postaja', 'zp', 'center', 'bs', 'k', 'pri', 'na
 
 _bays: dict = {'stamp': None, 'value': {}}
 _lock = threading.Lock()
+_warned: set = set()   # hand rows already reported (once per process)
 _last_learn: dict[str, float] = {}
 
 
@@ -246,11 +249,32 @@ def learn(now: Optional[float] = None) -> int:
 
 
 def overrides() -> list[dict]:
+    """The rows of `platform_overrides.csv` that name a bay (see the file's header). A row naming a bay its station
+    has no position for is reported once and kept (its text still shows); `bay_for` never moves a bus to it."""
     try:
         with open(OVERRIDES, encoding='utf-8', newline='') as f:
-            return [r for r in csv.DictReader(line for line in f if not line.startswith('#')) if r.get('bay')]
+            rows = [{k: (v or '').strip() for k, v in r.items() if k} for r in csv.DictReader(line for line in f if not line.startswith('#'))]
     except OSError:
         return []
+    rows = [r for r in rows if r.get('bay')]
+    for r in rows:
+        key = station_key(r.get('station'))
+        known = bays(key) if key else {}
+        problem = ('is no station with bays; the row is ignored' if not key
+                   else 'is no bay we have a position for; a bus never moves there' if known and not bay_refs(r['bay'], known) else '')
+        if problem and (r['station'], r['bay']) not in _warned:
+            _warned.add((r['station'], r['bay']))
+            logger.warning('platform_overrides.csv: station %r, bay %r %s', r['station'], r['bay'], problem)
+    return [r for r in rows if station_key(r.get('station'))]
+
+
+def usual_override(station_id: str, destination: str) -> Optional[str]:
+    """The bay a hand row with no time gives for every departure to `destination` at this station, or None."""
+    key = station_key(station_id)
+    for row in overrides():
+        if not row.get('time') and station_key(row.get('station')) == key and same_place(row.get('destination', ''), destination):
+            return row['bay']
+    return None
 
 
 def departure_platform(station_id: str, departure: float, destination: str, seen: Optional[Iterable] = None) -> Optional[str]:
@@ -259,7 +283,7 @@ def departure_platform(station_id: str, departure: float, destination: str, seen
     hhmm = datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M')
     key = station_key(station_id)
     for row in overrides():
-        if station_key(row.get('station')) == key and row.get('time') == hhmm and same_place(row.get('destination', ''), destination):
+        if row.get('time') == hhmm and station_key(row.get('station')) == key and same_place(row.get('destination', ''), destination):
             return row['bay']
     if seen is None:
         seen = station_seen(station_id)
@@ -335,14 +359,16 @@ def usual_platform(station_id: str, departure: float, destination: str, seen: Op
 
 
 def platform_for(station_id: str, departure: float, destination: str, seen: Optional[Iterable] = None) -> tuple[Optional[str], bool]:
-    """(platform text, usual): the departure's own bay (overrides, board), else the bay its destination
-    usually leaves from (`usual` True), else (None, False)."""
+    """(platform text, usual): the departure's own bay (a hand row with its time, else the board), else the bay its
+    destination usually leaves from (`usual` True): a hand row with no time, else the board's history; else (None, False)."""
     if seen is not None:
         seen = list(seen)
     hhmm = datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M')
     exact = departure_platform(station_id, departure, destination, None if seen is None else [s for s in seen if _hhmm(s) == hhmm])
     if exact:
         return exact, False
+    if hand := usual_override(station_id, destination):
+        return hand, True
     usual = usual_platform(station_id, departure, destination, seen)
     return (usual, True) if usual else (None, False)
 

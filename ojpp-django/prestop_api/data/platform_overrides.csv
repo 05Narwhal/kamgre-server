@@ -1,4 +1,12 @@
-# Bays set by hand; they win over the station's departure board (platforms.py).
-# station: the bus station (its key in platforms.STATIONS, e.g. ljubljana-ap, or its feed stop); time: scheduled departure HH:MM;
-# destination: as the trip shows it (matched loosely, "Koper" ~ "Koper AP"); bay: the bay number (local_ref).
+# Bays set by hand, for stations whose own departure board names none (Kranj, Maribor, Idrija: only Ljubljana AP does).
+# Fill it in alone: one row per line, no quotes unless a cell has a comma; the first four columns are needed, 'note' is yours.
+#   station:     the station's key in platforms.STATIONS: ljubljana-ap, kranj-ap, maribor-ap or idrija-ap.
+#   time:        scheduled departure HH:MM, or EMPTY.
+#   destination: as the trip shows it; matched loosely ("Koper" matches "Koper AP").
+#   bay:         the bay number (its local_ref) that exists in data/platform_bays.json for that station; a bay it lacks is logged and never used.
+# Two kinds of row:
+#   1. With a time: that one departure's bay. The app shows it as certain. Beats the live board.   kranj-ap,06:15,Ljubljana,5,photographed 2026-11-10
+#   2. With the time EMPTY: every departure to that destination, any time. The app shows it as "usually bay X", never as certain.   kranj-ap,,Škofja Loka,7,usually
+# A time row beats the live board, the board beats an empty-time row, which beats the usual bay learned from the board's history.
+# Lines starting with # are ignored. No real rows are shipped: with none, these stations show no bay number (a bus waits in a free bay, unnamed).
 station,time,destination,bay,note
