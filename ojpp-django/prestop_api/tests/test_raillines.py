@@ -319,7 +319,41 @@ class MergeToBorderTests(SimpleTestCase):
         self.assertEqual(len(ends), 2)
 
 
+# LP 7812, 2026-11-03: the rail from Sveti Rok ob Sotli west to Rogatec. It runs along the Sotla and the border file puts five
+# short stretches of it (up to 24 m deep) on the Croatian side, though every stop on it is in Slovenia.
+SV_ROK_ROGATEC = [
+    [15.76007, 46.2088], [15.758933, 46.208803], [15.757795, 46.208805], [15.756658, 46.208808],
+    [15.75558, 46.208845], [15.754653, 46.20902], [15.753797, 46.20933], [15.753107, 46.209717],
+    [15.75249, 46.21021], [15.752046, 46.210798], [15.75167, 46.211385], [15.75157, 46.21193],
+    [15.7518, 46.21262], [15.75219, 46.213316], [15.752632, 46.213997], [15.753177, 46.214649],
+    [15.753723, 46.215301], [15.754268, 46.215953], [15.75467, 46.216597], [15.754893, 46.217257],
+    [15.754955, 46.217935], [15.754922, 46.218598], [15.75481, 46.21922], [15.75438, 46.21977],
+    [15.75376, 46.22014], [15.752949999999998, 46.22041], [15.751907, 46.220643], [15.750863, 46.220877],
+    [15.74982, 46.22111], [15.74892, 46.22126], [15.747774, 46.221404], [15.746629, 46.221549],
+    [15.745483, 46.221693], [15.744338, 46.221837], [15.743192, 46.221982], [15.742217, 46.222057],
+    [15.741247, 46.222003], [15.740181, 46.221787], [15.739089, 46.221513], [15.73805, 46.22124],
+    [15.73721, 46.22094], [15.73648, 46.22038], [15.736035, 46.219655], [15.73559, 46.21892999999999],
+    [15.734934, 46.218488], [15.734046, 46.218062], [15.733302, 46.217572], [15.73263, 46.21705],
+    [15.731825, 46.21665], [15.73098, 46.21649], [15.73019, 46.21658], [15.729315, 46.216915],
+    [15.728727, 46.217453], [15.728167, 46.218058], [15.72773, 46.21861], [15.72765, 46.21935],
+    [15.727973, 46.21997], [15.728543, 46.220483], [15.72905, 46.22096], [15.729295, 46.22152],
+    [15.72923, 46.22217], [15.72894, 46.222585], [15.72837, 46.22301], [15.72765, 46.22326],
+    [15.72676, 46.22331], [15.725657, 46.22321], [15.724553, 46.22311], [15.723818, 46.223043],
+]
+
+
 class InsidePartsTests(SimpleTestCase):
+    def test_a_track_along_the_border_keeps_its_route_between_two_stations(self):
+        [part] = border.inside_parts(SV_ROK_ROGATEC)
+        self.assertAlmostEqual(geometry.cumulative(part)[-1], geometry.cumulative(SV_ROK_ROGATEC)[-1], delta=60)
+
+    def test_such_a_track_is_not_cut_where_it_is_followed_out_of_a_station(self):
+        kept = border.until_abroad(SV_ROK_ROGATEC)
+        self.assertAlmostEqual(geometry.cumulative(kept)[-1], geometry.cumulative(SV_ROK_ROGATEC)[-1], delta=60)
+
+    def test_a_line_leaving_for_good_is_still_cut_at_the_border(self):
+        self.assertLess(len(border.until_abroad(TO_CROATIA)), len(geometry.densify(TO_CROATIA, border.STEP)))
+
     def test_a_line_that_stays_home_keeps_its_points(self):
         line = geometry.densify(east(46.05, 2), 500)
         self.assertEqual(border.inside_parts(line), [line])
