@@ -145,10 +145,10 @@ class PlaceTests(SimpleTestCase):
         with mock.patch.object(platforms, 'platform_for', return_value=(None, False)), \
                 mock.patch.object(platforms, 'station_seen', return_value=[SimpleNamespace(platform='13')]):
             placed, bay = platforms.place(stops, AT_13, 'Nowhere')
-        self.assertEqual((placed[0]['lat'], placed[0]['lon']), (BAYS['27']['lat'], BAYS['27']['lon']))
+        self.assertEqual((placed[0]['lat'], placed[0]['lon']), (BAYS[bay['ref']]['lat'], BAYS[bay['ref']]['lon']))
         self.assertNotIn('bay', placed[0])  # no number: the board shows nothing and the leg names no bay
         self.assertFalse(bay['named'])
-        self.assertEqual([b['ref'] for b in bay['alternates']], ['28', '29', '37', '13'])  # the busiest last
+        self.assertEqual({bay['ref'], *(b['ref'] for b in bay['alternates'])}, set(BAYS))  # stable per destination (free_bays)
 
     def test_a_stop_that_is_no_station_with_bays_stays_put(self):
         other = [{'gtfsId': 'IJPP:other', 'name': 'Kranj', 'lat': 46.2, 'lon': 14.3}]

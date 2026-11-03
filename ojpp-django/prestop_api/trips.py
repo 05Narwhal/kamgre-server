@@ -91,11 +91,18 @@ def road_shape(raw: list, stops: list[dict], mode: str, deadline: Optional[float
     """The shape to draw and move vehicles on: bus shapes are repaired where the feed's is
     missing or wrong (see roads.py); an SŽ replacement bus's is routed on the roads between its
     stops, because the feed gives it the railway's; a bus leaving from a bay (platforms.py) drives
-    out of it to its second stop; a train's follows the railway (railtrack.py), also when the feed gives it no shape
+    out of it to its second stop, and one ending in a bay (`parked`) drives into it from the last but one; the line
+    always reaches the bay itself, also where the router stops at the road beside it; a train's follows the railway (railtrack.py), also when the feed gives it no shape
     at all, stop to stop; (geometry, complete)."""
     complete = True
     if mode == 'bus':
-        raw, complete = roads.repair(raw, stops, deadline, road_only=replacement, reroute=(0,) if from_bay else ())
+        parked = len(stops) > 1 and bool(stops[-1].get('parked'))
+        raw, complete = roads.repair(raw, stops, deadline, road_only=replacement,
+                                     reroute=(*((0,) if from_bay else ()), *((len(stops) - 2,) if parked else ())))
+        if from_bay and len(raw) > 1 and raw[0] != (first := [stops[0]['lon'], stops[0]['lat']]):
+            raw = [first, *raw]
+        if parked and len(raw) > 1 and raw[-1] != (last := [stops[-1]['lon'], stops[-1]['lat']]):
+            raw = [*raw, last]
     elif mode == 'rail':
         raw = trim_spurs(raw)  # no sideways step onto the station's point (geometry.trim_spurs)
         from . import raillines
@@ -137,7 +144,7 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
         stops, bay = platforms.place(stops, departure, stops[-1].get('name') or t.get('tripHeadsign') or '')
     origin = platforms.origin_area(bay['station'] if bay else stops[0].get('gtfsId') or '') if mode == 'bus' else None
     destination = platforms.origin_area(stops[-1].get('gtfsId') or '') if mode == 'bus' else None
-    parks = platforms.destination_bays(stops[-1].get('gtfsId') or '') if destination else []
+    parks = platforms.destination_bays(stops[-1].get('gtfsId') or '', towards=stops[0].get('name') or '') if destination else []
     raw = t.get('shapeCoordinates') or mapping.decode_polyline((t.get('tripGeometry') or {}).get('points') or '')
     if (a, b) != (0, len(every)):  # the feed's shape runs on abroad: the part between the stops in Slovenia
         raw = in_slovenia(raw, every, a, b) if len(raw) > 1 else raw
@@ -486,7 +493,12 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
             goes = abroad.train_ends(mapping.route_name(route), stops[0].get('name'), stops[-1].get('name'))[1]
         raw = p.get('shapeCoordinates') or mapping.decode_polyline((p.get('patternGeometry') or {}).get('points') or '')
         raw, stops = in_slovenia(raw, stops, a, b), stops[a:b]
-        geometry, done = road_shape(raw, stops, mapping.mode_of(route.get('mode')), deadline, replacement)
+        bay = None
+        if not rail:  # as its trips: from a bay, into a bay. Which one by its first trip of the day (no number shown here).
+            times = [st['serviceDay'] + st['scheduledDeparture'] for st in ((t.get('departureStoptime') or {}) for t in p.get('tripsForDate') or [])
+                     if st.get('serviceDay') is not None and st.get('scheduledDeparture') is not None]
+            stops, bay = platforms.place(stops, min(times, default=None), stops[-1].get('name') or p.get('headsign') or '')
+        geometry, done = road_shape(raw, stops, mapping.mode_of(route.get('mode')), deadline, replacement, from_bay=bool(bay))
         complete = complete and done
         distances = stop_distances(geometry, stops)
         patterns.append({
