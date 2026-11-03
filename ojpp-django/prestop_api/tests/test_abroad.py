@@ -1,10 +1,13 @@
 """Slovenia only: places abroad are text, never stops, shapes or vehicles (abroad.py)."""
-from datetime import date
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from unittest import mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 
 from prestop_api import abroad, mapping, trips
+from prestop_statistics.models import TripDelay, TripStops
 
 
 def _stop(sid, name, lat, lon):
@@ -379,3 +382,42 @@ class OnTheMapTests(SimpleTestCase):
         """EN 415: a part from Jesenice and one from Maribor run at the same time under one number."""
         legs = [_leg('IJPP:1', 'EN 415', ('Jesenice', 414), ('Ljubljana', 480), ('Dobova', 593)), _leg('IJPP:INTL-2', 'EN 415', ('Maribor', 539), ('Ljubljana', 600), ('Dobova', 670))]
         self.assertEqual(len(self.vehicles(legs, 560)), 2)
+
+
+class KeptDelayTests(TestCase):
+    """Delays abroad outlive the feed's report of them (spec 2026-11-03 L3): the collector's TripDelay keeps them."""
+    LEGS = [_leg('IJPP:1', 'RG 678', ('Maribor', 1232), ('Šentilj', 1242)), _leg('IJPP:INTL-2', 'IR 678', ('Šentilj', 1243), ('Spielfeld-Straß', 1250), ('Graz Hauptbahnhof', 1293))]
+    SERVICE_DATE = datetime.fromtimestamp(DAY + 12 * 3600, ZoneInfo('Europe/Ljubljana')).date()
+
+    def _keep(self, trip_id, delays, day=None):
+        now = timezone.now()
+        TripDelay.objects.create(service_date=day or self.SERVICE_DATE, trip_id=trip_id, route_id='r', operator_id='o', direction='0', stop_delays=delays, first_seen=now, last_seen=now)
+        TripStops.objects.update_or_create(trip_id=trip_id, defaults={'route_id': 'r', 'mode': 'RAIL', 'seen': self.SERVICE_DATE, 'stops': [
+            [i + 1, S[name]['gtfsId'], name, 0] for i, name in enumerate(('Šentilj', 'Spielfeld-Straß', 'Graz Hauptbahnhof'))]})
+
+    def test_a_feed_that_stopped_reporting_keeps_the_delay(self):
+        self._keep('IJPP:INTL-2', {'2': 240, '3': 300})
+        after = abroad.whole_run(self.LEGS[0], self.LEGS, abroad.kept_delays(self.LEGS))['after']
+        self.assertEqual([r.get('observedDelaySeconds') for r in after], [240, 300])
+        self.assertTrue(all('delaySeconds' not in r for r in after))  # not live any more: only what was seen
+
+    def test_a_kept_zero_is_no_measurement(self):
+        self._keep('IJPP:INTL-2', {'2': 0, '3': 60})
+        after = abroad.whole_run(self.LEGS[0], self.LEGS, abroad.kept_delays(self.LEGS))['after']
+        self.assertNotIn('observedDelaySeconds', after[0])
+        self.assertEqual(after[1]['observedDelaySeconds'], 60)
+
+    def test_nothing_kept_says_nothing(self):
+        after = abroad.whole_run(self.LEGS[0], self.LEGS, abroad.kept_delays(self.LEGS))['after']
+        self.assertTrue(all('observedDelaySeconds' not in r for r in after))
+
+    def test_another_days_run_is_not_this_run(self):
+        self._keep('IJPP:INTL-2', {'2': 240}, day=self.SERVICE_DATE - timedelta(days=1))
+        self.assertEqual(abroad.kept_delays(self.LEGS), {})
+
+    def test_the_trip_serves_them(self):
+        self._keep('IJPP:INTL-2', {'3': 300})
+        static = {'id': 'IJPP:1', 'routeName': 'RG 678', 'destination': 'Šentilj'}
+        with mock.patch.object(abroad, 'crosses', return_value=True), mock.patch('prestop_api.scheduled.loaded_trips', return_value=self.LEGS):
+            out = trips._outside_slovenia(static, [{'name': 'Maribor'}, {'name': 'Šentilj'}], self.SERVICE_DATE)
+        self.assertEqual(out['stopsAfter'][-1]['observedDelaySeconds'], 300)

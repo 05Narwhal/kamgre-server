@@ -11,6 +11,7 @@ Jesenice, BUS 415 reads "from Beljak / Villach". Where the real end comes from, 
 - for trains the feed doesn't take that far, `data/international_trains.csv`, the fallback.
 """
 import csv
+import logging
 import os
 import re
 from functools import lru_cache
@@ -183,17 +184,20 @@ def _joined(run: dict, legs: Sequence[dict]) -> tuple[list[dict], list[dict]]:
     return before, after
 
 
-def _row(trip: dict, i: int) -> dict:
+def _row(trip: dict, i: int, kept: Optional[dict] = None) -> dict:
     """A stop outside the trip's stretch in Slovenia, as text: no coordinates, so nothing can draw it, and an id only
     for a station in Slovenia. Times by the timetable; a delay only where the feed itself reports one, never guessed.
-    A live 0 counts as none: the feed marks stops abroad live at 0 in bulk, and that must not read as on time."""
+    A live 0 counts as none: the feed marks stops abroad live at 0 in bulk, and that must not read as on time.
+    `kept` (kept_delays): what the feed reported for this stop earlier, still there once it stops reporting the leg."""
     stop, delay = trip['stops'][i], trip['delays'][i]
     country = country_of(stop.get('name'), stop.get('gtfsId'))
+    observed = ((kept or {}).get(trip.get('id')) or {}).get(stop.get('gtfsId'))
     return {
         'name': stop.get('name') or '',
         **({'abroad': True, **({'country': country} if country else {})} if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else {'stopId': stop.get('gtfsId')}),
         'scheduledArrival': iso(trip['scheduledArrivals'][i]), 'scheduledDeparture': iso(trip['scheduledDepartures'][i]),
         **({'effectiveArrival': iso(trip['arrivals'][i]), 'effectiveDeparture': iso(trip['departures'][i]), 'delaySeconds': delay} if delay else {}),
+        **({'observedDelaySeconds': observed} if observed else {}),
     }
 
 
@@ -201,16 +205,40 @@ def _end(stop: dict) -> Optional[str]:
     return place(stop.get('name')) if is_abroad_stop(stop.get('name'), stop.get('gtfsId')) else None
 
 
-def whole_run(run: dict, legs: Sequence[dict]) -> dict:
+def whole_run(run: dict, legs: Sequence[dict], kept: Optional[dict] = None) -> dict:
     """`run`, a timetable trip, with its other `legs` (legs_of): {'before', 'after'}, the stops either side of its
-    stretch in Slovenia, and {'comes', 'goes'}, the places abroad it really starts and ends at (None in Slovenia)."""
+    stretch in Slovenia, and {'comes', 'goes'}, the places abroad it really starts and ends at (None in Slovenia).
+    `kept`: the delays kept for the legs' stops (kept_delays)."""
     before, after = _joined(run, legs)
     a, b, _, _ = trim(run['stops'], lambda s: s.get('name'), lambda s: s.get('gtfsId'))
     return {
-        'before': [_row(t, i) for t in before for i in range(len(t['stops']) - 1)] + [_row(run, i) for i in range(a)],
-        'after': [_row(run, i) for i in range(b, len(run['stops']))] + [_row(t, i) for t in after for i in range(1, len(t['stops']))],
+        'before': [_row(t, i, kept) for t in before for i in range(len(t['stops']) - 1)] + [_row(run, i, kept) for i in range(a)],
+        'after': [_row(run, i, kept) for i in range(b, len(run['stops']))] + [_row(t, i, kept) for t in after for i in range(1, len(t['stops']))],
         'comes': _end((before[0] if before else run)['stops'][0]), 'goes': _end((after[-1] if after else run)['stops'][-1]),
     }
+
+
+def kept_delays(legs: Sequence[dict]) -> dict[str, dict[str, int]]:
+    """{trip id: {stop id: seconds}}: the delays the collector kept for these timetable trips (TripDelay, by stop
+    sequence; TripStops says which stop that is), so a delay outlives the feed's report of it. A kept 0 is left out, as
+    in _row: the feed's bulk 0 abroad is no measurement. Optional: without the database the live delays still stand."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from prestop_statistics.models import TripDelay, TripStops
+    days = {t['id']: datetime.fromtimestamp(t['serviceDay'] + 12 * 3600, ZoneInfo('Europe/Ljubljana')).date() for t in legs}
+    try:
+        rows = [r for r in TripDelay.objects.filter(trip_id__in=days, service_date__in=set(days.values())) if r.service_date == days[r.trip_id]]
+        stops = {s.trip_id: s.stops for s in TripStops.objects.filter(trip_id__in=[r.trip_id for r in rows])} if rows else {}
+    except Exception as e:  # noqa: BLE001 - optional, see above
+        logging.getLogger(__name__).warning('Kept delays unavailable: %r', e)
+        return {}
+    out: dict[str, dict[str, int]] = {}
+    for r in rows:
+        ids = {str(s[0]): s[1] for s in stops.get(r.trip_id) or []}
+        found = {ids[seq]: delay for seq, delay in r.stop_delays.items() if delay and seq in ids}
+        if found:
+            out[r.trip_id] = found
+    return out
 
 
 def learn(trips: Sequence[dict]) -> None:
