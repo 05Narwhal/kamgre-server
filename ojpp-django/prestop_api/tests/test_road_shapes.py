@@ -40,6 +40,15 @@ class DensifyTests(SimpleTestCase):
         self.assertLessEqual(max(geometry.distance(a, b) for a, b in zip(dense, dense[1:])), 30.5)  # 6-decimal rounding
         self.assertAlmostEqual(geometry.cumulative(dense)[-1], geometry.cumulative(line)[-1], delta=0.5)
 
+    def test_a_train_gets_fewer_points_on_the_same_line(self):
+        corner = [[14.50, 46.05], [14.60, 46.05], [14.60, 46.10]]  # ~13 km
+        length = geometry.cumulative(corner)[-1]
+        [bus, train] = views._dense([{'geometry': corner, 'length': length, 'mode': 'bus'}, {'geometry': corner, 'length': length, 'mode': 'rail'}])
+        self.assertLess(len(train['geometry']), len(bus['geometry']) / 3)
+        self.assertLessEqual(max(geometry.distance(a, b) for a, b in zip(train['geometry'], train['geometry'][1:])), 100.5)
+        self.assertIn(corner[1], train['geometry'])  # every point of the shape stays
+        self.assertAlmostEqual(geometry.cumulative(train['geometry'])[-1], length, delta=0.5)
+
     def test_responses_stay_under_the_point_budget(self):
         line = [[14.50, 46.05], [15.50, 46.05]]  # ~77 km
         length = geometry.cumulative(line)[-1]

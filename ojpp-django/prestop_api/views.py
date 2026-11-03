@@ -801,7 +801,8 @@ def _dense(shapes: list[dict]) -> list[dict]:
     """Trips or line variants with their shapes densified, so the app can move vehicles smoothly along them
     (geometry.DENSE_STEP apart, wider when the response would get too big). Copies; cached values stay as they are."""
     step = max(geometry.DENSE_STEP, sum(s.get('length') or 0 for s in shapes) / POINT_BUDGET)
-    return [{**s, 'geometry': geometry.densify(s['geometry'], step)} if s.get('geometry') else s for s in shapes]
+    rail = max(step, geometry.RAIL_DENSE_STEP)
+    return [{**s, 'geometry': geometry.densify(s['geometry'], rail if s.get('mode') == 'rail' else step)} if s.get('geometry') else s for s in shapes]
 
 
 def _typical(entry: dict) -> dict:

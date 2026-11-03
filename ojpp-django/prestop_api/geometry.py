@@ -7,6 +7,7 @@ from typing import Optional
 MAX_POINTS = 400
 SHAPE_POINTS = 1500  # trip and line shapes: Douglas-Peucker keeps its 3 m tolerance on long, winding routes
 DENSE_STEP = 30.0    # m between points in shapes sent to the app, which moves vehicles along them
+RAIL_DENSE_STEP = 100.0  # the same for a train: 200 km of railway at 30 m is 7,000 points (160 kB) that add nothing to the line
 KY = 110_574
 
 
