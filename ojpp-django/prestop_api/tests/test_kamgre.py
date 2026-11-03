@@ -121,6 +121,6 @@ class SzLiveTests(SimpleTestCase):
         self.assertEqual((train['quality'], train['delaySeconds'], train['trainCategory'], train['trainNumber']), ('inferred', 120, 'LPV', '2904'))
         # C0: where the delay comes from, and the track at the next station (S1, at its timetable departure).
         self.assertEqual((train['delaySource'], train['nextPlatform'], train['nextPlatformUsual']), ('sz', '3', True))
-        track.assert_called_with('LPV 2904', 'IJPP:s1', self.T0 + 660)
+        track.assert_called_with('LPV 2904', 'IJPP:s1', self.T0 + 660, False)
         self.assertEqual((timetable['quality'], timetable['delaySeconds'], 'delaySource' in timetable), ('scheduled', None, False))
         self.assertEqual((realtime['quality'], realtime['delaySeconds'], realtime['delaySource']), ('scheduled', 60, 'gtfs-rt'))

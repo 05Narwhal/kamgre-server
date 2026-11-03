@@ -400,9 +400,12 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True, dw
         })
         if static['mode'] == 'rail' and 'platform' not in stops[-1]:
             # The train's track at each station (tracks.py).
-            track, usual = tracks.tracks.track(static['routeName'], stop['stopId'], day + st['scheduledDeparture'])
+            last = i == len(static['stops']) - 1  # no departure of its own: the track of the train its set goes on as
+            track, usual = tracks.tracks.track(static['routeName'], stop['stopId'], day + st['scheduledDeparture'], last)
             if track:
                 stops[-1].update(platform=track, platformUsual=usual)
+            elif lane := tracks.tracks.lane(static['routeName'], stop['stopId'], day + st['scheduledDeparture'], last):
+                stops[-1]['lanePlatform'] = lane  # drawn on this track in 3D, never said (spec 2026-11-03 L2)
     return {
         **{k: static[k] for k in ('id', 'routeId', 'routeName', 'operatorId', 'mode', 'color', 'destination', 'directionId', 'patternId', 'length')},
         'serviceDate': entry['serviceDate'].isoformat(), 'realtime': realtime,

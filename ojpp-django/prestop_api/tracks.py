@@ -12,6 +12,11 @@ train number, IJPP stop id, track such as '3' or '6-A'). Two uses:
   (or while the scraper's source is down) it is shown as the usual one ("usually track 3").
   Measured 2026-10-12 over 85 days: a track the train used on at least USUAL_SHARE of its days there
   was the right one 98.5 % of the time; a train/station pair without such a track gets none.
+- Where there is none, the track it used on at least COMMON_SHARE of its days (`common` in the same file) places the
+  train on a lane in 3D and 2D (spec 2026-11-03 L2). It was right ~95.6 % of the time, too seldom to say it as text:
+  it is never shown, only drawn.
+- A train's last station has no departure row of its own: where its set goes on as another train (train_stays), that
+  train's track is the one it stands on (always shown as usual, never announced).
 """
 import json
 import logging
@@ -45,6 +50,7 @@ POLL = 300            # s between polls of today's tracks
 BACKOFF = (60, 1800)  # s, doubling while the scraper fails
 USUAL_SHARE = 0.8     # of a train's observed days at a station
 USUAL_DAYS = 3        # observed days needed before a track counts as usual
+COMMON_SHARE = 0.5    # of a train's observed days: the track it is drawn on when it has no usual one (never shown)
 STAMP_CHECK = 10      # s between checks whether the usual-track file changed
 
 
@@ -70,6 +76,18 @@ def usual_tracks(rows: list[dict], share: float = USUAL_SHARE, days: int = USUAL
     return out
 
 
+def common_tracks(rows: list[dict], share: float = COMMON_SHARE, days: int = USUAL_DAYS) -> dict:
+    """{train: {stop id: track}} of the pairs `usual_tracks` leaves out where one track still has `share` of the days
+    (backtested 2026-11-03: 99.3 % of pairs covered with usual ones, 95.6 % right; the extra ones ~62 %): drawn, never said."""
+    usual = usual_tracks(rows)
+    out: dict[str, dict[str, str]] = {}
+    for train, stops in usual_tracks(rows, share, days).items():
+        for stop, track in stops.items():
+            if stop not in usual.get(train, {}):
+                out.setdefault(train, {})[stop] = track
+    return out
+
+
 class Tracks:
     def __init__(self):
         self._lock = threading.Lock()
@@ -78,7 +96,7 @@ class Tracks:
         self._polling = False
         self._next_poll = 0.0
         self._backoff = BACKOFF[0]
-        self._usual: dict = {'stamp': None, 'value': {}}
+        self._usual: dict = {'stamp': None, 'value': {}, 'common': {}}
         self.last_ok: Optional[float] = None
         self.mirrors = Mirrors('PRESTOP_SZ_TRACKS_URL')
 
@@ -86,6 +104,11 @@ class Tracks:
     def url(self) -> str:
         """The scraper's `train_data` URLs, tried in order ('' when off)."""
         return ','.join(self.mirrors.urls)
+
+    def common(self) -> dict:
+        """{train: {stop: track}} the most common track of pairs without a usual one (lane only, see the module doc)."""
+        self.usual()
+        return self._usual.get('common') or {}
 
     def usual(self) -> dict:
         # The file changes a few times a year: its stamp is checked at most every STAMP_CHECK s, not per board row.
@@ -100,10 +123,11 @@ class Tracks:
             self._usual['checked'] = time.monotonic()
             if self._usual['stamp'] != stamp:
                 try:
-                    value = json.loads(source.read_text(encoding='utf-8')).get('trains') or {}
-                except (OSError, ValueError):
-                    value = {}
-                self._usual.update(stamp=stamp, value=value)
+                    loaded = json.loads(source.read_text(encoding='utf-8'))
+                    value, common = loaded.get('trains') or {}, loaded.get('common') or {}
+                except (OSError, ValueError, AttributeError):
+                    value, common = {}, {}
+                self._usual.update(stamp=stamp, value=value, common=common)
             return self._usual['value']
 
     def today(self, now: Optional[float] = None) -> dict:
@@ -143,20 +167,62 @@ class Tracks:
         finally:
             self._polling = False
 
-    def track(self, route_name: str, stop_id: str, when: Optional[float] = None) -> tuple[Optional[str], bool]:
-        """(track, usual) of the train named `route_name` at `stop_id`, for a stop at `when` (unix time;
-        announced tracks only apply on their own day); (None, False) when unknown."""
-        train = number(route_name)
-        if not train or not stop_id:
-            return None, False
+    def _find(self, train: str, stop_id: str, when: Optional[float]) -> tuple[Optional[str], bool]:
         now = time.time()
-        today = self.today(now)
         if when is None or datetime.fromtimestamp(when, LOCAL).date() == datetime.fromtimestamp(now, LOCAL).date():
-            announced = (today.get(train) or {}).get(stop_id)
+            announced = (self.today(now).get(train) or {}).get(stop_id)
             if announced:
                 return announced, False
         usual = (self.usual().get(train) or {}).get(stop_id)
         return (usual, True) if usual else (None, False)
+
+    def terminus(self, route_name: str, stop_id: str, when: Optional[float] = None) -> tuple[Optional[str], bool]:
+        """(track, True) of a train at its LAST station: the track of the train its set goes on as there (a learned
+        'continues' stay, train_stays), whose departure the scraper reports; never announced, so always usual.
+        (None, False) when the set doesn't go on or that train has no track there."""
+        train = number(route_name)
+        if not train or not stop_id:
+            return None, False
+        try:
+            from prestop_statistics import train_stays
+            stay = train_stays.continues_as(train)
+        except Exception as e:  # noqa: BLE001 - optional: the stop stands without a track
+            logger.info('Stay of %s unavailable for its last track: %r', train, e)
+            return None, False
+        if not stay or stay.get('kind') != 'continues' or stay.get('level') not in ('sure', 'likely'):
+            return None, False
+        track, _ = self._find(str(stay['to_number']), stop_id, when)
+        return (track, True) if track else (None, False)
+
+    def track(self, route_name: str, stop_id: str, when: Optional[float] = None, last: bool = False) -> tuple[Optional[str], bool]:
+        """(track, usual) of the train named `route_name` at `stop_id`, for a stop at `when` (unix time;
+        announced tracks only apply on their own day); (None, False) when unknown. `last`: it is the train's last stop,
+        which has no departure of its own (see `terminus`)."""
+        train = number(route_name)
+        if not train or not stop_id:
+            return None, False
+        found = self._find(train, stop_id, when)
+        if found[0] or not last:
+            return found
+        return self.terminus(route_name, stop_id, when)
+
+    def lane(self, route_name: str, stop_id: str, when: Optional[float] = None, last: bool = False) -> Optional[str]:
+        """The track to draw the train on at `stop_id` when none can be said: its most common one there (see module doc),
+        at its last station that of the train it goes on as. None when unknown; callers use it only without `track`."""
+        train = number(route_name)
+        if not train or not stop_id:
+            return None
+        common = (self.common().get(train) or {}).get(stop_id)
+        if common or not last:
+            return common
+        try:
+            from prestop_statistics import train_stays
+            stay = train_stays.continues_as(train)
+        except Exception:  # noqa: BLE001
+            return None
+        if not stay or stay.get('kind') != 'continues' or stay.get('level') not in ('sure', 'likely'):
+            return None
+        return (self.common().get(str(stay['to_number'])) or {}).get(stop_id)
 
 
 tracks = Tracks()

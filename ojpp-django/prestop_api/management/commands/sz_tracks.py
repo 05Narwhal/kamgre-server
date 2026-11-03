@@ -55,7 +55,8 @@ class Command(BaseCommand):
         pairs = sum(len(v) for v in usual.values())
         target = tracks.usual_file()
         tmp = target.with_name(target.name + '.tmp')
-        tmp.write_text(json.dumps({'from': used[0], 'to': used[-1], 'days': len(used), 'trains': usual},
+        common = tracks.common_tracks(rows)  # pairs without a usual track: drawn on, never shown (spec 2026-11-03 L2)
+        tmp.write_text(json.dumps({'from': used[0], 'to': used[-1], 'days': len(used), 'trains': usual, 'common': common},
                                   ensure_ascii=False, indent=0, sort_keys=True), encoding='utf-8')
         os.replace(tmp, target)
-        self.stdout.write(f'{len(used)} days ({used[0]} – {used[-1]}): {len(usual)} trains, {pairs} train/station tracks.')
+        self.stdout.write(f'{len(used)} days ({used[0]} – {used[-1]}): {len(usual)} trains, {pairs} train/station tracks, {sum(len(v) for v in common.values())} more for lanes only.')

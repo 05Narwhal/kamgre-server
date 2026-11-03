@@ -559,7 +559,7 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
             if train:
                 out[-1]['replacesTrain'] = train
         else:  # the train's track at its next station (tracks.py)
-            track, usual = tracks.tracks.track(mapping.route_name(route), stops[i]['gtfsId'], (trip.get('scheduledDepartures') or trip['departures'])[i])
+            track, usual = tracks.tracks.track(mapping.route_name(route), stops[i]['gtfsId'], (trip.get('scheduledDepartures') or trip['departures'])[i], i == len(stops) - 1)
             if track:
                 out[-1].update(nextPlatform=track, nextPlatformUsual=usual)
             planned = zamudil.class_of(number, _service_date(trip))  # SŽ's planned class (zamudil.si), never the unit seen
