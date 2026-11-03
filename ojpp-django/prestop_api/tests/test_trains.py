@@ -236,3 +236,20 @@ class TrainHistoryStationsTests(TestCase):
         self.assertEqual((body['name'], body['origin'], body['destination'], body['since']), ('RG 480', 'Ljubljana', 'Jesenice', '2026-10-21'))
         self.assertEqual([d.get('canceled') for d in body['days']], [None, None, None, True, None])
         self.assertEqual(body['days'][4]['replaced'], 'whole')
+
+
+class RealEndsTests(TestCase):
+    """The user's train (spec 2026-11-03 L3): statistics read RG 211 by where it really runs, as its page does."""
+    def test_a_train_abroad_reads_by_its_real_ends(self):
+        from datetime import date as day
+        from unittest import mock
+        from prestop_api import abroad, trains
+        from prestop_statistics.models import TrainDay
+        TrainDay.objects.create(service_date=day(2026, 11, 2), number='211', category='RG', route_id='r', trip_id='t', origin='Ilirska Bistrica', destination='Dobova', stops=[])
+        with mock.patch.dict(abroad._feed_ends, {'211': ('Reka / Rijeka', 'Vinkovci')}):
+            body = trains.history('211', 7, day(2026, 11, 3))
+        self.assertEqual((body['origin'], body['destination']), ('Reka / Rijeka', 'Vinkovci'))
+
+    def test_a_train_at_home_keeps_its_ends(self):
+        from prestop_api import trains
+        self.assertEqual(trains._real_ends('LPV 9999', 'Celje', 'Maribor'), ('Celje', 'Maribor'))

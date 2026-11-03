@@ -93,6 +93,42 @@ class RollupTests(TestCase):
         self.assertEqual(days, {DAY, date(2026, 10, 24), date(2026, 10, 23)})  # 22 Oct left for the next night
 
 
+GRAZ, MARIBOR = ('IJPP:INTL-8100', 'Graz Hauptbahnhof'), ('IJPP:mb', 'Maribor')
+ONE_HERE = {'route': 'IJPP:r671', 'name': 'IR 671', 'mode': 'RAIL', 'stops': {1: GRAZ, 2: MARIBOR}}
+LEG_OF_310 = {'route': 'IJPP:r310x', 'name': 'RG 310', 'mode': 'RAIL', 'stops': {1: GRAZ, 2: MARIBOR}}
+
+
+class TrainsAbroadTests(TestCase):
+    """A train with one station here (spec 2026-11-03 L3): foreign operators count; the feed's bulk 0s don't."""
+    def _rows(self):
+        known = {**TRIPS, 'IJPP:INTL-g': ONE_HERE, 'IJPP:INTL-x': LEG_OF_310}
+        trains, stations, _ = rollup.build(DAY, trip_stops=lambda ids: {t: known.get(t) for t in ids}, day_tracks=lambda d: {}, plan=NO_PLAN)
+        return {t['number']: t for t in trains}, stations
+
+    def test_a_foreign_operators_train_with_reports_has_a_row(self):
+        delay('IJPP:INTL-g', {1: 120, 2: 180}, operator='IJPP:INTL-HZPP')
+        rows, stations = self._rows()
+        self.assertEqual([(s['name'], s['delay']) for s in rows['671']['stops']], [('Maribor', 180)])
+        self.assertEqual([s['stop_id'] for s in stations], ['IJPP:mb'])
+
+    def test_a_foreign_leg_never_replaces_szs_run_of_that_number(self):
+        delay('IJPP:t310', {1: 600})
+        delay('IJPP:INTL-x', {1: 60, 2: 60}, operator='IJPP:INTL-HZPP')
+        self.assertEqual(self._rows()[0]['310']['trip_id'], 'IJPP:t310')
+
+    def test_all_zeros_with_one_station_here_say_nothing(self):
+        delay('IJPP:INTL-g', {1: 0, 2: 0})
+        self.assertEqual(self._rows(), ({}, []))
+
+    def test_a_real_report_keeps_a_zero_at_the_station_here(self):
+        delay('IJPP:INTL-g', {1: 120, 2: 0})
+        self.assertEqual(self._rows()[0]['671']['stops'][0]['delay'], 0)
+
+    def test_a_train_on_time_all_along_its_stations_here_still_counts(self):
+        delay('IJPP:t2428', {1: 0, 2: 0, 3: 0, 4: 0})
+        self.assertEqual(self._rows()[0]['2428']['final_delay'], 0)
+
+
 class CanceledAndReplacedTests(TestCase):
     """Spec 2026-10-31 H1: canceled and replaced runs get rows without delays, which are never on time."""
 

@@ -11,6 +11,9 @@ Spec 2026-10-31 H1: each row also has its scheduled first departure, whether SŽ
 replacement buses ran that day (that date's plan, scheduled.day_plan: the feed's buses and closures.py's), and each
 station the delay gained since the previous reported one, so "where time is lost" is a sum. Canceled runs and runs a
 bus replaced without any report get a row too (no delays), so trends can count them.
+
+Spec 2026-11-03 L3: a foreign operator's train counts when SŽ has no run of that number. A run with one station here
+and nothing but 0s says nothing: the feed marks stops abroad live at 0 in bulk (abroad._row), which would read as on time.
 """
 import json
 import logging
@@ -18,6 +21,7 @@ from datetime import date, timedelta
 from typing import Callable, Optional
 
 from django.db import transaction
+from django.db.models import Q
 
 from prestop_api import abroad, sz
 from prestop_api.upstream import UpstreamError, otp
@@ -26,6 +30,7 @@ from prestop_statistics.models import StationDay, TrainDay, TripDelay
 
 logger = logging.getLogger(__name__)
 SZ_OPERATOR = 'IJPP:1161'
+FOREIGN_OPERATORS = 'IJPP:INTL-'  # railways abroad in the feed: their legs fill in only numbers SŽ has no run of
 CHUNK = 60  # trips per OTP query
 TRIP_Q = 'route { gtfsId shortName mode } stoptimes { stopPosition scheduledDeparture stop { gtfsId name } }'
 
@@ -81,6 +86,8 @@ def train_row(day: date, delay: Optional[TripDelay], trip: dict, tracks: dict, r
         return None
     raw = delay.stop_delays if delay else {}
     reported = {int(k): v for k, v in (raw or {}).items() if str(k).lstrip('-').isdigit() and v is not None}
+    if sum(not abroad.is_abroad_stop(name, stop) for stop, name in trip['stops'].values()) == 1 and not any(reported.values()):
+        reported = {}  # the feed's bulk 0s: no measurement
     stops, before = [], None
     for p in sorted(trip['stops']):
         if abroad.is_abroad_stop(trip['stops'][p][1], trip['stops'][p][0]):
@@ -170,7 +177,7 @@ def build(day: date, trip_stops: Optional[Callable[[list[str]], dict]] = None,
     once per day)."""
     trip_stops, day_tracks, plan = trip_stops or otp_trip_stops, day_tracks or scraper_tracks, plan or day_plan
     memo = {} if memo is None else memo
-    rows = list(TripDelay.objects.filter(service_date=day, operator_id=SZ_OPERATOR))
+    rows = list(TripDelay.objects.filter(Q(operator_id=SZ_OPERATOR) | Q(operator_id__startswith=FOREIGN_OPERATORS), service_date=day))
     replaced = replaced_runs(day, plan(day)) if rows else None
     reported = {r.trip_id for r in rows}
     missing = sorted((reported | set(replaced or {})) - memo.keys())
@@ -179,7 +186,9 @@ def build(day: date, trip_stops: Optional[Callable[[list[str]], dict]] = None,
     tracks = day_tracks(day) if rows else {}
     by_number: dict[str, dict] = {}
     unknown = 0
-    runs = [(r.trip_id, r) for r in rows] + [(t, None) for t in sorted(set(replaced or {}) - reported)]
+    runs = ([(r.trip_id, r) for r in rows if r.operator_id == SZ_OPERATOR] + [(t, None) for t in sorted(set(replaced or {}) - reported)]
+            + [(r.trip_id, r) for r in rows if r.operator_id != SZ_OPERATOR])
+    own: set[str] = set()
     for trip_id, r in runs:
         trip = memo.get(trip_id)
         if not trip:
@@ -189,6 +198,11 @@ def build(day: date, trip_stops: Optional[Callable[[list[str]], dict]] = None,
         row = train_row(day, r, trip, tracks, how, trip_id)
         if not row:
             continue
+        foreign = r is not None and r.operator_id != SZ_OPERATOR
+        if foreign and row['number'] in own:
+            continue  # a leg of SŽ's train, whose run this number already has
+        if not foreign:
+            own.add(row['number'])
         old = by_number.get(row['number'])
         # A number on two routes the same day (LP 4208, 23 Oct 2026) is one train: the run with more reports wins.
         if not old or _weight(row) > _weight(old):

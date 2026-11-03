@@ -131,6 +131,13 @@ def _ran(r) -> bool:
     return not r.canceled and r.replaced != 'whole'
 
 
+def _real_ends(name: Optional[str], origin: Optional[str], destination: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """A rollup's ends are its stretch in Slovenia; a train abroad reads by where it really runs (RG 211, Reka / Rijeka -
+    Vinkovci, not Ilirska Bistrica - Dobova), as its page does."""
+    comes, goes = abroad.train_ends(name, origin, destination)
+    return comes or origin or None, goes or destination or None
+
+
 def history(number: str, days: int, today: date) -> dict:
     """The train's last `days` days from the rollups (up to yesterday), newest first, and a summary: mean delay, and
     the share of runs that reached their last reported station on time. Spec 2026-10-31 H2 adds, for the per-train
@@ -166,6 +173,8 @@ def history(number: str, days: int, today: date) -> dict:
             w['runs'] += 1
             w['onTime'] += r.final_delay < ON_TIME_LATE
     latest = rows[0] if rows else None
+    name = f'{latest.category} {number}'.strip() if latest else None
+    origin, destination = _real_ends(name, latest.origin, latest.destination) if latest else (None, None)
     first = TrainDay.objects.order_by('service_date').values_list('service_date', flat=True).first()
     return {'number': number, 'days': out, 'summary': {
         'runs': len(ran), 'avgDelaySeconds': round(sum(means) / len(means)) if means else None,
@@ -176,8 +185,8 @@ def history(number: str, days: int, today: date) -> dict:
                       'medianGainedSeconds': _quantile(stations[stop]['gained'], 0.5)} for stop in route if stop in stations],
         'weekdays': [{'runs': w['runs'], 'onTimeShare': round(w['onTime'] / w['runs'], 4) if w['runs'] else None} for w in weekdays],
         'canceled': sum(1 for r in rows if r.canceled), 'replaced': sum(1 for r in rows if r.replaced in ('part', 'whole')),
-        'name': f'{latest.category} {number}'.strip() if latest else None, 'category': (latest.category or None) if latest else None,
-        'origin': latest.origin or None if latest else None, 'destination': latest.destination or None if latest else None,
+        'name': name, 'category': (latest.category or None) if latest else None,
+        'origin': origin, 'destination': destination,
         'since': first.isoformat() if first else None}
 
 
@@ -279,8 +288,10 @@ def trends(days: int, today: date) -> dict:
                       .filter(runs__gte=WORST_RUNS, mean__isnull=False).order_by('-mean', 'number')[:WORST])
     latest = {r['number']: r for r in period.filter(number__in=[w['number'] for w in worst_rows])
               .order_by('number', '-service_date').distinct('number').values('number', 'category', 'origin', 'destination')}
-    worst = [{'number': w['number'], 'name': f"{latest.get(w['number'], {}).get('category') or ''} {w['number']}".strip(),
-              'origin': latest.get(w['number'], {}).get('origin') or None, 'destination': latest.get(w['number'], {}).get('destination') or None,
+    names = {w['number']: f"{latest.get(w['number'], {}).get('category') or ''} {w['number']}".strip() for w in worst_rows}
+    ends = {n: _real_ends(name, latest.get(n, {}).get('origin'), latest.get(n, {}).get('destination')) for n, name in names.items()}
+    worst = [{'number': w['number'], 'name': names[w['number']],
+              'origin': ends[w['number']][0], 'destination': ends[w['number']][1],
               'runs': w['runs'], 'onTimeShare': round(w['on_time'] / w['runs'], 4), 'avgDelaySeconds': round(w['mean']),
               'maxDelaySeconds': w['worst']} for w in worst_rows]
     lost = time_lost(start, today)
