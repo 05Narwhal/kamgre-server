@@ -32,7 +32,7 @@ On the server, outbound traffic (the only usage-based charge left: Oracle bills 
 # in WSL, from the repository root
 bash backend/deploy/oracle/oci/guardrails.sh --dry-run   # show the quotas and alerts it would set
 bash backend/deploy/oracle/oci/guardrails.sh             # apply (free, safe to re-run)
-bash backend/deploy/oracle/oci/audit.sh                  # anytime: "Audit passed" = nothing billable
+yarn server:audit                                        # anytime: "Audit passed" = nothing billable (runs oci/audit.sh; plain `yarn audit` is Yarn's own package check)
 ```
 
 Rules:
@@ -140,7 +140,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File backend/deploy/oracle/push.p
 
 ## Day to day
 
-From Windows, `yarn server:top` (optionally `yarn server:top 5` for every 5 s, or `yarn server:top logs` to open on a tab) opens the live view in your own terminal over SSH, using `config.local`. It sends the local `server/top.py` (Python standard library, run by the server's own `python3`), so it works before the next deploy; on the server it is `sudo prestop-top`, and `sudo prestop-top --once` prints one frame of every tab.
+From Windows, `yarn server:top` (optionally `yarn server:top 5` for every 5 s, or `yarn server:top logs` to open on a tab) opens the live view in your own terminal over SSH, using `config.local`. It sends the local `server/top.py` (Python standard library, run by the server's own `python3`), so it works before the next deploy; on the server it is `sudo prestop-top`, and `sudo prestop-top --once` prints one frame of every tab. The mouse works throughout: hover any graph for the numbers behind it, click tabs, panel titles marked ›, alerts and the footer, and scroll with the wheel. To select text, hold Shift. A terminal that does not report mouse moves still shows a graph's numbers when you click it.
 
 It has seven tabs, switched with ←/→, Tab, 1–7 or a click (`?` lists the keys, `p` pauses, `+`/`-` change the speed): **Overview** (what needs a look, resources, traffic, services, health), **System** (CPU, memory, network and disk graphs, top processes), **Services** (state, uptime, restarts, CPU history, the timers' last and next runs, backups), **Traffic** (visitors per minute, API connections and hourly bytes, this month's outbound data with its pace and per-day/per-hour graphs from vnstat), **Data** (`/health`, coverage, every source, PostgreSQL and Redis), **Learning** and **Logs** (warnings and errors of the KamGre units in the last 24 h). It is read-only: the month's outbound data is worked out from the egress guard's counter file and vnstat the way `egress-guard.sh` does, without running the guard.
 
@@ -150,7 +150,7 @@ Its **Learning** tab (refreshed once a minute) follows the stay-on learning (`pr
 
 `yarn server:update --sz <file>` also uploads SŽ's list of disruptions (`potniski.sz.si/ovire-in-izredne-spremembe`), which is in no open feed and answers a bot check, so nothing reads it automatically: open the page in your own browser, save it (Ctrl+S, or copy the list's outer HTML into a file), and pass that file. `prestop-manage sz_notices --import` checks it and writes `/var/lib/prestop/sz-list.json`; a file with no notices leaves the old list in place. Then `szpdf_sync` runs at once, so the replacement buses of a timetable it reads well reach the planner right away; the rest stay text notices for their days. SŽ can change a notice after your upload, so run this about twice a week: `/health` lists `sz:list`, `stale` after three days, and the notices still show. `sudo prestop-manage sz_notices` shows what the server holds.
 
-`yarn server:stats` (or `yarn server:stats week`, `month`, `all`; "this week" works too) prints the usage report: unique visitors, new users, requests with the change from the period before, a chart per hour or day, busiest hours, features and endpoints with error rate and p95, Hop, and the platform split. It runs `prestop-manage stats` on the server (`prestop_api/analytics.py`, `analytics_report.py`). The API counts requests per hour, route and status class in Redis; the collector moves them to Postgres every minute (kept 400 days). Visitors are a HyperLogLog per day of salted hashes whose salt is deleted when the day ends; the nightly save keeps only those (kept forever), never an IP.
+The **Usage** tab (`yarn server:top usage`, or `usage week`, `month`, `all`) shows users and new users per day, all users so far, requests per day and hour, features and endpoints with error rate and p95, Hop, and the platform split, with the change from the period before. It reads the tables and Redis directly (`prestop_api/analytics.py` does the counting). The API counts requests per hour, route and status class in Redis; the collector moves them to Postgres every minute (kept 400 days). Visitors are a HyperLogLog per day of salted hashes whose salt is deleted when the day ends; the nightly save keeps only those (kept forever), never an IP. Because each day has its own salt, the same person on two days counts twice, so a longer period shows users a day, not distinct people.
 
 `yarn server:ssh` opens a shell on the server in your own terminal (`exit` or Ctrl+D leaves), for admin commands such as `sudo prestop-manage leg_detours --legs --delete` or `sudo prestop-status`.
 

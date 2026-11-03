@@ -3,15 +3,19 @@
 
     sudo prestop-top [seconds between updates, default 2] [tab]
     sudo prestop-top --once [tab]          print one frame of each tab (or one tab) and exit
+    sudo prestop-top usage week            open on the usage tab: today, week, month or all
 
-Tabs: overview, system, services, traffic, data, learning, logs. Python standard library only, so it runs on
-the server's own python3 (no venv), and top-remote.sh can send it over SSH before the next deploy.
+Tabs: overview, system, services, traffic, data, learning, logs, usage. Python standard library only, so it runs
+on the server's own python3 (no venv), and top-remote.sh can send it over SSH before the next deploy.
+
+Mouse: hover any graph for its numbers; click tabs, panel titles marked ›, alerts and buttons; the wheel scrolls.
 
 Read-only: it reads /proc, systemd, journald, Redis, PostgreSQL, vnstat and /api/v1/health. The month's
 outbound data is worked out the way egress-guard.sh does it, from the guard's counter file, without running
 the guard. Every clock and date on screen is in Slovenian time.
 """
 import curses
+import fnmatch
 import glob
 import json
 import locale
@@ -27,7 +31,8 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
-from datetime import datetime, time as dtime, timedelta, timezone
+from datetime import date, datetime, time as dtime, timedelta, timezone
+from functools import partial
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
@@ -40,7 +45,7 @@ API_PORT = 8066
 SERVICES = ['prestop-web', 'prestop-collector', 'prestop-push', 'prestop-ingest', 'caddy', 'cloudflared', 'postgresql', 'redis-server']
 TIMERS = ['prestop-egress', 'prestop-watchdog', 'prestop-szpdf', 'prestop-nightly', 'prestop-backup']
 TABS = [('overview', 'Overview'), ('system', 'System'), ('services', 'Services'), ('traffic', 'Traffic'),
-        ('data', 'Data'), ('learning', 'Learning'), ('logs', 'Logs')]
+        ('data', 'Data'), ('learning', 'Learning'), ('logs', 'Logs'), ('usage', 'Usage')]
 HISTORY = 900          # samples kept for the graphs (30 min at 2 s)
 ACTIVE_WINDOW = 15     # minutes of the traffic guard's active-visitor tally (prestop_api/traffic.py)
 GIB = 1024 ** 3
@@ -70,6 +75,7 @@ def env_int(name, default):
 
 
 REDIS_URL = ENV.get('REDIS_URL') or 'redis://127.0.0.1:6379/1'
+ANALYTICS_REDIS_URL = ENV.get('PRESTOP_ANALYTICS_REDIS_URL') or REDIS_URL
 MAX_ACTIVE = env_int('PRESTOP_TRAFFIC_MAX_ACTIVE', 3000)
 HOURLY_BYTES = env_int('PRESTOP_TRAFFIC_HOURLY_MB', 30000) * 1_000_000
 TRAFFIC_DIR = ENV.get('PRESTOP_TRAFFIC_STATE_DIR') or STATE_DIR + '/traffic'
@@ -164,6 +170,9 @@ STYLES = {
     'tab': (247, 235, 7, 0, ''), 'tabkey': (117, 235, 6, 0, ''), 'tabon': (234, 117, 0, 6, 'b'),
     'tabwarn': (221, 235, 3, 0, 'b'), 'tabbad': (210, 235, 1, 0, 'b'),
     'foot': (245, 235, 7, 0, ''), 'footkey': (117, 235, 6, 0, 'b'), 'footwarn': (221, 235, 3, 0, 'b'),
+    'hover': (231, 239, 7, 0, 'b'), 'hoverbtn': (234, 153, 0, 7, 'b'),
+    'tip': (252, 237, 7, 0, ''), 'tipb': (231, 237, 7, 0, 'b'), 'tipedge': (117, 237, 6, 0, ''),
+    'chip': (247, 236, 7, 0, ''), 'chipon': (234, 117, 0, 6, 'b'),
 }
 LEVEL = {'ok': 0, 'warn': 1, 'bad': 2}
 
@@ -179,10 +188,37 @@ def status_style(s):
 # ---------------------------------------------------------------- lines: a line is a list of (text, style)
 
 
+class Hot(str):
+    """A style that also says what its cells are. It is still the plain style name to everything that draws, so it
+    passes through panel(), fit() and hjoin(), and frame() finds it on screen wherever the layout put it.
+    Cells with the same key light up together; tip is the tooltip (lines, or a function giving them); act is what a
+    click does (a key, or a function of the view); mark=False keeps a cell dark, such as the gap between two bars."""
+
+    def __new__(cls, style, key=None, tip=None, act=None, mark=True):
+        s = super().__new__(cls, style)
+        s.key, s.tip, s.act, s.mark = object() if key is None else key, tip, act, mark
+        return s
+
+
+def link(segs, act):
+    """Makes a run of segments one click target; graphs inside it keep their own tooltips."""
+    key = object()
+    return [(t, s if isinstance(s, Hot) else Hot(s, key, act=act)) for t, s in segs]
+
+
+def go(name):
+    """The click action that opens a tab."""
+    return lambda view: view.update(tab=[k for k, _ in TABS].index(name))
+
+
+def chip(label, on, act):
+    return (f' {label} ', Hot('chipon' if on else 'chip', act=act))
+
+
 def merge(segs):
     out = []
     for t, s in segs:
-        if out and out[-1][1] == s:
+        if out and type(s) is str and type(out[-1][1]) is str and out[-1][1] == s:
             out[-1] = (out[-1][0] + t, s)
         elif t:
             out.append((t, s))
@@ -219,14 +255,15 @@ def blank(w=0):
     return [(' ' * w, 'text')]
 
 
-def panel(title, body, w, note='', note_style='dim'):
+def panel(title, body, w, note='', note_style='dim', to=None):
+    """A box round the body lines; `to` makes the title a link to that tab."""
     iw = max(1, w - 4)
-    t, n = f' {title} ', f' {note} ' if note else ''
+    t, n = f' {title} ' + ('› ' if to else ''), f' {note} ' if note else ''
     fill = w - 4 - len(t) - len(n)
     if fill < 0:
         n, fill = '', max(0, w - 4 - len(t))
         t = t[:w - 4]
-    out = [[('╭─', 'border'), (t, 'title'), ('─' * fill, 'border'), (n, note_style), ('─╮', 'border')]]
+    out = [[('╭─', 'border'), (t, Hot('title', act=go(to)) if to else 'title'), ('─' * fill, 'border'), (n, note_style), ('─╮', 'border')]]
     for line in body:
         out.append([('│ ', 'border')] + fit(line, iw) + [(' │', 'border')])
     out.append([('╰' + '─' * (w - 2) + '╯', 'border')])
@@ -266,7 +303,22 @@ def unavailable(name):
 BLOCKS = ' ▁▂▃▄▅▆▇█'
 
 
-def meter(p, w, style=None, marker=None):
+def tips_for(values, vals, name, fmt, tips):
+    """i -> tooltip of the i-th of vals, the last values of a history: its value and when it was measured."""
+    at = list(getattr(values, 'at', ()))[-len(vals):] if vals else []
+    at = [None] * (len(vals) - len(at)) + at
+
+    def tip(i):
+        if tips:
+            return tips(i)
+        out = [f'{fmt(vals[i] or 0)}  {name}'.rstrip()]
+        if at[i]:
+            out.append(f'{clock(at[i], "%H:%M:%S")} · {ago(at[i])}')
+        return out
+    return tip
+
+
+def meter(p, w, style=None, marker=None, tip=None):
     """A bar for a percentage; marker draws a tick at another percentage (the month's pace)."""
     if p is None:
         return [('measuring…'.ljust(w)[:w], 'faint')]
@@ -277,27 +329,31 @@ def meter(p, w, style=None, marker=None):
     if marker is not None and w > 0:
         i = max(0, min(w - 1, int(marker * w / 100)))
         cells[i] = ('┃', 'accentb')
-    return merge(cells)
+    key = object()
+    tip = tip or [f'{p:.1f} %']
+    return [(t, Hot(s, key, tip)) for t, s in merge(cells)]
 
 
-def spark(values, w, hi=None, style='accent', by_level=False):
+def spark(values, w, hi=None, style='accent', by_level=False, name='', fmt=lambda v: f'{v:.0f}', tips=None):
     vals = list(values)[-w:] if w > 0 else []
     top = hi or max([v for v in vals if v is not None] or [0]) or 1
     out = [(' ' * (w - len(vals)), 'text')]
-    for v in vals:
+    tip, chart = tips_for(values, vals, name, fmt, tips), object()
+    for i, v in enumerate(vals):
         v = v or 0
         n = max(0, min(8, int(round(v / top * 8))))
         st = level_style(v / top * 100) if by_level else style
-        out.append((BLOCKS[n] if n else '▁', st if v else 'faint'))
+        out.append((BLOCKS[n] if n else '▁', Hot(st if v else 'faint', (chart, i), partial(tip, i))))
     return merge(out)
 
 
-def area(values, w, h, hi=None, style='accent', by_level=False, label=lambda v: f'{v:.0f}'):
+def area(values, w, h, hi=None, style='accent', by_level=False, label=lambda v: f'{v:.0f}', name='', fmt=None, tips=None):
     """A filled graph, h rows high, of the last values that fit; the y axis is labelled at the top, middle and 0."""
     lab = 6
     cw = max(1, w - lab - 1)
     vals = [v or 0 for v in list(values)[-cw:]]
     top = hi or (max(vals, default=0) * 1.15) or 1
+    tip, chart = tips_for(values, vals, name, fmt or label, tips), object()
     lines = []
     for r in range(h - 1, -1, -1):
         if r == h - 1:
@@ -310,18 +366,28 @@ def area(values, w, h, hi=None, style='accent', by_level=False, label=lambda v: 
             tag = ''
         row = [(tag[:lab].rjust(lab), 'faint'), ('┤' if tag else '│', 'faint'), (' ' * (cw - len(vals)), 'text')]
         rs = level_style((r + 0.5) / h * 100) if by_level else style
-        for v in vals:
+        for i, v in enumerate(vals):
             n = max(0, min(8, int(round(v / top * h * 8)) - r * 8))
-            row.append((BLOCKS[n], rs) if n else ((' ', 'text') if r else ('▁', 'faint')))
+            ch, st = (BLOCKS[n], rs) if n else ((' ', 'text') if r else ('▁', 'faint'))
+            row.append((ch, Hot(st, (chart, i), partial(tip, i))))
         lines.append(merge(row))
     return lines
 
 
-def bars(values, w, h, labels=(), hi=None, style='accent', label=lambda v: f'{v:.0f}'):
-    """Vertical bars, one per value, with optional x labels under them; style may be a function of the index."""
+def bars(values, w, h, labels=(), hi=None, style='accent', label=lambda v: f'{v:.0f}', name='', fmt=None, tips=None, widest=6):
+    """Vertical bars, one per value, with optional x labels under them; style may be a function of the index.
+    tips(i) gives a bar's tooltip; without it, its value (fmt, or the axis label's format) and its x label."""
+    fmt = fmt or label
+    chart = object()
+
+    def tip(i):
+        if tips:
+            return tips(i)
+        x = labels[i] if i < len(labels) else ''
+        return [f'{fmt(values[i] or 0)}  {name}'.rstrip()] + ([x] if x else [])
     lab = 6
     n = max(1, len(values))
-    colw = max(1, min(6, (w - lab - 1) // n - 1))
+    colw = max(1, min(widest, (w - lab - 1) // n - 1))
     gap = 1 if (colw + 1) * n <= w - lab - 1 else 0
     top = hi or max(values, default=0) or 1
     lines = []
@@ -331,8 +397,8 @@ def bars(values, w, h, labels=(), hi=None, style='accent', label=lambda v: f'{v:
         for i, v in enumerate(values):
             k = max(0, min(8, int(round((v or 0) / top * h * 8)) - r * 8))
             st = style(i) if callable(style) else style
-            row.append(((BLOCKS[k] if k else (' ' if r else '▁')) * colw, st if k else 'faint'))
-            row.append((' ' * gap, 'text'))
+            row.append(((BLOCKS[k] if k else (' ' if r else '▁')) * colw, Hot(st if k else 'faint', (chart, i), partial(tip, i))))
+            row.append((' ' * gap, Hot('text', (chart, i), partial(tip, i), mark=False)))
         lines.append(merge(row))
     if labels:
         chars = [' '] * (lab + 1 + n * (colw + gap) + 8)
@@ -348,6 +414,18 @@ def bars(values, w, h, labels=(), hi=None, style='accent', label=lambda v: f'{v:
     return lines
 
 # ---------------------------------------------------------------- data collection
+
+
+class Hist(deque):
+    """A graph's history: the values, and in .at when each was measured (for the tooltips)."""
+
+    def __init__(self, maxlen=HISTORY):
+        super().__init__(maxlen=maxlen)
+        self.at = deque(maxlen=maxlen)
+
+    def append(self, v):
+        super().append(v)
+        self.at.append(time.time())
 
 
 class Poller(threading.Thread):
@@ -378,7 +456,7 @@ class Poller(threading.Thread):
 
 
 CHANGED = threading.Event()
-UI = {'interval': 2, 'paused': False}
+UI = {'interval': 2, 'paused': False, 'period': 'today'}
 POLL = {}
 
 
@@ -429,8 +507,8 @@ class Sampler:
     """The fast numbers, every interval: CPU, memory, disk, network, services, processes, API connections."""
 
     def __init__(self):
-        self.h = {k: deque(maxlen=HISTORY) for k in ('cpu', 'mem', 'rx', 'tx', 'conn', 'dr', 'dw')}
-        self.svc = {s: deque(maxlen=HISTORY) for s in SERVICES}
+        self.h = {k: Hist() for k in ('cpu', 'mem', 'rx', 'tx', 'conn', 'dr', 'dw')}
+        self.svc = {s: Hist() for s in SERVICES}
         self.prev = {}
         self.users = {}
         self.iface = self.default_iface()
@@ -589,8 +667,8 @@ class RedisError(Exception):
     pass
 
 
-def redis(*commands):
-    u = urlsplit(REDIS_URL)
+def redis(*commands, url=REDIS_URL):
+    u = urlsplit(url)
     pre = []
     if u.password:
         pre.append(['AUTH', u.username, u.password] if u.username else ['AUTH', u.password])
@@ -630,7 +708,7 @@ def redis(*commands):
     return out[len(pre):]
 
 
-USERS_HIST = deque(maxlen=HISTORY)
+USERS_HIST = Hist()
 
 
 def traffic():
@@ -650,7 +728,7 @@ def traffic():
             'busy': os.path.exists(TRAFFIC_DIR + '/busy'), 'stopped': os.path.exists(TRAFFIC_DIR + '/stopped')}
 
 
-HEALTH_MS = deque(maxlen=HISTORY)
+HEALTH_MS = Hist()
 
 
 def health():
@@ -735,7 +813,7 @@ union all (select 'long', extract(epoch from now() - query_start)::bigint, regex
            from pg_stat_activity where state = 'active' and pid <> pg_backend_pid() and datname = current_database() order by 2 desc limit 1)
 union all select 'ver', 0, current_setting('server_version')
 """
-DB_HIST = {'tps': deque(maxlen=240), 'ops': deque(maxlen=240)}
+DB_HIST = {'tps': Hist(240), 'ops': Hist(240)}
 DB_PREV = {}
 
 
@@ -903,11 +981,168 @@ def learning():
             'collector': [(today - timedelta(days=d), col.get(d, 0) / 86400) for d in range(14, 0, -1)]}
 
 
+# Usage (prestop_api/analytics.py counts it). Requests come per hour and route from AnalyticsHour (the collector moves
+# them from Redis every minute). Users come per day: each day has its own random salt, so the same person on two days
+# is two different hashes, and adding days up gives visits, never distinct people. That is on purpose, so periods show
+# users a day. Today and any day the nightly job has not saved yet are still in Redis. Keep these in step with it.
+PERIODS = [('today', 'Today'), ('week', 'This week'), ('month', 'This month'), ('all', 'All time')]
+PRESENCE = 'hop/presence'  # a ping every 15 s would swamp everything else, so it is counted on its own
+BUCKETS_MS = (50, 100, 200, 400, 800, 1600, 3200)
+DAY_TTL_DAYS = 8
+PLATFORMS = ('ios', 'android', 'desktop', 'other')
+DISPLAYS = ('app', 'browser')
+FEATURES = [
+    ('Boards', ('stops/*/board',)), ('Planner', ('journeys',)), ('Search', ('places',)),
+    ('Lines & trips', ('lines/*', 'trips', 'trips/*', 'statistics/*')), ('Vehicles', ('vehicles',)),
+    ('Map', ('stops', 'rentals')), ('Disruptions', ('alerts', 'alerts/*')), ('Hop', ('hop/*',)),
+    ('Reminders', ('push/*',)), ('App start', ('capabilities', 'locale', 'stats/*')), ('Health', ('health',)),
+]
+
+
+def feature(route):
+    for name, patterns in FEATURES:
+        if any(fnmatch.fnmatchcase(route, p) for p in patterns):
+            return name
+    return 'Other'
+
+
+def p95(buckets):
+    """Upper bound (ms) of the bucket holding the 95th percentile; None without data, -1 above the last bound."""
+    total = sum(buckets)
+    if not total:
+        return None
+    seen = 0
+    for i, n in enumerate(buckets):
+        seen += n
+        if seen >= 0.95 * total:
+            return BUCKETS_MS[i] if i < len(BUCKETS_MS) else -1
+    return -1
+
+
+def midnight(day):
+    return datetime.combine(day, dtime(0), TZ)
+
+
+def usage_period(name, now):
+    """(start, end, previous start, previous end): the period up to now and the same stretch before it (today vs
+    yesterday until this time, this week from Monday vs last week, this month vs last month's first days)."""
+    now = now.astimezone(TZ)
+    today = now.date()
+    if name == 'today':
+        return midnight(today), now, midnight(today - timedelta(days=1)), now - timedelta(days=1)
+    if name == 'week':
+        start = midnight(today - timedelta(days=today.weekday()))
+        return start, now, midnight(start.date() - timedelta(days=7)), now - timedelta(days=7)
+    if name == 'month':
+        start = midnight(today.replace(day=1))
+        before = midnight((start.date() - timedelta(days=1)).replace(day=1))
+        # The same stretch of last month, cut at its end (31 March vs February).
+        return start, now, before, min(datetime.combine(before.date() + (today - start.date()), now.time(), TZ), start)
+    return datetime(2000, 1, 1, tzinfo=TZ), now, None, None
+
+
+def usage_sql(start, end, prev_start, prev_end):
+    hours, days = 'prestop_api_analyticshour', 'prestop_api_analyticsday'
+    local = "(hour at time zone 'Europe/Ljubljana')"
+    span = f"hour >= '{start.isoformat()}' and hour < '{end.isoformat()}'"
+    real = f"route <> '{PRESENCE}'"
+    bad = "coalesce(sum(count) filter (where status = '5xx'), 0)::text"
+    refused = "coalesce(sum(count) filter (where status = '4xx'), 0)::text"
+    sql = f"""
+      select 'd', {local}::date::text, sum(count)::text, {bad}, {refused} from {hours} where {real} group by 2
+      union all select 'v', day::text, visitors::text, new_users::text, platforms::text from {days}
+      union all select 'h', extract(hour from {local})::int::text, sum(count)::text, {bad}, '' from {hours} where {real} and {span} group by 2
+      union all select 'r', route, status, sum(count)::text, '' from {hours} where {span} group by route, status
+      union all select 'b', route, '', e.ord::text, sum(e.val::bigint)::text
+        from {hours}, jsonb_array_elements_text(buckets) with ordinality e(val, ord) where {span} group by route, e.ord"""
+    if prev_start:
+        sql += f"""
+      union all select 'p', '', coalesce(sum(count), 0)::text, '', '' from {hours}
+        where {real} and hour >= '{prev_start.isoformat()}' and hour < '{prev_end.isoformat()}'"""
+    return sql
+
+
+def usage_live(today):
+    """{day: (visitors, new users, {platform: visitors})} for the days still in Redis."""
+    days = [today - timedelta(days=i) for i in range(DAY_TTL_DAYS + 1)]
+    names = PLATFORMS + DISPLAYS
+    cmds = []
+    for d in days:
+        uv = f'analytics:uv:{d.isoformat()}'
+        cmds += [['PFCOUNT', uv], ['PFCOUNT', f'analytics:new:{d.isoformat()}']] + [['PFCOUNT', f'{uv}:{n}'] for n in names]
+    replies = redis(*cmds, url=ANALYTICS_REDIS_URL)
+    for r in replies:
+        if isinstance(r, RedisError):
+            raise r
+    out, per = {}, 2 + len(names)
+    for i, d in enumerate(days):
+        v, new, *plat = replies[i * per:(i + 1) * per]
+        if v or new:
+            out[d] = (v, new, {n: c for n, c in zip(names, plat) if c})
+    return out
+
+
+def usage(query=None, live=None, now=None):
+    """What the usage tab shows for UI['period']: every day so far (saved and live), and the period's breakdown."""
+    now = (now or datetime.now(TZ)).astimezone(TZ)
+    today, name = now.date(), UI['period']
+    start, end, prev_start, prev_end = usage_period(name, now)
+    rows = (query or (lambda sql: psql(sql, timeout=20)))(usage_sql(start, end, prev_start, prev_end))
+    req, seen, by_hour, routes, buckets, prev_requests = {}, {}, {}, {}, {}, 0
+    for row in rows:
+        k, a, b, c, e = (row.split('|', 4) + [''] * 4)[:5]
+        if k == 'd':
+            req[date.fromisoformat(a)] = (int(b), int(c), int(e))
+        elif k == 'v':
+            seen[date.fromisoformat(a)] = (int(b), int(c), json.loads(e or '{}'))
+        elif k == 'h':
+            by_hour[int(a)] = (int(b), int(c))
+        elif k == 'r':
+            routes.setdefault(a, {})[b] = int(c)
+        elif k == 'b':
+            at = buckets.setdefault(a, [0] * (len(BUCKETS_MS) + 1))
+            if int(c) <= len(at):
+                at[int(c) - 1] += int(e)
+        elif k == 'p':
+            prev_requests = int(b)
+    live_error = None
+    try:
+        for d, (v, new, plat) in (live or usage_live)(today).items():  # a day saved before is merged, as the nightly job does
+            old = seen.get(d, (0, 0, {}))
+            seen[d] = (max(old[0], v), old[1] + new, {n: max(old[2].get(n, 0), plat.get(n, 0)) for n in {*old[2], *plat}})
+    except Exception as e:  # noqa: BLE001  the saved days still make a report
+        live_error = (str(e) or type(e).__name__).splitlines()[0][:80]
+    first = min([today, *req, *seen])
+    series, joined = [], 0
+    for i in range((today - first).days + 1):
+        d = first + timedelta(days=i)
+        n, er, rf = req.get(d, (0, 0, 0))
+        v, new, plat = seen.get(d, (0, 0, {}))
+        joined += new
+        series.append({'day': d, 'users': v, 'new': new, 'joined': joined, 'requests': n, 'errors': er, 'refused': rf, 'platforms': plat})
+    features, table = {}, {}
+    for route, statuses in routes.items():
+        if route == PRESENCE:
+            continue
+        for tbl, key in ((table, route), (features, feature(route))):
+            x = tbl.setdefault(key, {'count': 0, 'errors': 0, 'buckets': [0] * (len(BUCKETS_MS) + 1)})
+            x['count'] += sum(statuses.values())
+            x['errors'] += statuses.get('5xx', 0)
+            x['buckets'] = [p + q for p, q in zip(x['buckets'], buckets.get(route, []) or [0] * len(x['buckets']))]
+    real = [s for r, s in routes.items() if r != PRESENCE]
+    return {'period': name, 'now': now, 'start': start, 'end': end, 'prev_start': prev_start, 'prev_end': prev_end, 'series': series,
+            'hours': by_hour, 'requests': sum(sum(s.values()) for s in real), 'errors': sum(s.get('5xx', 0) for s in real),
+            'refused': sum(s.get('4xx', 0) for s in real), 'prev_requests': prev_requests,
+            'features': sorted(features.items(), key=lambda kv_: -kv_[1]['count']),
+            'routes': sorted(table.items(), key=lambda kv_: -kv_[1]['count'])[:8],
+            'presence': sum(routes.get(PRESENCE, {}).values()), 'sends': routes.get('hop/send', {}).get('2xx', 0), 'live_error': live_error}
+
+
 def start_pollers():
     every = lambda: UI['interval']  # noqa: E731
     for name, fn, ev in (('sample', SAMPLER, every), ('traffic', traffic, every), ('health', health, lambda: max(3, UI['interval'])),
                          ('egress', egress, lambda: 30), ('db', databases, lambda: 10), ('timers', timers, lambda: 15),
-                         ('logs', logs, lambda: 15), ('learning', learning, lambda: 60)):
+                         ('logs', logs, lambda: 15), ('learning', learning, lambda: 60), ('usage', usage, lambda: 60)):
         POLL[name] = Poller(name, fn, ev)
     for p in POLL.values():
         p.start()
@@ -992,6 +1227,10 @@ def svc_name(s):
     return s.removeprefix('prestop-')
 
 
+def egress_tip(e):
+    return [f'{e["used_gb"]:.1f} of {e["limit"]} GB sent in {e["month"]}', f'pace today {e["pace"]:.0f} GB · busy at {e["busy_at"]} GB']
+
+
 def tab_overview(w):
     s = val('sample')
 
@@ -1002,9 +1241,9 @@ def tab_overview(w):
         mw = max(8, min(26, iw // 4))
         sw = iw - 9 - mw - 2 - 16 - 1
 
-        def row(label, p, value, hist, hi=100, style='accent', by_level=True):
+        def row(label, p, value, hist, hi=100, style='accent', by_level=True, fmt=lambda v: f'{v:.0f} %'):
             line = [(f'{label:<9}', 'dim')] + meter(p, mw) + [('  ' + value.ljust(16)[:16] + ' ', 'text')]
-            return line + (spark(hist, sw, hi=hi, style=style, by_level=by_level) if hist is not None and sw >= 6 else [])
+            return line + (spark(hist, sw, hi=hi, style=style, by_level=by_level, name=label, fmt=fmt) if hist is not None and sw >= 6 else [])
         cpu = s['cpu']
         lines = [row('CPU', cpu, f'{cpu:.0f} % busy' if cpu is not None else '', H['cpu']),
                  row('Memory', pct(m['used'], m['total']), f'{m["used"] / GIB:.1f} / {m["total"] / GIB:.1f} GB', H['mem'])]
@@ -1015,7 +1254,7 @@ def tab_overview(w):
         net = fit(net, 9 + mw + 2 + 16 + 1)
         if sw >= 13:
             half = (sw - 1) // 2
-            net += spark(H['rx'], half, style='rx') + blank(1) + spark(H['tx'], sw - half - 1, style='tx')
+            net += spark(H['rx'], half, style='rx', name='in', fmt=rate) + blank(1) + spark(H['tx'], sw - half - 1, style='tx', name='out', fmt=rate)
         lines.append(net)
         lines.append(kv('Load', ' '.join(s['load']), ('  ·  ', 'faint'), f'{s["nproc"]} cores', ('  ·  ', 'faint'),
                         f'up {dur(s["uptime"])}', lw=9))
@@ -1025,6 +1264,13 @@ def tab_overview(w):
         t, e = val('traffic'), val('egress')
         mw = max(8, min(26, iw // 4))
         lines = []
+        u = val('usage')
+        if u:
+            day = u['series'][-1]
+            head = [('Users    ', 'dim'), (f'{day["users"]:,} today'.ljust(mw + 2), 'bold'), (f'{day["new"]:,} new'.ljust(10), 'text'),
+                    (f'{day["requests"]:,} requests'.ljust(18), 'dim')]
+            sw = iw - width(head)
+            lines.append(link(head, go('usage')) + (usage_spark(u, sw) if sw >= 6 else []))
         if t:
             lines.append([('Visitors ', 'dim')] + meter(pct(t['u15'], MAX_ACTIVE), mw) +
                          L(('  ' + f'{t["u15"]} in 15 min'.ljust(16), 'bold'), (f'now {t["u1"]} · 5 min {t["u5"]} · busy at {MAX_ACTIVE}', 'dim')))
@@ -1035,9 +1281,9 @@ def tab_overview(w):
         if s:
             sw = iw - 9 - mw - 2 - 16
             lines.append(kv('API', f'{s["conn"]} open connections'.ljust(mw + 2 + 16)[:mw + 18], lw=9) +
-                         (spark(SAMPLER.h['conn'], sw, style='purple') if sw >= 6 else []))
+                         (spark(SAMPLER.h['conn'], sw, style='purple', name='open connections') if sw >= 6 else []))
         if e:
-            lines.append([('Egress   ', 'dim')] + meter(pct(e['used_gb'], e['limit']), mw, marker=pct(e['pace'], e['limit'])) +
+            lines.append([('Egress   ', 'dim')] + meter(pct(e['used_gb'], e['limit']), mw, marker=pct(e['pace'], e['limit']), tip=egress_tip(e)) +
                          L(('  ' + f'{e["used_gb"]:.0f} / {e["limit"]} GB'.ljust(16), 'bold'),
                            (e['stage'], status_style({'normal': 'live', 'busy': 'stale'}.get(e['stage'], 'x'))),
                            (f' · pace {e["pace"]:.0f}' + (f' · month ≈ {e["forecast"]:.0f}' if e['forecast'] else ''), 'dim')))
@@ -1053,9 +1299,9 @@ def tab_overview(w):
         out = []
         for name, d in s['services'].items():
             c = d['cpu']
-            out.append(L(('● ', status_style(d['state'])), cell(svc_name(name), 13), cell(d['state'], 11, status_style(d['state'])),
-                         cell(f'{c:.1f}%' if c is not None else '–', 6, 'text', True), cell(size(d['mem']) if d['mem'] else '–', 10, 'text', True),
-                         ('   up ' + dur(time.time() - d['since']) if d['state'] == 'active' and d['since'] else '', 'dim')))
+            out.append(link(L(('● ', status_style(d['state'])), cell(svc_name(name), 13), cell(d['state'], 11, status_style(d['state'])),
+                              cell(f'{c:.1f}%' if c is not None else '–', 6, 'text', True), cell(size(d['mem']) if d['mem'] else '–', 10, 'text', True),
+                              ('   up ' + dur(time.time() - d['since']) if d['state'] == 'active' and d['since'] else '', 'dim')), go('services')))
         return out
 
     def health_(iw):
@@ -1068,7 +1314,7 @@ def tab_overview(w):
         down = [x['id'] for x in srcs if x.get('status') != 'live']
         cov = h.get('coverage')
         lines = [kv('API', ('● ', status_style(h.get('api'))), f'{h.get("api")} · {h["_ms"]:.0f} ms  ') +
-                 spark(HEALTH_MS, max(0, iw - 30), style='accent'),
+                 spark(HEALTH_MS, max(0, iw - 30), style='accent', name='response time', fmt=lambda v: f'{v:.0f} ms'),
                  kv('Database', ('● ', status_style(h.get('database'))), str(h.get('database'))),
                  kv('Collector', ('● ', status_style(c.get('status'))), str(c.get('status', '?')),
                     (f' · {ago(parse_iso(c["updatedAt"]))}' if c.get('updatedAt') else '', 'dim')),
@@ -1104,16 +1350,16 @@ def tab_overview(w):
         a = alerts()
         if not a:
             return [L(('● ', 'ok'), ('Everything looks fine.', 'ok'), ('  Nothing needs a look right now.', 'dim'))]
-        return [L(('● ', lvl), (text, 'bad' if lvl == 'bad' else 'text'), (f'   → {tab}', 'faint')) for lvl, tab, text in a]
+        return [link(L(('● ', lvl), (text, 'bad' if lvl == 'bad' else 'text'), (f'   → {tab}', 'faint')), go(tab)) for lvl, tab, text in a]
 
     a = alerts()
     worst = max((LEVEL[x[0]] for x in a), default=0)
     note = ['all clear', f'{len(a)} to check', f'{len(a)} to check'][worst]
     return (panel('Needs a look' if a else 'Status', alerts_(w - 4), w, note, ['ok', 'warn', 'bad'][worst]) +
-            columns(w, [lambda cw: panel('Resources', resources(cw - 4), cw, f'last {dur(len(SAMPLER.h["cpu"]) * UI["interval"])}'),
-                        lambda cw: panel('Traffic', traffic_(cw - 4), cw)],
-                    [lambda cw: panel('Services', services(cw - 4), cw),
-                     lambda cw: panel('Health', health_(cw - 4), cw)]))
+            columns(w, [lambda cw: panel('Resources', resources(cw - 4), cw, f'last {dur(len(SAMPLER.h["cpu"]) * UI["interval"])}', to='system'),
+                        lambda cw: panel('Traffic', traffic_(cw - 4), cw, to='traffic')],
+                    [lambda cw: panel('Services', services(cw - 4), cw, to='services'),
+                     lambda cw: panel('Health', health_(cw - 4), cw, to='data')]))
 
 
 def tab_system(w):
@@ -1125,12 +1371,12 @@ def tab_system(w):
 
     def cpu(cw):
         iw = cw - 4
-        body = area(H['cpu'], iw, 7, hi=100, by_level=True, label=lambda v: f'{v:.0f}%')
+        body = area(H['cpu'], iw, 7, hi=100, by_level=True, label=lambda v: f'{v:.0f}%', name='CPU busy', fmt=lambda v: f'{v:.1f} %')
         cores = s['cores']
         per = max(1, (iw + 2) // max(1, min(len(cores), 4)) - 2)
         row, rows = [], []
         for i, c in enumerate(cores):
-            row += [(f'cpu{i} ', 'dim')] + meter(c, max(4, per - 11)) + [(f' {c or 0:3.0f}%  ', 'text')]
+            row += [(f'cpu{i} ', 'dim')] + meter(c, max(4, per - 11), tip=[f'cpu{i}  {c or 0:.1f} % busy']) + [(f' {c or 0:3.0f}%  ', 'text')]
             if (i + 1) % 4 == 0:
                 rows.append(row)
                 row = []
@@ -1142,12 +1388,13 @@ def tab_system(w):
 
     def memory(cw):
         iw = cw - 4
-        body = area(H['mem'], iw, 5, hi=100, by_level=True, label=lambda v: f'{v:.0f}%')
+        body = area(H['mem'], iw, 5, hi=100, by_level=True, label=lambda v: f'{v:.0f}%', name='memory used', fmt=lambda v: f'{v:.1f} %')
         tot = m['total'] or 1
         mw = max(6, iw - 32)
         body.append([])
         for label, v, st in (('used', m['used'], 'accent'), ('cache', m['cached'] + m['buffers'], 'purple'), ('free', m['avail'], 'ok')):
-            body.append(kv(label, ) + meter(pct(v, tot), mw, st) + L((f'  {v / GIB:6.2f} GB  {pct(v, tot):3.0f} %', 'text')))
+            body.append(kv(label, ) + meter(pct(v, tot), mw, st, tip=[f'{label}  {v / GIB:.2f} GB', f'{pct(v, tot):.1f} % of {tot / GIB:.1f} GB']) +
+                        L((f'  {v / GIB:6.2f} GB  {pct(v, tot):3.0f} %', 'text')))
         if m['swap_total']:
             body.append(kv('swap') + meter(pct(m['swap_used'], m['swap_total']), mw) + L((f'  {m["swap_used"] / GIB:6.2f} GB of {m["swap_total"] / GIB:.1f}', 'text')))
         return panel('Memory', body, cw, f'{m["used"] / GIB:.1f} of {m["total"] / GIB:.1f} GB')
@@ -1156,10 +1403,10 @@ def tab_system(w):
         iw = cw - 4
         body = [L(('↓ in   ', 'rx'), (rate(s['rx']).ljust(12), 'bold'), (f'peak {rate(max(H["rx"], default=0))}', 'dim'),
                   (f' · since boot {size(s["rx_total"])}', 'dim'))]
-        body += area(H['rx'], iw, 4, style='rx', label=short)
+        body += area(H['rx'], iw, 4, style='rx', label=short, name='in', fmt=rate)
         body += [L(('↑ out  ', 'tx'), (rate(s['tx']).ljust(12), 'bold'), (f'peak {rate(max(H["tx"], default=0))}', 'dim'),
                    (f' · since boot {size(s["tx_total"])}', 'dim'))]
-        body += area(H['tx'], iw, 4, style='tx', label=short)
+        body += area(H['tx'], iw, 4, style='tx', label=short, name='out', fmt=rate)
         return panel('Network', body, cw, SAMPLER.iface or '?')
 
     def disk(cw):
@@ -1169,8 +1416,8 @@ def tab_system(w):
         sw = max(0, iw - 22)
         return panel('Disk', [kv('root /', lw=8) + meter(pct(d['used'], d['total']), mw) +
                               L((f'  {d["used"] / GIB:.0f} / {d["total"] / GIB:.0f} GB  {pct(d["used"], d["total"]):.0f} %', 'text')),
-                              kv('read', (rate(s['dr']).ljust(14), 'text'), lw=8) + spark(H['dr'], sw, style='rx'),
-                              kv('write', (rate(s['dw']).ljust(14), 'text'), lw=8) + spark(H['dw'], sw, style='tx')], cw)
+                              kv('read', (rate(s['dr']).ljust(14), 'text'), lw=8) + spark(H['dr'], sw, style='rx', name='read', fmt=rate),
+                              kv('write', (rate(s['dw']).ljust(14), 'text'), lw=8) + spark(H['dw'], sw, style='tx', name='written', fmt=rate)], cw)
 
     def procs(cw):
         iw = cw - 4
@@ -1202,7 +1449,7 @@ def tab_services(w):
             rows.append(L(('● ', st), cell(svc_name(name), 13, 'bold'), cell(f'{d["state"]} ({d["sub"]})' if d['sub'] and stw > 13 else d['state'], stw, st),
                           cell(up, 10, 'text'), cell(d['restarts'] if d['restarts'] is not None else '–', 9, 'warn' if d['restarts'] else 'faint', True),
                           cell(f'{d["cpu"]:.1f}%' if d['cpu'] is not None else '–', 8, 'text', True), ('  ', 'text'),
-                          *(spark(SAMPLER.svc[name], sw, style='accent') if sw >= 8 else [cell('', sw)]),
+                          *(spark(SAMPLER.svc[name], sw, style='accent', name=svc_name(name) + ' CPU', fmt=lambda v: f'{v:.1f} %') if sw >= 8 else [cell('', sw)]),
                           cell(size(d['mem']) if d['mem'] else '–', 10, 'text', True), cell(d['tasks'] if d['tasks'] is not None else '–', 7, 'dim', True)))
         out += panel('Services', rows, w, f'{sum(1 for d in s["services"].values() if d["state"] == "active")}/{len(s["services"])} running')
     else:
@@ -1225,7 +1472,8 @@ def tab_services(w):
             body = [kv('latest', (b[-1][0], 'bold'), f'  {size(b[-1][1])}', (f'  ·  {clock(b[-1][2], "%a %d %b %H:%M")}  ({ago(b[-1][2])})', 'dim')),
                     kv('kept', f'{len(b)} dumps · {size(sum(sizes))}', ('  in ' + BACKUP_DIR, 'dim'))]
             body += [[]] + bars(sizes, min(iw, 8 + len(b) * 7), 3, labels=[clock(x[2], '%d %b') for x in b], label=short,
-                                style=lambda i: 'accent' if i == len(b) - 1 else 'purple')
+                                style=lambda i: 'accent' if i == len(b) - 1 else 'purple',
+                                tips=lambda i: [size(b[i][1]), b[i][0], clock(b[i][2], '%a %d %b %H:%M')])
             out += panel('Backups', body, w, 'pg_dump nightly at 03:00')
         else:
             out += panel('Backups', [L(('no dumps in ' + BACKUP_DIR, 'warn'))], w)
@@ -1247,9 +1495,10 @@ def tab_traffic(w):
                 [('busy   ', 'dim')] + meter(pct(t['u15'], MAX_ACTIVE), max(6, iw - 14)) + L((f' {pct(t["u15"], MAX_ACTIVE):4.1f} %', 'text')), [],
                 L(('new visitors per minute', 'dim'))]
         body += bars(t['per_minute'], iw, 5, labels=[f'-{ACTIVE_WINDOW - 1 - i}m' if i % 5 == 4 else '' for i in range(ACTIVE_WINDOW - 1)] + ['now'],
-                     style=lambda i: 'accent' if i == ACTIVE_WINDOW - 1 else 'purple')
+                     style=lambda i: 'accent' if i == ACTIVE_WINDOW - 1 else 'purple',
+                     tips=lambda i: [f'{t["per_minute"][i]} new visitors', 'this minute' if i == ACTIVE_WINDOW - 1 else f'{ACTIVE_WINDOW - 1 - i} min ago'])
         if len(USERS_HIST) > 2:
-            body += [[], L(('visitors in 15 min, since this view opened', 'dim'))] + area(USERS_HIST, iw, 4, style='accent')
+            body += [[], L(('visitors in 15 min, since this view opened', 'dim'))] + area(USERS_HIST, iw, 4, style='accent', name='visitors in 15 min')
         return panel('Visitors', body, cw, 'hashed IPs, traffic guard')
 
     def api(cw):
@@ -1257,7 +1506,7 @@ def tab_traffic(w):
         body = []
         if s:
             body += [L(('open connections ', 'dim'), (str(s['conn']), 'bold'), (f'  peak {max(SAMPLER.h["conn"], default=0)}', 'dim'))]
-            body += area(SAMPLER.h['conn'], iw, 4, style='purple')
+            body += area(SAMPLER.h['conn'], iw, 4, style='purple', name='open connections')
         if t:
             body += [[], L(('sent in the last hour ', 'dim'), (size(t['hour_bytes']), 'bold'), (f'  of {HOURLY_BYTES / 1e9:.0f} GB', 'dim')),
                      meter(pct(t['hour_bytes'], HOURLY_BYTES), iw)]
@@ -1270,7 +1519,7 @@ def tab_traffic(w):
     if e:
         body = [L((f'{e["used_gb"]:.1f} GB', 'bold'), (f' of {e["limit"]} GB sent in {e["month"]}', 'dim'), ('   stage ', 'dim'),
                   (e['stage'], {'normal': 'ok', 'busy': 'warn'}.get(e['stage'], 'bad'))),
-                meter(pct(e['used_gb'], e['limit']), iw, marker=pct(e['pace'], e['limit'])),
+                meter(pct(e['used_gb'], e['limit']), iw, marker=pct(e['pace'], e['limit']), tip=egress_tip(e)),
                 L(('┃', 'accentb'), (f' pace {e["pace"]:.0f} GB', 'dim'), ('   busy at ', 'dim'), (f'{e["busy_at"]} GB', 'text'),
                   ('   stop at ', 'dim'), (f'{e["limit"]} GB', 'text'), ('   Oracle bills above 10000 GB', 'faint'))]
         if e['forecast']:
@@ -1282,11 +1531,13 @@ def tab_traffic(w):
             today = datetime.now(timezone.utc).day
             body += [[], L(('sent per day (vnstat)', 'dim'))]
             body += bars(vals, iw, 5, labels=[str(d) if d == 1 or d % 5 == 0 else '' for d in range(1, len(vals) + 1)], label=short,
-                         style=lambda i: 'accent' if i + 1 == today else 'purple')
+                         style=lambda i: 'accent' if i + 1 == today else 'purple',
+                         tips=lambda i: [f'{size(vals[i])} sent', f'{i + 1} {e["month"]}' + (' · today' if i + 1 == today else '')])
         if e['hours']:
             body += [[], L(('sent per hour, last 24 h', 'dim'))]
             body += bars([x[1] for x in e['hours']], iw, 4, labels=[f'{x[0]:02d}' if x[0] % 3 == 0 else '' for x in e['hours']],
-                         label=short, style='tx')
+                         label=short, style='tx',
+                         tips=lambda i: [f'{size(e["hours"][i][1])} sent · {size(e["hours"][i][2])} received', f'hour from {e["hours"][i][0]:02d}:00 (UTC)'])
         if e['vnstat_error']:
             body.append(L(('vnstat: ', 'dim'), (e['vnstat_error'], 'warn')))
         out += panel('Outbound data', body, w, 'egress guard, every 5 min')
@@ -1310,7 +1561,7 @@ def tab_data(w):
         mt = h.get('maintenance')
         if mt:
             body.append(kv('Maintenance', ('on ', 'warn'), (f'until {clock(parse_iso(mt.get("until")))}', 'dim')))
-        body += [[], L(('response time', 'dim'))] + area(HEALTH_MS, iw, 4, style='accent', label=lambda v: f'{v:.0f}ms')
+        body += [[], L(('response time', 'dim'))] + area(HEALTH_MS, iw, 4, style='accent', label=lambda v: f'{v:.0f}ms', name='response time', fmt=lambda v: f'{v:.0f} ms')
         cov = h.get('coverage')
         body.append([])
         if cov:
@@ -1364,7 +1615,7 @@ def tab_data(w):
                 kv('connections', lw=13) + meter(pct(total, pg.get('max', 100)), max(6, iw - 40)) +
                 L((f'  {total}/{pg.get("max", "?")}  ', 'text'), (' · '.join(f'{k} {v}' for k, v in sorted(conn.items())), 'dim')),
                 kv('commits', (f'{pg["tps"]:.1f}/s  ' if pg.get('tps') is not None else '…  ', 'text')) +
-                spark(DB_HIST['tps'], max(0, iw - 22), style='purple')]
+                spark(DB_HIST['tps'], max(0, iw - 22), style='purple', name='commits a second', fmt=lambda v: f'{v:.1f}')]
         if pg.get('long') and pg['long'][0] >= 1:
             secs, q = pg['long']
             body.append(kv('longest', (f'{dur(secs)}  ', level_style(secs, 30, 300)), (q, 'faint')))
@@ -1373,7 +1624,7 @@ def tab_data(w):
             top = max(x[1] for x in pg['tables']) or 1
             bw = max(4, iw - 52)
             for name, n in pg['tables']:
-                body.append(L(cell(name, 40, 'text'), cell(size(n), 10, 'text', True), ('  ', 'text'), *meter(pct(n, top), bw, 'purple')))
+                body.append(L(cell(name, 40, 'text'), cell(size(n), 10, 'text', True), ('  ', 'text'), *meter(pct(n, top), bw, 'purple', tip=[name, f'{size(n)} · {pct(n, pg.get("size", 0)):.1f} % of the database'])))
         return panel('PostgreSQL', body, cw, pg.get('version', ''))
 
     def redis_(cw):
@@ -1384,7 +1635,7 @@ def tab_data(w):
         body = [kv('memory', (size(r['mem']), 'bold'), (f'   peak {size(r["peak"])}' + (f' · max {size(r["maxmem"])}' if r['maxmem'] else ''), 'dim')),
                 kv('clients', str(r['clients']), ('   hit rate ', 'dim'), f'{r["hit"]:.1f} %', ('   evicted ', 'dim'), str(r['evicted'])),
                 kv('keys', ' · '.join(f'{k} {v}' for k, v in r['keys'].items()) or '0'),
-                kv('ops', (f'{r["ops"]}/s  ', 'text')) + spark(DB_HIST['ops'], max(0, iw - 22), style='rx')]
+                kv('ops', (f'{r["ops"]}/s  ', 'text')) + spark(DB_HIST['ops'], max(0, iw - 22), style='rx', name='operations a second')]
         return panel('Redis', body, cw, f'{r["version"]} · up {dur(r["uptime"])}')
     return columns(w, [api], [sources]) + columns(w, [postgres], [redis_])
 
@@ -1408,16 +1659,17 @@ def tab_learning(w):
     for d, share in lr['collector']:
         p = share * 100
         sty = 'ok' if share * 86400 >= FULL_DAY else 'warn' if p >= 70 else 'bad' if p > 0 else 'faint'
-        strip.append(('█' * (colw - 1) + ' ', sty))
+        strip.append(('█' * (colw - 1) + ' ', Hot(sty, ('collector', d), [f'{p:.1f} % recorded', day_label(d)])))
         wk.append((f'{d:%a}'[:colw - 1].ljust(colw), 'dim'))
         dn.append((f'{d.day}'.ljust(colw), 'faint'))
-    out += panel('Collector, last 14 days', [merge(strip), merge(strip), wk, dn,
+    out += panel('Collector, last 14 days', [strip, strip, wk, dn,
                  L(('█ ', 'ok'), ('counts (≥ 95 %)   ', 'dim'), ('█ ', 'warn'), ('≥ 70 %   ', 'dim'), ('█ ', 'bad'), ('less   ', 'dim'), ('█ ', 'faint'), ('none', 'dim'))],
                  w, f'{sum(1 for _, s in lr["collector"] if s * 86400 >= FULL_DAY)}/14 days counted')
 
     rows = [L(cell('FEED', 16, 'dim'), cell('LAST 14 DAYS', 30, 'dim'), ('STATUS', 'dim'))]
     for f in lr['feeds']:
-        days = merge([('■ ', 'ok' if ok else 'faint') for ok in f['days']])
+        days = [('■ ', Hot('ok' if ok else 'faint', (f['feed'], i), [f'{f["feed"]}: ' + ('counted' if ok else 'did not count'), day_label(lr['today'] - timedelta(days=14 - i))]))
+                for i, ok in enumerate(f['days'])]
         if f['open']:
             status = [('open', 'ok'), (f'  sure {f["sure"]} · likely {f["likely"]}', 'dim')]
         else:
@@ -1463,7 +1715,10 @@ def tab_logs(w):
             fe, fw = int(round(er * bw / top)), int(round(wa * bw / top))
             fe = max(fe, 1 if er else 0)
             fw = max(fw, 1 if wa else 0)
-            head.append(L(cell(unit, 18, 'text'), ('█' * fe, 'bad'), ('█' * fw, 'warn'), ('·' * max(0, bw - fe - fw), 'faint'),
+            tip = [unit, f'{er} errors · {wa} warnings in 24 h']
+            hot = object()
+            head.append(L(cell(unit, 18, 'text'), ('█' * fe, Hot('bad', hot, tip)), ('█' * fw, Hot('warn', hot, tip)),
+                          ('·' * max(0, bw - fe - fw), Hot('faint', hot, tip)),
                           (f'  {er:4d} errors', 'bad' if er else 'faint'), (f'  {wa:4d} warnings', 'warn' if wa else 'faint')))
     else:
         head.append(L(('● ', 'ok'), ('no warnings or errors from the KamGre services in 24 h', 'ok')))
@@ -1486,17 +1741,235 @@ def tab_logs(w):
             rows.append(prefix + [(lines[0] + (' …' if len(lines) > 1 else ''), 'bad' if x['p'] <= 3 else 'text')])
     if not rows:
         rows.append(L(('nothing to show', 'dim')))
-    flt = 'errors only' if LOGS['errors_only'] else 'warnings and errors'
-    return out + panel('Journal', rows, w, f'{flt} · newest first · e filter · w wrap')
+    toggles = [chip('warnings and errors', not LOGS['errors_only'], 'e' if LOGS['errors_only'] else None), ('  ', 'text'),
+               chip('errors only', LOGS['errors_only'], None if LOGS['errors_only'] else 'e'), ('    ', 'text'),
+               chip('wrap long lines', LOGS['wrap'], 'w')]
+    return out + panel('Journal', [toggles, []] + rows, w, 'newest first · e filter · w wrap')
+
+
+# ---------------------------------------------------------------- usage tab
+
+
+def ms_text(v):
+    return '–' if v is None else '>3.2 s' if v < 0 else f'≤{v} ms'
+
+
+def share(part, whole, decimals=0):
+    return f'{part * 100 / whole:.{decimals}f} %' if whole else '–'
+
+
+def change(a, b):
+    """Change from b to a as a (text, style) segment."""
+    if a is None or b is None or (a == 0 and b == 0):
+        return ('', 'dim')
+    if b == 0:
+        return ('new', 'ok')
+    p = (a - b) * 100 / b
+    if abs(p) < 0.5:
+        return ('= 0 %', 'dim')
+    return (f'{"▲" if p > 0 else "▼"} {abs(p):.0f} %', 'ok' if p > 0 else 'warn')
+
+
+def period_days(u, start=None, end=None):
+    start, end = (start or u['start']).date(), (end or u['end']).date()
+    return [x for x in u['series'] if start <= x['day'] <= end]
+
+
+def users_a_day(days, before):
+    """The mean over finished days (a day still running would pull it down), or over what there is."""
+    done = [x for x in days if x['day'] < before] or days
+    return round(sum(x['users'] for x in done) / len(done)) if done else 0
+
+
+def usage_tiles(u):
+    """The headline numbers: (heading, value, (note, style))."""
+    days = period_days(u)
+    today, series = u['series'][-1], u['series']
+    new = sum(x['new'] for x in days)
+    if u['period'] == 'today':
+        before = series[-2] if len(series) > 1 else None
+        users = ('USERS TODAY', f'{today["users"]:,}', (f'yesterday {before["users"]:,}' if before else '', 'dim'))
+        fresh = ('NEW TODAY', f'{new:,}', (f'yesterday {before["new"]:,}' if before else '', 'dim'))
+    else:
+        mean = users_a_day(days, today['day'])
+        if u['prev_start']:
+            old = period_days(u, u['prev_start'], u['prev_end'])
+            users = ('USERS A DAY', f'{mean:,}', change(mean, users_a_day(old, u['prev_end'].date()) if old else None))
+            fresh = ('NEW USERS', f'{new:,}', change(new, sum(x['new'] for x in old) if old else None))
+        else:
+            peak = max(days, key=lambda x: x['users'])
+            users = ('USERS A DAY', f'{mean:,}', (f'peak {peak["users"]:,}, {day_label(peak["day"])}', 'dim'))
+            fresh = ('NEW USERS', f'{new:,}', ('', 'dim'))
+    since = series[0]['day']
+    arrow = change(u['requests'], u['prev_requests']) if u['prev_start'] else (f'{u["requests"] / max(1, len(days)):,.0f} a day', 'dim')
+    return [users, fresh, ('ALL USERS', f'{today["joined"]:,}', (f'since {since.day} {since:%b}', 'dim')),
+            ('REQUESTS', f'{u["requests"]:,}', arrow),
+            ('SERVER ERRORS', share(u['errors'], u['requests'], 2), (f'refused {share(u["refused"], u["requests"], 1)}', 'dim'))]
+
+
+def group_days(days, room):
+    """One bar per day when they fit, else per week, else per month: (label, axis, the days in it)."""
+    if len(days) <= room:
+        return [(day_label(x['day']), str(x['day'].day), [x]) for x in days]
+    weekly = (len(days) + 13) // 7 <= room
+    out, keys = [], {}
+    for x in days:
+        d = x['day']
+        first = d - timedelta(days=d.weekday()) if weekly else d.replace(day=1)
+        if first not in keys:
+            keys[first] = []
+            out.append((f'week of {first.day} {first:%b}' if weekly else f'{first:%B %Y}', str(first.day) if weekly else f'{first:%b}', keys[first]))
+        keys[first].append(x)
+    return out
+
+
+def usage_tip(label, days):
+    users = round(sum(x['users'] for x in days) / len(days))
+    new, requests, errors = (sum(x[k] for x in days) for k in ('new', 'requests', 'errors'))
+    head = f'{users:,} users' + (' a day' if len(days) > 1 else '')
+    return [head, label, f'{new:,} new · {requests:,} requests' + (f' · {errors:,} errors' if errors else '')]
+
+
+def usage_spark(u, w):
+    days = u['series'][-w:]
+    return spark([x['users'] for x in days], w, style='accent', tips=lambda i: usage_tip(day_label(days[i]['day']), [days[i]]))
+
+
+def chart_days(u):
+    """The days the bar charts span: enough to see a trend, even for today alone."""
+    return u['series'][-{'today': 14, 'week': 14, 'month': 31}.get(u['period'], len(u['series'])):]
+
+
+def day_bars(u, iw, h, field, per_day=False, style='accent'):
+    """A bar chart of one number over chart_days(); the period's own days stand out, and today most."""
+    groups = group_days(chart_days(u), max(1, iw - 7))
+    first = u['start'].date()
+    today = u['series'][-1]['day']
+
+    def height(days):
+        total = sum(x[field] for x in days)
+        return total / len(days) if per_day else total
+
+    def colour(i):
+        days = groups[i][2]
+        return 'bold' if days[-1]['day'] == today else style if days[-1]['day'] >= first else 'purple'
+    return bars([height(g[2]) for g in groups], iw, h, labels=[g[1] for g in groups], label=short, style=colour, widest=iw,
+                tips=lambda i: usage_tip(groups[i][0], groups[i][2]) if field != 'requests' else requests_tip(groups[i]))
+
+
+def requests_tip(group):
+    label, _, days = group
+    n, er, rf = (sum(x[k] for x in days) for k in ('requests', 'errors', 'refused'))
+    users = sum(x['users'] for x in days)
+    return [f'{n:,} requests', label, f'{er:,} server errors · {rf:,} refused'] + ([f'{n / users:,.0f} per user'] if users else [])
+
+
+def tab_usage(w):
+    u = val('usage')
+    iw = w - 4
+    head = []
+    for key, name in PERIODS:
+        head += [chip(name, key == UI['period'], partial(set_period, key)), ('  ', 'text')]
+    head += [('t w m a', 'faint')]
+    if not u:
+        return panel('Usage', [head, []] + unavailable('usage'), w)
+    if u['period'] != UI['period']:
+        return panel('Usage', [head, [], L(('loading…', 'dim'))], w)
+    span = f'{day_label(u["start"].date())}, since 00:00' if u['period'] == 'today' else f'{day_label(u["series"][0]["day"] if u["period"] == "all" else u["start"].date())} – {day_label(u["end"].date())}'
+    tiles = usage_tiles(u)
+    tw = max(12, iw // len(tiles))
+    rows = [[], [cell(t[0], tw, 'dim') for t in tiles], [cell(t[1], tw, 'bold') for t in tiles], [cell(t[2][0], tw, t[2][1]) for t in tiles]]
+    if u['live_error']:
+        rows += [[], L(('today\'s users are unavailable: ', 'warn'), (u['live_error'], 'dim'))]
+    out = panel('Usage', [head] + rows, w, span)
+    days = period_days(u)
+
+    def users(cw):
+        peak = max((x['users'] for x in chart_days(u)), default=0)
+        return panel('Users per day', day_bars(u, cw - 4, 6, 'users', per_day=True), cw, f'peak {peak:,}')
+
+    def fresh(cw):
+        return panel('New users per day', day_bars(u, cw - 4, 6, 'new', style='ok'), cw, f'{sum(x["new"] for x in days):,} in this period')
+
+    def requests(cw):
+        return panel('Requests per day', day_bars(u, cw - 4, 6, 'requests'), cw, f'{sum(x["requests"] for x in chart_days(u)):,} shown')
+
+    def hours(cw):
+        today = u['period'] == 'today'
+        vals = [u['hours'].get(h, (0, 0))[0] for h in range(24)]
+        now = u['now'].hour
+
+        def tip(h):
+            n, er = u['hours'].get(h, (0, 0))
+            return [f'{n:,} requests', f'{h:02d}:00 – {h:02d}:59', f'{share(n, u["requests"], 1)} of the period' + (f' · {er:,} server errors' if er else '')]
+        body = bars(vals, cw - 4, 6, labels=[f'{h:02d}' if h % 3 == 0 else '' for h in range(24)], label=short,
+                    style=(lambda i: 'bold' if i == now else 'accent') if today else 'accent', tips=tip)
+        top = sorted(((v, h) for h, v in enumerate(vals) if v), reverse=True)[:3]
+        note = 'busiest ' + ' · '.join(f'{h:02d}:00' for _, h in top) if top else ''
+        return panel('Requests per hour' if today else 'Busiest hours of the day', body, cw, note)
+
+    def joined(cw):
+        groups = group_days(chart_days(u), max(1, cw - 11))
+        vals = [g[2][-1]['joined'] for g in groups]
+        body = bars(vals, cw - 4, 6, labels=[g[1] for g in groups], label=short, style='ok',
+                    tips=lambda i: [f'{vals[i]:,} users so far', groups[i][0], f'{sum(x["new"] for x in groups[i][2]):,} joined then'])
+        return panel('All users so far', body, cw, 'finished onboarding')
+
+    def table(cw, title, items, first):
+        cols = cw - 4
+        bw = max(4, cols - first - 28)
+        rows = [L(cell('', first, 'dim'), cell('REQUESTS', 10, 'dim', True), ('  ', 'dim'), cell('', bw, 'dim'), cell('P95', 9, 'dim', True), cell('ERRORS', 7, 'dim', True))]
+        top = max((x['count'] for _, x in items), default=0) or 1
+        for name, x in items:
+            tip = [name, f'{x["count"]:,} requests · {share(x["count"], u["requests"])} of the period', f'95 % within {ms_text(p95(x["buckets"]))}' +
+                   (f' · {x["errors"]:,} server errors' if x['errors'] else '')]
+            rows.append(L(cell(name, first, 'text'), cell(f'{x["count"]:,}', 10, 'text', True), ('  ', 'text'), *meter(pct(x['count'], top), bw, 'purple', tip=tip),
+                          cell(ms_text(p95(x['buckets'])), 9, 'dim', True), cell(share(x['errors'], x['count'], 1), 7, 'bad' if x['errors'] else 'faint', True)))
+        return panel(title, rows if items else [L(('none yet', 'dim'))], cw)
+
+    def platforms(cw):
+        cols = cw - 4
+        plat = {}
+        for x in days:
+            for k, v in x['platforms'].items():
+                plat[k] = plat.get(k, 0) + v
+        seen = sum(plat.get(k, 0) for k in PLATFORMS)
+        shown = plat.get('app', 0) + plat.get('browser', 0)
+        bw = max(4, cols - 20)
+        rows = []
+        for k, label in (('ios', 'iOS'), ('android', 'Android'), ('desktop', 'Desktop'), ('other', 'Other')):
+            if plat.get(k):
+                rows.append(L(cell(label, 10, 'text')) + meter(pct(plat[k], seen), bw, 'accent', tip=[f'{label}  {share(plat[k], seen)}', f'{plat[k]:,} user days']) + L(cell(share(plat[k], seen), 8, 'text', True)))
+        if shown:
+            rows.append([])
+            for k, label in (('app', 'Installed'), ('browser', 'Browser')):
+                rows.append(L(cell(label, 10, 'text')) + meter(pct(plat.get(k, 0), shown), bw, 'purple', tip=[f'{label}  {share(plat.get(k, 0), shown)}', f'{plat.get(k, 0):,} user days']) + L(cell(share(plat.get(k, 0), shown), 8, 'text', True)))
+        if not rows:
+            rows.append(L(('no visitors yet', 'dim')))
+        rows += [[], kv('Hop', f'{u["sends"]:,} routes sent', (f' · {u["presence"]:,} presence pings', 'dim'))]
+        return panel('Platforms', rows, cw)
+    out += columns(w, [users], [fresh]) + requests(w) + columns(w, [hours], [joined])
+    out += columns(w, [lambda cw: table(cw, 'Features', u['features'], 14)], [lambda cw: table(cw, 'Top endpoints', u['routes'], 22)], min_w=120)
+    out += platforms(w)
+    out += [L(('  A person counts once a day: days cannot be linked, on purpose, so there is no "users this month".', 'faint'))]
+    return out
+
+
+def set_period(name, view=None):
+    UI['period'] = name
+    UI['paused'] = False  # a paused view would wait for these numbers forever
+    if 'usage' in POLL:
+        POLL['usage'].wake.set()
 
 
 TAB_FUNCS = {'overview': tab_overview, 'system': tab_system, 'services': tab_services, 'traffic': tab_traffic,
-             'data': tab_data, 'learning': tab_learning, 'logs': tab_logs}
+             'data': tab_data, 'learning': tab_learning, 'logs': tab_logs, 'usage': tab_usage}
 
 HELP = [
-    ('← → / Tab', 'switch tabs (or click a tab)'), ('1 … 7', 'jump to a tab'), ('↑ ↓ PgUp PgDn', 'scroll (or the mouse wheel)'),
+    ('← → / Tab', 'switch tabs (or click a tab)'), ('1 … 8', 'jump to a tab'), ('↑ ↓ PgUp PgDn', 'scroll (or the mouse wheel)'),
     ('Home End', 'top / bottom'), ('p or space', 'pause / resume updates'), ('+ -', 'update faster / slower'),
-    ('r', 'refresh everything now'), ('e  w', 'logs: errors only · wrap long lines'), ('?', 'this help'), ('q  Esc', 'quit'),
+    ('r', 'refresh everything now'), ('e  w', 'logs: errors only · wrap long lines'), ('t w m a', 'usage: today · week · month · all'),
+    ('?', 'this help'), ('q  Esc', 'quit'), ('hover', 'any graph shows its numbers'), ('click', 'tabs, titles marked ›, alerts, footer'),
 ]
 
 # ---------------------------------------------------------------- screen
@@ -1507,7 +1980,7 @@ def header(w, tab):
     worst = max((LEVEL[x[0]] for x in a), default=0)
     pill = [('● all good', 'hdrok'), (f'● {len(a)} to check', 'hdrwarn'), (f'● {len(a)} to check', 'hdrbad')][worst]
     s = val('sample')
-    left = [(' ◆ KamGre server ', 'hdrb'), (socket.gethostname() + '  ', 'hdrdim'), (pill[0], pill[1])]
+    left = [(' ◆ KamGre server ', 'hdrb'), (socket.gethostname() + '  ', 'hdrdim'), (pill[0], Hot(pill[1], act=go('overview')))]
     now = datetime.now(TZ)
     right = []
     if UI['paused']:
@@ -1519,47 +1992,106 @@ def header(w, tab):
     return merge(left + [(' ' * max(1, gap), 'hdr')] + right) if gap > 0 else fit(left, w, 'hdr')
 
 
-TAB_X = []
-
-
 def tabbar(w, tab):
     marks = {}
     for lvl, t, _ in alerts():
         marks[t] = max(marks.get(t, 0), LEVEL[lvl])
-    line, x = [(' ', 'tab')], 1
-    TAB_X.clear()
+    line = [(' ', 'tab')]
     for i, (key, name) in enumerate(TABS):
         on = key == tab
         seg = [(f' {i + 1} ', 'tabon' if on else 'tabkey'), (f'{name} ', 'tabon' if on else 'tab')]
         if key in marks:
             seg.append(('●', 'tabon' if on else ['tab', 'tabwarn', 'tabbad'][marks[key]]))
             seg.append((' ', 'tabon' if on else 'tab'))
-        n = width(seg)
-        TAB_X.append((x, x + n, i))
-        line += seg + [(' ', 'tab')]
-        x += n + 1
+        line += link(seg, go(key)) + [(' ', 'tab')]
     return fit(line, w, 'tab')
 
 
 def footer(w, more_up, more_down):
-    keys = [('←→', 'tabs'), ('↑↓', 'scroll'), ('p', 'pause'), ('+/-', 'speed'), ('r', 'refresh'), ('?', 'help'), ('q', 'quit')]
-    line = [(' ', 'foot')]
-    for k, d in keys:
-        line += [(k, 'footkey'), (f' {d}   ', 'foot')]
+    line = [(' ', 'foot'), ('←', Hot('footkey', act=curses.KEY_LEFT)), ('→', Hot('footkey', act=curses.KEY_RIGHT)), (' tabs   ', 'foot'),
+            ('↑', Hot('footkey', act=curses.KEY_PPAGE)), ('↓', Hot('footkey', act=curses.KEY_NPAGE)), (' scroll   ', 'foot')]
+    line += link([('p', 'footkey'), (' resume' if UI['paused'] else ' pause', 'foot')], 'p') + [('   ', 'foot')]
+    line += [('+', Hot('footkey', act='+')), ('/', 'footkey'), ('-', Hot('footkey', act='-')), (' speed   ', 'foot')]
+    for k, d in (('r', 'refresh'), ('?', 'help'), ('q', 'quit')):
+        line += link([(k, 'footkey'), (f' {d}', 'foot')], k) + [('   ', 'foot')]
     if more_up or more_down:
-        line += [(('▲' if more_up else ' ') + ('▼' if more_down else ' ') + ' more', 'footwarn')]
+        line += [('▲' if more_up else ' ', Hot('footwarn', act=curses.KEY_PPAGE)), ('▼' if more_down else ' ', Hot('footwarn', act=curses.KEY_NPAGE)), (' more', 'footwarn')]
     return fit(line, w, 'foot')
 
 
 def frame(w, h, view):
     tab = TABS[view['tab']][0]
-    body = [[('', 'text')]] + (panel('Keys', [L(cell(k, 18, 'accentb'), (d, 'text')) for k, d in HELP], min(w, 64))
+    body = [[('', 'text')]] + (panel('Keys', [L(cell(k, 18, 'accentb'), (d, 'text')) for k, d in HELP], min(w, 66))
                                if view['help'] else TAB_FUNCS[tab](w))
     room = max(1, h - 3)
     view['scroll'] = max(0, min(view['scroll'], len(body) - room))
     shown = body[view['scroll']:view['scroll'] + room]
-    return ([header(w, tab), tabbar(w, tab)] + [fit(x, w) for x in shown] + [blank(w)] * (room - len(shown)) +
-            [footer(w, view['scroll'] > 0, view['scroll'] + room < len(body))])
+    lines = ([header(w, tab), tabbar(w, tab)] + [fit(x, w) for x in shown] + [blank(w)] * (room - len(shown)) +
+             [footer(w, view['scroll'] > 0, view['scroll'] + room < len(body))])
+    view['regions'] = regions(lines)
+    return hovered(lines, view, w, h)
+
+
+def regions(lines):
+    """{row: [(x from, x to, segment index, its Hot style)]}: everything on screen that reacts to the mouse."""
+    out = {}
+    for y, line in enumerate(lines):
+        x = 0
+        for i, (t, s) in enumerate(line):
+            if isinstance(s, Hot) and t:
+                out.setdefault(y, []).append((x, x + len(t), i, s))
+            x += len(t)
+    return out
+
+
+def under(view, pos):
+    """The Hot style under a screen position, or None."""
+    if pos:
+        for x0, x1, _, s in view.get('regions', {}).get(pos[1], ()):
+            if x0 <= pos[0] < x1:
+                return s
+    return None
+
+
+def hovered(lines, view, w, h):
+    """Lights up what the pointer is on (a whole graph column, a whole button) and adds its tooltip."""
+    hot = under(view, view.get('mouse'))
+    if hot is None:
+        return lines
+    for y, row in view['regions'].items():
+        for _, _, i, s in row:
+            if s.key == hot.key and s.mark:
+                lines[y][i] = (lines[y][i][0], 'hoverbtn' if s.act is not None else 'hover')
+    tip = hot.tip() if callable(hot.tip) else hot.tip
+    return with_tip(lines, tip, view['mouse'], w, h) if tip else lines
+
+
+def cut(line, a, b):
+    """The cells from a up to b of a line."""
+    out, x = [], 0
+    for t, s in line:
+        part = t[max(0, a - x):max(0, b - x)]
+        if part:
+            out.append((part, s))
+        x += len(t)
+    return out
+
+
+def with_tip(lines, tip, pos, w, h):
+    """Draws a tooltip beside the pointer, so it never covers the column being read."""
+    iw = min(max(len(t) for t in tip), max(1, w - 4))
+    box = [[('╭' + '─' * (iw + 2) + '╮', 'tipedge')]]
+    for j, t in enumerate(tip):
+        box.append([('│ ', 'tipedge'), (t[:iw].ljust(iw), 'tipb' if j == 0 else 'tip'), (' │', 'tipedge')])
+    box.append([('╰' + '─' * (iw + 2) + '╯', 'tipedge')])
+    bw, mx, my = iw + 4, pos[0], pos[1]
+    x = mx + 2 if mx + 2 + bw <= w else max(0, mx - 1 - bw)
+    y = max(2, min(my - 1, h - 1 - len(box)))
+    out = list(lines)
+    for j, row in enumerate(box):
+        if 0 <= y + j < h - 1:
+            out[y + j] = cut(out[y + j], 0, x) + row + cut(out[y + j], x + bw, w)
+    return out
 
 
 class CursesOut:
@@ -1605,6 +2137,82 @@ class CursesOut:
         curses.doupdate()
 
 
+def press(k, view, room):
+    """Does what a key or a clicked control asks for. True means quit."""
+    old_tab = view['tab']
+    if k in ('q', 'Q', '\x1b', '\x03'):
+        if not (view['help'] and k == '\x1b'):
+            return True
+        view['help'] = False
+    elif callable(k):
+        k(view)
+    elif k in (curses.KEY_RIGHT, '\t', 'l'):
+        view['tab'] = (view['tab'] + 1) % len(TABS)
+    elif k in (curses.KEY_LEFT, curses.KEY_BTAB, 'h'):
+        view['tab'] = (view['tab'] - 1) % len(TABS)
+    elif isinstance(k, str) and k.isdigit() and 1 <= int(k) <= len(TABS):
+        view['tab'] = int(k) - 1
+    elif k in (curses.KEY_DOWN, 'j'):
+        view['scroll'] += 1
+    elif k in (curses.KEY_UP, 'k'):
+        view['scroll'] -= 1
+    elif k == curses.KEY_NPAGE:
+        view['scroll'] += room - 1
+    elif k == curses.KEY_PPAGE:
+        view['scroll'] -= room - 1
+    elif k == curses.KEY_HOME:
+        view['scroll'] = 0
+    elif k == curses.KEY_END:
+        view['scroll'] = 10 ** 6
+    elif k in ('p', ' '):
+        UI['paused'] = not UI['paused']
+    elif k in ('+', '='):
+        UI['interval'] = max(1, UI['interval'] - 1)
+        wake_all()
+    elif k in ('-', '_'):
+        UI['interval'] = min(60, UI['interval'] + 1)
+    elif k in ('r', 'R'):
+        UI['paused'] = False
+        wake_all()
+    elif k == '?':
+        view['help'] = not view['help']
+    elif TABS[view['tab']][0] == 'logs' and k in ('e', 'w'):
+        LOGS['errors_only' if k == 'e' else 'wrap'] ^= True
+    elif TABS[view['tab']][0] == 'usage' and k in ('t', 'w', 'm', 'a'):
+        set_period({'t': 'today', 'w': 'week', 'm': 'month', 'a': 'all'}[k])
+    elif k == curses.KEY_RESIZE:
+        curses.update_lines_cols()
+    if view['tab'] != old_tab:
+        view['scrolls'][old_tab] = view['scroll']
+        view['scroll'] = view['scrolls'].get(view['tab'], 0)
+        view['help'] = False
+    view['scroll'] = max(0, view['scroll'])
+    return False
+
+
+def on_mouse(view, room):
+    """One mouse event. Returns (does the screen change, did a click ask to quit). A move only repaints when the
+    pointer reached something else, because a terminal sends one event for every cell it crosses."""
+    try:
+        _, mx, my, _, b = curses.getmouse()
+    except curses.error:
+        return False, False
+    before = under(view, view.get('mouse'))
+    view['mouse'] = (mx, my)
+    hot = under(view, view['mouse'])
+    if b & curses.BUTTON4_PRESSED:
+        view['scroll'] = max(0, view['scroll'] - 3)
+    elif b & getattr(curses, 'BUTTON5_PRESSED', 0):
+        view['scroll'] += 3
+    elif b & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED):
+        if hot is not None and hot.act is not None:
+            return True, press(hot.act, view, room)
+        view['help'] = False
+    else:
+        return (before.key if before is not None else None) != (hot.key if hot is not None else None), False
+    return True, False
+
+
 def run(scr, start_tab):
     curses.curs_set(0)
     if curses.has_colors():
@@ -1615,87 +2223,54 @@ def run(scr, start_tab):
     scr.timeout(200)
     scr.keypad(True)
     out = CursesOut(scr)
-    view = {'tab': start_tab, 'scroll': 0, 'help': False}
-    scrolls = {}
-    last = 0.0
+    view = {'tab': start_tab, 'scroll': 0, 'help': False, 'mouse': None, 'regions': {}, 'scrolls': {}}
+    h, w = scr.getmaxyx()
+    out.paint(frame(w, h, view), w, h)
+    # Curses asked the terminal for clicks only. Asking for every move too, after the first paint because the last
+    # request wins; 1006 is the report format curses expects when this terminal's terminfo says so.
+    sgr = (curses.tigetstr('kmous') or b'').endswith(b'<')
+    os.write(1, b'\x1b[?1003h' + (b'\x1b[?1006h' if sgr else b''))
+    try:
+        loop(scr, out, view)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        os.write(1, b'\x1b[?1003l' + (b'\x1b[?1006l' if sgr else b''))
+
+
+def loop(scr, out, view):
+    last, dirty = time.time(), False
     while True:
         h, w = scr.getmaxyx()
-        if CHANGED.is_set() or time.time() - last >= 1:
+        if dirty or CHANGED.is_set() or time.time() - last >= 1:
             CHANGED.clear()
+            dirty = False
             out.paint(frame(w, h, view), w, h)
             last = time.time()
+        room = max(1, h - 3)
         try:
             k = scr.get_wch()
         except curses.error:
             continue
-        except KeyboardInterrupt:
-            return
-        if k == '\x1b':  # Esc alone, or the start of a key sequence this terminal's terminfo does not know
-            k = escape(scr)
-        room = max(1, h - 3)
-        old_tab = view['tab']
-        if k is None:
-            pass
-        elif k in ('q', 'Q', '\x1b', '\x03'):
-            if view['help'] and k == '\x1b':
-                view['help'] = False
+        # Take everything already waiting before painting again: moving the mouse sends a flood of events.
+        while True:
+            if k == curses.KEY_MOUSE:
+                change, quits = on_mouse(view, room)
+                dirty = dirty or change
             else:
+                if k == '\x1b':  # Esc alone, or the start of a key sequence this terminal's terminfo does not know
+                    k = escape(scr)
+                quits = k is not None and press(k, view, room)
+                dirty = True
+            if quits:
                 return
-        elif k in (curses.KEY_RIGHT, '\t', 'l'):
-            view['tab'] = (view['tab'] + 1) % len(TABS)
-        elif k in (curses.KEY_LEFT, curses.KEY_BTAB, 'h'):
-            view['tab'] = (view['tab'] - 1) % len(TABS)
-        elif isinstance(k, str) and k.isdigit() and 1 <= int(k) <= len(TABS):
-            view['tab'] = int(k) - 1
-        elif k in (curses.KEY_DOWN, 'j'):
-            view['scroll'] += 1
-        elif k in (curses.KEY_UP, 'k'):
-            view['scroll'] -= 1
-        elif k == curses.KEY_NPAGE:
-            view['scroll'] += room - 1
-        elif k == curses.KEY_PPAGE:
-            view['scroll'] -= room - 1
-        elif k == curses.KEY_HOME:
-            view['scroll'] = 0
-        elif k == curses.KEY_END:
-            view['scroll'] = 10 ** 6
-        elif k in ('p', ' '):
-            UI['paused'] = not UI['paused']
-        elif k in ('+', '='):
-            UI['interval'] = max(1, UI['interval'] - 1)
-            wake_all()
-        elif k in ('-', '_'):
-            UI['interval'] = min(60, UI['interval'] + 1)
-        elif k in ('r', 'R'):
-            UI['paused'] = False
-            wake_all()
-        elif k == '?':
-            view['help'] = not view['help']
-        elif k == 'e' and TABS[view['tab']][0] == 'logs':
-            LOGS['errors_only'] = not LOGS['errors_only']
-        elif k == 'w' and TABS[view['tab']][0] == 'logs':
-            LOGS['wrap'] = not LOGS['wrap']
-        elif k == curses.KEY_MOUSE:
+            scr.timeout(0)
             try:
-                _, mx, my, _, b = curses.getmouse()
+                k = scr.get_wch()
             except curses.error:
-                continue
-            if b & curses.BUTTON4_PRESSED:
-                view['scroll'] -= 3
-            elif b & getattr(curses, 'BUTTON5_PRESSED', 0):
-                view['scroll'] += 3
-            elif my == 1 and b & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED):
-                for x0, x1, i in TAB_X:
-                    if x0 <= mx < x1:
-                        view['tab'] = i
-        elif k == curses.KEY_RESIZE:
-            curses.update_lines_cols()
-        if view['tab'] != old_tab:
-            scrolls[old_tab] = view['scroll']
-            view['scroll'] = scrolls.get(view['tab'], 0)
-            view['help'] = False
-        view['scroll'] = max(0, view['scroll'])
-        CHANGED.set()
+                break
+            finally:
+                scr.timeout(200)
 
 
 ESCAPES = {'[H': curses.KEY_HOME, '[1~': curses.KEY_HOME, 'OH': curses.KEY_HOME, '[F': curses.KEY_END, '[4~': curses.KEY_END,
@@ -1708,7 +2283,7 @@ def escape(scr):
     seq = ''
     scr.timeout(30)
     try:
-        while len(seq) < 8:
+        while len(seq) < 24:  # a mouse report such as [<35;120;40M is the longest
             try:
                 ch = scr.get_wch()
             except curses.error:
@@ -1742,7 +2317,7 @@ def ansi(lines):
 def once(tabs):
     """One frame of each tab, printed (two samples a second apart, so rates have something to compare)."""
     for name, fn, _ in (('sample', SAMPLER, 0), ('traffic', traffic, 0), ('health', health, 0), ('egress', egress, 0),
-                        ('db', databases, 0), ('timers', timers, 0), ('logs', logs, 0), ('learning', learning, 0)):
+                        ('db', databases, 0), ('timers', timers, 0), ('logs', logs, 0), ('learning', learning, 0), ('usage', usage, 0)):
         POLL[name] = Poller(name, fn, lambda: 0)
     for p in POLL.values():
         p.once()
@@ -1762,22 +2337,27 @@ def main(argv):
             break
         except locale.Error:
             continue
-    os.environ.setdefault('ESCDELAY', '25')
+    os.environ.setdefault('ESCDELAY', '50')  # a little longer than a key needs: a mouse report split in two must not read as Esc
     names = [k for k, _ in TABS]
     start, single = 0, None
+    periods = [k for k, _ in PERIODS]
     for a in argv:
         if a.isdigit():
             UI['interval'] = max(1, min(60, int(a)))
         elif a.lower() in names:
             start = names.index(a.lower())
             single = a.lower()
+        elif a.lower() in periods:
+            UI['period'] = a.lower()
+            if single is None:
+                start, single = names.index('usage'), 'usage'
         elif a in ('--once', '-1'):
             UI['once'] = True
         elif a in ('-h', '--help'):
             print(__doc__)
             return 0
         else:
-            print(f'Unknown argument {a!r}. Usage: prestop-top [seconds] [{"|".join(names)}] [--once]', file=sys.stderr)
+            print(f'Unknown argument {a!r}. Usage: prestop-top [seconds] [{"|".join(names)}] [{"|".join(periods)}] [--once]', file=sys.stderr)
             return 2
     if UI.get('once'):
         once([single] if single else names)

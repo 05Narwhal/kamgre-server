@@ -1,4 +1,4 @@
-"""Small, privacy-preserving usage counts for /api/v1 (`yarn server:stats`, analytics_report.py).
+"""Small, privacy-preserving usage counts for /api/v1, shown on the usage tab of `yarn server:top` (deploy/oracle/server/top.py).
 
 Per request the middleware adds to Redis, never to the database: the route (its URL pattern such as
 "stops/*/board", never a path with ids in it), the status class and the time taken, per hour. The collector moves
@@ -254,31 +254,3 @@ def nightly(now: Optional[float] = None) -> Optional[list]:
     return saved
 
 
-def live_day(day: date, r=None) -> dict:
-    """Today's figures straight from Redis (not saved until tonight), shaped like AnalyticsDay."""
-    r = r or _redis()
-    uv = f'analytics:uv:{day.isoformat()}'
-    keys = {name: f'{uv}:{name}' for name in PLATFORMS + DISPLAYS}
-    return {'day': day, 'visitors': r.pfcount(uv), 'visitors_hll': _hll(r, uv), 'new_users': r.pfcount(f'analytics:new:{day.isoformat()}'),
-            'platforms': {name: r.pfcount(key) for name, key in keys.items() if r.exists(key)},
-            'platform_hll': {name: base64.b64encode(_hll(r, key)).decode() for name, key in keys.items() if r.exists(key)}}
-
-
-def union(blobs: list[bytes], r=None) -> Optional[int]:
-    """Unique count across saved HyperLogLogs (a whole period), or None when Redis is unavailable."""
-    blobs = [b for b in blobs if b]
-    if not blobs:
-        return 0
-    try:
-        r = r or _redis()
-        keys = [f'analytics:union:{secrets.token_hex(6)}:{i}' for i in range(len(blobs))]
-        pipe = r.pipeline(transaction=False)
-        for key, blob in zip(keys, blobs):
-            pipe.set(key, blob, ex=60)
-        pipe.execute()
-        try:
-            return r.pfcount(*keys)
-        finally:
-            r.delete(*keys)
-    except redis.RedisError:
-        return None
