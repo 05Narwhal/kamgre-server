@@ -103,13 +103,13 @@ def walk(arrive: dict, depart: dict, otp_walk: float, arrive_track: Optional[str
             seconds += TRACK_EXIT_SECONDS.get(station, TRACK_EXIT_DEFAULT)
         bus_end = depart if rail_a else arrive
         bus_stop = b if rail_a else a
-        bay = _bay_point(bus_stop['stopId'], bus_end.get('platform')) if bus_stop['stopId'] in platforms.STATIONS else None
+        bay = _bay_point(bus_stop['stopId'], bus_end.get('platform')) if platforms.station_key(bus_stop['stopId']) else None
         if bay:
             seconds += _on_foot(_meters(bus_stop, bay))
         return round(seconds), ('track-to-bus' if rail_a else 'bus-to-track') if (track or bay) else kind
     # Bus to bus.
-    if b_id in platforms.STATIONS or a_id in platforms.STATIONS:
-        station = b_id if b_id in platforms.STATIONS else a_id
+    if platforms.station_key(b_id) or platforms.station_key(a_id):
+        station = b_id if platforms.station_key(b_id) else a_id
         bay = _bay_point(station, depart.get('platform')) if b_id == station else None
         if bay:
             # Buses set down at the station's own stop (no source gives arrival bays): from there to the bay; from

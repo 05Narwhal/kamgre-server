@@ -1158,7 +1158,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             platform = (l['from'].get('stop') or {}).get('platformCode')
             board = (l['from'].get('stop') or {}).get('gtfsId')
             usual = False
-            if transit and not platform and board in platforms.STATIONS:
+            if transit and not platform and platforms.station_key(board):
                 # Bus station bays, as the station's board announced them (platforms.learn), else the
                 # bay the destination usually leaves from (marked as such).
                 if board not in seen_bays:

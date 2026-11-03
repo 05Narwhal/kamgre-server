@@ -79,7 +79,9 @@ def _load_stops():
         union = set().union(*(routes.get(i, set()) for i in ids))
         for i in ids:
             routes[i] = union
-    return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways}
+    # Which feed stop each bus station with bays is now (feeds renumber stops; platforms.resolve).
+    from . import platforms
+    return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways, 'bayStations': platforms.resolve(built)}
 
 
 def _stop_directions(built: list[dict]) -> tuple[dict[str, list], set[str]]:
@@ -672,7 +674,7 @@ def _with_live_platforms(entries: Optional[list[dict]], stop_id: str, kind: str 
     except UpstreamError as e:
         logger.warning('Replaced trains unknown: %r', e)
     from . import platforms
-    if kind == 'departure' and stop_id in platforms.STATIONS:
+    if kind == 'departure' and platforms.station_key(stop_id):
         # Bus station bays, as AP Ljubljana's board announced them (platforms.learn), else the bay the
         # destination usually leaves from (marked as such).
         seen = platforms.station_seen(stop_id) or []

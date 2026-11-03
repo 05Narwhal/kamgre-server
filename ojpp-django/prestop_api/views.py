@@ -22,7 +22,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
-from . import citytt, coverage, geometry, mapping, maplinks, operator_notices, sources, stopservice, supplement, sz_list, trips, variants, warm
+from . import citytt, coverage, geometry, mapping, maplinks, operator_notices, platforms, sources, stopservice, supplement, sz_list, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
@@ -284,9 +284,11 @@ def health(request):
     except Exception:
         database = 'unavailable'
     # coverage: the collector's last count of the buses the map and a few boards leave out (coverage.Sampler)
+    # bayStations.unresolved: bus stations with bays that match no feed stop (renumbered: buses lose their bays)
     srcs = all_sources()
     body = {'api': 'ready', 'database': database, 'sources': srcs, 'collector': _collector_source() if database == 'ready' else None,
-            'maintenance': _maintenance(), 'coverage': coverage.latest(), 'outages': outages(srcs), 'sz': _sz_debug()}
+            'maintenance': _maintenance(), 'coverage': coverage.latest(), 'outages': outages(srcs), 'sz': _sz_debug(),
+            'bayStations': {'unresolved': platforms.unresolved()}}
     return JsonResponse(body, status=200 if database == 'ready' else 503)
 
 

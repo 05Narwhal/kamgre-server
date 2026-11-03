@@ -134,9 +134,9 @@ def sparse_points(coords: list, cum: list[float], a: float, b: float, most: int 
 
 def bus_station(stop: dict) -> bool:
     """Whether a stop is a bus station's (a stop of the trip, or an OTP place with `stop.gtfsId`)."""
-    from .platforms import STATIONS
+    from .platforms import station_key
     stop_id = stop.get('gtfsId') or (stop.get('stop') or {}).get('gtfsId')
-    return stop_id in STATIONS or bool(BUS_STATION.search(mapping.fold(stop.get('name') or '')))
+    return bool(station_key(stop_id)) or bool(BUS_STATION.search(mapping.fold(stop.get('name') or '')))
 
 
 def into_stations(coords: list, stops: list[dict], bad: list[bool]) -> list[bool]:

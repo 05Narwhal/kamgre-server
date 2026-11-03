@@ -10,7 +10,9 @@ from django.utils import timezone
 from prestop_api import platforms, roads
 from prestop_api.models import PlatformSeen
 
-AP = 'IJPP:1126954'
+AP = 'IJPP:1168813'  # Ljubljana AP in the feed (was IJPP:1126954 until Nov 2026)
+OLD_AP = 'IJPP:1126954'
+KEY = 'ljubljana-ap'
 BAYS = {
     '13': {'lat': 46.0580472, 'lon': 14.5145895, 'heading': 29.9, 'path': [[14.5145045, 46.0579443], [14.5146746, 46.05815]]},
     '27': {'lat': 46.05806, 'lon': 14.5157, 'heading': 29.6, 'path': []},
@@ -105,7 +107,7 @@ class UsualBayTests(SimpleTestCase):
 
 class PlaceTests(SimpleTestCase):
     def setUp(self):
-        patcher = mock.patch.object(platforms, 'bays', side_effect=lambda station: BAYS if station == AP else {})
+        patcher = mock.patch.object(platforms, 'bays', side_effect=lambda station: BAYS if station == KEY else {})
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -122,7 +124,7 @@ class PlaceTests(SimpleTestCase):
         stops = [{'gtfsId': AP, 'name': 'Ljubljana AP', 'lat': 46.057944, 'lon': 14.514695}, {'gtfsId': 'x', 'name': 'Koper', 'lat': 45.5, 'lon': 13.7}]
         with mock.patch.object(platforms, 'platform_for', return_value=('27-29', True)):
             placed, bay = platforms.place(stops, AT_13, 'Koper')
-        self.assertEqual((placed[0]['bay'], placed[0]['bayUsual'], bay['station']), ('27', True, AP))
+        self.assertEqual((placed[0]['bay'], placed[0]['bayUsual'], bay['station']), ('27', True, KEY))
         # Spec 2026-10-18 A3: the rest of the range is where it stands when 27 is taken.
         self.assertEqual([b['ref'] for b in bay['alternates']], ['28', '29'])
         self.assertEqual(bay['alternates'][0]['heading'], 29.6)
@@ -166,3 +168,64 @@ class RerouteTests(SimpleTestCase):
         with mock.patch.object(roads.legs, 'get_many', side_effect=lambda keys: {k: legs[k] for k in keys if k in legs}):
             shape, _ = roads.repair(road, stops, reroute=(0,))
         self.assertIn([14.505, 46.0503], shape)
+
+
+def _stop(stop_id, name, lat, lon, modes=('bus',)):
+    return {'id': stop_id, 'name': name, 'latitude': lat, 'longitude': lon, 'modes': list(modes)}
+
+
+RAIL = _stop('IJPP:1122804', 'Ljubljana', 46.058509, 14.512924, ('bus', 'rail'))
+
+
+class ResolveTests(SimpleTestCase):
+    """Spec 2026-11-03 L1: the feed renumbered Ljubljana AP; a station with bays is found by place and name."""
+
+    def resolved(self, stops):
+        found = platforms.resolve(stops)
+        return mock.patch.object(platforms, '_resolved', return_value=found)
+
+    def test_a_renumbered_station_is_found_by_place_and_name(self):
+        stops = [_stop('IJPP:9999', 'Ljubljana AP', 46.057944, 14.514695), RAIL, _stop('LPP:1', 'Bavarski dvor', 46.0585, 14.5135)]
+        self.assertEqual(platforms.resolve(stops)[KEY], {'ids': ['IJPP:9999'], 'nextDoor': ['IJPP:1122804']})
+        with self.resolved(stops):
+            self.assertEqual(platforms.station_key('IJPP:9999'), KEY)
+            self.assertEqual(platforms.station_key(OLD_AP), KEY)  # rows and links under the old id still count
+            self.assertIsNone(platforms.station_key('LPP:1'))
+            self.assertEqual(platforms.unresolved(), [])
+            self.assertEqual(platforms.origin_area('IJPP:9999')['radius'], 130)
+
+    def test_a_moved_stop_is_found_inside_the_radius_and_a_railway_station_is_never_the_bus_station(self):
+        moved = _stop('IJPP:8888', 'Avtobusna postaja Ljubljana', 46.0592, 14.5150)  # ~130 m north
+        self.assertEqual(platforms.resolve([RAIL, moved])[KEY]['ids'], ['IJPP:8888'])
+        far = _stop('IJPP:7777', 'Ljubljana AP', 46.0650, 14.5150)  # ~780 m away: another stop
+        self.assertEqual(platforms.resolve([RAIL, far])[KEY]['ids'], [])
+
+    def test_a_station_matching_no_stop_is_reported(self):
+        with self.resolved([RAIL, _stop('IJPP:1', 'Kranj AP', 46.24, 14.35)]):
+            self.assertEqual(platforms.unresolved(), [KEY])
+        with mock.patch.object(platforms, '_resolved', return_value=None):  # no stop index yet: nothing to report
+            self.assertEqual(platforms.unresolved(), [])
+
+    def test_replacement_buses_find_the_renumbered_railway_station_next_door(self):
+        stops = [_stop('IJPP:1168813', 'Ljubljana AP', 46.057944, 14.514695), {**RAIL, 'id': 'IJPP:5555'}]
+        with self.resolved(stops), mock.patch.object(platforms, 'bays', side_effect=lambda s: BAYS if s == KEY else {}):
+            self.assertEqual(platforms.next_door('IJPP:5555'), KEY)
+            bay = platforms.bay_for({'gtfsId': 'IJPP:5555'}, AT_13, 'Jesenice', 'Avtobusna postaja Ljubljana (peroni 37, 38 in 39)')
+        self.assertEqual(bay['ref'], '37')
+
+    def test_the_bay_file_is_keyed_by_station(self):
+        self.assertGreaterEqual(len(platforms.read_bays()[KEY]['bays']), 40)
+        self.assertEqual(len(platforms.bays(AP)), len(platforms.bays(KEY)))
+
+
+class OldRowsTests(TestCase):
+    def test_rows_under_the_old_feed_id_are_still_read_and_the_newer_row_of_a_departure_wins(self):
+        PlatformSeen.objects.create(key=f'{OLD_AP}|13:00|tolmin', platform='13', destination='Tolmin', operator='Nomago')
+        PlatformSeen.objects.create(key=f'{OLD_AP}|13:00|koper', platform='12', destination='Koper', operator='Arriva')
+        PlatformSeen.objects.create(key=f'{KEY}|13:00|koper', platform='14', destination='Koper', operator='Arriva')
+        PlatformSeen.objects.create(key='IJPP:other|13:00|koper', platform='1', destination='Koper', operator='x')
+        with mock.patch.object(platforms, 'overrides', return_value=[]):
+            self.assertEqual(platforms.departure_platform(AP, AT_13, 'Tolmin'), '13')
+            self.assertEqual(platforms.departure_platform(AP, AT_13, 'Koper'), '14')
+        self.assertEqual(len(platforms.station_seen(AP)), 2)
+        self.assertEqual(platforms.station_seen('IJPP:other'), [])

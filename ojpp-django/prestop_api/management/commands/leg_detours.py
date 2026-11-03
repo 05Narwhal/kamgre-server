@@ -1,7 +1,7 @@
 """Report drawn bus lines that take a way a bus does not drive: loops and long detours between two stops.
 
     manage.py leg_detours                                 # today's trips at Ljubljana AP: stretches within 1.5 km of it
-    manage.py leg_detours --stations IJPP:1126954,IJPP:1127365
+    manage.py leg_detours --stations ljubljana-ap,IJPP:1127365    # a station with bays (platforms.STATIONS) or a stop id
     manage.py leg_detours --all                           # every flagged stretch of those trips, wherever it is
     manage.py leg_detours --legs                          # also the stored routed legs (RoadLeg)
     manage.py leg_detours --legs --delete                 # ... and drop the ones serving refuses, to be routed again
@@ -16,14 +16,14 @@ import time
 
 from django.core.management.base import BaseCommand, CommandError
 
-from prestop_api import geometry, roads, sources, trips
+from prestop_api import geometry, platforms, roads, sources, trips
 
 
 class Command(BaseCommand):
     help = 'Flag drawn bus lines with loops or detours between stops; optionally drop bad stored road legs.'
 
     def add_arguments(self, parser):
-        parser.add_argument('--stations', default='IJPP:1126954', help='comma-separated stop ids whose trips are checked')
+        parser.add_argument('--stations', default='ljubljana-ap', help='comma-separated stop ids (or stations with bays) whose trips are checked')
         parser.add_argument('--legs', action='store_true', help='also check the stored routed legs (RoadLeg)')
         parser.add_argument('--delete', action='store_true', help='with --legs: delete the flagged legs')
         parser.add_argument('--all', action='store_true', help='report flagged stretches anywhere on the trips')
@@ -34,6 +34,7 @@ class Command(BaseCommand):
         now = int(time.time())
         places = {s['id']: [s['longitude'], s['latitude']] for s in sources.stops.get().value['all']}
         for station in [s for s in stations.split(',') if s]:
+            station = platforms.station_ids(station)[0] if station in platforms.STATIONS else station
             here = places.get(station)
             ids = {e['tripId'] for kind in ('departure', 'arrival') for e in sources.board(station, kind, now, 'sl') or [] if e['mode'] == 'bus'}
             # Wait for legs still being routed: a provisional line is not what serving settles on.

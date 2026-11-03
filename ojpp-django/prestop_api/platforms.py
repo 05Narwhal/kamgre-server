@@ -1,6 +1,6 @@
 """Which bay a bus leaves from at a big bus station, and where in that bay it stands.
 
-The feeds have one stop for a whole bus station (Ljubljana AP is IJPP:1126954, 46 bays), so every
+The feeds have one stop for a whole bus station (Ljubljana AP, 46 bays; see STATIONS), so every
 departure would start at the same point. Two sources fix that:
 
 - Where each bay is: `data/platform_bays.json`, read from OpenStreetMap by `manage.py platform_bays`
@@ -19,6 +19,7 @@ Rows in `data/platform_overrides.csv` (station, time, destination, bay) win over
 import csv
 import json
 import logging
+import math
 import re
 import threading
 import time
@@ -38,13 +39,19 @@ DATA = Path(__file__).resolve().parent / 'data'
 BAYS = DATA / 'platform_bays.json'
 OVERRIDES = DATA / 'platform_overrides.csv'
 
-# Stations with bays: the feed stop, where to look for bays in OSM, the station's own ground (`ground`
-# m around lat/lon: bays 1-46, the aisles and the driveways), and the departure board.
+# Stations with bays, by a name of our own (feeds renumber their stops: Ljubljana AP was IJPP:1126954, is
+# IJPP:1168813 since Nov 2026): where to look for bays in OSM (`radius` m), the station's own ground (`ground` m around
+# lat/lon: bays 1-46, the aisles and the driveways), the departure board, and `ids`: the feed stops it had (rows of
+# `PlatformSeen` keyed by an old id are still read). Which feed stop the station is now is found by place and name
+# when the stop index loads (`resolve`); a station that finds none is reported in /health (`unresolved`).
+# `next_door`: a railway station whose replacement buses leave from this station's bays, when SŽ names them
+# ("peroni 37, 38 in 39").
 STATIONS = {
-    'IJPP:1126954': {'name': 'Avtobusna postaja Ljubljana', 'lat': 46.05805, 'lon': 14.51475, 'radius': 200, 'ground': 130, 'board': 'ap-ljubljana'},
+    'ljubljana-ap': {'name': 'Avtobusna postaja Ljubljana', 'place': 'Ljubljana', 'lat': 46.05805, 'lon': 14.51475, 'radius': 200, 'ground': 130,
+                     'board': 'ap-ljubljana', 'ids': ['IJPP:1168813', 'IJPP:1126954'],
+                     'next_door': {'place': 'Ljubljana', 'lat': 46.058509, 'lon': 14.512924, 'radius': 150, 'ids': ['IJPP:1122804']}},
 }
-# Stops whose replacement buses leave from a bus station's bays, when SŽ names them ("peroni 37, 38 in 39").
-NEXT_DOOR = {'IJPP:1122804': 'IJPP:1126954'}  # Ljubljana railway station -> Ljubljana AP
+BUS_STATION = re.compile(r'(^|\W)(ap|avtobusna postaja|avt\.? ?post\.?)(\W|$)')
 LEARN_EVERY = 180   # s between polls of a departure board
 # A departure the board has not shown yet gets its destination's usual bay if this share of that
 # destination's departures used it (measured 2026-10-12: the usual bay was right for 86%).
@@ -58,6 +65,80 @@ _lock = threading.Lock()
 _last_learn: dict[str, float] = {}
 
 
+# ---------------------------------------------------------------- which feed stop a station is
+
+def _meters(lat: float, lon: float, lat2: float, lon2: float) -> float:
+    return math.hypot((lat2 - lat) * 111_320, (lon2 - lon) * 111_320 * math.cos(math.radians(lat)))
+
+
+def _nearby(stops: list[dict], spec: dict, mode: str) -> list[dict]:
+    """Feed stops of `mode` within the spec's radius whose name is the spec's place, nearest first; a bus station
+    takes stops that are not also a railway station's."""
+    out = []
+    for s in stops:
+        modes = set(s.get('modes') or [])
+        if mode not in modes or (mode == 'bus' and 'rail' in modes) or not same_place(s.get('name') or '', spec['place']):
+            continue
+        d = _meters(spec['lat'], spec['lon'], s.get('latitude') or 0, s.get('longitude') or 0)
+        if d <= spec['radius']:
+            out.append((d, s))
+    return [s for _, s in sorted(out, key=lambda x: x[0])]
+
+
+def resolve(stops: list[dict]) -> dict:
+    """Station key -> {'ids': its feed stops now, 'nextDoor': its railway station's}: from the stop index (feed
+    stops with 'id', 'name', 'latitude', 'longitude', 'modes'). A station's stops are the bus stops at that place in
+    its radius whose name says bus station ("Ljubljana AP", "Avtobusna postaja Ljubljana"), nearest first."""
+    out = {}
+    for key, spec in STATIONS.items():
+        ids = [s['id'] for s in _nearby(stops, spec, 'bus') if BUS_STATION.search(mapping.fold(s.get('name') or ''))]
+        door = spec.get('next_door')
+        out[key] = {'ids': ids, 'nextDoor': [s['id'] for s in _nearby(stops, door, 'rail')][:1] if door else []}
+    return out
+
+
+def _resolved() -> Optional[dict]:
+    """What `resolve` found when the stop index last loaded (None before it has)."""
+    try:
+        from .sources import stops
+        snap = stops.peek()
+    except Exception:  # no stop index in this process
+        return None
+    return snap.value.get('bayStations') if snap else None
+
+
+def station_ids(key: str) -> list[str]:
+    """The feed stops of a station with bays: the ones found now, then the ones it had."""
+    found = (_resolved() or {}).get(key) or {}
+    return list(dict.fromkeys([*(found.get('ids') or []), *STATIONS[key].get('ids', [])]))
+
+
+def station_key(stop_id: Optional[str]) -> Optional[str]:
+    """The station with bays a feed stop (or a station key) is, or None."""
+    if not stop_id:
+        return None
+    if stop_id in STATIONS:
+        return stop_id
+    return next((key for key in STATIONS if stop_id in station_ids(key)), None)
+
+
+def next_door(stop_id: Optional[str]) -> Optional[str]:
+    """The station with bays whose railway station `stop_id` is, or None."""
+    found = _resolved() or {}
+    for key, spec in STATIONS.items():
+        door = spec.get('next_door') or {}
+        if stop_id and stop_id in [*((found.get(key) or {}).get('nextDoor') or []), *door.get('ids', [])]:
+            return key
+    return None
+
+
+def unresolved() -> list[str]:
+    """Stations with bays that match no stop of the loaded stop index (renumbered or moved in the feed): their buses
+    would all stand at one point again. Empty before the index loads."""
+    found = _resolved()
+    return [] if found is None else sorted(key for key in STATIONS if not (found.get(key) or {}).get('ids'))
+
+
 # ---------------------------------------------------------------- bays
 
 def read_bays() -> dict:
@@ -68,7 +149,10 @@ def read_bays() -> dict:
 
 
 def bays(station_id: str) -> dict:
-    """ref -> {'lat', 'lon', 'heading', 'path'} for a station (re-read when the file changes)."""
+    """ref -> {'lat', 'lon', 'heading', 'path'} for a station (its key or feed stop; re-read when the file changes)."""
+    key = station_key(station_id)
+    if not key:
+        return {}
     try:
         stamp = BAYS.stat().st_mtime
     except OSError:
@@ -76,7 +160,7 @@ def bays(station_id: str) -> dict:
     with _lock:
         if _bays['stamp'] != stamp:
             _bays.update(stamp=stamp, value=read_bays())
-        return (_bays['value'].get(station_id) or {}).get('bays') or {}
+        return (_bays['value'].get(key) or {}).get('bays') or {}
 
 
 def first_bay(platform: str, known: dict) -> Optional[str]:
@@ -158,27 +242,47 @@ def departure_platform(station_id: str, departure: float, destination: str, seen
     """The platform text for a departure at `departure` (unix time) to `destination`, from the
     overrides or what the board said for that time and destination; None when unknown."""
     hhmm = datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M')
+    key = station_key(station_id)
     for row in overrides():
-        if row.get('station') == station_id and row.get('time') == hhmm and same_place(row.get('destination', ''), destination):
+        if station_key(row.get('station')) == key and row.get('time') == hhmm and same_place(row.get('destination', ''), destination):
             return row['bay']
     if seen is None:
-        try:
-            from .models import PlatformSeen
-            seen = list(PlatformSeen.objects.filter(key__startswith=f'{station_id}|{hhmm}|'))
-        except Exception as e:  # no database: no bays
-            logger.warning('Platforms unavailable: %r', e)
+        seen = station_seen(station_id)
+        if seen is None:
             return None
+        seen = [s for s in seen if _hhmm(s) == hhmm]
     matches = [s for s in seen if same_place(s.destination, destination)]
     return max(matches, key=lambda s: s.updated).platform if matches else None
 
 
+def _hhmm(row) -> str:
+    parts = row.key.split('|')
+    return parts[1] if len(parts) > 1 else ''
+
+
 def station_seen(station_id: str) -> Optional[list]:
+    """The station's `PlatformSeen` rows: under its key, and under the feed stops it had (rows from before a
+    renumbering; of one departure seen under both, the newer row)."""
+    key = station_key(station_id)
+    if not key:
+        return []
     try:
+        from django.db.models import Q
         from .models import PlatformSeen
-        return list(PlatformSeen.objects.filter(key__startswith=f'{station_id}|'))
+        prefixes = [key, *STATIONS[key].get('ids', [])]
+        query = Q()
+        for p in prefixes:
+            query |= Q(key__startswith=f'{p}|')
+        rows = list(PlatformSeen.objects.filter(query))
     except Exception as e:  # no database: no bays
         logger.warning('Platforms unavailable: %r', e)
         return None
+    newest: dict = {}
+    for r in rows:
+        departure = r.key.split('|', 1)[-1]
+        if departure not in newest or r.updated > newest[departure].updated:
+            newest[departure] = r
+    return list(newest.values())
 
 
 def usual_platform(station_id: str, departure: float, destination: str, seen: Optional[Iterable] = None, share: float = USUAL_SHARE) -> Optional[str]:
@@ -191,7 +295,7 @@ def usual_platform(station_id: str, departure: float, destination: str, seen: Op
         seen = station_seen(station_id)
         if seen is None:
             return None
-    matches = [s for s in seen if s.key.startswith(f'{station_id}|') and same_place(s.destination, destination)]
+    matches = [s for s in seen if same_place(s.destination, destination)]
     # 'Bled' also matches 'Bled shuttle': the same destination's own departures first.
     words = _words(destination)
     matches = [s for s in matches if _words(s.destination) == words] or matches
@@ -201,7 +305,7 @@ def usual_platform(station_id: str, departure: float, destination: str, seen: Op
     at = minute(datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M'))
     gaps = []
     for s in matches:
-        gap = abs(minute(s.key.split('|')[1]) - at)
+        gap = abs(minute(_hhmm(s)) - at)
         gaps.append((s, min(gap, 1440 - gap)))
     for pool in ([(s, g) for s, g in gaps if g <= DEPARTURE_WINDOW], gaps):  # this departure's, then the destination's
         counts: dict[str, list[int]] = {}
@@ -221,7 +325,7 @@ def platform_for(station_id: str, departure: float, destination: str, seen: Opti
     if seen is not None:
         seen = list(seen)
     hhmm = datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M')
-    exact = departure_platform(station_id, departure, destination, None if seen is None else [s for s in seen if s.key.startswith(f'{station_id}|{hhmm}|')])
+    exact = departure_platform(station_id, departure, destination, None if seen is None else [s for s in seen if _hhmm(s) == hhmm])
     if exact:
         return exact, False
     usual = usual_platform(station_id, departure, destination, seen)
@@ -236,7 +340,8 @@ def bay_for(stop: dict, departure: Optional[float], destination: str, label: str
     station = stop.get('gtfsId') or ''
     named = PERON.search(label or '')
     if named and not bays(station):
-        station = NEXT_DOOR.get(station, station)
+        station = next_door(station) or station
+    station = station_key(station) or station
     known = bays(station)
     if not known:
         return None
@@ -257,7 +362,7 @@ def origin_area(station_id: str) -> Optional[dict]:
     """The ground of a bus station with bays, as {'latitude', 'longitude', 'radius'}: a bus there
     before its departure is waiting in its bay, wherever its GPS puts it inside; one there at the end
     of its trip has arrived and parks where it is."""
-    spec = STATIONS.get(station_id)
+    spec = STATIONS.get(station_key(station_id) or '')
     return {'latitude': spec['lat'], 'longitude': spec['lon'], 'radius': spec['ground']} if spec else None
 
 

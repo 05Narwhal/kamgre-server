@@ -1,7 +1,7 @@
 """Read a bus station's bays from OpenStreetMap into data/platform_bays.json (see platforms.py).
 
     manage.py platform_bays                      # every station in platforms.STATIONS
-    manage.py platform_bays --station IJPP:1126954
+    manage.py platform_bays --station ljubljana-ap    # a station's key (or its feed stop)
 
 For each platform node with a `local_ref` (the bay number riders see) the command finds where a
 bus stands at it: a bay with a short driveway of its own (sawtooth bays, like bays 1-29 at
@@ -33,16 +33,19 @@ class Command(BaseCommand):
     help = "Read bus station bays (platform local_ref) from OSM into data/platform_bays.json."
 
     def add_arguments(self, parser):
-        parser.add_argument('--station', default='', help='only this station stop id')
+        parser.add_argument('--station', default='', help='only this station (key in platforms.STATIONS, or its feed stop)')
 
     def handle(self, *args, station='', **options):
         out = platforms.read_bays()
-        for stop_id, spec in platforms.STATIONS.items():
-            if station and stop_id != station:
+        only = platforms.station_key(station) if station else None
+        if station and not only:
+            raise CommandError(f'No station with bays: {station}')
+        for key, spec in platforms.STATIONS.items():
+            if only and key != only:
                 continue
             data = self._overpass(QUERY.format(r=spec['radius'], lat=spec['lat'], lon=spec['lon']))
             bays = bays_from(data['elements'])
-            out[stop_id] = {'name': spec['name'], 'bays': bays}
+            out[key] = {'name': spec['name'], 'bays': bays}
             self.stdout.write(f'{spec["name"]}: {len(bays)} bays ({", ".join(sorted(bays, key=_num))})')
         platforms.BAYS.write_text(json.dumps(out, ensure_ascii=False, indent=1, sort_keys=True), encoding='utf-8')
 
