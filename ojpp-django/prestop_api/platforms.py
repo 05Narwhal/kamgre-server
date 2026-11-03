@@ -366,6 +366,27 @@ def origin_area(station_id: str) -> Optional[dict]:
     return {'latitude': spec['lat'], 'longitude': spec['lon'], 'radius': spec['ground']} if spec else None
 
 
+PARK_BAYS = 8  # bays a bus ending at a bus station may park in
+
+
+def destination_bays(station_id: str, seen: Optional[Iterable] = None) -> list[dict]:
+    """Bays a bus ending its trip at a bus station parks in, as [{'lat', 'lon', 'heading'}]: no source says where
+    buses arrive, so the PARK_BAYS bays departures use least (by the board's history), fewest first. No numbers:
+    the map draws the bus there, nothing names the bay."""
+    station = station_key(station_id) or station_id
+    known = bays(station)
+    if not known:
+        return []
+    if seen is None:
+        seen = station_seen(station) or []
+    used = {ref: 0 for ref in known}
+    for s in seen:
+        for ref in bay_refs(getattr(s, 'platform', '') or '', known):
+            used[ref] += 1
+    order = sorted(known, key=lambda r: (used[r], int(r) if r.isdigit() else 10**6, r))
+    return [{'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in order[:PARK_BAYS]]
+
+
 def place(stops: list[dict], departure: Optional[float], destination: str) -> tuple[list[dict], Optional[dict]]:
     """Stops with the first one moved into its bay (a copy), and that bay (or None)."""
     if not stops:

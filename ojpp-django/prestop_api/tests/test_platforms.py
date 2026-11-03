@@ -129,6 +129,16 @@ class PlaceTests(SimpleTestCase):
         self.assertEqual([b['ref'] for b in bay['alternates']], ['28', '29'])
         self.assertEqual(bay['alternates'][0]['heading'], 29.6)
 
+    def test_a_bus_ending_at_the_station_parks_in_the_least_used_bays(self):
+        # Seen: 13 twice, 27-29 once (each of 27, 28, 29), 37 once, 28 once more.
+        seen = [SimpleNamespace(platform=p) for p in ('13', '13', '27-29', '37', '28')]
+        parks = platforms.destination_bays(AP, seen)
+        order = ('27', '29', '37', '13', '28')  # fewest departures first, then by number
+        self.assertEqual([(b['lat'], b['lon']) for b in parks], [(BAYS[r]['lat'], BAYS[r]['lon']) for r in order])
+        self.assertEqual(parks[0]['heading'], 29.6)
+        self.assertNotIn('ref', parks[0])  # an arrival's bay is never named
+        self.assertEqual(platforms.destination_bays('IJPP:other', seen), [])
+
     def test_an_unknown_departure_or_another_station_stays_put(self):
         stops = [{'gtfsId': AP, 'name': 'Ljubljana AP', 'lat': 46.0, 'lon': 14.0}]
         with mock.patch.object(platforms, 'departure_platform', return_value=None):
