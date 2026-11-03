@@ -450,6 +450,7 @@ def health(now: Optional[float] = None) -> list[dict]:
 MONTHS = ('jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'avg', 'sep', 'okt', 'nov', 'dec')
 _MONTH_WORD = re.compile(r'(\d{1,2})\.?\s*(' + '|'.join(MONTHS) + r'|may|aug|oct)[a-z]*\.?')
 _GROUP = re.compile(r'\(([^()]*\d[^()]*)\)')
+_FOOTNOTE_MARK = re.compile(r'\(\s*[!*]+\s*\)')  # SŽ's "((!*)2. - 6. november)": a footnote mark inside the dates' brackets
 PDF_LINK = re.compile(r'\[([^\]]*)\]\((https?://[^)\s]+?\.pdf)\)', re.I)
 MD_LINK = re.compile(r'\[([^\]]*)\]\((https?://[^)\s]+)\)')
 REPLACEMENT_TITLE = re.compile(r'nadomest(?:n\w*|\.)\s+prevoz|avtobusn\w*\s+(?:\w+\s+)?prevoz\s+na\s+relaciji')
@@ -466,7 +467,7 @@ def title_spans(title: str, seen: date) -> Optional[list[tuple[date, date]]]:
     on; a date more than half a year before it is next year's):
     "(24. 10. - 1. 11.)", "(26. - 30. oktober)", "(26. in 27. oktober)" (two one-day spans), "(26. - 30. 10. in
     3. - 6. 11.)" (two spans: not 31. 10. - 2. 11.), "(do 12. decembra)" (from `seen`). None when unreadable."""
-    groups = _GROUP.findall(title or '')
+    groups = _GROUP.findall(_FOOTNOTE_MARK.sub('', title or ''))
     if not groups:
         return None
     text = _MONTH_WORD.sub(lambda m: f'{m.group(1)}. {_month(m.group(2))}.', fold(groups[-1]))
@@ -577,9 +578,14 @@ def replacement_pairs(notices: list[dict]) -> tuple[list[tuple[dict, Optional[di
             paired |= {i, j}
             break
     for i, item in enumerate(notices):
-        if i not in paired and REPLACEMENT_TITLE.search(fold(item.get('summary') or '')) and not fold(item.get('summary') or '').startswith('dodatno'):
+        title = fold(item.get('summary') or '')
+        # A link left without a title (its trains differ from every title's) is no notice: "Povezava: [Vozni red nadomestnega
+        # prevoza](…)" would pass for a title; SŽ's own list (sz_list.records) then gives that timetable its notice.
+        if i in paired or not REPLACEMENT_TITLE.search(title) or title.startswith('dodatno'):
+            continue
+        if not title.startswith('povezava'):
             pairs.append((item, None))
-            paired.add(i)
+        paired.add(i)  # a leftover link is in neither list: not a notice, and no train notice of its own
     others = [n for i, n in enumerate(notices) if i not in paired]
     return pairs, others
 

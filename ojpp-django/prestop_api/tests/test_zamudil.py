@@ -297,6 +297,11 @@ class TitleDateTests(SimpleTestCase):
         self.assertEqual(self.spans('Avtobusni IC prevoz na relaciji Ljubljana - Celje in obratno (do 12. decembra).'),
                          [(DAY, d(2026, 12, 12))])
 
+    def test_a_footnote_mark_inside_the_brackets_is_no_part_of_the_dates(self):
+        # SŽ, 2 Nov 2026: "… Beljak (A) in obratno ((!*)2. - 6. november)."
+        title = 'Vozni red nadomestnega prevoza: Ljubljana - Jesenice / Beljak (A) in obratno ((!*)2. - 6. november).'
+        self.assertEqual(self.spans(title, date(2026, 11, 3)), [(date(2026, 11, 2), date(2026, 11, 6))])
+
     def test_the_year_rolls_over(self):
         seen = date(2026, 12, 28)
         self.assertEqual(self.spans('Vozni red nadomestnega prevoza: Divača - Koper in obratno (28. 12. - 5. 1.).', seen),
@@ -357,6 +362,16 @@ class RecordTests(SimpleTestCase):
         with self.assertLogs('prestop_api.zamudil', 'WARNING'):
             [rec] = zamudil.records([(DAY, data), (date(2026, 10, 28), data), (date(2026, 10, 30), data)])
         self.assertEqual((rec['Cas'], rec['CasVir']), (['27.10.2026-28.10.2026, 30.10.2026-30.10.2026'], ['listed']))
+
+    def test_a_timetable_link_whose_trains_differ_from_the_title_is_no_notice(self):
+        link = 'Povezava: [Vozni red nadomestnega prevoza](https://potniski.sz.si/wp-content/uploads/2026/10/a.pdf)'
+        data = {'notices': [{'summary': 'Vozni red nadomestnega prevoza: Ljubljana - Kamnik in obratno (2. - 6. november).', 'trainNumbers': [1, 2]},
+                            {'summary': link, 'body': '', 'trainNumbers': [1]}]}
+        pairs, others = zamudil.replacement_pairs(data['notices'])
+        self.assertEqual(pairs, [(data['notices'][0], None)])  # the title alone, with no timetable
+        self.assertEqual(others, [])  # nor a train notice named "Vozni red nadomestnega prevoza"
+        [rec] = zamudil.records([(date(2026, 11, 3), data)])
+        self.assertEqual((rec['Relacija'], rec['Cas'], rec['CasVir']), (['Ljubljana - Kamnik'], ['02.11.2026-06.11.2026'], ['title']))
 
     def test_the_old_feeds_readers(self):
         from prestop_api import closures
