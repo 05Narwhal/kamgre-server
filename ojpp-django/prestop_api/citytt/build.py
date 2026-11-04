@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 LIMIT = 4 * 1024 * 1024  # bytes per fetched file
 OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter',
             'https://overpass.kumi.systems/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter']
-OSM_Q = '''[out:json][timeout:90];
+# the last good Overpass answer per city, in the git-ignored data/ folder: a build reuses it when no server answers
+OSM_KEPT = Path(__file__).resolve().parents[2] / 'data' / 'citytt-osm'
+OSM_Q = '''[out:json][timeout:180];
 (node["highway"="bus_stop"]({b});node["public_transport"="platform"]["bus"="yes"]({b}););out body;
 rel["type"="route"]["route"="bus"]({b});out body;'''
 OFF_SHAPE = 50   # m: a stop further than this from its trip's routed shape fails the build
@@ -121,16 +123,7 @@ def osm_poles(city: City) -> tuple[list[dict], list[list[str]]]:
     route relations as runs of those poles."""
     south, west, north, east = _wider(city.bbox)
     query = OSM_Q.format(b=f'{south},{west},{north},{east}')
-    for url in OVERPASS:
-        try:
-            resp = requests.post(url, data={'data': query}, timeout=150, headers={'User-Agent': USER_AGENT})
-            resp.raise_for_status()
-            elements = resp.json()['elements']
-            break
-        except (requests.RequestException, ValueError, KeyError) as e:
-            logger.warning('Overpass %s: %r', url, e)
-    else:
-        raise BuildError('no Overpass server answered')
+    elements = _overpass(city, query)
     stops = {}
     for e in elements:
         if e['type'] == 'node':
@@ -140,6 +133,33 @@ def osm_poles(city: City) -> tuple[list[dict], list[list[str]]]:
     runs = [[f'osm:{m["ref"]}' for m in e.get('members') or [] if m['type'] == 'node' and m['ref'] in stops and m['role'].startswith('platform')]
             for e in elements if e['type'] == 'relation']
     return [stops[k] for k in sorted(stops)], [r for r in runs if len(r) > 1]
+
+
+def _overpass(city: City, query: str) -> list[dict]:
+    """Overpass's answer to the query; with no server answering, the last answer kept for the same query."""
+    kept = OSM_KEPT / f'{city.name}.json'
+    for url in OVERPASS:
+        try:
+            resp = requests.post(url, data={'data': query}, timeout=200, headers={'User-Agent': USER_AGENT})
+            resp.raise_for_status()
+            elements = resp.json()['elements']
+        except (requests.RequestException, ValueError, KeyError) as e:
+            logger.warning('Overpass %s: %r', url, e)
+            continue
+        try:
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            kept.write_text(json.dumps({'query': query, 'on': date.today().isoformat(), 'elements': elements}), encoding='utf-8')
+        except OSError as e:
+            logger.warning('Overpass answer not kept: %r', e)
+        return elements
+    try:
+        last = json.loads(kept.read_text(encoding='utf-8'))
+        if last['query'] == query:
+            logger.warning('%s: no Overpass server answered, using the answer kept on %s', city.name, last['on'])
+            return last['elements']
+    except (OSError, ValueError, KeyError):
+        pass
+    raise BuildError('no Overpass server answered')
 
 
 def _wider(bbox: tuple, margin: float = 0.01) -> tuple:

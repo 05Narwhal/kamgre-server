@@ -111,6 +111,19 @@ class PoleTests(SimpleTestCase):
                          (['IJPP:b', 'IJPP:w', 'IJPP:a'], []))
 
 
+    def test_no_overpass_server_answering_reuses_the_last_answer_for_the_same_query(self):
+        import requests
+        tmp = Path(tempfile.mkdtemp()); self.addCleanup(shutil.rmtree, tmp)
+        ok = mock.Mock(**{'json.return_value': {'elements': [{'type': 'node', 'id': 7}]}})
+        with mock.patch.object(build, 'OSM_KEPT', tmp), mock.patch.object(build.requests, 'post', return_value=ok):
+            self.assertEqual(build._overpass(JESENICE, 'q'), [{'type': 'node', 'id': 7}])
+        down = mock.patch.object(build.requests, 'post', side_effect=requests.ConnectionError('504'))
+        with mock.patch.object(build, 'OSM_KEPT', tmp), down:
+            self.assertEqual(build._overpass(JESENICE, 'q'), [{'type': 'node', 'id': 7}])
+            with self.assertRaises(build.BuildError):
+                build._overpass(JESENICE, 'another bbox')
+
+
 class CalendarTests(SimpleTestCase):
     def test_monday_to_saturday_without_holidays_but_31_october_and_1_november(self):
         rows, dates = build.calendar(JESENICE)
