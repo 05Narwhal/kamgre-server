@@ -12,6 +12,11 @@ Timetables nobody publishes as GTFS any more are kept by hand in `data/gtfs/<fee
 ids as in OTP's feed so stops and lines keep theirs) and read the same way: Sevnica's file expired on
 2026-06-24, so its city bus vanished, while the municipality's page lists the timetable valid from
 1. 9. 2026 (see data/gtfs/README.md).
+
+A folder with a `replaces.txt` (route_id,mode) is a correction of OTP's feed of the same id, not a replacement:
+OTP keeps the feed's stops, lines and runs, and only the runs in the folder are read here. Mode `replace`: on a
+day the folder runs that line, OTP's runs of the line are dropped (Koper's line 9 on working days goes another way
+than OTP has it); `add`: the folder's runs come on top of OTP's (two of Koper's line 2 runs OTP lacks).
 """
 import csv
 import io
@@ -162,6 +167,7 @@ def parse(feed: str, data: bytes) -> dict:
     exceptions: dict[tuple[str, str], bool] = {}
     for d in _rows(z, 'calendar_dates.txt'):
         exceptions[(d['service_id'], d['date'])] = d.get('exception_type') == '1'
+    replaces = {q(r['route_id']): (r.get('mode') or 'replace').strip() for r in _rows(z, 'replaces.txt') if r.get('route_id')}
     by_stop: dict[str, list[tuple[str, int]]] = {}
     for tid, t in trips.items():
         for i, s in enumerate(t['stops']):
@@ -171,7 +177,7 @@ def parse(feed: str, data: bytes) -> dict:
         for s in t['stops']:
             stop_routes.setdefault(s['stopId'], set()).add(t['routeId'])
     return {'feed': feed, 'routes': routes, 'trips': trips, 'stops': stops, 'shapes': shapes, 'calendar': calendar,
-            'exceptions': exceptions, 'byStop': by_stop, 'stopRoutes': stop_routes}
+            'exceptions': exceptions, 'byStop': by_stop, 'stopRoutes': stop_routes, 'replaces': replaces}
 
 
 def _load() -> dict[str, dict]:
@@ -209,7 +215,40 @@ def _feeds() -> dict[str, dict]:
 
 
 def _feed_of(gtfs_id: str) -> Optional[dict]:
-    return _feeds().get(gtfs_id.split(':', 1)[0]) if ':' in gtfs_id else None
+    """The feed read here that answers for an id: a correction (replaces.txt) only for its own runs."""
+    feed = _feeds().get(gtfs_id.split(':', 1)[0]) if ':' in gtfs_id else None
+    if feed is not None and feed.get('replaces') and _trip(feed, gtfs_id) is None:
+        return None
+    return feed
+
+
+def whole(feeds: dict) -> dict:
+    """The feeds that replace OTP's of the same id (not corrections)."""
+    return {name: f for name, f in feeds.items() if not f.get('replaces')}
+
+
+def _correction(gtfs_id: str) -> Optional[dict]:
+    feed = _feeds().get(gtfs_id.split(':', 1)[0]) if ':' in (gtfs_id or '') else None
+    return feed if feed is not None and feed.get('replaces') else None
+
+
+def replaced(route_id: Optional[str], day: date) -> bool:
+    """Whether OTP's runs of a line on a service day are swapped for a correction's own (mode `replace`, on a day the
+    correction runs that line)."""
+    feed = _correction(route_id or '')
+    if feed is None or feed['replaces'].get(route_id) != 'replace':
+        return False
+    return any(t['routeId'] == route_id and runs(feed, t['serviceId'], day) for t in feed['trips'].values())
+
+
+def leg_replaced(leg: dict) -> bool:
+    """A journey leg (OTP's) riding a run a correction replaces (supplement.replaced), by the day it starts."""
+    at = (leg.get('start') or {}).get('scheduledTime') or ''
+    try:
+        day = datetime.fromisoformat(at).astimezone(LOCAL).date()
+    except ValueError:
+        return False
+    return replaced((leg.get('route') or {}).get('gtfsId'), day)
 
 
 def owns(gtfs_id: str) -> bool:
@@ -264,7 +303,7 @@ def _stop(feed: dict, stop_id: str) -> dict:
 def routes() -> dict[str, dict]:
     """Routes of every loaded feed, as sources._load_routes keeps OTP's."""
     out = {}
-    for feed in _feeds().values():
+    for feed in whole(_feeds()).values():
         for rid, r in feed['routes'].items():
             agency = r['agency']
             heads = sorted({(t['directionId'], t['headsign']) for t in feed['trips'].values() if t['routeId'] == rid}, key=lambda x: (x[0] is None, x[0] or 0, x[1]))
@@ -276,10 +315,22 @@ def routes() -> dict[str, dict]:
 def stops() -> list[dict]:
     """Stops with the routes serving them, in the shape of sources.STOPS_Q's."""
     out = []
-    for feed in _feeds().values():
+    for feed in whole(_feeds()).values():
         for sid, rids in feed['stopRoutes'].items():
             out.append({**_stop(feed, sid), 'vehicleMode': 'BUS', 'platformCode': None, 'parentStation': None,
                         'routes': [{'gtfsId': rid, 'mode': feed['routes'][rid]['mode'], 'agency': {'gtfsId': feed['routes'][rid]['agency']['gtfsId']}} for rid in sorted(rids)]})
+    return out
+
+
+def added_lines() -> dict[str, list[dict]]:
+    """Stop id -> the lines a correction's runs add there (in sources.STOPS_Q's `routes` shape): OTP's stop keeps its
+    own and gains these (Koper's PH Sonce gets line 9)."""
+    out: dict[str, list[dict]] = {}
+    for feed in _feeds().values():
+        if feed.get('replaces'):
+            for sid, rids in feed['stopRoutes'].items():
+                out[sid] = [{'gtfsId': rid, 'mode': feed['routes'][rid]['mode'], 'agency': {'gtfsId': feed['routes'][rid]['agency']['gtfsId']}}
+                            for rid in sorted(rids)]
     return out
 
 
@@ -295,7 +346,7 @@ def running_stops(days: Iterable[date]) -> set[str]:
 
 def sequences() -> list[list[str]]:
     """Each distinct run of stops the trips serve, in order (stop directions, stopgroups.directions)."""
-    return [list(run) for feed in _feeds().values() for run in {tuple(s['stopId'] for s in t['stops']) for t in feed['trips'].values()}]
+    return [list(run) for feed in whole(_feeds()).values() for run in {tuple(s['stopId'] for s in t['stops']) for t in feed['trips'].values()}]
 
 
 def trip_info(trip_id: str) -> dict:
@@ -370,6 +421,23 @@ def otp_route(route_id: str, day: date) -> Optional[dict]:
     route = feed and feed['routes'].get(route_id)
     if not route:
         return None
+    return {**route, 'patterns': _patterns(feed, route_id, day)}
+
+
+def corrected_route(route: dict, day: date) -> dict:
+    """OTP's route (trips.LINE_Q's shape) with a correction applied: its replaced runs out of the day's trips, the
+    correction's own patterns added."""
+    rid = route.get('gtfsId') or ''
+    feed = _correction(rid)
+    if feed is None or rid not in feed['routes']:
+        return route
+    patterns = route.get('patterns') or []
+    if replaced(rid, day):
+        patterns = [{**p, 'tripsForDate': []} for p in patterns]
+    return {**route, 'patterns': patterns + _patterns(feed, rid, day)}
+
+
+def _patterns(feed: dict, route_id: str, day: date) -> list[dict]:
     start = day_start(day)
     patterns: dict[tuple, dict] = {}
     for t in feed['trips'].values():
@@ -389,7 +457,7 @@ def otp_route(route_id: str, day: date) -> Optional[dict]:
         n = seen[p['code']] = seen.get(p['code'], 0) + 1
         if n > 1:
             p['code'] = f'{p["code"]}:{n}'
-    return {**route, 'patterns': list(patterns.values())}
+    return list(patterns.values())
 
 
 def stoptimes(stop_id: str, start: int, span: int, limit: int, updates: dict) -> Optional[list[dict]]:
@@ -398,6 +466,24 @@ def stoptimes(stop_id: str, start: int, span: int, limit: int, updates: dict) ->
     feed = _feed_of(stop_id)
     if not feed or stop_id not in feed['stops']:
         return None
+    return _stoptimes(feed, stop_id, start, span, limit, updates)
+
+
+def corrected_board(stop_id: str, calls: list[dict], start: int, span: int, updates: dict) -> list[dict]:
+    """OTP's calls at a stop (BOARD_Q's stoptimesWithoutPatterns) with a correction applied: calls of runs it replaces
+    dropped, its own runs' calls from `start` for `span` s added, in time order."""
+    feed = _correction(stop_id)
+    if feed is None:
+        return calls
+    kept = [c for c in calls if not replaced(((c.get('trip') or {}).get('route') or {}).get('gtfsId'),
+                                             datetime.fromtimestamp(c.get('serviceDay') or 0, LOCAL).date())]
+    own = _stoptimes(feed, stop_id, start, span, 10_000, updates) if stop_id in feed['byStop'] else []
+    if not own and len(kept) == len(calls):
+        return calls
+    return sorted(kept + own, key=lambda st: st['serviceDay'] + st['scheduledDeparture'])
+
+
+def _stoptimes(feed: dict, stop_id: str, start: int, span: int, limit: int, updates: dict) -> list[dict]:
     out = []
     first = datetime.fromtimestamp(start, LOCAL).date()
     for day in (first - timedelta(days=1), first, first + timedelta(days=1)):
@@ -432,7 +518,7 @@ def timetable_runs(now: float, before: int, after: int) -> list[dict]:
     out = []
     today = datetime.fromtimestamp(now, LOCAL).date()
     kept = _hand_kept()
-    for name, feed in _feeds().items():
+    for name, feed in whole(_feeds()).items():
         if name not in kept:
             continue
         for day in (today - timedelta(days=1), today):

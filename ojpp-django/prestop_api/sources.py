@@ -61,6 +61,10 @@ def _load_stops():
     if extra:
         feeds = {s['gtfsId'].split(':', 1)[0] for s in extra}
         raw = [s for s in raw if s['gtfsId'].split(':', 1)[0] not in feeds] + extra
+    added = supplement.added_lines()  # a correction's runs call at OTP's stops: those stops list its lines too
+    if added:
+        raw = [{**s, 'routes': (s.get('routes') or []) + [r for r in added[s['gtfsId']] if r['gtfsId'] not in {x['gtfsId'] for x in s.get('routes') or []}]}
+               if s['gtfsId'] in added else s for s in raw]
     # No stop abroad: KamGre shows Slovenia only (abroad.py).
     raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'), s.get('gtfsId'))]
     built = mapping.build_stops(raw)
@@ -551,7 +555,9 @@ def _member_board(stop_id: str, kind: str, start: int, alert_list: list[dict], d
                 seen.add(key)
                 calls.append(st)
         noted: list = []
-        rows = mapping.build_board(stop_id, calls, kind, alert_list, live, updates, noted if drops is not None else None)
+        # A correction of this feed (supplement.py, replaces.txt): its runs in, the ones it replaces out.
+        shown = supplement.corrected_board(stop_id, calls, start - back, until - start + back, updates)
+        rows = mapping.build_board(stop_id, shown, kind, alert_list, live, updates, noted if drops is not None else None)
         kept = [r for r in rows if (r['effectiveAt'] or r['scheduledAt']) >= mapping.iso(start)] if back else rows
         if len(page) < n or len(kept) >= BOARD_MAX:
             break

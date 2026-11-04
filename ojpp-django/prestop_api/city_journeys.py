@@ -620,12 +620,12 @@ def _beaten(node: dict, others: list[dict]) -> bool:
 
 
 def _without_stale(data: dict) -> dict:
-    """OTP's connections minus those riding a run of an older table of a feed read here (supplement.stale): the
-    feed's own run, at its real times, is added in their place below."""
+    """OTP's connections minus those riding a run of an older table of a feed read here (supplement.stale) or a run a
+    correction replaces (supplement.leg_replaced): the feed's own run, at its real times, is added in their place below."""
     edges = (data.get('planConnection') or {}).get('edges')
     if not edges or not _feeds():
         return data
-    kept = [e for e in edges if not any(l.get('transitLeg') and supplement.stale((l.get('trip') or {}).get('gtfsId'))
+    kept = [e for e in edges if not any(l.get('transitLeg') and (supplement.stale((l.get('trip') or {}).get('gtfsId')) or supplement.leg_replaced(l))
                                         for l in (e.get('node') or {}).get('legs') or [])]
     return data if len(kept) == len(edges) else {**data, 'planConnection': {**data['planConnection'], 'edges': kept}}
 

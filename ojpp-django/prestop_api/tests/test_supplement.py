@@ -149,3 +149,81 @@ class LocalFeedTests(SimpleTestCase):
             self.assertEqual(set(supplement.feeds()), {'Jesenice', 'MARPROM', 'Piran', 'Ptuj', 'Sevnica'})
         with self.settings(PRESTOP_LOCAL_GTFS=False, PRESTOP_KRANJ_GTFS_URL=''):
             self.assertEqual(supplement.feeds(), {})
+
+
+CORRECTION = {
+    'agency.txt': 'agency_id,agency_name,agency_url,agency_timezone\nA,Arriva d.o.o.,https://arriva.si,Europe/Ljubljana\n',
+    'routes.txt': 'route_id,agency_id,route_short_name,route_long_name,route_type\n9,A,9,Koper AP - Potniški terminal,3\n2,A,2,Semedela - Bolnica,3\n',
+    'stops.txt': 'stop_id,stop_name,stop_lat,stop_lon\n100,Koper AP,45.54,13.73\n200,PH Sonce,45.53,13.72\n',
+    'trips.txt': 'route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\n9,D,fix-9-1,Koper AP,0,\n2,D,fix-2-1,Bolnica,0,\n',
+    'stop_times.txt': ('trip_id,arrival_time,departure_time,stop_id,stop_sequence\n'
+                       'fix-9-1,10:00:00,10:00:00,100,1\nfix-9-1,10:09:00,10:09:00,200,2\nfix-9-1,10:18:00,10:18:00,100,3\n'
+                       'fix-2-1,10:55:00,10:55:00,100,1\nfix-2-1,11:05:00,11:05:00,200,2\n'),
+    'calendar.txt': ('service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n'
+                     'D,1,1,1,1,1,0,0,20261101,20270831\n'),
+    'replaces.txt': 'route_id,mode\n9,replace\n2,add\n',
+}
+THURSDAY, SATURDAY = date(2026, 11, 5), date(2026, 11, 7)
+
+
+def correction():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w') as z:
+        for name, text in CORRECTION.items():
+            z.writestr(name, text)
+    return supplement.parse('MOKoper', buf.getvalue())
+
+
+def call(route: str, trip: str, day: date, at: int) -> dict:
+    return {'serviceDay': supplement.day_start(day), 'scheduledDeparture': at, 'realtimeDeparture': at,
+            'trip': {'gtfsId': f'MOKoper:{trip}', 'route': {'gtfsId': f'MOKoper:{route}'}}}
+
+
+class CorrectionTests(SimpleTestCase):
+    """A hand-kept folder with replaces.txt corrects some lines of OTP's feed (Koper's line 9 on working days, two
+    line 2 runs) and leaves the rest to OTP."""
+
+    def setUp(self):
+        patcher = mock.patch.object(supplement, '_feeds', return_value={'MOKoper': correction()})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_only_its_own_runs_are_read_here(self):
+        self.assertTrue(supplement.owns('MOKoper:fix-9-1'))
+        self.assertIsNotNone(supplement.otp_trip('MOKoper:fix-9-1', THURSDAY))
+        for otp_id in ('MOKoper:otp-9', 'MOKoper:100', 'MOKoper:9'):
+            self.assertFalse(supplement.owns(otp_id), otp_id)
+        self.assertFalse(supplement.stale('MOKoper:otp-9'))  # OTP's other runs are not an old table
+        self.assertIsNone(supplement.stoptimes('MOKoper:100', 0, 3600, 10, {}))
+        self.assertEqual((supplement.routes(), supplement.stops(), supplement.sequences()), ({}, [], []))
+
+    def test_a_replaced_line_on_the_days_the_correction_runs_it(self):
+        self.assertTrue(supplement.replaced('MOKoper:9', THURSDAY))
+        self.assertFalse(supplement.replaced('MOKoper:9', SATURDAY))   # weekends stay OTP's
+        self.assertFalse(supplement.replaced('MOKoper:2', THURSDAY))   # added runs, OTP's kept
+        self.assertFalse(supplement.replaced('MOKoper:4', THURSDAY))
+        leg = {'route': {'gtfsId': 'MOKoper:9'}, 'start': {'scheduledTime': '2026-11-05T10:00:00+01:00'}}
+        self.assertTrue(supplement.leg_replaced(leg))
+        self.assertFalse(supplement.leg_replaced({**leg, 'start': {'scheduledTime': '2026-11-07T10:00:00+01:00'}}))
+
+    def test_board_drops_replaced_runs_and_adds_its_own(self):
+        calls = [call('9', 'otp-9', THURSDAY, 36_000), call('2', 'otp-2', THURSDAY, 37_000), call('4', 'otp-4', THURSDAY, 40_000)]
+        start = supplement.day_start(THURSDAY) + 30_000
+        board = supplement.corrected_board('MOKoper:100', calls, start, 20_000, {})
+        self.assertEqual([c['trip']['gtfsId'] for c in board], ['MOKoper:fix-9-1', 'MOKoper:otp-2', 'MOKoper:fix-9-1', 'MOKoper:fix-2-1', 'MOKoper:otp-4'])
+        saturday = [call('9', 'otp-9', SATURDAY, 36_000)]
+        self.assertEqual(supplement.corrected_board('MOKoper:100', saturday, supplement.day_start(SATURDAY), 80_000, {}), saturday)
+        self.assertEqual(supplement.corrected_board('IJPP:1', calls, start, 20_000, {}), calls)
+
+    def test_line_keeps_otps_variants_and_adds_the_corrections(self):
+        otp = {'gtfsId': 'MOKoper:9', 'patterns': [{'code': 'MOKoper:9:0:01', 'tripsForDate': [{'gtfsId': 'MOKoper:otp-9'}]}]}
+        thursday = supplement.corrected_route(otp, THURSDAY)
+        self.assertEqual([(p['code'], [t['gtfsId'] for t in p['tripsForDate']]) for p in thursday['patterns']],
+                         [('MOKoper:9:0:01', []), ('MOKoper:9:0:3', ['MOKoper:fix-9-1'])])
+        saturday = supplement.corrected_route(otp, SATURDAY)
+        self.assertEqual([len(p['tripsForDate']) for p in saturday['patterns']], [1, 0])
+        other = {'gtfsId': 'MOKoper:4', 'patterns': []}
+        self.assertIs(supplement.corrected_route(other, THURSDAY), other)
+
+    def test_otps_stops_list_the_lines_it_adds(self):
+        self.assertEqual([r['gtfsId'] for r in supplement.added_lines()['MOKoper:200']], ['MOKoper:2', 'MOKoper:9'])

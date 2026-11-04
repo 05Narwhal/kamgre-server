@@ -55,7 +55,7 @@ def _from_otp(names: list[str], days: list[date]) -> dict[str, list[int]]:
 def check(today: date) -> dict:
     wanted = days_to_check(today)
     days = [d for _, d in wanted]
-    own = supplement._feeds()
+    own = supplement.whole(supplement._feeds())  # a correction (replaces.txt) holds a few lines: the feed counts from OTP
     trips = {name: [sum(1 for t in own[name]['trips'].values() if supplement.runs(own[name], t['serviceId'], d)) for d in days]
              for name in FEEDS if name in own}
     others = [name for name in FEEDS if name not in own]
