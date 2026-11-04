@@ -69,7 +69,11 @@ def _load_stops():
     merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends, frozenset(overrides['stops']))
     # Each side of a stop on its own side of the road (Slovenia drives on the right), at OSM's pole when one is close.
     stopgroups.place_sides(merged, built, ways, set(overrides['stops']) | set(overrides['stations']), stopfix.osm_poles())
+    # Same-name poles close together are one marker below z16 (the map draws them so; ids and boards unchanged).
+    place_of = stopgroups.places(merged)
     for i, station in enumerate(merged):
+        if station['id'] in place_of:
+            merged[i] = station = {**station, 'placeKey': place_of[station['id']]}
         # Where SŽ's replacement buses leave from when that is beside the station, not at it.
         nearby = [r for sid in station.get('memberIds') or [station['id']] for r in overrides['replacement'].get(sid, [])]
         if nearby:

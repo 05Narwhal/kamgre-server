@@ -406,3 +406,31 @@ class MarkerPoleTests(SimpleTestCase):
         merged, _ = stopgroups.merge(stops, ways={'IJPP:1': EAST, 'IJPP:2': WEST}, fixed=frozenset({'IJPP:1'}))
         rail = next(s for s in merged if s['id'] == 'IJPP:rail')
         self.assertEqual((rail['latitude'], rail['longitude']), (lat, lon))
+
+
+class PlaceTests(SimpleTestCase):
+    """Same-name poles within 60 m are one place below z16 (spec 2026-11-04 M8); merging and ids stay."""
+    LAT, LON = 45.9, 15.6
+
+    def at(self, id_, name, metres_north, modes=('bus',)):
+        return stop(id_, name, north_of(self.LAT, metres_north), self.LON, modes)
+
+    def test_brezice_k_poles_are_one_place_and_gd_is_another(self):
+        markers = [self.at('IJPP:1123642', 'Brežice K', 0), self.at('IJPP:1123643', 'Brežice K', 12), self.at('IJPP:1123644', 'Brežice K', 15),
+                   self.at('IJPP:1123639', 'Brežice GD', 300), self.at('IJPP:1123640', 'Brežice GD', 338)]
+        self.assertEqual(stopgroups.places(markers), {'IJPP:1123642': 'IJPP:1123642', 'IJPP:1123643': 'IJPP:1123642', 'IJPP:1123644': 'IJPP:1123642',
+                                                      'IJPP:1123639': 'IJPP:1123639', 'IJPP:1123640': 'IJPP:1123639'})
+
+    def test_a_place_never_chains_past_60_m(self):
+        # 0, 40, 80 m: the middle joins its nearer neighbour only; the far end stays alone.
+        out = stopgroups.places([self.at('X:a', 'Vas', 0), self.at('X:b', 'Vas', 38), self.at('X:c', 'Vas', 80)])
+        self.assertEqual(out, {'X:a': 'X:a', 'X:b': 'X:a'})
+
+    def test_different_names_far_poles_and_stations_are_left_alone(self):
+        out = stopgroups.places([self.at('X:a', 'Brežice K', 0), self.at('X:b', 'Brežice GD', 10), self.at('X:c', 'Brežice K', 70),
+                                 self.at('SZ:1', 'Brežice', 5, ('rail',)), self.at('X:d', 'Brežice', 20)])
+        self.assertEqual(out, {})
+
+    def test_alike_names_from_two_feeds_share_a_place(self):
+        self.assertEqual(stopgroups.places([self.at('LPP:1', 'Bavarski dvor', 0), self.at('IJPP:2', 'Ljubljana Bavarski dvor', 45)]),
+                         {'LPP:1': 'IJPP:2', 'IJPP:2': 'IJPP:2'})
