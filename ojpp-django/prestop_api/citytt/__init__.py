@@ -43,6 +43,8 @@ class City:
     pages: tuple = ()      # more pages whose timetable links count too (a news post linking a file the page lacks)
     files: tuple = ()      # the exact file names to read: the build reports one that vanished or a new one it does not know
     stale: tuple = ()      # names of old files the pages still link: ignored
+    names: tuple = ()      # (the timetable's spelling, its pole's name) where the timetable spells a stop its own way
+    unplaced: tuple = ()   # stops no source has a pole for: left out of the runs (status notes list them)
 
 
 CITIES = {
@@ -75,6 +77,9 @@ CITIES = {
         start=date(2026, 11, 1), end=date(2027, 3, 31),
         agency=('arriva', 'Arriva d.o.o.', 'https://arriva.si/'),
         bbox=(45.48, 13.55, 45.55, 13.64),
+        names=(('Bernardin kr.', 'Bernardin K'),),
+        # Neither IJPP nor OSM has a pole for these two (Liminjanska cesta, Lucija, on runs from TC Tuš), 2026-11-04.
+        unplaced=('Liminjanska I', 'Liminjanska II'),
         # D = workdays Mon-Fri, PESO = Fridays (the Saturday file prints the Saturday runs itself), SO = Saturdays,
         # NP = Sundays and public holidays, SONP = Saturdays, Sundays and public holidays, V = every day. Public
         # holidays run only the services flagged True.

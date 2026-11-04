@@ -10,14 +10,23 @@ Which of a name's poles a run uses follows from runs that are known: OTP's patte
 GAP stops apart, in as many known runs as possible (`adjacent`). A stop whose best choices tie is ambiguous and the
 build fails: the side of the road alone guessed wrong at Jesenice OŠ Prežihov Voranc, whose two poles stand on two
 streets.
+
+Where no known run tells (Piran: OTP has no city runs there, OSM's few relations are short), the road decides
+(`length`): the run is routed through each choice of the tied poles, the bus stopping with the pole on its right, and
+the shortest choice wins when it is clearly shorter. That settles two streets by distance and one road's two sides by
+the turn a wrong side would need. A pole the road still cannot place (one standing at a crossing, where it has no
+side) takes the one of its name's two poles that the other direction did not (`avoid`).
 """
+import itertools
 import math
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 from ..stopgroups import similar
 
 SAME_POLE = 15  # m: an untagged OSM pole this close to a feed stop of an alike name is that stop
 GAP = 3         # a known run may have up to GAP - 1 stops between two consecutive stops of the timetable
+ROAD_MARGIN = 20  # m: the road's shortest choice must beat every other by this much
+MOST_CHOICES = 64  # tied poles' combinations routed for one stretch of a run
 
 
 def meters(a: dict, b: dict) -> float:
@@ -74,9 +83,12 @@ def candidates(name: str, poles: dict[str, dict]) -> list[str]:
     return sorted(pid for pid, p in poles.items() if any(similar(name, n) for n in p['names']))
 
 
-def choose(names: list[str], poles: dict[str, dict], pairs: dict[tuple[str, str], float]) -> tuple[list[Optional[str]], list[str]]:
-    """A pole per stop of one run (the choice the most known runs agree with, `adjacent`), and the problems: no pole,
-    or poles the known runs cannot tell apart."""
+def choose(names: list[str], poles: dict[str, dict], pairs: dict[tuple[str, str], float],
+           length: Optional[Callable[[list[dict]], Optional[float]]] = None,
+           avoid: Optional[dict[str, set]] = None) -> tuple[list[Optional[str]], list[str]]:
+    """A pole per stop of one run (the choice the most known runs agree with, `adjacent`; ties settled by the road,
+    `length`: metres of road through a list of poles, None without a route; then by `avoid`: name -> the poles the
+    other direction took), and the problems: no pole, or poles nothing tells apart."""
     options = [candidates(n, poles) for n in names]
     problems = [f'no pole named like "{n}" (stop {i + 1})' for i, (n, o) in enumerate(zip(names, options)) if not o]
     if problems:
@@ -89,12 +101,39 @@ def choose(names: list[str], poles: dict[str, dict], pairs: dict[tuple[str, str]
     for i in range(len(names) - 2, -1, -1):
         behind.insert(0, {c: max(behind[0][n] + link(c, n) for n in options[i + 1]) for c in options[i]})
     best = max(ahead[-1].values())
-    chosen = []
+    tops = [[c for c in options[i] if abs(ahead[i][c] + behind[i][c] - best) < 1e-9] for i in range(len(names))]
+    chosen = [t[0] if len(t) == 1 else None for t in tops]
+    if length and None in chosen:
+        _by_road(chosen, tops, poles, length)
     for i, n in enumerate(names):
-        top = [c for c in options[i] if abs(ahead[i][c] + behind[i][c] - best) < 1e-9]
-        if len(top) == 1:
-            chosen.append(top[0])
-        else:
-            chosen.append(None)
-            problems.append(f'"{n}" (stop {i + 1}): no known run tells its pole from {", ".join(top)}')
+        if chosen[i] is None and avoid and len(options[i]) == 2:
+            left = [c for c in tops[i] if c not in avoid.get(n, ())]
+            chosen[i] = left[0] if len(left) == 1 else None
+        if chosen[i] is None:
+            problems.append(f'"{n}" (stop {i + 1}): no known run or road tells its pole from {", ".join(tops[i])}')
     return chosen, problems
+
+
+def _by_road(chosen: list, tops: list[list[str]], poles: dict[str, dict], length: Callable) -> None:
+    """Each stretch of tied stops, routed from the chosen stop before it to the one after it through every choice of
+    their poles: a stop takes the pole that all choices within ROAD_MARGIN of the shortest agree on."""
+    i = 0
+    while i < len(chosen):
+        if chosen[i] is not None:
+            i += 1
+            continue
+        j = i
+        while j < len(chosen) and chosen[j] is None:
+            j += 1
+        combos = list(itertools.islice(itertools.product(*tops[i:j]), MOST_CHOICES + 1))
+        if len(combos) <= MOST_CHOICES:
+            ends = ([chosen[i - 1]] if i else [], [chosen[j]] if j < len(chosen) else [])
+            routed = [(m, c) for c in combos if (m := length([poles[p] for p in ends[0] + list(c) + ends[1]])) is not None]
+            if routed:
+                shortest = min(m for m, _ in routed)
+                near = [c for m, c in routed if m - shortest < ROAD_MARGIN]
+                for k in range(i, j):
+                    picks = {c[k - i] for c in near}
+                    if len(picks) == 1:
+                        chosen[k] = picks.pop()
+        i = j

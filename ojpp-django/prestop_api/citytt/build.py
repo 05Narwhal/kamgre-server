@@ -19,7 +19,10 @@ from typing import Callable, Optional
 
 import requests
 
+from django.conf import settings
+
 from .. import geometry, roads, supplement
+from ..upstream import session
 from ..stopgroups import _fullest
 from ..sztimetables import holiday
 from ..upstream import USER_AGENT
@@ -308,7 +311,37 @@ def road_shape(points: list[dict], route=roads.route_window) -> list:
     return geometry.simplify(coords, geometry.SHAPE_POINTS)
 
 
-def build(city: City, src: Sources, today: date, route=roads.route_window) -> tuple[dict[str, str], dict]:
+SIDE_TOLERANCE = 2  # m: a pole this far off the road's centre line stands on a side of it (Valhalla's default is 5)
+
+
+def road_length(points: list[dict]) -> Optional[float]:
+    """Metres of road (Valhalla, bus costing) through the poles in order, the bus stopping with each on its right;
+    None when there is no route."""
+    body = {'locations': [{'lat': p['lat'], 'lon': p['lon'], 'type': 'break', 'preferred_side': 'same',
+                           'street_side_tolerance': SIDE_TOLERANCE} for p in points],
+            'costing': 'bus', 'directions_type': 'none'}
+    resp = session().post(settings.PRESTOP_VALHALLA_URL, json=body, timeout=(5, 20))
+    if resp.status_code == 400:
+        return None
+    resp.raise_for_status()
+    return resp.json()['trip']['summary']['length'] * 1000
+
+
+def spelled(city: City, tables: list[dict]) -> tuple[list[dict], list[str]]:
+    """The tables with the city's own spellings named as their poles (`names`) and its stops with no pole anywhere
+    left out of every run (`unplaced`), and a note for each stop left out."""
+    names, out, notes = dict(city.names), [], []
+    for t in tables:
+        keep = [i for i, n in enumerate(t['stops']) if n not in city.unplaced]
+        if len(keep) < len(t['stops']):
+            notes.append(f'{t["line"]} {t.get("direction", 0)} {t.get("service", "")}: left out, no pole: '
+                         + ', '.join(n for n in t['stops'] if n in city.unplaced))
+        out.append({**t, 'stops': [names.get(t['stops'][i], t['stops'][i]) for i in keep],
+                    'runs': [[run[i] for i in keep] for run in t['runs']]})
+    return out, notes
+
+
+def build(city: City, src: Sources, today: date, route=roads.route_window, length=road_length) -> tuple[dict[str, str], dict]:
     """The feed's files (name -> text) and its status; raises BuildError with every problem found."""
     page = re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', src.page)))
     problems = [] if city.days in page else [f'the page no longer says "{city.days}": the running days may have changed']
@@ -332,11 +365,25 @@ def build(city: City, src: Sources, today: date, route=roads.route_window) -> tu
             notes += found
         except ValueError as e:
             problems.append(str(e))
+    tables, found = spelled(city, tables)
+    notes += found
     all_poles, alias = poles.unify(src.feed_stops, src.osm_stops)
     pairs = poles.merged(poles.adjacent(src.feed_runs), poles.adjacent(src.osm_runs, alias))
+    # Every distinct run of stops is placed once; one the road leaves tied then avoids the poles the other direction
+    # of its line took for the same name.
+    key = lambda t: (t['line'], t.get('direction', 0), tuple(t['stops']))  # noqa: E731
+    placed = {key(t): poles.choose(t['stops'], all_poles, pairs, length) for t in tables} if not problems else {}
+    for k, (chosen, found) in list(placed.items()):
+        if found and not any('no pole named' in f for f in found):
+            avoid: dict[str, set] = {}
+            for (line, direction, stops), (other, bad) in placed.items():
+                if line == k[0] and direction != k[1] and not bad:
+                    for n, pid in zip(stops, other):
+                        avoid.setdefault(n, set()).add(pid)
+            placed[k] = poles.choose(list(k[2]), all_poles, pairs, length, avoid)
 
     def place(table: dict) -> list[str]:
-        chosen, found = poles.choose(table['stops'], all_poles, pairs)
+        chosen, found = placed[key(table)]
         if found:
             raise BuildError('; '.join(f'{table["line"]}: {p}' for p in found))
         return chosen

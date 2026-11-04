@@ -97,6 +97,19 @@ class PoleTests(SimpleTestCase):
         self.assertEqual(chosen, [None])
         self.assertIn('IJPP:e, IJPP:w', problems[0])
 
+    def test_the_road_settles_poles_no_known_run_tells_apart_then_the_other_direction(self):
+        found, _ = poles.unify([stop('IJPP:a', 'Integral', 46.4410, 14.0400), stop('IJPP:w', 'ZD', 46.4399, 14.0443),
+                                stop('IJPP:e', 'ZD', 46.4397, 14.0444), stop('IJPP:b', 'Bolnica', 46.4380, 14.0500)], [])
+        # The wrong side needs a turn round: that route is far longer.
+        road = lambda pts: 400 if pts[1]['id'] == 'IJPP:e' else 1300  # noqa: E731
+        self.assertEqual(poles.choose(['Integral', 'ZD', 'Bolnica'], found, {}, road), (['IJPP:a', 'IJPP:e', 'IJPP:b'], []))
+        # Within ROAD_MARGIN the road cannot tell; the pole the other direction took is then not this one's.
+        flat = lambda pts: 400 + (10 if pts[1]['id'] == 'IJPP:e' else 0)  # noqa: E731
+        chosen, problems = poles.choose(['Bolnica', 'ZD', 'Integral'], found, {}, flat)
+        self.assertEqual((chosen[1], len(problems)), (None, 1))
+        self.assertEqual(poles.choose(['Bolnica', 'ZD', 'Integral'], found, {}, flat, {'ZD': {'IJPP:e'}}),
+                         (['IJPP:b', 'IJPP:w', 'IJPP:a'], []))
+
 
 class CalendarTests(SimpleTestCase):
     def test_monday_to_saturday_without_holidays_but_31_october_and_1_november(self):
