@@ -23,7 +23,8 @@ WINDOW = 14  # days ahead
 # Every city network (spec 2026-11-04): does it normally run on Saturdays? All run on weekdays. False for CELEBUS, MONM
 # and Postojna is only what their feeds show so far: M-A2 checks each against its operator's timetable.
 FEEDS = {'LPP': True, 'MARPROM': True, 'CELEBUS': False, 'MONM': False, 'MONG': True, 'MOKoper': True, 'MOKranj': True, 'MOKrsko': True,
-         'MOMS': True, 'MOVelenje': True, 'Postojna': False, 'Ptuj': True, 'Brezice': True, 'Sevnica': False, 'Jesenice': True}
+         'MOMS': True, 'MOVelenje': True, 'Postojna': False, 'Ptuj': True, 'Brezice': True, 'Sevnica': False, 'Jesenice': True,
+         'Piran': True}
 
 
 def days_to_check(today: date) -> list[tuple[str, date]]:

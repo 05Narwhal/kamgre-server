@@ -295,3 +295,16 @@ class BuildTests(SimpleTestCase):
         self.assertTrue(supplement.runs(feed, 'SO', date(2026, 11, 7)))
         self.assertFalse(supplement.runs(feed, 'SO', date(2026, 12, 26)))       # a holiday Saturday runs NP
         self.assertEqual(citytt.health(date(2026, 11, 4))[1]['id'], 'city-timetables:Piran')
+
+
+class ComposeTests(SimpleTestCase):
+    def test_a_run_printed_after_23_50_at_00_05_leaves_that_night(self):
+        # Piran's Friday file ends 23:35, 23:50, 00:05: the last bus is Saturday 00:05, not Friday morning's
+        poles = {f'IJPP:{n}': {'id': f'IJPP:{n}', 'name': name, 'lat': 45.52, 'lon': 13.57 + n / 1000} for n, name in enumerate(STOPS)}
+        t = table('1.1.1', 0, 'FRI', [['23:35', '23:38', '23:45'], ['23:50', '23:58', '00:02'], ['00:05', '00:08', '00:15']])
+        rows, problems = build.compose(PIRAN, [t], lambda table: list(poles), lambda pts: [[p['lon'], p['lat']] for p in pts], poles)
+        self.assertEqual(problems, [])
+        first = {r['trip_id']: r['departure_time'] for r in rows['stop_times.txt'] if r['stop_sequence'] == '1'}
+        self.assertEqual(sorted(first.values()), ['23:35:00', '23:50:00', '24:05:00'])
+        last = [r['departure_time'] for r in rows['stop_times.txt'] if r['stop_sequence'] == '3']
+        self.assertEqual(last, ['23:45:00', '24:02:00', '24:15:00'])

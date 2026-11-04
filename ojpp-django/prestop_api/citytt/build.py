@@ -209,12 +209,15 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
                            'route_long_name': title_case(t['title']), 'route_type': '3'})
         service, direction = t.get('service') or SERVICE, str(t.get('direction', 0))
         services.add(service)
+        latest = 0  # the latest start so far: runs are printed in time order, so a start half a day earlier is after midnight
         for run in t['runs']:
             calls = [(i, _seconds(v)) for i, v in enumerate(run) if v]
             if len(calls) < 2:
                 problems.append(f'{route}: a run with {len(calls)} stops')
                 continue
-            fixed, day = [], 0
+            day = 24 * 3600 if calls[0][1] < latest - 12 * 3600 else 0  # Piran's "00:05" after 23:50 leaves that night
+            latest = max(latest, calls[0][1] + day)
+            fixed = []
             for i, s in calls:  # a time earlier than the one before is after midnight
                 if fixed and s + day < fixed[-1][1]:
                     day += 24 * 3600
