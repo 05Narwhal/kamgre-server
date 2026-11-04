@@ -37,6 +37,12 @@ class City:
     end: date
     agency: tuple          # (id, name, url): the name matches the operator's in IJPP (operators.py merges them)
     bbox: tuple            # (south, west, north, east): every stop lies inside
+    # Cities whose timetables are several services (Piran): (service id, weekdays Monday … Sunday, runs on public
+    # holidays). Each service gets its own calendar rows; `weekdays`/`holidays_too` are then unused.
+    services: tuple = ()
+    pages: tuple = ()      # more pages whose timetable links count too (a news post linking a file the page lacks)
+    files: tuple = ()      # the exact file names to read: the build reports one that vanished or a new one it does not know
+    stale: tuple = ()      # names of old files the pages still link: ignored
 
 
 CITIES = {
@@ -52,6 +58,28 @@ CITIES = {
         start=date(2025, 10, 1), end=date(2027, 6, 24),
         agency=('arriva', 'Arriva d.o.o.', 'https://arriva.si/'),
         bbox=(46.40, 13.96, 46.49, 14.13),
+    ),
+    'Piran': City(
+        feed='Piran', name='Piran',
+        page='https://arriva.si/avtobusni-prevozi/mestni-avtobusni-prevozi/mestni-avtobusni-prevozi-piran/vozni-red-in-cenik-piran/',
+        # The Saturday file is linked from the news post only (2026-11-04); the page lists the other three.
+        pages=('https://arriva.si/en/changes-to-piran-urban-transport-timetables-effective-november-1-2026/',),
+        links=r'https://arriva\.si/wp-content/uploads/[^"\'\s]+/(?:Linija|Line)-1\.1\.[12][^"\'\s]*\.pdf',
+        files=('Linija-1.1.1_POPE.pdf', 'Line-1.1.1._Sat_1.11.2026.pdf', 'Linija-1.1.1._NP_1.11.2026.pdf', 'Linija-1.1.2-.pdf'),
+        stale=('Line-1.1.1_SAT-1.pdf', 'Line-1.1.1_SH-1.pdf', 'Line-1.1.1_MON-FRI.pdf', 'Linija-1.1.1_SOB-1.pdf',
+               'Line-1.1.1._SH_1.11.2026.pdf'),
+        reader='arriva_grid',
+        days='Vozni redi veljajo od 1. 11. 2026 do 31. 3. 2027.',
+        weekdays=(1, 1, 1, 1, 1, 1, 1), holidays_too=(),
+        # The files print "1.XI.–31.III." and the page says valid until 31 March 2027: check the page again then.
+        start=date(2026, 11, 1), end=date(2027, 3, 31),
+        agency=('arriva', 'Arriva d.o.o.', 'https://arriva.si/'),
+        bbox=(45.48, 13.55, 45.55, 13.64),
+        # D = workdays Mon-Fri, PESO = Fridays (the Saturday file prints the Saturday runs itself), SO = Saturdays,
+        # NP = Sundays and public holidays, SONP = Saturdays, Sundays and public holidays, V = every day. Public
+        # holidays run only the services flagged True.
+        services=(('D', (1, 1, 1, 1, 1, 0, 0), False), ('FRI', (0, 0, 0, 0, 1, 0, 0), False), ('SO', (0, 0, 0, 0, 0, 1, 0), False),
+                  ('NP', (0, 0, 0, 0, 0, 0, 1), True), ('SONP', (0, 0, 0, 0, 0, 1, 1), True), ('V', (1, 1, 1, 1, 1, 1, 1), True)),
     ),
     'MARPROM': City(
         feed='MARPROM', name='Maribor',

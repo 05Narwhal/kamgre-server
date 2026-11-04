@@ -10,11 +10,12 @@ import logging
 import re
 import shutil
 import tempfile
+import time
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import requests
 
@@ -34,6 +35,7 @@ OSM_Q = '''[out:json][timeout:90];
 rel["type"="route"]["route"="bus"]({b});out body;'''
 OFF_SHAPE = 50   # m: a stop further than this from its trip's routed shape fails the build
 SERVICE = 'redni'
+FETCH_GAP = 1.0  # s between two requests to the operator
 
 
 class BuildError(Exception):
@@ -65,13 +67,34 @@ def _get(url: str) -> bytes:
 
 
 def fetch(city: City) -> tuple[str, list[dict]]:
-    """The city's page as text and its timetable files."""
+    """The city's page (and `pages`) as text and its timetable files, fetched one after the other, a second apart.
+    With `files` set, only those are read, and one that vanished or a new one the pages link (not in `stale`) fails."""
     try:
-        page = _get(city.page).decode('utf-8', 'replace')
+        texts = []
+        for n, url in enumerate([city.page, *city.pages]):
+            if n:
+                time.sleep(FETCH_GAP)
+            texts.append(_get(url).decode('utf-8', 'replace'))
+        page = '\n'.join(texts)
         links = list(dict.fromkeys(html.unescape(u) for u in re.findall(city.links, page)))
         if not links:
             raise BuildError(f'no timetable links on {city.page}')
-        return page, [{'url': u, 'name': u.rsplit('/', 1)[-1], 'data': _get(u)} for u in links]
+        if city.files:
+            names = {}
+            for u in links:
+                names.setdefault(u.rsplit('/', 1)[-1], u)
+            found = [f'{n} is no longer linked from {city.page}' + (f' or {", ".join(city.pages)}' if city.pages else '')
+                     for n in city.files if n not in names]
+            found += [f'{n} is new on the pages ({u}): read it and add it to the city\'s files or stale names'
+                      for n, u in names.items() if n not in city.files and n not in city.stale]
+            if found:
+                raise BuildError('\n'.join(found))
+            links = [names[n] for n in city.files]
+        files = []
+        for u in links:
+            time.sleep(FETCH_GAP)
+            files.append({'url': u, 'name': u.rsplit('/', 1)[-1], 'data': _get(u)})
+        return page, files
     except requests.RequestException as e:
         raise BuildError(f'{city.name}: {e!r}') from e
 
@@ -119,18 +142,25 @@ def _wider(bbox: tuple, margin: float = 0.01) -> tuple:
 
 # ---------------------------------------------------------------- the feed
 
-def calendar(city: City) -> tuple[list[dict], list[dict]]:
+def calendar(city: City, used: Optional[set] = None) -> tuple[list[dict], list[dict]]:
     """calendar.txt and calendar_dates.txt rows: the weekdays it runs, without public holidays but those it runs on
-    anyway (which it then runs on whatever the weekday)."""
+    anyway (which it then runs on whatever the weekday). A city with `services` gets rows per service (those in
+    `used`, when given): a service runs on public holidays only when declared so, whatever the weekday."""
     days = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
-    rows = [{'service_id': SERVICE, **{d: str(city.weekdays[i]) for i, d in enumerate(days)},
-             'start_date': city.start.strftime('%Y%m%d'), 'end_date': city.end.strftime('%Y%m%d')}]
-    dates, day = [], city.start
-    while day <= city.end:
-        runs = bool(city.weekdays[day.weekday()])
-        if holiday(day) and runs != ((day.month, day.day) in city.holidays_too):
-            dates.append({'service_id': SERVICE, 'date': day.strftime('%Y%m%d'), 'exception_type': '2' if runs else '1'})
-        day += timedelta(days=1)
+    services = [(sid, wd, bool(hol)) for sid, wd, hol in city.services if used is None or sid in used] or \
+               [(SERVICE, city.weekdays, None)]
+    rows, dates = [], []
+    for sid, weekdays, on_holidays in services:
+        rows.append({'service_id': sid, **{d: str(weekdays[i]) for i, d in enumerate(days)},
+                     'start_date': city.start.strftime('%Y%m%d'), 'end_date': city.end.strftime('%Y%m%d')})
+        day = city.start
+        while day <= city.end:
+            runs = bool(weekdays[day.weekday()])
+            if holiday(day):
+                holidays = on_holidays if on_holidays is not None else (day.month, day.day) in city.holidays_too
+                if runs != holidays:
+                    dates.append({'service_id': sid, 'date': day.strftime('%Y%m%d'), 'exception_type': '2' if runs else '1'})
+            day += timedelta(days=1)
     return rows, dates
 
 
@@ -162,14 +192,20 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
     problems = []
     used: dict[str, list[str]] = {}  # pole id -> the timetables' names for it
     routes, trips, times, shapes = [], [], [], []
-    for t in sorted(tables, key=lambda t: t['line']):
+    shape_ids: dict[tuple, str] = {}      # (route, direction, poles, stops) -> shape id
+    trip_ids: set[str] = set()
+    services: set[str] = set()
+    # A table without a 'service' is a whole line (Jesenice); the grid reader's are per (line, direction, service).
+    for t in sorted(tables, key=lambda t: (t['line'], t.get('direction', 0), t.get('service', ''))):
         route = t['line']
         ids = place(t)
         for pid, name in zip(ids, t['stops']):
             used.setdefault(pid, []).append(name)
-        routes.append({'route_id': route, 'agency_id': city.agency[0], 'route_short_name': route,
-                       'route_long_name': title_case(t['title']), 'route_type': '3'})
-        shape_ids: dict[tuple, str] = {}
+        if not any(r['route_id'] == route for r in routes):
+            routes.append({'route_id': route, 'agency_id': city.agency[0], 'route_short_name': route,
+                           'route_long_name': title_case(t['title']), 'route_type': '3'})
+        service, direction = t.get('service') or SERVICE, str(t.get('direction', 0))
+        services.add(service)
         for run in t['runs']:
             calls = [(i, _seconds(v)) for i, v in enumerate(run) if v]
             if len(calls) < 2:
@@ -181,14 +217,23 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
                     day += 24 * 3600
                 fixed.append((i, s + day))
             key = tuple(i for i, _ in fixed)
-            if key not in shape_ids:
-                shape_ids[key] = route if not shape_ids else f'{route}-{len(shape_ids) + 1}'
+            shape_key = (route, direction, tuple(ids[i] for i in key), tuple(t['stops'][i] for i in key))
+            if shape_key not in shape_ids:
+                mine = sum(1 for k in shape_ids if k[0] == route)
+                shape_ids[shape_key] = route if not mine else f'{route}-{mine + 1}'
                 coords = shape([{**all_poles[ids[i]], 'name': t['stops'][i]} for i in key])
-                shapes += [{'shape_id': shape_ids[key], 'shape_pt_lat': f'{lat:.6f}', 'shape_pt_lon': f'{lon:.6f}', 'shape_pt_sequence': str(n + 1)}
+                shapes += [{'shape_id': shape_ids[shape_key], 'shape_pt_lat': f'{lat:.6f}', 'shape_pt_lon': f'{lon:.6f}', 'shape_pt_sequence': str(n + 1)}
                            for n, (lon, lat) in enumerate(coords)]
             trip = f'{route}-{run[fixed[0][0]].replace(":", "")}'
-            trips.append({'route_id': route, 'service_id': SERVICE, 'trip_id': trip, 'trip_headsign': t['stops'][fixed[-1][0]],
-                          'direction_id': '0', 'shape_id': shape_ids[key]})
+            if 'service' in t:  # one line has several directions and services, and two buses may leave at one minute
+                trip = f'{route}-{direction}-{service}-{run[fixed[0][0]].replace(":", "")}'
+                n = 1
+                while trip in trip_ids:
+                    n += 1
+                    trip = f'{route}-{direction}-{service}-{run[fixed[0][0]].replace(":", "")}-{n}'
+            trip_ids.add(trip)
+            trips.append({'route_id': route, 'service_id': service, 'trip_id': trip, 'trip_headsign': t['stops'][fixed[-1][0]],
+                          'direction_id': direction, 'shape_id': shape_ids[shape_key]})
             times += [{'trip_id': trip, 'arrival_time': _hms(s), 'departure_time': _hms(s), 'stop_id': stop_id(ids[i]), 'stop_sequence': str(i + 1)}
                       for i, s in fixed]
     stops = []
@@ -197,7 +242,7 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
         # A feed's pole keeps the feed's name, so the two are one marker (stopgroups merges alike names only).
         name = pole['name'] if not pid.startswith('osm:') else _fullest(sorted(set(used[pid])) + [pole['name']])
         stops.append({'stop_id': stop_id(pid), 'stop_name': name, 'stop_lat': f'{pole["lat"]:.6f}', 'stop_lon': f'{pole["lon"]:.6f}'})
-    cal, dates = calendar(city)
+    cal, dates = calendar(city, services if city.services else None)
     return {
         'agency.txt': [{'agency_id': city.agency[0], 'agency_name': city.agency[1], 'agency_url': city.agency[2],
                         'agency_timezone': 'Europe/Ljubljana', 'agency_lang': 'sl'}],
@@ -223,10 +268,11 @@ def check(city: City, files: dict[str, str], tables: list[dict], today: date) ->
             z.writestr(name, text)
     feed = supplement.parse(city.feed, buf.getvalue())
     problems = []
-    for t in tables:
-        n = sum(1 for trip in feed['trips'].values() if trip['routeId'] == f'{city.feed}:{t["line"]}')
-        if n != len(t['runs']):
-            problems.append(f'{t["line"]}: {n} trips read back, the timetable has {len(t["runs"])} columns')
+    for line in sorted({t['line'] for t in tables}):
+        n = sum(1 for trip in feed['trips'].values() if trip['routeId'] == f'{city.feed}:{line}')
+        columns = sum(len(t['runs']) for t in tables if t['line'] == line)
+        if n != columns:
+            problems.append(f'{line}: {n} trips read back, the timetable has {columns} columns')
     for trip in feed['trips'].values():
         deps = [s['departure'] for s in trip['stops']]
         if len(deps) < 2 or deps != sorted(deps):
@@ -273,11 +319,19 @@ def build(city: City, src: Sources, today: date, route=roads.route_window) -> tu
             tmp.write(f['data'])
             tmp.flush()
             try:
-                tables.append({**reader.parse(tmp.name), 'file': f['name']})
+                read = reader.parse(tmp.name)  # one table per file, or (the grid reader) one per line, direction and service
+                tables += [{**t, 'file': f['name']} for t in (read if isinstance(read, list) else [read])]
             except ValueError as e:
                 problems.append(f'{f["name"]}: {e}')
-    lines = [t['line'] for t in tables]
-    problems += [f'line {x} read from two files' for x in sorted({x for x in lines if lines.count(x) > 1})]
+    notes = [f'{t["line"]} {t["direction"]} {t["service"]} ({t["file"]}): {n}' for t in tables for n in t.get('notes') or []]
+    keys = [(t['line'], t.get('direction'), t.get('service')) for t in tables]
+    problems += [f'line {x[0]}{" " + str(x[1]) + " " + x[2] if x[2] else ""} read from two files' for x in sorted({x for x in keys if keys.count(x) > 1}, key=str)]
+    if hasattr(reader, 'combine') and not problems:
+        try:
+            tables, found = reader.combine(tables, city)
+            notes += found
+        except ValueError as e:
+            problems.append(str(e))
     all_poles, alias = poles.unify(src.feed_stops, src.osm_stops)
     pairs = poles.merged(poles.adjacent(src.feed_runs), poles.adjacent(src.osm_runs, alias))
 
@@ -304,8 +358,15 @@ def build(city: City, src: Sources, today: date, route=roads.route_window) -> tu
     files['feed_info.txt'] = to_text([{'feed_publisher_name': 'KamGre', 'feed_publisher_url': 'https://kamgre.si', 'feed_lang': 'sl',
                                        'feed_start_date': city.start.strftime('%Y%m%d'), 'feed_end_date': city.end.strftime('%Y%m%d'),
                                        'feed_version': version}])
-    status = {'status': 'ok', 'version': version, 'end': city.end.isoformat(), 'source': city.page, 'files': hashes,
-              'lines': {t['line']: len(t['runs']) for t in sorted(tables, key=lambda t: t['line'])}}
+    lines: dict[str, int] = {}
+    for t in sorted(tables, key=lambda t: t['line']):
+        lines[t['line']] = lines.get(t['line'], 0) + len(t['runs'])
+    status = {'status': 'ok', 'version': version, 'end': city.end.isoformat(), 'source': city.page, 'files': hashes, 'lines': lines}
+    if any('service' in t for t in tables):
+        status['services'] = {f'{t["line"]} {"out" if t["direction"] == 0 else "back"} {t["service"]}': len(t['runs'])
+                              for t in sorted(tables, key=lambda t: (t['line'], t['direction'], t['service'])) if t['runs']}
+    if notes:
+        status['notes'] = notes
     return files, status
 
 
