@@ -49,10 +49,15 @@ class City:
     stale: tuple = ()      # names of old files the pages still link: ignored
     names: tuple = ()      # (the timetable's spelling, its pole's name) where the timetable spells a stop its own way
     unplaced: tuple = ()   # stops no source has a pole for: left out of the runs (status notes list them)
-    # A correction of OTP's feed of the same id (supplement.py, replaces.txt): (line, 'replace' | 'add'). Only these
+    # A correction of OTP's feed of the same id (supplement.py, replaces.txt): (line, 'replace' | 'add' | 'all'). Only these
     # lines are read and OTP keeps the rest; its stops are the poles (set own_stops too).
     replaces: tuple = ()
     only: tuple = ()       # (line, direction, first departures): of that line only these runs are read (an 'add')
+    only_services: tuple = ()  # (line, services): of that line only the tables of these services are read
+    # (title as the reader gives it, OTP's route id, the number riders know): a reader whose lines are titles (Postojna)
+    line_ids: tuple = ()
+    unread: tuple = ()     # the reader's lines left out on purpose (they match OTP's)
+    breaks: tuple = ()     # (service, ((first, last day), …)): days that service does not run (school holidays)
 
 
 CITIES = {
@@ -144,6 +149,38 @@ CITIES = {
         services=(('D', (1, 1, 1, 1, 1, 0, 0), False), ('DS', (1, 1, 1, 1, 1, 0, 0), False, (9, 10, 11, 12, 1, 2, 3, 4, 5, 6))),
         line_services=(('2', 'D', 'DS'),),
         names=(('Bolnišnica', 'Bol.Izola'), ('Barka II', 'Barka')),
+    ),
+    'Postojna': City(
+        # A correction of OTP's Postojna feed (docs/research/2026-11-04-city-timetables.md): OTP has no Saturday runs of
+        # lines 1 and 2 (the poster: Saturday mornings), runs its school lines through the school holidays and 1-5 min
+        # off the poster, and lacks Šolska Popoldanska 3. Weekday runs of 1 and 2 and Delavska match: OTP's stay.
+        feed='Postojna', name='Postojna', own_stops=True,
+        page='https://www.nomago.si/avtobusni-prevozi/mestni-promet/postojna/vozni-red',
+        links=r'https://www\.nomago\.si/storage/app/media/mesta/postojna/[^"\'\s]+\.pdf',
+        files=('2026_Furman_VozniRed_A_01.pdf',),
+        reader='nomago_postojna',
+        days='S 1. oktobrom 2026 velja nov vozni red mestnega avtobusa Furman.',
+        weekdays=(1, 1, 1, 1, 1, 1, 0), holidays_too=(),
+        # The poster prints no end: check the page again before the next school year.
+        start=date(2026, 10, 1), end=date(2027, 8, 31),
+        agency=('Postojna', 'NOMAGO d.o.o.', 'https://nomago.si'),
+        bbox=(45.72, 14.16, 45.81, 14.27),
+        line_ids=(('Proga 1', '1', '1'), ('Proga 2', '2', '2'), ('Šolska 1', 'ducu', '4'), ('Šolska 2', '5l2y', '5'),
+                  ('Šolska 3', 'mamr', '6'), ('Šolska 4', 'l6ti', '7'), ('Šolska Popoldanska 1,2', 'enzk', '8'),
+                  ('Šolska Popoldanska 3', 'pop3', '9')),
+        unread=('Delavska',),
+        replaces=(('1', 'add'), ('2', 'add'), ('ducu', 'all'), ('5l2y', 'all'), ('mamr', 'all'), ('l6ti', 'all'),
+                  ('enzk', 'all'), ('pop3', 'add')),
+        only_services=(('1', ('SO',)), ('2', ('SO',))),
+        # SO = Saturdays (lines 1 and 2, the legend's morning window), SOL = school days: working days but the 2026/27
+        # school holidays of Notranjsko-kraška (gov.si, "Podrobnejša navodila o šolskem koledarju za OŠ 2026/2027", 5 Feb
+        # 2026): autumn, New Year, winter (2nd group), 26 Apr (no lessons), May Day, summer from 25 Jun.
+        services=(('SO', (0, 0, 0, 0, 0, 1, 0), False), ('SOL', (1, 1, 1, 1, 1, 0, 0), False)),
+        breaks=(('SOL', ((date(2026, 10, 26), date(2026, 10, 30)), (date(2026, 12, 25), date(2027, 1, 2)),
+                         (date(2027, 2, 22), date(2027, 2, 26)), (date(2027, 4, 26), date(2027, 5, 2)),
+                         (date(2027, 6, 25), date(2027, 8, 31)))),),
+        names=(('Kazarje - prihod', 'Kazarje'), ('Pretnarjeva', 'Pretnerjeva'), ('Kolodvorska cesta', 'Kolodvorska'),
+               ('Žel. postaja', 'Železniška postaja'), ('Pod jelovico', 'Pod Jelovico'), ('Pod Kolodvorom', 'Pod kolodvorom')),
     ),
     'MARPROM': City(
         feed='MARPROM', name='Maribor',

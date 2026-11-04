@@ -68,6 +68,14 @@ class AlarmTests(SimpleTestCase):
         self.assertGreater(result['trips']['MARPROM'][0], 1000)
         self.assertGreater(result['trips']['Sevnica'][0], 0)
 
+    def test_a_corrections_own_runs_count_on_top_of_otps(self):
+        from prestop_api.tests.test_supplement import correction  # Koper's: two working-day runs, nothing at weekends
+        with mock.patch.object(city_feeds, 'FEEDS', {'MOKoper': True}),                 mock.patch.object(supplement, '_feeds', return_value={'MOKoper': correction()}),                 mock.patch.object(city_feeds, 'otp') as otp:
+            otp.return_value.query.return_value = routes(MOKoper=[5, 5, 0, 0])
+            result = city_feeds.check(WED)
+        self.assertEqual(result['trips']['MOKoper'], [7, 7, 0, 0])
+        self.assertEqual(self.empty(result), [('MOKoper', 'saturday', '2026-11-07'), ('MOKoper', 'saturday', '2026-11-14')])
+
     def test_only_feeds_otp_answers_for_are_asked_of_it(self):
         with mock.patch.object(city_feeds, 'FEEDS', {'MARPROM': True}), mock.patch.object(supplement, '_feeds', return_value={'MARPROM': real('MARPROM')}), \
                 mock.patch.object(city_feeds, 'otp') as otp:

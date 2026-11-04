@@ -161,7 +161,7 @@ CORRECTION = {
                        'fix-2-1,10:55:00,10:55:00,100,1\nfix-2-1,11:05:00,11:05:00,200,2\n'),
     'calendar.txt': ('service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n'
                      'D,1,1,1,1,1,0,0,20261101,20270831\n'),
-    'replaces.txt': 'route_id,mode\n9,replace\n2,add\n',
+    'replaces.txt': 'route_id,mode\n9,replace\n2,add\n5,all\n',
 }
 THURSDAY, SATURDAY = date(2026, 11, 5), date(2026, 11, 7)
 
@@ -205,6 +205,13 @@ class CorrectionTests(SimpleTestCase):
         leg = {'route': {'gtfsId': 'MOKoper:9'}, 'start': {'scheduledTime': '2026-11-05T10:00:00+01:00'}}
         self.assertTrue(supplement.leg_replaced(leg))
         self.assertFalse(supplement.leg_replaced({**leg, 'start': {'scheduledTime': '2026-11-07T10:00:00+01:00'}}))
+
+    def test_mode_all_drops_otps_runs_on_every_day_of_the_folders_dates(self):
+        # Postojna's school lines: OTP runs them through the holidays, when the folder runs nothing.
+        for day in (THURSDAY, SATURDAY, date(2026, 12, 28), date(2027, 8, 31)):
+            self.assertTrue(supplement.replaced('MOKoper:5', day), day)
+        for day in (date(2026, 10, 30), date(2027, 9, 1)):
+            self.assertFalse(supplement.replaced('MOKoper:5', day), day)
 
     def test_board_drops_replaced_runs_and_adds_its_own(self):
         calls = [call('9', 'otp-9', THURSDAY, 36_000), call('2', 'otp-2', THURSDAY, 37_000), call('4', 'otp-4', THURSDAY, 40_000)]

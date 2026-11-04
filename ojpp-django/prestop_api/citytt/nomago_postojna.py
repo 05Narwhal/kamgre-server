@@ -14,7 +14,7 @@ potnik"): left out, with a note.
 
 The legend under Proga 1 and 2 says when they run on Saturdays ("Ob sobotah vozi od 8¹³ do 12¹⁰", the minutes raised):
 the runs lying wholly in that window are the Saturday service. `parse` returns one table per box and service: Proga
-`D` (working days) and `SO` (Saturdays), Šolska `Š` (school days), Delavska `D`. The lines keep the poster's titles;
+`D` (working days) and `SO` (Saturdays), Šolska `SOL` (school days), Delavska `D`. The lines keep the poster's titles;
 the city's `line_ids` give them OTP's route ids.
 """
 import re
@@ -30,7 +30,7 @@ TITLE_ABOVE = 6   # pt: a box's first row may stand this far above its title's n
 BAND = 3          # pt: sideways titles this close in x head one band
 ROW_GAP = 16     # pt: an untimed row this far below the one before starts a box (a title printed upright)
 GAP = 30          # min: calls further apart are two runs
-SERVICES = {'Proga': 'D', 'Šolska': 'Š', 'Delavska': 'D'}
+SERVICES = {'Proga': 'D', 'Šolska': 'SOL', 'Delavska': 'D'}
 
 
 def parse(path) -> list[dict]:

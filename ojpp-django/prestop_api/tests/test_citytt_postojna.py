@@ -5,7 +5,7 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from prestop_api.citytt import nomago_postojna
+from prestop_api.citytt import CITIES, build, nomago_postojna
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'citytt'
 WORDS = json.loads((FIXTURES / 'postojna-poster.words.json').read_text(encoding='utf-8'))
@@ -23,8 +23,8 @@ class ReaderTests(SimpleTestCase):
 
     def test_every_box(self):
         self.assertEqual(set(self.tables), {
-            ('Proga 1', 'D'), ('Proga 1', 'SO'), ('Proga 2', 'D'), ('Proga 2', 'SO'), ('Šolska 1', 'Š'), ('Šolska 2', 'Š'),
-            ('Šolska 3', 'Š'), ('Šolska 4', 'Š'), ('Šolska Popoldanska 1,2', 'Š'), ('Šolska Popoldanska 3', 'Š'), ('Delavska', 'D')})
+            ('Proga 1', 'D'), ('Proga 1', 'SO'), ('Proga 2', 'D'), ('Proga 2', 'SO'), ('Šolska 1', 'SOL'), ('Šolska 2', 'SOL'),
+            ('Šolska 3', 'SOL'), ('Šolska 4', 'SOL'), ('Šolska Popoldanska 1,2', 'SOL'), ('Šolska Popoldanska 3', 'SOL'), ('Delavska', 'D')})
 
     def test_main_grid_columns(self):
         one = self.tables[('Proga 1', 'D')]
@@ -40,14 +40,14 @@ class ReaderTests(SimpleTestCase):
         self.assertEqual(starts(self.tables[('Proga 2', 'SO')]), ['08:15', '08:55', '09:35', '11:15', '11:55', '12:35'])
 
     def test_school_boxes(self):
-        self.assertEqual(starts(self.tables[('Šolska 1', 'Š')]), ['07:02'])
-        four = self.tables[('Šolska 4', 'Š')]
+        self.assertEqual(starts(self.tables[('Šolska 1', 'SOL')]), ['07:02'])
+        four = self.tables[('Šolska 4', 'SOL')]
         self.assertEqual((four['stops'][0], starts(four)), ('Raubarkomanda', ['07:32']))
-        afternoon = self.tables[('Šolska Popoldanska 1,2', 'Š')]
+        afternoon = self.tables[('Šolska Popoldanska 1,2', 'SOL')]
         self.assertEqual(starts(afternoon), ['13:27', '13:49'])
         self.assertEqual(afternoon['stops'][-1], 'Šolski center')
         self.assertIn('Raubarkomanda 1 Če je potnik: no time, left out', afternoon['notes'])
-        three = self.tables[('Šolska Popoldanska 3', 'Š')]
+        three = self.tables[('Šolska Popoldanska 3', 'SOL')]
         self.assertEqual(starts(three), ['12:35', '14:12'])   # everyone alights at Zagon at 13.20, it runs again at 14.12
         self.assertEqual(starts(self.tables[('Delavska', 'D')]), ['05:52'])
 
@@ -55,3 +55,33 @@ class ReaderTests(SimpleTestCase):
         words = [dict(w, text='814') if w['text'] == '813' else w for w in WORDS]
         with self.assertRaisesRegex(ValueError, 'Proga 1: no runs fit Saturdays 08:14'):
             nomago_postojna.read(words)
+
+
+class CorrectionTests(SimpleTestCase):
+    """CITIES['Postojna']: OTP's ids for the poster's titles, Saturdays of 1 and 2 on top of OTP's weekdays, the school
+    lines in place of OTP's, on school days of the official 2026/27 calendar only."""
+    city = CITIES['Postojna']
+
+    def test_titles_become_otps_lines_and_only_saturdays_of_1_and_2_are_read(self):
+        tables, problems = build.retitled(self.city, nomago_postojna.read(WORDS))
+        self.assertEqual(problems, [])
+        out, problems = build.corrected(self.city, tables)
+        self.assertEqual(problems, [])
+        self.assertEqual(sorted((t['line'], t['service'], len(t['runs'])) for t in out), [
+            ('1', 'SO', 7), ('2', 'SO', 6), ('5l2y', 'SOL', 1), ('ducu', 'SOL', 1), ('enzk', 'SOL', 2), ('l6ti', 'SOL', 1),
+            ('mamr', 'SOL', 1), ('pop3', 'SOL', 2)])
+
+    def test_a_new_title_on_the_poster_is_a_problem(self):
+        tables = nomago_postojna.read(WORDS)
+        _, problems = build.retitled(self.city, tables + [{**tables[0], 'line': 'Proga 3'}])
+        self.assertEqual(problems, ['"Proga 3" is not in line_ids'])
+
+    def test_school_days_skip_the_holidays(self):
+        rows, dates = build.calendar(self.city, {'SOL'})
+        self.assertEqual([r['service_id'] for r in rows], ['SOL'])
+        off = {d['date'] for d in dates if d['exception_type'] == '2'}
+        for day in ('20261026', '20261030', '20261225', '20270101', '20270222', '20270226', '20270426', '20270430',
+                    '20270625', '20270701', '20270831'):
+            self.assertIn(day, off)
+        for day in ('20261023', '20261102', '20270104', '20270215', '20270301', '20270503', '20270624'):
+            self.assertNotIn(day, off)

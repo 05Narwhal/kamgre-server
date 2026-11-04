@@ -20,10 +20,11 @@ log = logging.getLogger(__name__)
 
 WINDOW = 14  # days ahead
 
-# Every city network (spec 2026-11-04): does it normally run on Saturdays? All run on weekdays. False for CELEBUS, MONM
-# and Postojna is only what their feeds show so far: M-A2 checks each against its operator's timetable.
+# Every city network (spec 2026-11-04): does it normally run on Saturdays? All run on weekdays. MONM: none, as Nomago's
+# timetables say (M-A2); Postojna: Saturday mornings, lines 1 and 2 (the poster, M-A2); CELEBUS is only what its feed
+# shows so far: M-A2 checks it against its operator's timetable.
 FEEDS = {'LPP': True, 'MARPROM': True, 'CELEBUS': False, 'MONM': False, 'MONG': True, 'MOKoper': True, 'MOKranj': True, 'MOKrsko': True,
-         'MOMS': True, 'MOVelenje': True, 'Postojna': False, 'Ptuj': True, 'Brezice': True, 'Sevnica': False, 'Jesenice': True,
+         'MOMS': True, 'MOVelenje': True, 'Postojna': True, 'Ptuj': True, 'Brezice': True, 'Sevnica': False, 'Jesenice': True,
          'Piran': True}
 
 
@@ -61,6 +62,11 @@ def check(today: date) -> dict:
     others = [name for name in FEEDS if name not in own]
     if others:
         trips.update(_from_otp(others, days))
+    # A correction's own runs count on top of OTP's (Postojna's Saturdays are only in the folder).
+    for name, feed in supplement._feeds().items():
+        if feed.get('replaces') and name in trips:
+            trips[name] = [n + sum(1 for t in feed['trips'].values() if supplement.runs(feed, t['serviceId'], d))
+                           for n, d in zip(trips[name], days)]
     empty = [{'feed': name, 'kind': kind, 'day': d.isoformat()} for name, saturdays in FEEDS.items() for n, (kind, d) in enumerate(wanted)
              if not trips[name][n] and (kind == 'weekday' or saturdays)]
     if empty:

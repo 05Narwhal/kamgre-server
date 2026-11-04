@@ -111,7 +111,8 @@ def feed_poles(city: City) -> tuple[list[dict], list[list[str]]]:
     own = lambda s: s['id'].startswith(f'{city.feed}:')  # noqa: E731
     stops = [{'id': s['id'], 'name': s['name'], 'lat': s['latitude'], 'lon': s['longitude']} for s in sources.stops.get().value['all']
              if 'rail' not in s['modes'] and own(s) == city.own_stops and south <= s['latitude'] <= north and west <= s['longitude'] <= east
-             and not (city.own_stops and s['id'].split(':', 1)[1].startswith('osm'))]  # an own OSM pole comes from OSM again
+             # an own OSM pole ('osm<node>', written by stop_id) comes from OSM again; OTP's own 'osm=<node>' ids stay (Postojna)
+             and not (city.own_stops and re.match(r'osm\d', s['id'].split(':', 1)[1]))]
     return stops, [p['stops'] for p in sources.patterns.get().value['patterns']]
 
 
@@ -155,6 +156,7 @@ def calendar(city: City, used: Optional[set] = None) -> tuple[list[dict], list[d
     days = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
     services = [(s[0], s[1], bool(s[2]), s[3] if len(s) > 3 else ()) for s in city.services if used is None or s[0] in used] or \
                [(SERVICE, city.weekdays, None, ())]
+    breaks = dict(city.breaks)
     rows, dates = [], []
     for sid, weekdays, on_holidays, months in services:
         rows.append({'service_id': sid, **{d: str(weekdays[i]) for i, d in enumerate(days)},
@@ -165,6 +167,8 @@ def calendar(city: City, used: Optional[set] = None) -> tuple[list[dict], list[d
             if holiday(day):
                 want = on_holidays if on_holidays is not None else (day.month, day.day) in city.holidays_too
             if months and day.month not in months:  # Ptuj's lines 2-5: no summer service
+                want = False
+            if any(first <= day <= last for first, last in breaks.get(sid, ())):  # Postojna's school runs: holidays
                 want = False
             if runs != want:
                 dates.append({'service_id': sid, 'date': day.strftime('%Y%m%d'), 'exception_type': '2' if runs else '1'})
@@ -205,6 +209,7 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
     shape_ids: dict[tuple, str] = {}      # (route, direction, poles, stops) -> shape id
     trip_ids: set[str] = set()
     services: set[str] = set()
+    numbers = {rid: number for _, rid, number in city.line_ids}
     # A table without a 'service' is a whole line (Jesenice); the grid reader's are per (line, direction, service).
     for t in sorted(tables, key=lambda t: (t['line'], t.get('direction', 0), t.get('service', ''))):
         route = t['line']
@@ -212,7 +217,7 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
         for pid, name in zip(ids, t['stops']):
             used.setdefault(pid, []).append(name)
         if not any(r['route_id'] == route for r in routes):
-            routes.append({'route_id': route, 'agency_id': city.agency[0], 'route_short_name': route,
+            routes.append({'route_id': route, 'agency_id': city.agency[0], 'route_short_name': numbers.get(route, route),
                            'route_long_name': title_case(t['title']), 'route_type': '3'})
         service, direction = t.get('service') or SERVICE, str(t.get('direction', 0))
         services.add(service)
@@ -392,14 +397,23 @@ def spelled(city: City, tables: list[dict]) -> tuple[list[dict], list[str]]:
     return out, notes
 
 
+def retitled(city: City, tables: list[dict]) -> tuple[list[dict], list[str]]:
+    """A reader's line titles as OTP's route ids (city.line_ids); `unread` titles are left out, and a title the city
+    knows neither way is a new line on the poster: a problem, so nobody's runs vanish unseen."""
+    ids = {title: rid for title, rid, _ in city.line_ids}
+    problems = [f'"{t["line"]}" is not in line_ids' for t in tables if t['line'] not in ids and t['line'] not in city.unread]
+    return [{**t, 'line': ids[t['line']]} for t in tables if t['line'] in ids], problems
+
+
 def corrected(city: City, tables: list[dict]) -> tuple[list[dict], list[str]]:
     """A correction's tables (city.replaces): only its lines, and of a line in `only` only the listed runs (by their
     first departure); a listed run the files no longer print is a problem, so the correction never quietly shrinks."""
     lines = {line for line, _ in city.replaces}
     only = {(line, direction): set(starts) for line, direction, starts in city.only}
+    kept = dict(city.only_services)
     out, problems = [], []
     for t in tables:
-        if t['line'] not in lines:
+        if t['line'] not in lines or t['line'] in kept and t.get('service') not in kept[t['line']]:
             continue
         wanted = only.get((t['line'], t.get('direction', 0)))
         if wanted is None:
@@ -434,6 +448,9 @@ def build(city: City, src: Sources, today: date, route=roads.route_window, lengt
     notes = [f'{t["line"]} {t["direction"]} {t["service"]} ({t["file"]}): {n}' for t in tables for n in t.get('notes') or []]
     keys = [(t['line'], t.get('direction'), t.get('service')) for t in tables]
     problems += [f'line {x[0]}{" " + str(x[1]) + " " + x[2] if x[2] else ""} read from two files' for x in sorted({x for x in keys if keys.count(x) > 1}, key=str)]
+    if city.line_ids:
+        tables, found = retitled(city, tables)
+        problems += found
     if city.replaces and not problems:
         tables, found = corrected(city, tables)
         problems += found

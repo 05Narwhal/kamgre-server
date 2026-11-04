@@ -16,7 +16,9 @@ ids as in OTP's feed so stops and lines keep theirs) and read the same way: Sevn
 A folder with a `replaces.txt` (route_id,mode) is a correction of OTP's feed of the same id, not a replacement:
 OTP keeps the feed's stops, lines and runs, and only the runs in the folder are read here. Mode `replace`: on a
 day the folder runs that line, OTP's runs of the line are dropped (Koper's line 9 on working days goes another way
-than OTP has it); `add`: the folder's runs come on top of OTP's (two of Koper's line 2 runs OTP lacks).
+than OTP has it); `add`: the folder's runs come on top of OTP's (two of Koper's line 2 runs OTP lacks); `all`: OTP's
+runs of the line are dropped on every day of the folder's dates, whether the folder runs it that day or not (Postojna's
+school runs, which OTP also runs through the school holidays).
 """
 import csv
 import io
@@ -234,9 +236,13 @@ def _correction(gtfs_id: str) -> Optional[dict]:
 
 def replaced(route_id: Optional[str], day: date) -> bool:
     """Whether OTP's runs of a line on a service day are swapped for a correction's own (mode `replace`, on a day the
-    correction runs that line)."""
+    correction runs that line; mode `all`, on any day of the correction's dates)."""
     feed = _correction(route_id or '')
-    if feed is None or feed['replaces'].get(route_id) != 'replace':
+    mode = feed['replaces'].get(route_id) if feed is not None else None
+    if mode == 'all':
+        key = day.strftime('%Y%m%d')
+        return any(cal[0] <= key <= cal[1] for cal in feed['calendar'].values())
+    if mode != 'replace':
         return False
     return any(t['routeId'] == route_id and runs(feed, t['serviceId'], day) for t in feed['trips'].values())
 
