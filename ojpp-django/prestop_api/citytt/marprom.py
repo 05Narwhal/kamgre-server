@@ -24,6 +24,7 @@ import hashlib
 import html
 import io
 import re
+import statistics
 import tempfile
 import time
 import zipfile
@@ -265,7 +266,6 @@ def run_times(stop_ids: list, trips: list[tuple], deps: list[list[tuple]]):
     the variant): the median of each service's trips that call at both, since a layover differs from weekday to weekend
     (G3 waits 3 min more at the university on weekends); else the sum of the steps between; else, between neighbours with
     as many departures each, the median gap of the two sorted lists zipped."""
-    import statistics
     seen: dict[tuple, dict] = {}
     for service, trip in trips:
         for x, (a, ta) in enumerate(trip):
@@ -330,6 +330,36 @@ def chain(deps: list[list[tuple]], run, tolerance: float = TOLERANCE, skip: int 
                 active.append(t)
         active = [t for t in active if at - t['at'] < skip]
     return [t['calls'] for t in sorted(trips, key=lambda t: (t['calls'][0][1], t['calls'][0][0]))]
+
+
+def steps_of(history: list[tuple], last_only: bool = False) -> dict:
+    """{stop: {next stop: [(service, minutes)]}} over published trips ((service, [(stop_id, minute)]) each): every step, or
+    with `last_only` only the step that ends each trip."""
+    out: dict = {}
+    for service, trip in history:
+        for (a, ta), (b, tb) in zip(trip[-2:-1] if last_only else trip, trip[-1:] if last_only else trip[1:]):
+            out.setdefault(a, {}).setdefault(b, []).append((service, tb - ta))
+    return out
+
+
+def _same_name(a: str, b: str) -> bool:
+    return re.sub(r'\W+', '', a).lower() == re.sub(r'\W+', '', b).lower()
+
+
+def last_call(stop: str, final, ends: dict, steps: dict, names: dict, weekday: set):
+    """The stop a trip whose last printed departure is at `stop` arrives at, with the minutes to it, or None. Nothing departs
+    from it, so it has no page and no printed time: the time is the published run time. `ends` (steps_of, last_only): the line's
+    published trips that end right after `stop` say which stop, one named as the page says first, then most trips. `final`: the
+    direction's last stop's name, when `stop` is the last with a page; there, any line's published step to a stop of that name
+    also counts (P18's Turnerjeva). The run time is the median of the published weekday tables (`weekday`), else of all."""
+    found = ends.get(stop)
+    if not found and final:
+        found = {b: g for b, g in steps.get(stop, {}).items() if _same_name(names.get(b, ''), final)}
+    if not found:
+        return None
+    best = min(found, key=lambda b: (not (final and _same_name(names.get(b, ''), final)), -len(found[b]), b))
+    gaps = found[best]
+    return best, round(statistics.median([g for s, g in gaps if s in weekday] or [g for _, g in gaps]))
 
 
 def _align(expected: list[list[float]], trips: list[tuple], arrivals: list[tuple], tolerance: float) -> dict[int, int]:
@@ -496,7 +526,7 @@ def _slice(small: list, big: list) -> int:
 
 class _Shapes:
     """Which shape, headsign and direction a new trip takes: those of a published trip on the route that calls at the
-    same stops (that trip's last stop, an arrival, is not in ours), else of the one whose stops contain ours with the
+    same stops (give or take its last one, when ours ends a stop earlier), else of the one whose stops contain ours with the
     fewest more, else the shape of the published trip sharing most stops with ours that passes them all in order (its
     headsign too), else none (supplement.py routes such a trip on the roads)."""
 
@@ -577,6 +607,9 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
     services = {k: v for k, v in services.items() if v}
 
     new, stop_rows, unknown = [], [], collections.defaultdict(set)
+    names = {sid: r['stop_name'] for sid, r in stops.items()}
+    all_steps = steps_of([(t['service'], t['stops']) for t in trips.values()])
+    no_last: set = set()
     shapes, ids_used, per_line, alone = _Shapes(published, stops, trips), set(), collections.Counter(), collections.Counter()
     for d in directions:
         line, doc = d['line'], d['doc']
@@ -592,13 +625,21 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
             continue
         route = routes[line]
         history = [(t['service'], t['stops']) for t in trips.values() if t['route'] == route]
+        line_ends = steps_of(history, last_only=True)
+        last_page = max(i for i, (code, _) in enumerate(doc['stops']) if code)
         for kind in ('weekday', 'weekday_holiday'):
             deps = doc['tables'][kind]
             for trip in chain(deps, run_times(ids, history, deps)):
-                if len(trip) < 2:
+                at = trip[-1][0]
+                final = doc['stops'][-1][1] if at == last_page and at < len(ids) - 1 else None
+                arrival = last_call(ids[at], final, line_ends, all_steps, names, ended)
+                if final and not arrival:
+                    no_last.add(f'{line} {d["dir"]}: {final}')
+                if len(trip) < 2 and not arrival:
                     alone[line] += 1
                     continue
-                shape, headsign, direction_id = shapes.of(route, tuple(ids[i] for i, _, _ in trip))
+                call_ids = [ids[i] for i, _, _ in trip] + ([arrival[0]] if arrival else [])
+                shape, headsign, direction_id = shapes.of(route, tuple(call_ids))
                 base = f'{line}-{d["dir"]}-{TAGS[kind]}-{doc["stops"][trip[0][0]][0]}-{trip[0][1] // 60:02d}{trip[0][1] % 60:02d}'
                 tid, copy = base, 1
                 while tid in ids_used:
@@ -611,6 +652,10 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
                             'trip_short_name': line, 'direction_id': direction_id or ('0' if d['dir'] == 'plus' else '1'), 'shape_id': shape})
                 stop_rows += [{'trip_id': tid, 'arrival_time': _time(m), 'departure_time': _time(m), 'stop_id': ids[i],
                                'stop_sequence': str(seq + 1), 'timepoint': '1'} for seq, (i, m, _) in enumerate(trip)]
+                if arrival:  # the last stop: no page, so the published run time and not a printed time
+                    clock = _time(trip[-1][1] + arrival[1])
+                    stop_rows.append({'trip_id': tid, 'arrival_time': clock, 'departure_time': clock, 'stop_id': arrival[0],
+                                      'stop_sequence': str(len(trip) + 1), 'timepoint': '0'})
     problems += [f'{line}: stop codes not in the published feed: {", ".join(sorted(names))}' for line, names in sorted(unknown.items()) if names]
     problems += [f'line {line} has no weekday trips' for line in routes if not per_line[line] and not unknown.get(line)]
     if problems:
@@ -656,7 +701,7 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
     }
     last = min(ends[s] for s in (WEEKDAY, HOLIDAY, *services.values()))
     facts = {'end': f'{last[:4]}-{last[4:6]}-{last[6:]}', 'lines': dict(sorted(per_line.items())), 'weekend': weekend,
-             'shapes': dict(shapes.counts), 'aloneDepartures': dict(alone), 'dropped': sorted(ended),
+             'shapes': dict(shapes.counts), 'aloneDepartures': dict(alone), 'noLastStop': sorted(no_last), 'dropped': sorted(ended),
              'shapesInPublished': len({r['shape_id'] for r in published['shapes.txt']}), 'shapesKept': len(used)}
     return files, facts, problems
 
@@ -712,7 +757,7 @@ def make(city: City, src: Fetched, today: date, read=read_pdf) -> tuple[dict[str
     files['feed_info.txt'] = build.to_text([{'feed_publisher_name': 'KamGre', 'feed_publisher_url': 'https://kamgre.si', 'feed_lang': 'sl',
                                              'feed_start_date': first, 'feed_end_date': facts['end'].replace('-', ''), 'feed_version': version}])
     status = {'status': 'ok', 'version': version, 'end': facts['end'], 'source': city.page.split('{line}')[0], 'files': hashes,
-              'lines': facts['lines'], 'weekend': facts['weekend'], 'shapes': facts['shapes'], 'aloneDepartures': facts['aloneDepartures']}
+              'lines': facts['lines'], 'weekend': facts['weekend'], 'shapes': facts['shapes'], 'aloneDepartures': facts['aloneDepartures'], 'noLastStop': facts['noLastStop']}
     return files, status
 
 

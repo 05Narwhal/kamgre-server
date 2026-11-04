@@ -50,8 +50,10 @@ rebuilds it (about 60 requests, one a second, and some minutes to read the PDFs)
 - Weekday trips are rebuilt from the pages (`pdf-weekday`, Monday to Friday; `pdf-holiday` on the ŠP school-holiday ranges
   the PDFs print). A page lists one stop's departures, so a trip is chained from the stops it passes: each departure is
   matched to the one at the next stop that the published run time expects (within 2 min, in order); a departure nothing
-  continues ends its trip, one nothing led up to starts a new one. No time is made up. A trip has no last stop (nothing
-  departs from it, so the PDFs have no page for it) and a stop whose weekday table is empty is passed by.
+  continues ends its trip, one nothing led up to starts a new one. No departure is made up, and a stop whose weekday table
+  is empty is passed by. Nothing departs from a trip's last stop, so the PDFs have no page for it: it comes from the published
+  trips (the stop they end at after this one, `timepoint=0`, published run time). A direction whose last stop that cannot find
+  is listed in `status.json` as `noLastStop`; a trip ending mid-way where no published trip ends stays at its last departure.
   Trip ids are `<line>-<plus|minus>-<wd|sp>-<first stop_code>-<HHMM>`, `-2` for a true duplicate (twin buses).
 - Saturday and Sunday keep the published trips (8727, 8728); the summer tables 8726 and 8729 are dropped. They run on to
   the PDFs' end (2027-08-31) only when the PDFs' Saturday and Sunday departures equal the published ones (99.5 %, both

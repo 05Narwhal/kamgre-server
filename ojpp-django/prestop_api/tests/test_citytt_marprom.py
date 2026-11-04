@@ -275,13 +275,37 @@ class FeedTests(SimpleTestCase):
         weekday = [t for t in feed['trips'].values() if t['serviceId'] == 'pdf-weekday']
         self.assertEqual(sorted(t['id'] for t in weekday), ['MARPROM:G9-plus-wd-s1-0500', 'MARPROM:G9-plus-wd-s1-0600', 'MARPROM:G9-plus-wd-s2-0550'])
         first = feed['trips']['MARPROM:G9-plus-wd-s1-0500']
-        self.assertEqual([(s['stopId'], s['departure']) for s in first['stops']], [('MARPROM:10', 300 * 60), ('MARPROM:20', 305 * 60), ('MARPROM:30', 310 * 60)])
+        self.assertEqual([(s['stopId'], s['departure']) for s in first['stops']], [('MARPROM:10', 300 * 60), ('MARPROM:20', 305 * 60), ('MARPROM:30', 310 * 60), ('MARPROM:40', 315 * 60)])
         self.assertEqual((first['shapeId'], first['headsign']), ('70', 'Alfa - Delta'))        # same stops as a published trip
         self.assertEqual(feed['trips']['MARPROM:G9-plus-wd-s2-0550']['shapeId'], '70')          # a published trip with more stops
         self.assertEqual(status['shapes'], {'published trip': 2, 'published trip with more stops': 2})
         self.assertEqual(status['lines'], {'G9': 3})
         self.assertEqual([t['id'] for t in feed['trips'].values() if t['serviceId'] == 'pdf-holiday'], ['MARPROM:G9-plus-sp-s1-0530'])
         self.assertEqual(files, self.make()[0])   # the same input, the same files
+
+    def test_a_trip_gets_the_last_stop_no_page_exists_for(self):
+        files, status = self.make()
+        feed = self.feed(files)
+        rows = [r for r in csv.DictReader(io.StringIO(files['stop_times.txt'])) if r['trip_id'] == 'G9-plus-wd-s1-0500']
+        self.assertEqual([(r['stop_id'], r['departure_time'], r['timepoint']) for r in rows][-2:], [('30', '05:10:00', '1'), ('40', '05:15:00', '0')])   # read from the pages; from the published run time
+        self.assertEqual([s['stopId'] for s in feed['trips']['MARPROM:G9-plus-wd-s2-0550']['stops']], ['MARPROM:20', 'MARPROM:30', 'MARPROM:40'])
+        self.assertEqual([s['stopId'] for s in feed['trips']['MARPROM:G9-plus-wd-s1-0600']['stops']], ['MARPROM:10', 'MARPROM:20'])   # ends mid-way, no published trip ends after Beta
+        self.assertEqual(status['noLastStop'], [])
+
+    def test_a_lone_departure_at_the_last_page_is_a_trip_to_the_last_stop(self):
+        feed = self.feed(self.make(tables={**PDF, '003': {**PDF['003'], 'weekday': ['05:10', '05:55', '23:00']}})[0])
+        self.assertEqual([s['stopId'] for s in feed['trips']['MARPROM:G9-plus-wd-s3-2300']['stops']], ['MARPROM:30', 'MARPROM:40'])
+
+    def test_the_last_stop_comes_from_a_published_end_then_by_name_from_any_line(self):
+        ends = {'a': {'x': [('8726', 2)], 'y': [('8726', 3), ('8727', 9), ('8727', 9)]}}
+        steps = {'a': {'x': [('8726', 2)], 'z': [('8726', 4), ('8727', 8)]}, 'b': {'z': [('8727', 7), ('8726', 6), ('8726', 8)]}}
+        names = {'x': 'Tabor - Jadranska', 'y': 'Pekre', 'z': 'Turnerjeva'}
+        summer = {'8726'}
+        self.assertEqual(marprom.last_call('a', None, ends, steps, names, summer), ('y', 3))            # most trips; the weekday table's run time
+        self.assertEqual(marprom.last_call('a', 'TABOR Jadranska', ends, steps, names, summer), ('x', 2))   # the page's name wins
+        self.assertEqual(marprom.last_call('b', 'Turnerjeva', ends, steps, names, summer), ('z', 7))    # no published end here: any line's step to that name
+        self.assertIsNone(marprom.last_call('b', 'Pekre', ends, steps, names, summer))
+        self.assertIsNone(marprom.last_call('b', None, ends, steps, names, summer))                     # mid-way: nothing is made up
 
     def test_the_summer_tables_are_dropped_and_saturday_and_sunday_keep_their_trips(self):
         files, _ = self.make()
@@ -334,7 +358,7 @@ class FeedTests(SimpleTestCase):
     def test_a_trip_whose_stops_no_published_trip_has_takes_a_shape_that_passes_them(self):
         files, status = self.make(tables={**PDF, '002': {**PDF['002'], 'weekday': []}})   # Beta has no weekday departures: Alfa → Gama
         feed = self.feed(files)
-        self.assertEqual([s['stopId'] for s in feed['trips']['MARPROM:G9-plus-wd-s1-0500']['stops']], ['MARPROM:10', 'MARPROM:30'])
+        self.assertEqual([s['stopId'] for s in feed['trips']['MARPROM:G9-plus-wd-s1-0500']['stops']], ['MARPROM:10', 'MARPROM:30', 'MARPROM:40'])
         trip = feed['trips']['MARPROM:G9-plus-wd-s1-0500']
         self.assertEqual((trip['shapeId'], trip['headsign']), ('70', 'Alfa - Delta'))   # the published trip with most stops in common
         self.assertEqual(status['shapes'].get('published shape'), 1)

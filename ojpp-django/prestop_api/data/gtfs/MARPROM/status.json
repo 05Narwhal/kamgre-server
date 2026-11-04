@@ -1,6 +1,6 @@
 {
  "status": "ok",
- "version": "a5c9cb2c98cb",
+ "version": "3017d403d35a",
  "end": "2026-12-31",
  "source": "https://www.marprom.si/koda-linije_nova/",
  "files": [
@@ -409,5 +409,8 @@
   "P10": 5,
   "P16": 1
  },
+ "noLastStop": [
+  "P18 minus: Turnerjeva"
+ ],
  "built": "2026-11-04"
 }

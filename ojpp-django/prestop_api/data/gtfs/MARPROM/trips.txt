@@ -940,43 +940,43 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 83,8727,114547,E.Leclerc - Žp Maribor -Šentiljska Hofer,P17,1,7534
 83,8727,114548,E.Leclerc - Žp Maribor -Šentiljska Hofer,P17,1,7534
 83,8727,114549,E.Leclerc - Žp Maribor -Šentiljska Hofer,P17,1,7534
-65,pdf-weekday,G5-plus-wd-s263-0505,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0530,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0555,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0620,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0645,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0710,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0735,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0800,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0825,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0850,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0915,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-0945,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1015,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1045,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1115,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1145,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1215,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1245,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1310,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1335,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1400,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1425,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1450,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1515,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1540,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1605,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1630,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1655,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1720,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1750,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1820,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1850,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1920,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-1950,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-2025,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-2110,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
-65,pdf-weekday,G5-plus-wd-s263-2145,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6884
+65,pdf-weekday,G5-plus-wd-s263-0505,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0530,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0555,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0620,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0645,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0710,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0735,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0800,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0825,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0850,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0915,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-0945,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1015,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1045,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1115,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1145,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1215,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1245,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1310,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1335,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1400,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1425,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1450,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1515,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1540,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1605,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1630,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1655,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1720,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1750,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1820,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1850,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1920,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-1950,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-2025,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-2110,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,pdf-weekday,G5-plus-wd-s263-2145,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
 65,pdf-weekday,G5-minus-wd-s57-0505,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
 65,pdf-weekday,G5-minus-wd-s57-0530,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
 65,pdf-weekday,G5-minus-wd-s57-0555,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
