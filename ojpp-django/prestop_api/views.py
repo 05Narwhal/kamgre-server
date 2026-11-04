@@ -484,7 +484,8 @@ def board(request, stop_id):
     if kind not in ('departure', 'arrival'):
         raise ApiError(422, 'INVALID_KIND', 'kind must be departure or arrival')
     at = parse_time(request.GET.get('at') or mapping.iso(time.time()), 'at')
-    items = sources.board(stop_id, kind, int(at.timestamp()), language(request))
+    # `place=1`: every pole of the stop's place (one marker below z16), each row with its pole's `towards`.
+    items = sources.board(stop_id, kind, int(at.timestamp()), language(request), place=request.GET.get('place') == '1')
     if items is None:
         raise ApiError(404, 'STOP_NOT_FOUND', 'This stop is not in the current timetable.')
     status = 'live' if any(i['quality'] for i in items) else 'scheduled'

@@ -65,7 +65,7 @@ def _load_stops():
     raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'), s.get('gtfsId'))]
     built = mapping.build_stops(raw)
     # Stops that are the same physical stop or station become one (see stopgroups.py).
-    ways, ends = _stop_directions(built)
+    ways, ends, sequences = _stop_directions(built)
     merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends, frozenset(overrides['stops']))
     # Each side of a stop on its own side of the road (Slovenia drives on the right), at OSM's pole when one is close.
     stopgroups.place_sides(merged, built, ways, set(overrides['stops']) | set(overrides['stations']), stopfix.osm_poles())
@@ -85,13 +85,21 @@ def _load_stops():
             routes[i] = union
     # Which feed stop each bus station with bays is now (feeds renumber stops; platforms.resolve).
     from . import platforms
-    return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways, 'bayStations': platforms.resolve(built)}
+    # A place's poles, and where the runs through each go next (its board says which pole a row leaves from).
+    places: dict[str, list[str]] = {}
+    for marker, key in place_of.items():
+        places.setdefault(key, []).append(marker)
+    marker_of = {member: ids[0] for member, ids in groups.items() if ids}
+    names = {s['id']: s['name'] for s in merged}
+    pole_towards = stopgroups.towards(sequences, marker_of, names, set(place_of))
+    return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways, 'bayStations': platforms.resolve(built),
+            'places': places, 'towards': pole_towards}
 
 
-def _stop_directions(built: list[dict]) -> tuple[dict[str, list], set[str]]:
-    """Which way vehicles travel through each stop, from the timetable's patterns (stopgroups.directions), and the
-    stops where runs start or end (stopgroups.termini); empty when the patterns cannot be loaded (then only stops at
-    the same spot merge across feeds)."""
+def _stop_directions(built: list[dict]) -> tuple[dict[str, list], set[str], list[list[str]]]:
+    """Which way vehicles travel through each stop, from the timetable's patterns (stopgroups.directions), the
+    stops where runs start or end (stopgroups.termini), and the patterns' stop sequences; empty when the patterns
+    cannot be loaded (then only stops at the same spot merge across feeds)."""
     try:
         runs = patterns.get().value['patterns']
     except UpstreamError as e:
@@ -100,7 +108,7 @@ def _stop_directions(built: list[dict]) -> tuple[dict[str, list], set[str]]:
     own = supplement.sequences()
     feeds = {run[0].split(':', 1)[0] for run in own if run}
     sequences = [p['stops'] for p in runs if p['stops'] and p['stops'][0].split(':', 1)[0] not in feeds] + own
-    return stopgroups.directions(sequences, {s['id']: (s['latitude'], s['longitude']) for s in built}), stopgroups.termini(sequences)
+    return stopgroups.directions(sequences, {s['id']: (s['latitude'], s['longitude']) for s in built}), stopgroups.termini(sequences), sequences
 
 
 def stop_directions(stop_id: str) -> list[tuple[float, float]]:
@@ -592,29 +600,53 @@ BOARD_REUSE = 60     # s: a board asked for up to this much later than a reused 
 _boards: dict[tuple, tuple[float, int, Optional[list[dict]]]] = {}
 
 
-def board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[dict]]:
-    """Departures or arrivals; a merged stop lists every member's, in time order. A board built in the last
+def place_poles(stop_id: str) -> list[str]:
+    """The markers of the place `stop_id` is in (same-name poles within 60 m, stopgroups.places), key first;
+    just `stop_id` when it is in none."""
+    snap = stops.peek() or stops.get()
+    value = snap.value
+    key = next((s.get('placeKey') for s in value['list'] if s['id'] == stop_id), None) if 'places' in value else None
+    poles = (value.get('places') or {}).get(key) or [stop_id]
+    return sorted(poles, key=lambda p: (p != key, p))
+
+
+def board(stop_id: str, kind: str, start: int, language: str, place: bool = False) -> Optional[list[dict]]:
+    """Departures or arrivals; a merged stop lists every member's, in time order. `place`: every pole of its place
+    (place_poles), each row saying where its pole's runs go next (`towards`). A board built in the last
     BOARD_TTL seconds from up to BOARD_REUSE seconds earlier is served again (callers copy before changing it)."""
     if not settings.PRESTOP_SHORT_CACHE:
-        return _board(stop_id, kind, start, language)
-    key = (stop_id, kind, language)
+        return _place_board(stop_id, kind, start, language) if place else _board(stop_id, kind, start, language)
+    key = (stop_id, kind, language, place)
     hit = _boards.get(key)
     if hit and time.time() - hit[0] < BOARD_TTL and 0 <= start - hit[1] < BOARD_REUSE:
         return hit[2]
-    items = _board(stop_id, kind, start, language)
+    items = _place_board(stop_id, kind, start, language) if place else _board(stop_id, kind, start, language)
     if len(_boards) > 5000:
         _boards.clear()
     _boards[key] = (time.time(), start, items)
     return items
 
 
-def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[list] = None) -> Optional[list[dict]]:
-    """`drops`: collects each run left out and why (coverage.note), for the coverage audit."""
+def _place_board(stop_id: str, kind: str, start: int, language: str) -> Optional[list[dict]]:
+    poles = place_poles(stop_id)
+    if len(poles) == 1:
+        return _board(stop_id, kind, start, language)
+    members = list(dict.fromkeys(m for pole in poles for m in stop_group(pole, wait=True)))
+    items = _board(stop_id, kind, start, language, members=members)
+    snap = stops.peek()
+    to = (snap.value.get('towards') or {}) if snap else {}
+    marker_of = {m: pole for pole in poles for m in stop_group(pole)}
+    return [{**e, 'towards': to[marker_of[e['stopId']]]} if to.get(marker_of.get(e.get('stopId'))) else e for e in items] if items else items
+
+
+def _board(stop_id: str, kind: str, start: int, language: str, drops: Optional[list] = None, members: Optional[list[str]] = None) -> Optional[list[dict]]:
+    """`drops`: collects each run left out and why (coverage.note), for the coverage audit. `members`: the stops
+    to list (a place's poles, _place_board); by default the stop's merged group."""
     try:
         alert_list = alerts(language)
     except UpstreamError:
         alert_list = []
-    members = stop_group(stop_id, wait=True)
+    members = members or stop_group(stop_id, wait=True)
     if len(members) == 1:
         own, runs = _member_board(stop_id, kind, start, alert_list, drops), {}
         if own:  # one feed: its own second bus stays, a train it lists twice is one (mapping.copy_of)

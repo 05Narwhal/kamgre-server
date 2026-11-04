@@ -471,6 +471,25 @@ def places(markers: list[dict]) -> dict[str, str]:
     return out
 
 
+def towards(sequences: list[list[str]], marker_of: dict[str, str], names: dict[str, str], poles: set[str]) -> dict[str, str]:
+    """Pole (marker id, of a place) -> the name of the stop most runs through it go to next, so a place's board can
+    say which pole each row leaves from ("towards Trg"). Member stops count as their marker; a next stop with the
+    pole's own name is skipped (the place's other pole, a stop split by feed). Ties: the name first in order. A pole
+    no run leaves (only arrivals) is not listed."""
+    counts: dict[str, dict[str, int]] = {}
+    for seq in sequences:
+        markers = [marker_of.get(s, s) for s in seq]
+        for i, here in enumerate(markers):
+            if here not in poles:
+                continue
+            own = normalize(names.get(here, ''))
+            nxt = next((m for m in markers[i + 1:] if m != here and names.get(m) and normalize(names[m]) != own), None)
+            if nxt:
+                tally = counts.setdefault(here, {})
+                tally[names[nxt]] = tally.get(names[nxt], 0) + 1
+    return {pole: min(tally, key=lambda name: (-tally[name], name)) for pole, tally in counts.items()}
+
+
 def report(stops: list[dict], merged: list[dict]) -> list[dict]:
     """One row per member of every merged station: how far it is from the station marker."""
     by_id = {s['id']: s for s in stops}

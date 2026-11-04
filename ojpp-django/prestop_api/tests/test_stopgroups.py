@@ -434,3 +434,10 @@ class PlaceTests(SimpleTestCase):
     def test_alike_names_from_two_feeds_share_a_place(self):
         self.assertEqual(stopgroups.places([self.at('LPP:1', 'Bavarski dvor', 0), self.at('IJPP:2', 'Ljubljana Bavarski dvor', 45)]),
                          {'LPP:1': 'IJPP:2', 'IJPP:2': 'IJPP:2'})
+
+    def test_each_pole_of_a_place_says_where_its_runs_go_next(self):
+        names = {'K1': 'Brežice K', 'K2': 'Brežice K', 'GD': 'Brežice GD', 'T': 'Trg', 'B': 'Bizeljsko', 'X': 'Brežice K'}
+        sequences = [['GD', 'K1', 'T']] * 3 + [['B', 'X', 'GD'],  # X is a member of K1: counts as K1
+                     ['T', 'K2', 'K1', 'GD'],  # the place's other pole (same name) is skipped
+                     ['T', 'K2', 'B'], ['GD', 'K2']]  # K2's last stop on one run: no next stop there
+        self.assertEqual(stopgroups.towards(sequences, {'X': 'K1'}, names, {'K1', 'K2'}), {'K1': 'Trg', 'K2': 'Bizeljsko'})
