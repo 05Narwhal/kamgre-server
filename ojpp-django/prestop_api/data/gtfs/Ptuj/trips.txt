@@ -1,0 +1,76 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,shape_id
+1,D,1-0-D-0610,Ptuj AP,0,1
+1,D,1-0-D-0640,Ptuj AP,0,1
+1,D,1-0-D-0710,Ptuj AP,0,1
+1,D,1-0-D-0740,Ptuj AP,0,1
+1,D,1-0-D-0810,Ptuj AP,0,1
+1,D,1-0-D-0840,Ptuj AP,0,1-2
+1,D,1-0-D-0930,Ptuj AP,0,1-2
+1,D,1-0-D-1130,Ptuj AP,0,1
+1,D,1-0-D-1200,Ptuj AP,0,1
+1,D,1-0-D-1230,Ptuj AP,0,1-2
+1,D,1-0-D-1330,Ptuj AP,0,1-2
+1,D,1-0-D-1430,Ptuj AP,0,1
+1,D,1-0-D-1500,Ptuj AP,0,1
+1,D,1-0-D-1530,Ptuj AP,0,1-2
+1,D,1-0-D-1630,Ptuj AP,0,1-2
+1,D,1-0-D-1730,Ptuj AP,0,1-2
+1,D,1-0-D-1930,Ptuj AP,0,1-2
+1,D,1-0-D-2030,Ptuj AP,0,1-2
+1,SONP,1-0-SONP-0700,Ptuj AP,0,1-3
+1,SONP,1-0-SONP-0800,Ptuj AP,0,1-3
+1,SONP,1-0-SONP-0830,Ptuj AP,0,1-4
+1,SONP,1-0-SONP-0900,Ptuj AP,0,1-3
+1,SONP,1-0-SONP-0930,Ptuj AP,0,1-4
+1,SONP,1-0-SONP-1100,Ptuj AP,0,1-3
+1,SONP,1-0-SONP-1130,Ptuj AP,0,1-4
+1,SONP,1-0-SONP-1200,Ptuj AP,0,1-3
+1,SONP,1-0-SONP-1230,Ptuj AP,0,1-4
+1,SONP,1-0-SONP-1300,Ptuj AP,0,1-3
+1,SONP,1-0-SONP-1400,Ptuj AP,0,1-3
+2,DS,2-0-DS-0700,Ptuj AP,0,2
+2,DS,2-0-DS-0745,Ptuj AP,0,2-2
+2,DS,2-0-DS-0805,Ptuj AP,0,2-3
+2,DS,2-0-DS-0850,Ptuj AP,0,2-3
+2,DS,2-0-DS-0930,Ptuj AP,0,2-3
+2,DS,2-0-DS-1110,Ptuj AP,0,2-3
+2,DS,2-0-DS-1150,Ptuj AP,0,2-3
+2,DS,2-0-DS-1240,Ptuj AP,0,2-3
+2,DS,2-0-DS-1325,Krcevina pri Vurbergu 123,0,2-4
+2,DS,2-0-DS-1415,Ptuj AP,0,2-5
+2,DS,2-0-DS-1455,Krcevina pri Vurbergu 123,0,2-4
+3,DS,3-0-DS-0640,Žnidaričevo nabr. Mladika,0,3
+3,DS,3-0-DS-0735,Ptuj AP,0,3-2
+3,DS,3-0-DS-0830,Ptuj AP,0,3-3
+3,DS,3-0-DS-0930,Ptuj AP,0,3-3
+3,DS,3-0-DS-1130,Ptuj AP,0,3-3
+3,DS,3-0-DS-1230,Ptuj AP,0,3-3
+3,DS,3-0-DS-1345,Žnidaričevo nabr. Mladika,0,3-4
+3,DS,3-0-DS-1450,Žnidaričevo nabr. Mladika,0,3-5
+3,DS,3-0-DS-1535,Ptuj AP,0,3-6
+4,DS,4-0-DS-0642,Zadružni trg parkirišče,0,4
+4,DS,4-0-DS-0740,Ptuj AP,0,4-2
+4,DS,4-0-DS-0820,Ptuj AP,0,4-3
+4,DS,4-0-DS-0940,Ptuj AP,0,4-3
+4,DS,4-0-DS-1200,Ptuj AP,0,4-3
+4,DS,4-0-DS-1305,Zadružni trg parkirišče,0,4-4
+4,DS,4-0-DS-1340,Ptuj Breg trg.,0,4-5
+4,DS,4-0-DS-1402,Zadružni trg parkirišče,0,4-6
+4,DS,4-0-DS-1430,Ptuj AP,0,4-7
+4,DS,4-0-DS-1505,Zadružni trg parkirišče,0,4-8
+5,DS,5-0-DS-0700,Ptuj AP,0,5
+5,DS,5-0-DS-0720,Ptuj AP,0,5-2
+5,DS,5-0-DS-0740,Ptuj AP,0,5
+5,DS,5-0-DS-0810,Ptuj AP,0,5-2
+5,DS,5-0-DS-0840,Ptuj AP,0,5-2
+5,DS,5-0-DS-0910,Ptuj AP,0,5-2
+5,DS,5-0-DS-0940,Ptuj AP,0,5-2
+5,DS,5-0-DS-1010,Ptuj AP,0,5-2
+5,DS,5-0-DS-1040,Ptuj AP,0,5-2
+5,DS,5-0-DS-1210,Ptuj AP,0,5-2
+5,DS,5-0-DS-1240,Ptuj AP,0,5-2
+5,DS,5-0-DS-1310,Ptuj AP,0,5-3
+5,DS,5-0-DS-1340,Ptuj AP,0,5-3
+5,DS,5-0-DS-1410,Ptuj AP,0,5-3
+5,DS,5-0-DS-1440,Ptuj AP,0,5-3
+5,DS,5-0-DS-1520,Ptuj AP,0,5-2

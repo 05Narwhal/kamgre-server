@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+OCR = True  # build.py: a stop name no pole is named like may be a misread (poles.misread)
 CLOCK = re.compile(r'(?<!\d)([01]?\d|2[0-3])[:.;]([0-5]\d)(?!\d)')
 # Day codes over the runs (legend): D = workdays (lines 2-5: 1 Sep - 30 Jun only, the city's services say which),
 # SO/NEP = Saturdays, Sundays and public holidays.

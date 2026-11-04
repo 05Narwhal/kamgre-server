@@ -3,10 +3,15 @@ tesseract found on the real pages (fixtures/citytt/ptuj-*.words.json, saved from
 so no PNG or tesseract is needed here."""
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from django.test import SimpleTestCase
 
-from prestop_api.citytt import arriva_ocr
+from prestop_api import citytt
+from prestop_api.citytt import arriva_ocr, build, poles
+
+PTUJ = citytt.CITIES['Ptuj']
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'citytt'
 
@@ -76,3 +81,64 @@ class SplitTests(SimpleTestCase):
         (a, b) = arriva_ocr._split([{'text': '10:32|12:47', 'x': 200, 'y': 5}], [0, 100, 200, 300])
         self.assertLess(a['x'], 200)
         self.assertGreater(b['x'], 200)
+
+
+class FeedTests(SimpleTestCase):
+    """The Ptuj folder replaces OTP's Ptuj feed: its stop ids, its services per line and its OCR'd names."""
+
+    def test_lines_2_to_5_have_no_summer_and_line_1_runs_all_year(self):
+        rows, dates = build.calendar(PTUJ)
+        off = {(d['service_id'], d['date']) for d in dates if d['exception_type'] == '2'}
+        on = {(d['service_id'], d['date']) for d in dates if d['exception_type'] == '1'}
+        self.assertIn(('DS', '20270701'), off)              # a Thursday in July: lines 2-5 do not run
+        self.assertIn(('DS', '20270831'), off)
+        self.assertNotIn(('DS', '20270630'), off)           # school year's last day
+        self.assertNotIn(('D', '20270701'), off)            # line 1 does
+        self.assertIn(('D', '20261225'), off)               # Christmas, a Friday: no workday buses ...
+        self.assertIn(('SONP', '20261225'), on)             # ... the Sunday and holiday ones
+        self.assertEqual({r['service_id'] for r in rows}, {'D', 'DS', 'SONP'})
+
+    def test_a_line_s_day_code_names_the_city_s_service(self):
+        self.assertIn(('4', 'D', 'DS'), PTUJ.line_services)
+        self.assertNotIn('1', {line for line, _, _ in PTUJ.line_services})
+
+    def test_stops_keep_otp_s_ids_and_a_stop_printed_twice_is_one_call(self):
+        # Line 4: Ptuj AP 08:46, then Ptuj AP 09:00 on the next row: the bus waits there.
+        pole = lambda n, name: {'id': f'Ptuj:{n}', 'name': name, 'lat': 46.42, 'lon': 15.87 + n / 1000}  # noqa: E731
+        all_poles = {p['id']: p for p in (pole(1, 'Ptuj AP'), pole(2, 'Zadružni trg parkirišče'), pole(3, 'Ptuj Breg'))}
+        t = {'line': '4', 'title': 'Breg - Turnisce', 'direction': 0, 'service': 'DS',
+             'stops': ['Zadružni trg parkirišče', 'Ptuj AP', 'Ptuj AP', 'Ptuj Breg'], 'runs': [['08:43', '08:46', '09:00', '09:05']]}
+        rows, problems = build.compose(PTUJ, [t], lambda table: ['Ptuj:2', 'Ptuj:1', 'Ptuj:1', 'Ptuj:3'],
+                                       lambda pts: [[p['lon'], p['lat']] for p in pts], all_poles)
+        self.assertEqual(problems, [])
+        calls = [(r['stop_id'], r['arrival_time'], r['departure_time']) for r in rows['stop_times.txt']]
+        self.assertEqual(calls, [('2', '08:43:00', '08:43:00'), ('1', '08:46:00', '09:00:00'), ('3', '09:05:00', '09:05:00')])
+        self.assertEqual(sorted(s['stop_id'] for s in rows['stops.txt']), ['1', '2', '3'])
+
+    def test_feed_poles_are_the_feed_s_own_stops(self):
+        stop = lambda sid, name: {'id': sid, 'name': name, 'latitude': 46.42, 'longitude': 15.87, 'modes': ['bus']}  # noqa: E731
+        fake = SimpleNamespace(
+            stops=SimpleNamespace(get=lambda: SimpleNamespace(value={'all': [stop('Ptuj:1129013', 'Ptuj AP'), stop('IJPP:5', 'Ptuj AP'),
+                                                                              stop('Ptuj:osm9', 'Terme Ptuj')]})),
+            patterns=SimpleNamespace(get=lambda: SimpleNamespace(value={'patterns': []})))
+        with mock.patch('prestop_api.sources', fake, create=True):
+            stops, _ = build.feed_poles(PTUJ)
+        self.assertEqual([s['id'] for s in stops], ['Ptuj:1129013'])  # not IJPP's, and an own OSM pole comes from OSM again
+
+
+class NameTests(SimpleTestCase):
+    def test_a_misread_name_takes_the_pole_name_it_clearly_is(self):
+        named = lambda *names: {f'p{i}': {'names': [n]} for i, n in enumerate(names)}  # noqa: E731
+        found = named('Zadružni trg parkirišče', 'Pod gradom parkirišče', 'Suha veja', 'Draženci 18e', 'Trg')
+        self.assertEqual(poles.misread('ZadruiZni trg parkiriSée', found), 'Zadružni trg parkirišče')
+        self.assertEqual(poles.misread('Suha veja 02', found), 'Suha veja')     # a pole named without the number
+        self.assertIsNone(poles.misread('Draženci 21d', found))                  # never another house number
+        self.assertIsNone(poles.misread('Knjiznica', found))
+        # two spellings of one place are not a tie
+        self.assertEqual(poles.misread('Pod gradom parkiriSée', {**found, 'q': {'names': ['Pod gradom - parkirišče']}})[:10], 'Pod gradom')
+
+    def test_the_town_s_station_is_not_alike_a_stop_ending_in_the_town(self):
+        self.assertFalse(poles.alike('Dom upokojencev Ptuj', 'Ptuj AP', 'Ptuj'))
+        self.assertFalse(poles.alike('Ptuj AP', 'Terme Ptuj', 'Ptuj'))
+        self.assertTrue(poles.alike('Ptuj AP', 'Ptuj AP', 'Ptuj'))
+        self.assertTrue(poles.alike('Ptuj bol.', 'Ptuj Bolnišnica', 'Ptuj'))

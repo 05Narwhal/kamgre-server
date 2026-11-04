@@ -17,11 +17,14 @@ the shortest choice wins when it is clearly shorter. That settles two streets by
 the turn a wrong side would need. A pole the road still cannot place (one standing at a crossing, where it has no
 side) takes the one of its name's two poles that the other direction did not (`avoid`).
 """
+import difflib
 import itertools
 import math
+import re
+import unicodedata
 from typing import Callable, Iterable, Optional
 
-from ..stopgroups import similar
+from ..stopgroups import normalize, similar, words
 
 SAME_POLE = 15  # m: an untagged OSM pole this close to a feed stop of an alike name is that stop
 GAP = 3         # a known run may have up to GAP - 1 stops between two consecutive stops of the timetable
@@ -79,17 +82,49 @@ def merged(*weights: dict) -> dict[tuple[str, str], float]:
     return out
 
 
-def candidates(name: str, poles: dict[str, dict]) -> list[str]:
-    return sorted(pid for pid, p in poles.items() if any(similar(name, n) for n in p['names']))
+def alike(name: str, pole_name: str, town: str = '') -> bool:
+    """stopgroups.similar, but a name that is the town alone after its stop-kind words ("Ptuj AP") is not alike a
+    stop that merely ends in it ("Dom upokojencev Ptuj", "Terme Ptuj", "Nova vas pri Ptuju")."""
+    if not similar(name, pole_name):
+        return False
+    short, long = sorted((words(name), words(pole_name)), key=len)
+    return not (town and len(short) == 1 and len(long) > 1 and normalize(name) != normalize(pole_name)
+                and words(town)[:1] == [short[0]])
+
+
+def candidates(name: str, poles: dict[str, dict], town: str = '') -> list[str]:
+    return sorted(pid for pid, p in poles.items() if any(alike(name, n, town) for n in p['names']))
+
+
+OCR_LIKE = 0.8     # an OCR'd name no pole is named like takes the pole name this alike (difflib ratio, letters only) ...
+OCR_MARGIN = 0.05  # ... when it beats every other pole name by this much
+
+
+def _letters(name: str) -> str:
+    """'Pod gradom - parkirišče' -> 'podgradomparkirisce': two spellings of one place compare equal."""
+    return re.sub(r'[^a-z0-9]', '', unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode().casefold())
+
+
+def misread(name: str, poles: dict[str, dict]) -> Optional[str]:
+    """The pole name an OCR'd stop name stands for ('Zadruizni trg parkirisée' -> 'Zadružni trg parkirišče'), or None
+    when none is clearly alike or it would change a house number ('Draženci 21d' never becomes 'Draženci 18e'; a pole
+    named without one, 'Suha veja' for 'Suha veja 02', is fine)."""
+    digits = lambda s: re.findall(r'\d+', s)  # noqa: E731
+    scored = sorted(((difflib.SequenceMatcher(None, _letters(name), _letters(n)).ratio(), n)
+                     for n in {n for p in poles.values() for n in p['names']} if not digits(n) or digits(n) == digits(name)), reverse=True)
+    if not scored or scored[0][0] < OCR_LIKE or (len(scored) > 1 and scored[0][0] - scored[1][0] < OCR_MARGIN and
+                                                 _letters(scored[1][1]) != _letters(scored[0][1])):
+        return None
+    return scored[0][1]
 
 
 def choose(names: list[str], poles: dict[str, dict], pairs: dict[tuple[str, str], float],
            length: Optional[Callable[[list[dict]], Optional[float]]] = None,
-           avoid: Optional[dict[str, set]] = None) -> tuple[list[Optional[str]], list[str]]:
+           avoid: Optional[dict[str, set]] = None, town: str = "") -> tuple[list[Optional[str]], list[str]]:
     """A pole per stop of one run (the choice the most known runs agree with, `adjacent`; ties settled by the road,
     `length`: metres of road through a list of poles, None without a route; then by `avoid`: name -> the poles the
     other direction took), and the problems: no pole, or poles nothing tells apart."""
-    options = [candidates(n, poles) for n in names]
+    options = [candidates(n, poles, town) for n in names]
     problems = [f'no pole named like "{n}" (stop {i + 1})' for i, (n, o) in enumerate(zip(names, options)) if not o]
     if problems:
         return [None] * len(names), problems

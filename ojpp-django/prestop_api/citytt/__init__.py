@@ -38,8 +38,12 @@ class City:
     agency: tuple          # (id, name, url): the name matches the operator's in IJPP (operators.py merges them)
     bbox: tuple            # (south, west, north, east): every stop lies inside
     # Cities whose timetables are several services (Piran): (service id, weekdays Monday … Sunday, runs on public
-    # holidays). Each service gets its own calendar rows; `weekdays`/`holidays_too` are then unused.
+    # holidays[, months it runs in]). Each service gets its own calendar rows; `weekdays`/`holidays_too` are then unused.
     services: tuple = ()
+    line_services: tuple = ()  # (line, the reader's service, the city's service): one line's day code means another service
+    # The folder replaces OTP's feed of the same id (supplement.owns): its stops are the poles, keeping their ids (saved
+    # stops and merges keep working), and the national feed's stops are not candidates.
+    own_stops: bool = False
     pages: tuple = ()      # more pages whose timetable links count too (a news post linking a file the page lacks)
     files: tuple = ()      # the exact file names to read: the build reports one that vanished or a new one it does not know
     stale: tuple = ()      # names of old files the pages still link: ignored
@@ -85,6 +89,33 @@ CITIES = {
         # holidays run only the services flagged True.
         services=(('D', (1, 1, 1, 1, 1, 0, 0), False), ('FRI', (0, 0, 0, 0, 1, 0, 0), False), ('SO', (0, 0, 0, 0, 0, 1, 0), False),
                   ('NP', (0, 0, 0, 0, 0, 0, 1), True), ('SONP', (0, 0, 0, 0, 0, 1, 1), True), ('V', (1, 1, 1, 1, 1, 1, 1), True)),
+    ),
+    'Ptuj': City(
+        # Replaces OTP's Ptuj feed, a pre-September table for lines 2, 3 and 5 (docs/research/2026-11-04-city-timetables.md).
+        feed='Ptuj', name='Ptuj', own_stops=True,
+        page='https://arriva.si/avtobusni-prevozi/mestni-avtobusni-prevozi/mestni-avtobusni-prevozi-ptuj/vozni-redi-in-cenik-ptuj/',
+        links=r'https://arriva\.si/wp-content/uploads/[^"\'\s]+/Linija-[1-5][^"\'\s]*\.pdf',
+        files=('Linija-1_PTUJ_2_01092026.pdf', 'Linija-2_Panorama_1_01092026.pdf', 'Linija-3_Jezero_Spuhlja_1_01092026-ANG.pdf',
+               'Linija-4-_Breg_Turnisce_1_01092026.pdf', 'Linija-5_Ljudski-vrt_Rogoznica_2_01092026.pdf'),
+        reader='arriva_ocr',
+        # The page still says so (2026-11-04), though the files are the 1 Sep 2026 timetables.
+        days='Vozni redi veljajo od 10. 2. 2025 naprej.',
+        weekdays=(1, 1, 1, 1, 1, 0, 0), holidays_too=(),
+        # The files print "01092026" and no end: check the page again before the next school year.
+        start=date(2026, 9, 1), end=date(2027, 8, 31),
+        agency=('arriva', 'Arriva d.o.o.', 'https://arriva.si/'),
+        bbox=(46.38, 15.78, 46.48, 15.95),
+        # D = workdays, SO/NEP = Saturdays, Sundays and public holidays (line 1 only), all year; lines 2-5 run on
+        # workdays from 1 Sep to 30 Jun only (DS).
+        services=(('D', (1, 1, 1, 1, 1, 0, 0), False), ('DS', (1, 1, 1, 1, 1, 0, 0), False, (9, 10, 11, 12, 1, 2, 3, 4, 5, 6)),
+                  ('SONP', (0, 0, 0, 0, 0, 1, 1), True)),
+        line_services=(('2', 'D', 'DS'), ('3', 'D', 'DS'), ('4', 'D', 'DS'), ('5', 'D', 'DS')),
+        # Line 4's row 45 prints "Ptuj Turnišče 02*,04" (no legend for the star): the Turnišče poles, which OTP names alike.
+        # OCR'd names too garbled for poles.misread; "Jurčičeva 2" is the other side's pole of "Jurčičeva 1" (OTP names both so).
+        names=(('Ptuj Turnisée 02*,04', 'Ptuj Turnišče'), ('Juréigéeva 1', 'Jurčičeva 1'), ('Jurcigéeva 2', 'Jurčičeva 1'),
+               ('Villa Monde parkirisce', 'Parking Vila Monde')),
+        # Line 2's 07:00 from Krčevina passes "Knjižnica": neither OTP, IJPP nor OSM has a pole by that name (2026-11-04).
+        unplaced=('Knjiznica',),
     ),
     'MARPROM': City(
         feed='MARPROM', name='Maribor',

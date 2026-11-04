@@ -107,8 +107,10 @@ def feed_poles(city: City) -> tuple[list[dict], list[list[str]]]:
     every pattern's run of stops."""
     from .. import sources
     south, west, north, east = _wider(city.bbox)
+    own = lambda s: s['id'].startswith(f'{city.feed}:')  # noqa: E731
     stops = [{'id': s['id'], 'name': s['name'], 'lat': s['latitude'], 'lon': s['longitude']} for s in sources.stops.get().value['all']
-             if 'rail' not in s['modes'] and not s['id'].startswith(f'{city.feed}:') and south <= s['latitude'] <= north and west <= s['longitude'] <= east]
+             if 'rail' not in s['modes'] and own(s) == city.own_stops and south <= s['latitude'] <= north and west <= s['longitude'] <= east
+             and not (city.own_stops and s['id'].split(':', 1)[1].startswith('osm'))]  # an own OSM pole comes from OSM again
     return stops, [p['stops'] for p in sources.patterns.get().value['patterns']]
 
 
@@ -150,19 +152,21 @@ def calendar(city: City, used: Optional[set] = None) -> tuple[list[dict], list[d
     anyway (which it then runs on whatever the weekday). A city with `services` gets rows per service (those in
     `used`, when given): a service runs on public holidays only when declared so, whatever the weekday."""
     days = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')
-    services = [(sid, wd, bool(hol)) for sid, wd, hol in city.services if used is None or sid in used] or \
-               [(SERVICE, city.weekdays, None)]
+    services = [(s[0], s[1], bool(s[2]), s[3] if len(s) > 3 else ()) for s in city.services if used is None or s[0] in used] or \
+               [(SERVICE, city.weekdays, None, ())]
     rows, dates = [], []
-    for sid, weekdays, on_holidays in services:
+    for sid, weekdays, on_holidays, months in services:
         rows.append({'service_id': sid, **{d: str(weekdays[i]) for i, d in enumerate(days)},
                      'start_date': city.start.strftime('%Y%m%d'), 'end_date': city.end.strftime('%Y%m%d')})
         day = city.start
         while day <= city.end:
-            runs = bool(weekdays[day.weekday()])
+            runs = want = bool(weekdays[day.weekday()])
             if holiday(day):
-                holidays = on_holidays if on_holidays is not None else (day.month, day.day) in city.holidays_too
-                if runs != holidays:
-                    dates.append({'service_id': sid, 'date': day.strftime('%Y%m%d'), 'exception_type': '2' if runs else '1'})
+                want = on_holidays if on_holidays is not None else (day.month, day.day) in city.holidays_too
+            if months and day.month not in months:  # Ptuj's lines 2-5: no summer service
+                want = False
+            if runs != want:
+                dates.append({'service_id': sid, 'date': day.strftime('%Y%m%d'), 'exception_type': '2' if runs else '1'})
             day += timedelta(days=1)
     return rows, dates
 
@@ -182,10 +186,11 @@ def _hms(s: int) -> str:
     return f'{s // 3600:02d}:{s % 3600 // 60:02d}:00'
 
 
-def stop_id(pole_id: str) -> str:
-    """The feed's id for a pole: the national stop's number ('IJPP:1121067' -> '1121067'), 'osm<node>' for an OSM pole."""
+def stop_id(pole_id: str, own: str = '') -> str:
+    """The feed's id for a pole: the national stop's number ('IJPP:1121067' -> '1121067'), 'osm<node>' for an OSM pole,
+    and a stop of the feed the folder replaces (`own`, 'Ptuj:21' -> '21') its own id."""
     feed, raw = pole_id.split(':', 1)
-    return raw if feed == 'IJPP' else f'osm{raw}' if feed == 'osm' else f'{feed}-{raw}'
+    return raw if feed in ('IJPP', own) else f'osm{raw}' if feed == 'osm' else f'{feed}-{raw}'
 
 
 def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], shape: Callable[[list[dict]], list],
@@ -193,6 +198,7 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
     """GTFS rows per file name from the read timetables. `place`: a pole id per stop of a timetable (raises
     BuildError); `shape`: the road coordinates through a run of stops."""
     problems = []
+    own_id = lambda pid: stop_id(pid, city.feed if city.own_stops else '')  # noqa: E731
     used: dict[str, list[str]] = {}  # pole id -> the timetables' names for it
     routes, trips, times, shapes = [], [], [], []
     shape_ids: dict[tuple, str] = {}      # (route, direction, poles, stops) -> shape id
@@ -222,6 +228,15 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
                 if fixed and s + day < fixed[-1][1]:
                     day += 24 * 3600
                 fixed.append((i, s + day))
+            # A stop printed twice in a row (Ptuj line 4: Ptuj AP 08:46, then 09:00 on) is one call, arriving and leaving.
+            leaves: dict[int, int] = {}  # row of a call -> when it leaves, when later than it arrives
+            calls_once: list[tuple[int, int]] = []
+            for i, s in fixed:
+                if calls_once and ids[calls_once[-1][0]] == ids[i]:
+                    leaves[calls_once[-1][0]] = s
+                else:
+                    calls_once.append((i, s))
+            fixed = calls_once
             key = tuple(i for i, _ in fixed)
             shape_key = (route, direction, tuple(ids[i] for i in key), tuple(t['stops'][i] for i in key))
             if shape_key not in shape_ids:
@@ -240,14 +255,14 @@ def compose(city: City, tables: list[dict], place: Callable[[dict], list[str]], 
             trip_ids.add(trip)
             trips.append({'route_id': route, 'service_id': service, 'trip_id': trip, 'trip_headsign': t['stops'][fixed[-1][0]],
                           'direction_id': direction, 'shape_id': shape_ids[shape_key]})
-            times += [{'trip_id': trip, 'arrival_time': _hms(s), 'departure_time': _hms(s), 'stop_id': stop_id(ids[i]), 'stop_sequence': str(i + 1)}
-                      for i, s in fixed]
+            times += [{'trip_id': trip, 'arrival_time': _hms(s), 'departure_time': _hms(leaves.get(i, s)), 'stop_id': own_id(ids[i]),
+                       'stop_sequence': str(i + 1)} for i, s in fixed]
     stops = []
-    for pid in sorted(used, key=stop_id):
+    for pid in sorted(used, key=own_id):
         pole = all_poles[pid]
         # A feed's pole keeps the feed's name, so the two are one marker (stopgroups merges alike names only).
         name = pole['name'] if not pid.startswith('osm:') else _fullest(sorted(set(used[pid])) + [pole['name']])
-        stops.append({'stop_id': stop_id(pid), 'stop_name': name, 'stop_lat': f'{pole["lat"]:.6f}', 'stop_lon': f'{pole["lon"]:.6f}'})
+        stops.append({'stop_id': own_id(pid),'stop_name': name, 'stop_lat': f'{pole["lat"]:.6f}', 'stop_lon': f'{pole["lon"]:.6f}'})
     cal, dates = calendar(city, services if city.services else None)
     return {
         'agency.txt': [{'agency_id': city.agency[0], 'agency_name': city.agency[1], 'agency_url': city.agency[2],
@@ -373,12 +388,18 @@ def build(city: City, src: Sources, today: date, route=roads.route_window, lengt
             problems.append(str(e))
     tables, found = spelled(city, tables)
     notes += found
+    renamed = {(line, code): sid for line, code, sid in city.line_services}
+    tables = [{**t, 'service': renamed.get((t['line'], t['service']), t['service'])} if 'service' in t else t for t in tables]
     all_poles, alias = poles.unify(src.feed_stops, src.osm_stops)
+    if getattr(reader, 'OCR', False):  # a misread name no pole is named like takes the pole name it clearly is
+        read_as = {n: poles.misread(n, all_poles) for t in tables for n in t['stops'] if not poles.candidates(n, all_poles, city.name)}
+        tables = [{**t, 'stops': [read_as.get(n) or n for n in t['stops']]} for t in tables]
+        notes += [f'read "{n}" as "{m}"' for n, m in sorted(read_as.items()) if m]
     pairs = poles.merged(poles.adjacent(src.feed_runs), poles.adjacent(src.osm_runs, alias))
     # Every distinct run of stops is placed once; one the road leaves tied then avoids the poles the other direction
     # of its line took for the same name.
     key = lambda t: (t['line'], t.get('direction', 0), tuple(t['stops']))  # noqa: E731
-    placed = {key(t): poles.choose(t['stops'], all_poles, pairs, length) for t in tables} if not problems else {}
+    placed = {key(t): poles.choose(t['stops'], all_poles, pairs, length, town=city.name) for t in tables} if not problems else {}
     for k, (chosen, found) in list(placed.items()):
         if found and not any('no pole named' in f for f in found):
             avoid: dict[str, set] = {}
@@ -386,7 +407,7 @@ def build(city: City, src: Sources, today: date, route=roads.route_window, lengt
                 if line == k[0] and direction != k[1] and not bad:
                     for n, pid in zip(stops, other):
                         avoid.setdefault(n, set()).add(pid)
-            placed[k] = poles.choose(list(k[2]), all_poles, pairs, length, avoid)
+            placed[k] = poles.choose(list(k[2]), all_poles, pairs, length, avoid, town=city.name)
 
     def place(table: dict) -> list[str]:
         chosen, found = placed[key(table)]

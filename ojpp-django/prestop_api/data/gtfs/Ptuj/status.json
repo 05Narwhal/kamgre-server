@@ -1,0 +1,76 @@
+{
+ "status": "ok",
+ "version": "9e45a56cb079",
+ "end": "2027-08-31",
+ "source": "https://arriva.si/avtobusni-prevozi/mestni-avtobusni-prevozi/mestni-avtobusni-prevozi-ptuj/vozni-redi-in-cenik-ptuj/",
+ "files": [
+  {
+   "file": "Linija-1_PTUJ_2_01092026.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2026/09/Linija-1_PTUJ_2_01092026.pdf",
+   "sha256": "c76a02e5d7f81b18422034a25b44a4ad07eef4f3553915e30a01571d56a92157"
+  },
+  {
+   "file": "Linija-2_Panorama_1_01092026.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2026/09/Linija-2_Panorama_1_01092026.pdf",
+   "sha256": "90094d654c5ebdd42524b86a559cd9aeba92cd7417a885c8f8a4916120bd1591"
+  },
+  {
+   "file": "Linija-3_Jezero_Spuhlja_1_01092026-ANG.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2026/09/Linija-3_Jezero_Spuhlja_1_01092026-ANG.pdf",
+   "sha256": "a56d93f92eeabe6d8910b142c03c69f8dbef7eeb0e9f2cacb7d4636dd52b854a"
+  },
+  {
+   "file": "Linija-4-_Breg_Turnisce_1_01092026.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2026/09/Linija-4-_Breg_Turnisce_1_01092026.pdf",
+   "sha256": "5b4a2856c778e321a2d6aab4e767944d8603f94d3d78f50cf589b113b5bc1317"
+  },
+  {
+   "file": "Linija-5_Ljudski-vrt_Rogoznica_2_01092026.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2026/09/Linija-5_Ljudski-vrt_Rogoznica_2_01092026.pdf",
+   "sha256": "c0d5e7413629e4256da275a17af9744ec2557c23871c97ea4cd349d081ff67f3"
+  }
+ ],
+ "lines": {
+  "1": 29,
+  "2": 11,
+  "3": 9,
+  "4": 10,
+  "5": 16
+ },
+ "services": {
+  "1 out D": 18,
+  "1 out SONP": 11,
+  "2 out DS": 11,
+  "3 out DS": 9,
+  "4 out DS": 10,
+  "5 out DS": 16
+ },
+ "notes": [
+  "2 0 D: left out, no pole: Knjiznica",
+  "read \"DrazZenci obraéalisée\" as \"Draženci obračališče\"",
+  "read \"Miheligeva galerija\" as \"Miheličeva galerija\"",
+  "read \"OS Olge Meglié\" as \"OŠ Olge Meglič\"",
+  "read \"Pod gradom parkiriSée\" as \"Pod gradom parkirišče\"",
+  "read \"Pod gradom parkirisée\" as \"Pod gradom parkirišče\"",
+  "read \"Ptuj Turnisce 01\" as \"Ptuj Turnišče\"",
+  "read \"Ptuj Turnisce 02\" as \"Ptuj Turnišče\"",
+  "read \"Ptuj Turnisce 03\" as \"Ptuj Turnišče\"",
+  "read \"Ptuj Turnisée 01\" as \"Ptuj Turnišče\"",
+  "read \"Rimska peé\" as \"Rimska peč\"",
+  "read \"Suha veja 01\" as \"Suha veja\"",
+  "read \"Suha veja 02\" as \"Suha veja\"",
+  "read \"Trinica\" as \"Tržnica\"",
+  "read \"UI. 5 Prekomorske 13\" as \"Ul. 5 Prekomorske 13\"",
+  "read \"Vitéava 134\" as \"Vičava 134\"",
+  "read \"Viéava 49 trgovina\" as \"Vičava 49 trgovina\"",
+  "read \"ZadruZni trg parkirisée\" as \"Zadružni trg parkirišče\"",
+  "read \"ZadruiZni trg parkiriSée\" as \"Zadružni trg parkirišče\"",
+  "read \"ZadruiZni trg parkirisée\" as \"Zadružni trg parkirišče\"",
+  "read \"Zadruini trg parkiriSée\" as \"Zadružni trg parkirišče\"",
+  "read \"Zadruizni trg parkirisée\" as \"Zadružni trg parkirišče\"",
+  "read \"Znidariéevo nabr. Mladika\" as \"Žnidaričevo nabr. Mladika\"",
+  "read \"Zupanéigeva 10\" as \"Župančičeva 10\"",
+  "read \"Zupanéiéeva 10\" as \"Župančičeva 10\""
+ ],
+ "built": "2026-11-04"
+}

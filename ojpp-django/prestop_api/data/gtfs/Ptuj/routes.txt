@@ -1,0 +1,6 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+1,arriva,1,Ptuj,3
+2,arriva,2,Panorama,3
+3,arriva,3,Jezero – Spuhlja,3
+4,arriva,4,Breg – Turnisce,3
+5,arriva,5,Ljudski vrt – Rogoznica,3
