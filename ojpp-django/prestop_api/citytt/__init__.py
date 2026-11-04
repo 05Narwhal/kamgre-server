@@ -49,6 +49,10 @@ class City:
     stale: tuple = ()      # names of old files the pages still link: ignored
     names: tuple = ()      # (the timetable's spelling, its pole's name) where the timetable spells a stop its own way
     unplaced: tuple = ()   # stops no source has a pole for: left out of the runs (status notes list them)
+    # A correction of OTP's feed of the same id (supplement.py, replaces.txt): (line, 'replace' | 'add'). Only these
+    # lines are read and OTP keeps the rest; its stops are the poles (set own_stops too).
+    replaces: tuple = ()
+    only: tuple = ()       # (line, direction, first departures): of that line only these runs are read (an 'add')
 
 
 CITIES = {
@@ -116,6 +120,29 @@ CITIES = {
                ('Villa Monde parkirisce', 'Parking Vila Monde')),
         # Line 2's 07:00 from Krčevina passes "Knjižnica": neither OTP, IJPP nor OSM has a pole by that name (2026-11-04).
         unplaced=('Knjiznica',),
+    ),
+    'MOKoper': City(
+        # A correction of OTP's Koper feed, not a replacement (docs/research/2026-11-04-city-timetables.md): OTP runs
+        # line 9 on working days the weekend way (via Žusterna parkirišče), Arriva's table and its 2026/04 route map
+        # by PH Sonce; and OTP lacks line 2's 10:55 and 11:55 from Koper. Every other line and day stays OTP's.
+        feed='MOKoper', name='Koper', own_stops=True,
+        page='https://arriva.si/en/passenger-transport/city-bus-transport/city-transport-koper/timetable-price-list-koper/',
+        links=r'https://arriva\.si/wp-content/uploads/[^"\'\s]+/Line-[29]-Koper[^"\'\s]*-annual\.pdf',
+        files=('Line-2-Koper-Semedela-Markovec-Hospital-Koper-annual.pdf', 'Line-9-Koper-AP-Passenger-terminal-Koper-AP-annual.pdf'),
+        reader='arriva_koper',
+        # Line 2's working-day file is the school year's: July and August have their own (2026-11-04).
+        days='Timetable (MON – FRI) (July, August)',
+        weekdays=(1, 1, 1, 1, 1, 0, 0), holidays_too=(),
+        # The files print "Valid from 18.11.2022" and no end: check the page again before the next school year.
+        start=date(2026, 9, 1), end=date(2027, 8, 31),
+        agency=('arriva', 'Arriva d.o.o.', 'https://arriva.si/'),
+        bbox=(45.50, 13.68, 45.57, 13.78),
+        replaces=(('9', 'replace'), ('2', 'add')),
+        only=(('2', 0, ('10:55', '11:55')),),
+        # D = working days all year (line 9), DS = working days but July and August (line 2's file says so).
+        services=(('D', (1, 1, 1, 1, 1, 0, 0), False), ('DS', (1, 1, 1, 1, 1, 0, 0), False, (9, 10, 11, 12, 1, 2, 3, 4, 5, 6))),
+        line_services=(('2', 'D', 'DS'),),
+        names=(('Bolnišnica', 'Bol.Izola'), ('Barka II', 'Barka')),
     ),
     'MARPROM': City(
         feed='MARPROM', name='Maribor',

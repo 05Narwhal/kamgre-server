@@ -45,7 +45,8 @@ class Command(BaseCommand):
                     page, files = build.fetch(c)
                     stops, runs = build.feed_poles(c)
                     osm_stops, osm_runs = build.osm_poles(c)
-                    out, status = build.build(c, build.Sources(page, files, stops, runs, osm_stops, osm_runs), today)
+                    legs = build.feed_legs(c) if c.replaces else {}  # a correction: OTP's drawing where no road route is plausible
+                    out, status = build.build(c, build.Sources(page, files, stops, runs, osm_stops, osm_runs, legs), today)
             except build.BuildError as e:
                 failed = True
                 self.stderr.write(f'{c.name}: build failed, the folder stays as it was:\n  ' + str(e).replace('\n', '\n  '))

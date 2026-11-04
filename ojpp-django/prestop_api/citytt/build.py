@@ -21,7 +21,7 @@ import requests
 
 from django.conf import settings
 
-from .. import geometry, roads, supplement
+from .. import geometry, mapping, roads, supplement
 from ..upstream import session
 from ..stopgroups import _fullest
 from ..sztimetables import holiday
@@ -55,6 +55,7 @@ class Sources:
     feed_runs: list = field(default_factory=list)
     osm_stops: list = field(default_factory=list)
     osm_runs: list = field(default_factory=list)
+    feed_legs: dict = field(default_factory=dict)   # a correction's: OTP's drawing of two stops in a row (feed_legs)
 
 
 # ---------------------------------------------------------------- fetching
@@ -313,10 +314,35 @@ def check(city: City, files: dict[str, str], tables: list[dict], today: date) ->
 
 # ---------------------------------------------------------------- one build
 
-def road_shape(points: list[dict], route=roads.route_window) -> list:
+def feed_legs(city: City) -> dict[tuple[str, str], list]:
+    """For a correction (city.replaces): OTP's own drawing of every two stops in a row on the lines it corrects,
+    (pole id, pole id) -> coordinates. Valhalla routes Koper's Zeleni park → Potniški terminal (2 minutes by the
+    timetable) 2.2 km round the town, as OSM closes Pristaniška ulica / Kopališko nabrežje to buses; ignoring the
+    access tags sends it through the old town's pedestrian streets on the local tiles (2026-11-04). OTP's line 9 has
+    the same two stops in a row, drawn along the quay."""
+    from .. import trips
+    from ..upstream import otp
+    out: dict[tuple[str, str], list] = {}
+    for line, _ in city.replaces:
+        route = otp().query(trips.LINE_Q, {'id': f'{city.feed}:{line}', 'date': date.today().strftime('%Y%m%d')}).get('route') or {}
+        for p in route.get('patterns') or []:
+            coords = mapping.decode_polyline((p.get('patternGeometry') or {}).get('points') or '')
+            stops = p.get('stops') or []
+            if len(coords) < 2 or len(stops) < 2:
+                continue
+            cum = geometry.cumulative(coords)
+            at = geometry.project_stops(coords, stops)
+            for (a, (da, off_a)), (b, (db, off_b)) in zip(zip(stops, at), zip(stops[1:], at[1:])):
+                if off_a <= OFF_SHAPE and off_b <= OFF_SHAPE and db > da:
+                    out.setdefault((a['gtfsId'], b['gtfsId']), geometry.slice_between(coords, cum, da, db))
+    return out
+
+
+def road_shape(points: list[dict], route=roads.route_window, known: Optional[dict] = None, borrowed: Optional[list] = None) -> list:
     """Coordinates along the roads through the stops (Valhalla, bus costing); raises BuildError on a missing or
     implausible leg. A leg that loops out of its first stop or into its last to turn round is cut where the bus first
-    passes the stop, as the national feed's legs are (Piran: Bernardin K → Pirat looped 1.3 km round the roundabout)."""
+    passes the stop, as the national feed's legs are (Piran: Bernardin K → Pirat looped 1.3 km round the roundabout).
+    A leg still implausible takes the feed's own drawing of the same two poles (`known`, feed_legs), noted in `borrowed`."""
     coords: list = []
     for start in range(0, len(points) - 1, roads.MAX_LOCATIONS - 1):
         window = points[start:start + roads.MAX_LOCATIONS]
@@ -326,6 +352,10 @@ def road_shape(points: list[dict], route=roads.route_window) -> list:
         for a, b, leg in zip(window, window[1:], legs):
             if len(leg) > 2 and not roads.plausible(leg, a, b):
                 leg = roads.untangle(leg)
+            if (len(leg) < 2 or not roads.plausible(leg, a, b)) and (a.get('id'), b.get('id')) in (known or {}):
+                leg = known[(a['id'], b['id'])]
+                if borrowed is not None:
+                    borrowed.append(f'{a["name"]} → {b["name"]}')
             if len(leg) < 2 or not roads.plausible(leg, a, b):
                 raise BuildError(f'no plausible road from {a["name"]} to {b["name"]}')
             coords += leg if not coords else leg[1:]
@@ -362,6 +392,30 @@ def spelled(city: City, tables: list[dict]) -> tuple[list[dict], list[str]]:
     return out, notes
 
 
+def corrected(city: City, tables: list[dict]) -> tuple[list[dict], list[str]]:
+    """A correction's tables (city.replaces): only its lines, and of a line in `only` only the listed runs (by their
+    first departure); a listed run the files no longer print is a problem, so the correction never quietly shrinks."""
+    lines = {line for line, _ in city.replaces}
+    only = {(line, direction): set(starts) for line, direction, starts in city.only}
+    out, problems = [], []
+    for t in tables:
+        if t['line'] not in lines:
+            continue
+        wanted = only.get((t['line'], t.get('direction', 0)))
+        if wanted is None:
+            if not any(line == t['line'] for line, _ in only):  # a line in `only` keeps nothing else, either direction
+                out.append(t)
+            continue
+        runs = [r for r in t['runs'] if next((v for v in r if v), None) in wanted]
+        if runs:
+            out.append({**t, 'runs': runs})
+    for (line, direction), starts in only.items():
+        found = {next((v for v in r if v), None) for t in out if (t['line'], t.get('direction', 0)) == (line, direction) for r in t['runs']}
+        problems += [f'line {line} {direction}: no run leaves at {s} any more' for s in sorted(starts - found)]
+    problems += [f'line {line}: not in the files' for line in sorted(lines - {t['line'] for t in out})]
+    return out, problems
+
+
 def build(city: City, src: Sources, today: date, route=roads.route_window, length=road_length) -> tuple[dict[str, str], dict]:
     """The feed's files (name -> text) and its status; raises BuildError with every problem found."""
     page = re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', src.page)))
@@ -380,6 +434,9 @@ def build(city: City, src: Sources, today: date, route=roads.route_window, lengt
     notes = [f'{t["line"]} {t["direction"]} {t["service"]} ({t["file"]}): {n}' for t in tables for n in t.get('notes') or []]
     keys = [(t['line'], t.get('direction'), t.get('service')) for t in tables]
     problems += [f'line {x[0]}{" " + str(x[1]) + " " + x[2] if x[2] else ""} read from two files' for x in sorted({x for x in keys if keys.count(x) > 1}, key=str)]
+    if city.replaces and not problems:
+        tables, found = corrected(city, tables)
+        problems += found
     if hasattr(reader, 'combine') and not problems:
         try:
             tables, found = reader.combine(tables, city)
@@ -418,9 +475,13 @@ def build(city: City, src: Sources, today: date, route=roads.route_window, lengt
     files: dict[str, str] = {}
     if not problems:
         try:
-            rows, found = compose(city, tables, place, lambda pts: road_shape(pts, route), all_poles)
+            borrowed: list[str] = []
+            rows, found = compose(city, tables, place, lambda pts: road_shape(pts, route, src.feed_legs, borrowed), all_poles)
             problems += found
+            notes += [f'drawn as the feed draws it (no plausible road route): {leg}' for leg in dict.fromkeys(borrowed)]
             files = {name: to_text(r) for name, r in rows.items()}
+            if city.replaces:
+                files['replaces.txt'] = to_text([{'route_id': line, 'mode': mode} for line, mode in city.replaces])
         except BuildError as e:
             problems.append(str(e))
     if not problems:

@@ -399,7 +399,7 @@ class FeedTests(SimpleTestCase):
         self.assertEqual(json.loads((self.root / 'MARPROM' / 'status.json').read_text(encoding='utf-8'))['status'], 'failed')
 
     def test_jesenice_is_untouched(self):
-        self.assertEqual([r['id'] for r in citytt.health(self.today)], ['city-timetables:Jesenice', 'city-timetables:Piran', 'city-timetables:Ptuj',
+        self.assertEqual([r['id'] for r in citytt.health(self.today)], ['city-timetables:Jesenice', 'city-timetables:Piran', 'city-timetables:Ptuj', 'city-timetables:MOKoper',
                                                                                   'city-timetables:MARPROM'])
 
 
