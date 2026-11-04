@@ -511,6 +511,20 @@ def repair(coords: list, stops: list[dict], deadline: Optional[float] = None, ro
     return to_station_ends(out, stops), complete
 
 
+def repair_in_bays(coords: list, stops: list[dict], deadline: Optional[float] = None, road_only: bool = False, from_bay: bool = False) -> tuple[list, bool]:
+    """`repair` for a bus leaving a bay (platforms.py) or ending in one (its last stop `parked`): it drives out of the
+    bay to its second stop and into the bay from the last but one, and the line always reaches the bay itself, also
+    where the router stops at the road beside it. (geometry, complete)."""
+    parked = len(stops) > 1 and bool(stops[-1].get('parked'))
+    raw, complete = repair(coords, stops, deadline, road_only=road_only,
+                           reroute=(*((0,) if from_bay else ()), *((len(stops) - 2,) if parked else ())))
+    if from_bay and len(raw) > 1 and raw[0] != (first := [stops[0]['lon'], stops[0]['lat']]):
+        raw = [first, *raw]
+    if parked and len(raw) > 1 and raw[-1] != (last := [stops[-1]['lon'], stops[-1]['lat']]):
+        raw = [*raw, last]
+    return raw, complete
+
+
 def _repair_legs(coords: list, stops: list[dict], deadline: Optional[float], matching: bool, on_roads, reroute: Iterable[int]) -> tuple[list, bool]:
     bad = into_stations(coords, stops, bad_segments(coords, stops, {} if on_roads else None))
     for i in reroute:

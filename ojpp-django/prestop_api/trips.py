@@ -96,13 +96,7 @@ def road_shape(raw: list, stops: list[dict], mode: str, deadline: Optional[float
     at all, stop to stop; (geometry, complete)."""
     complete = True
     if mode == 'bus':
-        parked = len(stops) > 1 and bool(stops[-1].get('parked'))
-        raw, complete = roads.repair(raw, stops, deadline, road_only=replacement,
-                                     reroute=(*((0,) if from_bay else ()), *((len(stops) - 2,) if parked else ())))
-        if from_bay and len(raw) > 1 and raw[0] != (first := [stops[0]['lon'], stops[0]['lat']]):
-            raw = [first, *raw]
-        if parked and len(raw) > 1 and raw[-1] != (last := [stops[-1]['lon'], stops[-1]['lat']]):
-            raw = [*raw, last]
+        raw, complete = roads.repair_in_bays(raw, stops, deadline, road_only=replacement, from_bay=from_bay)
     elif mode == 'rail':
         raw = trim_spurs(raw)  # no sideways step onto the station's point (geometry.trim_spurs)
         from . import raillines

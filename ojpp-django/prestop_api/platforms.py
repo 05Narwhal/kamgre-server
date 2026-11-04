@@ -462,3 +462,22 @@ def place(stops: list[dict], departure: Optional[float], destination: str) -> tu
     if parks:
         out[-1] = {**stops[-1], 'lat': parks[0]['lat'], 'lon': parks[0]['lon'], 'parked': True}
     return out, bay
+
+
+def place_leg(stops: list[dict], departure: Optional[float], first: dict, last: dict) -> tuple[list[dict], Optional[dict]]:
+    """A planner's leg (`stops`: gtfsId, name, lat, lon) with its ends where `place` has them on the whole trip, whose
+    first and last stops are `first` and `last`; an end the trip only calls at on its way stays on the feed's point, as
+    the trip's own line does. Also the bay the leg leaves from (or None), as `place`."""
+    if not stops:
+        return stops, None
+    out = list(stops)
+    bay = None
+    if first.get('gtfsId') and stops[0].get('gtfsId') == first['gtfsId']:
+        bay = bay_for(first, departure, last.get('name') or '')
+        if bay:
+            out[0] = {**stops[0], 'lat': bay['lat'], 'lon': bay['lon']}
+    if len(stops) > 1 and last.get('gtfsId') and stops[-1].get('gtfsId') == last['gtfsId']:
+        parks = destination_bays(last['gtfsId'], towards=first.get('name') or '')
+        if parks:
+            out[-1] = {**stops[-1], 'lat': parks[0]['lat'], 'lon': parks[0]['lon'], 'parked': True}
+    return out, bay
