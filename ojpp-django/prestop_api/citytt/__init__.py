@@ -135,7 +135,8 @@ CITIES = {
         weekdays=(1, 1, 1, 1, 1, 0, 0), holidays_too=(),
         # The files print "Valid from 18.11.2022" and no end: check the page again before the next school year.
         start=date(2026, 9, 1), end=date(2027, 8, 31),
-        agency=('arriva', 'Arriva d.o.o.', 'https://arriva.si/'),
+        # OTP's own Koper operator: corrected runs keep the company of the runs they stand in for (one operator filter).
+        agency=('MPK', 'Mestni potniški promet Koper', 'https://arriva.si/'),
         bbox=(45.50, 13.68, 45.57, 13.78),
         replaces=(('9', 'replace'), ('2', 'add')),
         only=(('2', 0, ('10:55', '11:55')),),

@@ -1,3 +1,3 @@
 route_id,agency_id,route_short_name,route_long_name,route_type
-2,arriva,2,Koper – Semedela – Markovec – Bolnica – Koper,3
-9,arriva,9,Koper Ap – Potniški terminal – Koper Ap,3
+2,MPK,2,Koper – Semedela – Markovec – Bolnica – Koper,3
+9,MPK,9,Koper Ap – Potniški terminal – Koper Ap,3
