@@ -1,0 +1,30 @@
+{
+ "status": "ok",
+ "version": "22f5c4dd60ce",
+ "end": "2027-08-31",
+ "source": "https://arriva.si/en/passenger-transport/city-bus-transport/city-transport-koper/timetable-price-list-koper/",
+ "files": [
+  {
+   "file": "Line-2-Koper-Semedela-Markovec-Hospital-Koper-annual.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2026/02/Line-2-Koper-Semedela-Markovec-Hospital-Koper-annual.pdf",
+   "sha256": "06fd8542a4557b2e2de8088d0a4f7a6386f227e769e682cdb86132070c5a4f45"
+  },
+  {
+   "file": "Line-9-Koper-AP-Passenger-terminal-Koper-AP-annual.pdf",
+   "url": "https://arriva.si/wp-content/uploads/2026/02/Line-9-Koper-AP-Passenger-terminal-Koper-AP-annual.pdf",
+   "sha256": "fd9da5c244ccb92dd47c59e5b3afc1209e603a62c8ac605788295c79fda66971"
+  }
+ ],
+ "lines": {
+  "2": 2,
+  "9": 29
+ },
+ "services": {
+  "2 out DS": 2,
+  "9 out D": 29
+ },
+ "notes": [
+  "drawn as the feed draws it (no plausible road route): Zeleni park → Potniški terminal"
+ ],
+ "built": "2026-11-04"
+}
