@@ -217,6 +217,13 @@ def owns(gtfs_id: str) -> bool:
     return _feed_of(gtfs_id) is not None
 
 
+def stale(trip_id: str) -> bool:
+    """A trip OTP names under a feed read here that the feed does not have: OTP's older table of that feed (Ptuj,
+    Nov 2026), with times the operator no longer runs and no trip page."""
+    feed = _feed_of(trip_id or '')
+    return feed is not None and _trip(feed, trip_id) is None
+
+
 # OTP's copy of a feed can merge versions of the operator's file and prefix a trip id two of them share with the
 # version ('MOKranj:3_xfpW3oZOcB_155115', Kranj line 1, 19-20 Oct 2026); the realtime feed then names the run so, and
 # the file read here has it by its plain id, same stops and times.

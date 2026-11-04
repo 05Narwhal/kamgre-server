@@ -619,9 +619,21 @@ def _beaten(node: dict, others: list[dict]) -> bool:
     return False
 
 
+def _without_stale(data: dict) -> dict:
+    """OTP's connections minus those riding a run of an older table of a feed read here (supplement.stale): the
+    feed's own run, at its real times, is added in their place below."""
+    edges = (data.get('planConnection') or {}).get('edges')
+    if not edges or not _feeds():
+        return data
+    kept = [e for e in edges if not any(l.get('transitLeg') and supplement.stale((l.get('trip') or {}).get('gtfsId'))
+                                        for l in (e.get('node') or {}).get('legs') or [])]
+    return data if len(kept) == len(edges) else {**data, 'planConnection': {**data['planConnection'], 'edges': kept}}
+
+
 def add(data: dict, req: dict, anchor: Optional[int], query, budget: int) -> tuple[dict, Optional[dict]]:
     """`data` with the city bus connections after OTP's, and where the town search's pages go on from (None: there is
     no town search, cursors stay OTP's). `query`: the request's counted OTP query; `budget`: OTP queries left."""
+    data = _without_stale(data)
     if 'bus' not in req['modes'] or req['via'] or not _feeds():
         return data, None
     starts, ends = _feeds_near(req['origin']), _feeds_near(req['destination'])

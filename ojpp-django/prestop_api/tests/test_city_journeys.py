@@ -196,6 +196,15 @@ class CityJourneyTests(SimpleTestCase):
         # OTP's copy of the 08:00 run stays alone; the 09:00 run is still added.
         self.assertEqual([e['node']['legs'][0]['trip']['gtfsId'] for e in journeys._edges(data)], ['Jesenice:3_1-0800', 'Jesenice:1-0900'])
 
+    def test_otp_s_old_table_of_a_feed_read_here_gives_way_to_the_feed(self):
+        # Ptuj, 4 Nov 2026: OTP still has the pre-September table under the hand-kept feed's id; its runs have no trip page.
+        req = request(place('A'), place('D'))
+        data, _ = self.add(req)
+        own = journeys._edges(data)[0]['node']['legs'][0]
+        old = {**own, 'trip': {**own['trip'], 'gtfsId': 'Jesenice:Ml9LUsSMLVBBUF8wODAw'}}
+        data, _ = self.add(req, otp([old]))
+        self.assertEqual([e['node']['legs'][0]['trip']['gtfsId'] for e in journeys._edges(data)], ['Jesenice:1-0800', 'Jesenice:1-0900'])
+
     def test_a_live_delay_moves_the_ride(self):
         self.updates.return_value = {'Jesenice:1-0800': {'trip': {'tripId': 'Jesenice:1-0800', 'startDate': '20261026'},
                                                          'updates': [{'stopSequence': 1, 'departure': {'delay': 120}}]}}
