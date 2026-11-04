@@ -207,6 +207,25 @@ class BuildTests(SimpleTestCase):
             with self.assertRaisesRegex(build.BuildError, 'shape passes more than 50 m from Tomšičeva trgovina'):
                 build.build(JESENICE, sources(), self.today, route=snapped_away)
 
+    def test_a_leg_looping_out_of_its_first_stop_is_cut_where_the_bus_passes_it(self):
+        # Piran: the router left Bernardin K round the roundabout, 1.3 km, before driving the 576 m to Pirat
+        a = {'name': 'Bernardin K', 'lon': 13.571053, 'lat': 45.518658}
+        b = {'name': 'Pirat', 'lon': 13.5776012, 'lat': 45.5162499}
+        looped = [[a['lon'], a['lat']], [a['lon'], a['lat'] + 0.004], [a['lon'] + 0.003, a['lat'] + 0.004],
+                  [a['lon'] + 0.003, a['lat']], [a['lon'] + 0.0001, a['lat']], [b['lon'], b['lat']]]
+        self.assertFalse(build.roads.plausible(looped, a, b))
+        shape = build.road_shape([a, b], route=lambda window: [looped])
+        self.assertLess(build.geometry.cumulative(shape)[-1], 650)
+        self.assertLess(build.geometry.distance(shape[0], [a['lon'], a['lat']]), 30)
+        self.assertEqual(shape[-1], [b['lon'], b['lat']])
+
+    def test_a_leg_that_stays_implausible_fails(self):
+        a = {'name': 'A', 'lon': 13.571053, 'lat': 45.518658}
+        b = {'name': 'B', 'lon': 13.5776012, 'lat': 45.5162499}
+        far = [[a['lon'], a['lat']], [a['lon'] + 0.05, a['lat'] + 0.05], [b['lon'], b['lat']]]
+        with self.assertRaisesRegex(build.BuildError, 'no plausible road from A to B'):
+            build.road_shape([a, b], route=lambda window: [far])
+
 
 class CityBusTests(SimpleTestCase):
     """Hand-kept city buses publish no positions: the map draws them where their timetable puts them."""

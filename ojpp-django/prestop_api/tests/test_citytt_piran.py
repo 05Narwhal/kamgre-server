@@ -150,6 +150,23 @@ class CombineTests(SimpleTestCase):
         self.assertEqual(v['runs'], [['06:15', '06:18', '06:29', '06:39']])   # the 1.1.2 trip stays
         self.assertTrue(any(n.startswith('MERGED: 1.1.1 out D Piran 06:15 = 1.1.2 out V Piran 06:15') and n.endswith('dropped') for n in notes), notes)
 
+    def test_an_unmarked_twin_of_a_krka_run_is_the_same_bus_and_goes(self):
+        # Saturday prints Piran 06:15 twice: the Krka run and, beside it, the same 1.1.2 bus with no mark
+        tables, notes = arriva_grid.combine(files(out_so=([['05:30', '05:33', '05:40'], ['06:15', '06:18', '06:29'], ['06:15', '06:18', '06:29']],
+                                                          [False, True, False]),
+                                                  out_v=[['06:15', '06:18', '06:29', '06:39']]), PIRAN)
+        so = next(t for t in tables if (t['line'], t['direction'], t['service']) == ('1.1.1', 0, 'SO'))
+        self.assertEqual(so['runs'], [['05:30', '05:33', '05:40']])
+        self.assertTrue(any(n.startswith('TWICE: 1.1.1 out SO Piran 06:15') for n in notes), notes)
+        self.assertFalse(any(n.startswith('DECIDE') for n in notes), notes)
+
+    def test_same_times_with_no_krka_run_beside_them_stay_for_a_person(self):
+        tables, notes = arriva_grid.combine(files(out_so=([['06:15', '06:18', '06:29']], [False]),
+                                                  out_v=[['06:15', '06:18', '06:29', '06:39']]), PIRAN)
+        so = next(t for t in tables if (t['line'], t['direction'], t['service']) == ('1.1.1', 0, 'SO'))
+        self.assertEqual(so['runs'], [['06:15', '06:18', '06:29']])
+        self.assertTrue(any(n.startswith('DECIDE: 1.1.1 out SO Piran 06:15') for n in notes), notes)
+
     def test_a_krka_run_no_1_1_2_run_matches_stays_and_is_reported(self):
         tables, notes = arriva_grid.combine(files(out_so=([['08:00', '08:03', '08:10']], [True]), out_v=[['06:15', '06:18', '06:29', '06:39']]), PIRAN)
         so = next(t for t in tables if (t['line'], t['direction'], t['service']) == ('1.1.1', 0, 'SO'))

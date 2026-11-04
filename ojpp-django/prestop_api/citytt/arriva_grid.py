@@ -327,8 +327,10 @@ def _label(table: dict, k: int) -> str:
 def combine(tables: list[dict], city) -> tuple[list[dict], list[str]]:
     """Line 1.1.1's run marked "Krka" is the same bus as the 1.1.2 run that calls at its first stop at its first time
     (and agrees on every stop they share): the 1.1.2 trip stays, the 1.1.1 trip goes for the days they overlap. A
-    marked run no 1.1.2 run matches stays. Returns the tables and the notes (merged, unmatched, and the pairs left
-    for a person to decide: same times Piran - Lucija AP, no marker)."""
+    marked run no 1.1.2 run matches stays. An unmarked run printed beside the marked one with the same times as the
+    1.1.2 run that took it is that bus again (Saturday and Sunday print Piran 06:15 and 09:00 twice) and goes too.
+    Returns the tables and the notes (merged, twice, unmatched, and the pairs left for a person to decide: same times
+    Piran - Lucija AP, no marker)."""
     for line, services in REQUIRED.items():
         for direction in (0, 1):
             have = {t['service'] for t in tables if t['line'] == line and t['direction'] == direction}
@@ -338,6 +340,7 @@ def combine(tables: list[dict], city) -> tuple[list[dict], list[str]]:
     notes: list[str] = []
     long = [t for t in tables if t['line'] == KRKA_LINE]
     moved: list[tuple[dict, list, bool, str]] = []
+    taken: set[tuple[int, int, int]] = set()  # (1.1.2 table, its run, the 1.1.1 table whose marked run it took)
     for t in [t for t in tables if t['line'] != KRKA_LINE]:
         keep_runs, keep_krka = [], []
         for k, run in enumerate(t['runs']):
@@ -355,6 +358,7 @@ def combine(tables: list[dict], city) -> tuple[list[dict], list[str]]:
                     theirs = dict(_calls(u, other))
                     if calls[0][1] == theirs.get(calls[0][0]) and all(theirs[n] == v for n, v in calls if n in theirs):
                         hits.append(f'{_label(u, m)} (service {u["service"]})')
+                        taken.add((id(u), m, id(t)))
                         left = left - _days(city, u['service'])
             if not hits:
                 notes.append(f'UNMATCHED: {_label(t, k)} is marked Krka and no 1.1.2 run matches: kept')
@@ -378,6 +382,7 @@ def combine(tables: list[dict], city) -> tuple[list[dict], list[str]]:
     for t in tables:
         if t['line'] == KRKA_LINE:
             continue
+        twice: set[int] = set()
         for k, run in enumerate(t['runs']):
             if t['krka'][k]:
                 continue
@@ -391,7 +396,14 @@ def combine(tables: list[dict], city) -> tuple[list[dict], list[str]]:
                 for m, other in enumerate(u['runs']):
                     theirs = dict(_calls(u, other))
                     if all(e in theirs for e in ends) and all(theirs[n] == v for n, v in mine.items() if n in theirs and _between(t, n, ends)):
-                        notes.append(f'DECIDE: {_label(t, k)} and {_label(u, m)} have the same times {ends[0]} - {ends[1]}, no marker: both kept')
+                        if (id(u), m, id(t)) in taken:
+                            twice.add(k)
+                            notes.append(f'TWICE: {_label(t, k)} is {_label(u, m)} printed again beside its Krka run: dropped')
+                        else:
+                            notes.append(f'DECIDE: {_label(t, k)} and {_label(u, m)} have the same times {ends[0]} - {ends[1]}, no marker: both kept')
+        if twice:
+            t['runs'] = [r for k, r in enumerate(t['runs']) if k not in twice]
+            t['krka'] = [x for k, x in enumerate(t['krka']) if k not in twice]
     return tables, notes
 
 

@@ -297,7 +297,8 @@ def check(city: City, files: dict[str, str], tables: list[dict], today: date) ->
 
 def road_shape(points: list[dict], route=roads.route_window) -> list:
     """Coordinates along the roads through the stops (Valhalla, bus costing); raises BuildError on a missing or
-    implausible leg."""
+    implausible leg. A leg that loops out of its first stop or into its last to turn round is cut where the bus first
+    passes the stop, as the national feed's legs are (Piran: Bernardin K → Pirat looped 1.3 km round the roundabout)."""
     coords: list = []
     for start in range(0, len(points) - 1, roads.MAX_LOCATIONS - 1):
         window = points[start:start + roads.MAX_LOCATIONS]
@@ -305,6 +306,8 @@ def road_shape(points: list[dict], route=roads.route_window) -> list:
         if not legs or len(legs) != len(window) - 1:
             raise BuildError(f'no road route through {window[0]["name"]} … {window[-1]["name"]}')
         for a, b, leg in zip(window, window[1:], legs):
+            if len(leg) > 2 and not roads.plausible(leg, a, b):
+                leg = roads.untangle(leg)
             if len(leg) < 2 or not roads.plausible(leg, a, b):
                 raise BuildError(f'no plausible road from {a["name"]} to {b["name"]}')
             coords += leg if not coords else leg[1:]
