@@ -1182,6 +1182,9 @@ def alerts():
         cov = h.get('coverage')
         if cov and cov.get('unexplained'):
             out.append(('warn', 'data', f'{cov["unexplained"]} buses left out unexplained (yarn coverage)'))
+        quiet = (h.get('cityFeeds') or {}).get('empty')
+        if quiet:
+            out.append(('warn', 'data', f'city feeds with no trips on a coming day: {", ".join(sorted({e["feed"] for e in quiet}))}'))
         if h.get('maintenance'):
             out.append(('warn', 'data', 'maintenance notice is on'))
     if e:
