@@ -1,0 +1,9 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+1,Postojna,1,Proga 1,3
+2,Postojna,2,Proga 2,3
+5l2y,Postojna,5,Šolska 2,3
+ducu,Postojna,4,Šolska 1,3
+enzk,Postojna,8,"Šolska Popoldanska 1,2",3
+l6ti,Postojna,7,Šolska 4,3
+mamr,Postojna,6,Šolska 3,3
+pop3,Postojna,9,Šolska Popoldanska 3,3

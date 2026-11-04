@@ -169,6 +169,10 @@ CITIES = {
                   ('Šolska 3', 'mamr', '6'), ('Šolska 4', 'l6ti', '7'), ('Šolska Popoldanska 1,2', 'enzk', '8'),
                   ('Šolska Popoldanska 3', 'pop3', '9')),
         unread=('Delavska',),
+        # Šolska 4's 7:32 starts at Raubarkomanda (a request stop) and calls at Javorniška pot 4: no pole in OSM, and OTP's
+        # Javorniška pot 4 (Postojna:hj0f) is on no run, so not among the served stops (2026-11-04). The run starts at
+        # Javorniška pot 7:40, as OTP's does.
+        unplaced=('Raubarkomanda', 'Javorniška pot 4'),
         replaces=(('1', 'add'), ('2', 'add'), ('ducu', 'all'), ('5l2y', 'all'), ('mamr', 'all'), ('l6ti', 'all'),
                   ('enzk', 'all'), ('pop3', 'add')),
         only_services=(('1', ('SO',)), ('2', ('SO',))),

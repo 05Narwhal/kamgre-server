@@ -1,0 +1,9 @@
+route_id,mode
+1,add
+2,add
+ducu,all
+5l2y,all
+mamr,all
+l6ti,all
+enzk,all
+pop3,add

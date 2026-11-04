@@ -1,0 +1,38 @@
+{
+ "status": "ok",
+ "version": "df970028af4c",
+ "end": "2027-08-31",
+ "source": "https://www.nomago.si/avtobusni-prevozi/mestni-promet/postojna/vozni-red",
+ "files": [
+  {
+   "file": "2026_Furman_VozniRed_A_01.pdf",
+   "url": "https://www.nomago.si/storage/app/media/mesta/postojna/2026_Furman_VozniRed_A_01.pdf",
+   "sha256": "7e9e7cd28bb25ccd5352d3689cd78124d0e7fad2467d81f77dc182969df8b83e"
+  }
+ ],
+ "lines": {
+  "1": 7,
+  "2": 6,
+  "5l2y": 1,
+  "ducu": 1,
+  "enzk": 2,
+  "l6ti": 1,
+  "mamr": 1,
+  "pop3": 2
+ },
+ "services": {
+  "1 out SO": 7,
+  "2 out SO": 6,
+  "5l2y out SOL": 1,
+  "ducu out SOL": 1,
+  "enzk out SOL": 2,
+  "l6ti out SOL": 1,
+  "mamr out SOL": 1,
+  "pop3 out SOL": 2
+ },
+ "notes": [
+  "Šolska Popoldanska 1,2 0 SOL (2026_Furman_VozniRed_A_01.pdf): Raubarkomanda 1 Če je potnik: no time, left out",
+  "l6ti 0 SOL: left out, no pole: Raubarkomanda, Javorniška pot 4"
+ ],
+ "built": "2026-11-04"
+}

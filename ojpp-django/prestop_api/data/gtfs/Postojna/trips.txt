@@ -1,0 +1,22 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,shape_id
+1,SO,1-0-SO-0813,Kazarje,0,1
+1,SO,1-0-SO-0840,Kazarje,0,1-2
+1,SO,1-0-SO-0910,Kazarje,0,1-2
+1,SO,1-0-SO-0940,Kazarje,0,1-2
+1,SO,1-0-SO-1038,Kazarje,0,1-3
+1,SO,1-0-SO-1110,Kazarje,0,1-2
+1,SO,1-0-SO-1140,Kazarje,0,1-2
+2,SO,2-0-SO-0815,Inkubator,0,2
+2,SO,2-0-SO-0855,Inkubator,0,2
+2,SO,2-0-SO-0935,Inkubator,0,2
+2,SO,2-0-SO-1115,Inkubator,0,2
+2,SO,2-0-SO-1155,Inkubator,0,2
+2,SO,2-0-SO-1235,Inkubator,0,2
+5l2y,SOL,5l2y-0-SOL-0700,Spodnji Burger,0,5l2y
+ducu,SOL,ducu-0-SOL-0702,Spodnji Burger,0,ducu
+enzk,SOL,enzk-0-SOL-1327,Šolski center,0,enzk
+enzk,SOL,enzk-0-SOL-1349,Šolski center,0,enzk
+l6ti,SOL,l6ti-0-SOL-0740,Spodnji Burger,0,l6ti
+mamr,SOL,mamr-0-SOL-0750,Spodnji Burger,0,mamr
+pop3,SOL,pop3-0-SOL-1235,Zagon,0,pop3
+pop3,SOL,pop3-0-SOL-1412,Zagon,0,pop3-2
