@@ -56,7 +56,7 @@ STATIONS = {
     'ljubljana-ap': {'name': 'Avtobusna postaja Ljubljana', 'place': 'Ljubljana', 'lat': 46.05805, 'lon': 14.51475, 'radius': 200, 'ground': 130,
                      'board': 'ap-ljubljana', 'ids': ['IJPP:1168813', 'IJPP:1126954'],
                      'next_door': {'place': 'Ljubljana', 'lat': 46.058509, 'lon': 14.512924, 'radius': 150, 'ids': ['IJPP:1122804']}},
-    'kranj-ap': {'name': 'Avtobusna postaja Kranj', 'place': 'Kranj', 'lat': 46.2463, 'lon': 14.3547, 'radius': 120, 'ground': 90,
+    'kranj-ap': {'name': 'Avtobusna postaja Kranj', 'place': 'Kranj', 'lat': 46.2463, 'lon': 14.3547, 'radius': 120, 'ground': 130,
                  'ids': ['IJPP:1121237', 'IJPP:1121238']},
     'maribor-ap': {'name': 'Avtobusna postaja Maribor', 'place': 'Maribor', 'lat': 46.55956, 'lon': 15.65575, 'radius': 120, 'ground': 110,
                    'ids': ['IJPP:1127365']},

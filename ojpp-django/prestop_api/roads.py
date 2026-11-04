@@ -552,4 +552,21 @@ def _repair_legs(coords: list, stops: list[dict], deadline: Optional[float], mat
                 break
         found = legs.get_many(keys)
         missing = set(keys) - set(found)
+    for i in reroute:
+        if 0 <= i < len(bad) and around_the_town(found.get(key := leg_key(stops[i], stops[i + 1])), coords, stops, i):
+            del found[key]
     return splice(coords, stops, bad, found), (not missing or not settings.PRESTOP_VALHALLA_URL) and not matching
+
+
+def around_the_town(leg: Optional[list], coords: list, stops: list[dict], i: int) -> bool:
+    """A routed leg to or from a bay that goes the long way round where the bus's own line goes straight there: the
+    router may not drive a yard's road the way buses do (Kranj: 1.6 km round the town for 420 m), so the line keeps
+    the feed's way and runs along the yard to the bay. Same limit as the report (DETOUR_FLAG), and well over the feed."""
+    if not leg or len(leg) < 2:
+        return False
+    length = geometry.cumulative(leg)[-1]
+    straight = geometry.distance([stops[i]['lon'], stops[i]['lat']], [stops[i + 1]['lon'], stops[i + 1]['lat']])
+    if length <= max(DETOUR_FLAG[0] * straight, straight + DETOUR_FLAG[1]):
+        return False
+    along = [a for a, _ in geometry.project_stops(coords, stops[i:i + 2])]
+    return length > 1.3 * max(along[1] - along[0], straight)
