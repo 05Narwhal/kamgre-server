@@ -1,0 +1,413 @@
+{
+ "status": "ok",
+ "version": "a5c9cb2c98cb",
+ "end": "2026-12-31",
+ "source": "https://www.marprom.si/koda-linije_nova/",
+ "files": [
+  {
+   "file": "gtfs.zip",
+   "url": "https://vozniredi.marprom.si/GTFS/gtfs.zip",
+   "sha256": "fe79449b033d39bb873055f88f73c9183586d8494c18d0317bcbd6d137c5f785"
+  },
+  {
+   "file": "PVRG5-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG5-20260901_plus.pdf",
+   "sha256": "86e05553a9cbd3518a708c7900cbb6627edb8628c605febbb8c4350aa422934f"
+  },
+  {
+   "file": "PVRG5-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG5-20260901_minus.pdf",
+   "sha256": "2873adf9892e70d1ed7b178f52419468326d465b070d904ad63c55b58fd7d5ac"
+  },
+  {
+   "file": "PVRG1-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG1-20260901_plus.pdf",
+   "sha256": "ef4bcd1217d1fcfd06d481df2d195492ad49526fdec5bdc71a21a6ed6bfd9e2d"
+  },
+  {
+   "file": "PVRG1-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG1-20260901_minus.pdf",
+   "sha256": "0048d74a16c7b70a5533f25f42ec0cfd7bba01058be2d4d10dab35b5b105a860"
+  },
+  {
+   "file": "PVRG2-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG2-20260901_plus.pdf",
+   "sha256": "0ea3616f1bec0b3e1ed61030bfda594c88bd66bdee45b4360123b490a4237fc5"
+  },
+  {
+   "file": "PVRG2-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG2-20260901_minus.pdf",
+   "sha256": "9e34ea61e6a778f265551a07ce7230d70e363db7bc37d20bbf045b05c21c8e8f"
+  },
+  {
+   "file": "PVRG3-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG3-20260901_plus.pdf",
+   "sha256": "b285f4e9ebb835e23ada581202db50575950d7dc273f50a3c6bb6a5b1d3c55ef"
+  },
+  {
+   "file": "PVRG3-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG3-20260901_minus.pdf",
+   "sha256": "4b379eab2bd33fd83f184ee569bee9aff53b91416f17e86f64d9ad38603a32ee"
+  },
+  {
+   "file": "PVRG4-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG4-20260901_plus.pdf",
+   "sha256": "3106636013b78dfa5f77557261313ba8508d592b714d10cb3e03236418db3dea"
+  },
+  {
+   "file": "PVRG4-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG4-20260901_minus.pdf",
+   "sha256": "bed3cff47babc6ddb72f8aab08bc3df6ec5521ad83bfffd224d6eba21cd5ca90"
+  },
+  {
+   "file": "PVRG6-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG6-20260901_plus.pdf",
+   "sha256": "fa8c35904b5a2442f6b2502db9c1457b3996faf45061cb91c85d62de2be51a76"
+  },
+  {
+   "file": "PVRG6-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRG6-20260901_minus.pdf",
+   "sha256": "5a39327c3359f1f1d8f0cdeb09d26950ce75942ccb597a1a2f98a50a44f9d4ef"
+  },
+  {
+   "file": "PVRP7-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP7-20260901_plus.pdf",
+   "sha256": "379602a3ae11902d3391de86bc5cff0cab912af859bf94ec2f022eff08338696"
+  },
+  {
+   "file": "PVRP7-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP7-20260901_minus.pdf",
+   "sha256": "fef57d6b01a17949c24a413502fcd819107f57549d40a9d9f5b613243aceb48b"
+  },
+  {
+   "file": "PVRP8-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP8-20260901_plus.pdf",
+   "sha256": "fbc6aebfe36f2de8858073d7f6a638bc81a62fa729e9b56480b44422ddfc5e3e"
+  },
+  {
+   "file": "PVRP8-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP8-20260901_minus.pdf",
+   "sha256": "16c5d0e852add1e731b53ce3b7f212321039f4a0d68cdbec929a9a8f499740e6"
+  },
+  {
+   "file": "PVRP9-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP9-20260901_plus.pdf",
+   "sha256": "9ec591cd2ad1f1c049516c7d1e4a5a69dc0a7a5fa388d5c651fb05c65e1c3105"
+  },
+  {
+   "file": "PVRP9-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP9-20260901_minus.pdf",
+   "sha256": "d8996ef63bbc0e05665d7c2393659b6c8fdaa0cda4601e6b849b9c33b61cb133"
+  },
+  {
+   "file": "PVRP10-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP10-20260901_plus.pdf",
+   "sha256": "247861e55263330cea56999d09d8b73fe372d89785aef005cfe1c7e34b8d362d"
+  },
+  {
+   "file": "PVRP10-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP10-20260901_minus.pdf",
+   "sha256": "a71038d7367948c9665fe9d0f8e11bf832c8bb8311b66b3f8c021fbea2fb8dd2"
+  },
+  {
+   "file": "PVRP11-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP11-20260901_plus.pdf",
+   "sha256": "1bebc9ef2538946ce89fb7b45fa00ba4eb61ca08564891766dccea82559945ab"
+  },
+  {
+   "file": "PVRP11-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP11-20260901_minus.pdf",
+   "sha256": "f8fc92fa64d3bf86107273a532be10ff9c00851b1782d5284689b8412391db1f"
+  },
+  {
+   "file": "PVRP12-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP12-20260901_plus.pdf",
+   "sha256": "31f8317a375431c997d3266e78ddf4668ef48c46d5b9aee047082f6faa64ca96"
+  },
+  {
+   "file": "PVRP12-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP12-20260901_minus.pdf",
+   "sha256": "02e31792f722ea1061eebef09153446a5198c9feb6607d1662a60a7265727be8"
+  },
+  {
+   "file": "PVRP13-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP13-20260901_plus.pdf",
+   "sha256": "3b288aa53ddd0f01d037772f8a699f8758f409a78fad9aac655bfd8808fddcf6"
+  },
+  {
+   "file": "PVRP13-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP13-20260901_minus.pdf",
+   "sha256": "112ccf7f951e5cf51e3877851b8a6c4f7274df72eb12b1dc38d90bc59ced819e"
+  },
+  {
+   "file": "PVRP14-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP14-20260901_plus.pdf",
+   "sha256": "dd66e2f45d614c226cacfac79f1df7639e80eae5b0b59842061dc3a36bbfc1b6"
+  },
+  {
+   "file": "PVRP14-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP14-20260901_minus.pdf",
+   "sha256": "25b930cf340deaa5648c87c9a6f7de904a201c82eb3f53b5ad28ca037049f3e5"
+  },
+  {
+   "file": "PVRP15-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP15-20260901_plus.pdf",
+   "sha256": "fd66bb0c3dec7f5f8800d78a14d0917f27d9771d5c62d454ad2a8a7addbab165"
+  },
+  {
+   "file": "PVRP15-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP15-20260901_minus.pdf",
+   "sha256": "c749ac389f48365ce19b5ed0201c4469e18ebb9832602bb69dda806dc79dfb36"
+  },
+  {
+   "file": "PVRP16-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP16-20260901_plus.pdf",
+   "sha256": "4b6910cdd806d9a256de372d1a8e3b956a9794274c28c06e093a6ff76d0f9614"
+  },
+  {
+   "file": "PVRP16-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP16-20260901_minus.pdf",
+   "sha256": "6b79fd84d886e84205bd5327bddf78866d37547764aa087c4b0718b6b3c68225"
+  },
+  {
+   "file": "PVRP17-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP17-20260901_plus.pdf",
+   "sha256": "b5424521d6290c168f939e08559ee26d14cfc7f3250101e68cee4b6dffdf0742"
+  },
+  {
+   "file": "PVRP17-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP17-20260901_minus.pdf",
+   "sha256": "61ecd31408a84c6461c02c2e41aaaa119a0b12d0a8d025291eb54236c26e4606"
+  },
+  {
+   "file": "PVRP18-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP18-20260901_plus.pdf",
+   "sha256": "3f45069ef8c96d926477e77018b6facc90b42cc3c23d38f7a5b73ec1c48a3a73"
+  },
+  {
+   "file": "PVRP18-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP18-20260901_minus.pdf",
+   "sha256": "5e90240a9f59328f3fef74a4cf7f75325d02ce51be2ff87883ca61b1bbbfabe4"
+  },
+  {
+   "file": "PVRP19-20260901_plus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP19-20260901_plus.pdf",
+   "sha256": "5942e8b9ed81aa6000106d8d89d2699f3aaff19447661f3da048c32714d9aed3"
+  },
+  {
+   "file": "PVRP19-20260901_minus.pdf",
+   "url": "https://www.marprom.si/dokumentacija/prihajajoci-vozni-redi/PVRP19-20260901_minus.pdf",
+   "sha256": "fe3aa8c1a2acdede2822404e9384e064dfef5c3dd25f43aab55ec205c73fcc11"
+  }
+ ],
+ "lines": {
+  "G1": 120,
+  "G2": 112,
+  "G3": 81,
+  "G4": 82,
+  "G5": 75,
+  "G6": 119,
+  "P10": 37,
+  "P11": 54,
+  "P12": 38,
+  "P13": 43,
+  "P14": 30,
+  "P15": 56,
+  "P16": 50,
+  "P17": 49,
+  "P18": 69,
+  "P19": 27,
+  "P7": 44,
+  "P8": 39,
+  "P9": 28
+ },
+ "weekend": {
+  "saturday": {
+   "equal": 10386,
+   "published": 11192,
+   "pdf": 10822,
+   "lines": {
+    "G1": {
+     "equal": 611,
+     "published": 611,
+     "pdf": 624
+    },
+    "G2": {
+     "equal": 435,
+     "published": 435,
+     "pdf": 435
+    },
+    "G3": {
+     "equal": 1724,
+     "published": 1724,
+     "pdf": 1799
+    },
+    "G4": {
+     "equal": 824,
+     "published": 824,
+     "pdf": 824
+    },
+    "G5": {
+     "equal": 1,
+     "published": 572,
+     "pdf": 336
+    },
+    "G6": {
+     "equal": 990,
+     "published": 990,
+     "pdf": 990
+    },
+    "P10": {
+     "equal": 246,
+     "published": 415,
+     "pdf": 246
+    },
+    "P11": {
+     "equal": 409,
+     "published": 417,
+     "pdf": 409
+    },
+    "P12": {
+     "equal": 812,
+     "published": 812,
+     "pdf": 812
+    },
+    "P13": {
+     "equal": 176,
+     "published": 184,
+     "pdf": 176
+    },
+    "P14": {
+     "equal": 575,
+     "published": 575,
+     "pdf": 575
+    },
+    "P15": {
+     "equal": 476,
+     "published": 476,
+     "pdf": 476
+    },
+    "P16": {
+     "equal": 516,
+     "published": 516,
+     "pdf": 516
+    },
+    "P17": {
+     "equal": 403,
+     "published": 403,
+     "pdf": 403
+    },
+    "P18": {
+     "equal": 664,
+     "published": 676,
+     "pdf": 677
+    },
+    "P19": {
+     "equal": 400,
+     "published": 400,
+     "pdf": 400
+    },
+    "P7": {
+     "equal": 409,
+     "published": 409,
+     "pdf": 409
+    },
+    "P8": {
+     "equal": 465,
+     "published": 465,
+     "pdf": 465
+    },
+    "P9": {
+     "equal": 250,
+     "published": 288,
+     "pdf": 250
+    }
+   },
+   "agrees": false
+  },
+  "sunday": {
+   "equal": 6025,
+   "published": 6138,
+   "pdf": 6038,
+   "lines": {
+    "G1": {
+     "equal": 429,
+     "published": 429,
+     "pdf": 429
+    },
+    "G2": {
+     "equal": 281,
+     "published": 281,
+     "pdf": 281
+    },
+    "G3": {
+     "equal": 1200,
+     "published": 1200,
+     "pdf": 1200
+    },
+    "G4": {
+     "equal": 369,
+     "published": 369,
+     "pdf": 369
+    },
+    "G6": {
+     "equal": 705,
+     "published": 705,
+     "pdf": 705
+    },
+    "P10": {
+     "equal": 0,
+     "published": 92,
+     "pdf": 0
+    },
+    "P11": {
+     "equal": 246,
+     "published": 255,
+     "pdf": 246
+    },
+    "P12": {
+     "equal": 520,
+     "published": 520,
+     "pdf": 520
+    },
+    "P15": {
+     "equal": 414,
+     "published": 414,
+     "pdf": 414
+    },
+    "P16": {
+     "equal": 468,
+     "published": 468,
+     "pdf": 468
+    },
+    "P18": {
+     "equal": 612,
+     "published": 624,
+     "pdf": 625
+    },
+    "P7": {
+     "equal": 409,
+     "published": 409,
+     "pdf": 409
+    },
+    "P8": {
+     "equal": 372,
+     "published": 372,
+     "pdf": 372
+    }
+   },
+   "agrees": false
+  }
+ },
+ "shapes": {
+  "published trip": 1621,
+  "published trip with more stops": 175,
+  "published shape": 203
+ },
+ "aloneDepartures": {
+  "P8": 7,
+  "P10": 5,
+  "P16": 1
+ },
+ "built": "2026-11-04"
+}

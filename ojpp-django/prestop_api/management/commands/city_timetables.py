@@ -7,8 +7,10 @@
         # rewrite <file>.expected.json for every fixture PDF: check each changed run against the PDF first
 
 arriva.si answers only from Slovenia: run it on a PC there (`yarn city-timetables`) and commit the folder. Needs
-OTP, Overpass and Valhalla (ojpp.sh uses the local one on :8002 when it runs).
+OTP, Overpass and Valhalla (ojpp.sh uses the local one on :8002 when it runs). Marprom needs none of them, only
+marprom.si and the published GTFS (about 60 requests, one a second, and some minutes to read the PDFs).
 """
+import importlib
 import json
 from datetime import date
 from pathlib import Path
@@ -36,10 +38,14 @@ class Command(BaseCommand):
         failed = differs = False
         for c in [CITIES[city]] if city else CITIES.values():
             try:
-                page, files = build.fetch(c)
-                stops, runs = build.feed_poles(c)
-                osm_stops, osm_runs = build.osm_poles(c)
-                out, status = build.build(c, build.Sources(page, files, stops, runs, osm_stops, osm_runs), today)
+                reader = importlib.import_module(f'prestop_api.citytt.{c.reader}')
+                if hasattr(reader, 'run'):  # a reader that fetches and builds on its own (Marprom: no poles, no routing)
+                    out, status = reader.run(c, today)
+                else:
+                    page, files = build.fetch(c)
+                    stops, runs = build.feed_poles(c)
+                    osm_stops, osm_runs = build.osm_poles(c)
+                    out, status = build.build(c, build.Sources(page, files, stops, runs, osm_stops, osm_runs), today)
             except build.BuildError as e:
                 failed = True
                 self.stderr.write(f'{c.name}: build failed, the folder stays as it was:\n  ' + str(e).replace('\n', '\n  '))

@@ -36,3 +36,28 @@ Slovenia (arriva.si refuses other countries, the server included), check the sum
   are one marker), else the OpenStreetMap pole (`osm<node>`): Straža, Tomšičeva trgovina, Tomšičeva I and II,
   OŠ Prežihov Voranc, Blejska Dobrava pokopališče. Which pole a direction uses follows OTP's patterns and OSM's
   bus route relations (citytt/poles.py). Shapes are routed with Valhalla.
+
+## MARPROM (Maribor)
+
+Written by `manage.py city_timetables --city MARPROM` (prestop_api/citytt/marprom.py), not by hand; `yarn city-timetables`
+rebuilds it (about 60 requests, one a second, and some minutes to read the PDFs). `--check` compares without writing;
+/health shows `city-timetables:MARPROM`.
+
+- Why: Marprom's published feed (<https://vozniredi.marprom.si/GTFS/gtfs.zip>) ends its weekday service 8726 on
+  2026-08-31 and nothing replaces it, so every stop was empty Monday to Friday from 1 September. Each line's page
+  (`marprom.si/koda-linije_nova/<line>_nova/`) links next timetables as `PVR<line>-20260901_plus.pdf` / `_minus.pdf`, one
+  page per stop (the site's own `_plus_007.pdf` per stop are skipped). Ids stay the published feed's (stop `192`, route, shapes).
+- Weekday trips are rebuilt from the pages (`pdf-weekday`, Monday to Friday; `pdf-holiday` on the ŠP school-holiday ranges
+  the PDFs print). A page lists one stop's departures, so a trip is chained from the stops it passes: each departure is
+  matched to the one at the next stop that the published run time expects (within 2 min, in order); a departure nothing
+  continues ends its trip, one nothing led up to starts a new one. No time is made up. A trip has no last stop (nothing
+  departs from it, so the PDFs have no page for it) and a stop whose weekday table is empty is passed by.
+  Trip ids are `<line>-<plus|minus>-<wd|sp>-<first stop_code>-<HHMM>`, `-2` for a true duplicate (twin buses).
+- Saturday and Sunday keep the published trips (8727, 8728); the summer tables 8726 and 8729 are dropped. They run on to
+  the PDFs' end (2027-08-31) only when the PDFs' Saturday and Sunday departures equal the published ones (99.5 %, both
+  ways); otherwise they end where the published feed does and /health says stale 14 days before. `status.json` lists
+  how far each line agrees.
+- Marks on the pages: `<>` is an empty template field (never drawn); `*` after a minute is a line variant, the legend at
+  the foot of the page names it ("Vozi do Lesarske šole."): such trips pass a stop the others skip.
+- Each file is checked as supplement.py reads it; an unreadable file, a stop code the published feed lacks, or a line
+  without weekday trips fails the build and leaves this folder as it was.

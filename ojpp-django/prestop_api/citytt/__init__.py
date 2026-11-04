@@ -9,6 +9,10 @@ Sources (docs/research/2026-10-23-city-bus-sources.md):
 - Jesenice: Arriva's city lines 1A, 1B, 2A, 2B, one Word-table PDF each (arriva.py). arriva.si answers only from
   Slovenia (403 from the Oracle server in Milan, Globalping 2026-10-23), so the command runs on a PC in Slovenia
   (`yarn city-timetables`) and the folder is committed; the server never fetches it.
+- Maribor: Marprom's published feed ends its weekday service 2026-08-31 and nothing follows it, but each line's page links
+  next September's timetables as PDFs, one per direction and stop (marprom.py). The weekday trips are rebuilt from those
+  pages; the published Saturday and Sunday trips stay. marprom.py fetches and builds on its own (`run`), since it needs
+  no pole matching or routing: no OTP, Overpass or Valhalla.
 
 Only the command and the tests import the readers (pdfplumber is heavy); the API reads `health()` alone.
 """
@@ -48,6 +52,19 @@ CITIES = {
         start=date(2025, 10, 1), end=date(2027, 6, 24),
         agency=('arriva', 'Arriva d.o.o.', 'https://arriva.si/'),
         bbox=(46.40, 13.96, 46.49, 14.13),
+    ),
+    'MARPROM': City(
+        feed='MARPROM', name='Maribor',
+        page='https://www.marprom.si/koda-linije_nova/{line}_nova/',   # one page per line: {line} is its code in lower case
+        links=r'(https?://www\.marprom\.si/dokumentacija/[^"\'\s<>]*/PVR{line}-(\d{8})_(plus|minus)\.pdf)',
+        reader='marprom',
+        days='',               # unused: the PDFs name their own days and the ŠP (school holiday) dates
+        weekdays=(1, 1, 1, 1, 1, 0, 0), holidays_too=(),
+        # The PDFs start on 2026-09-01 and have no end; their ŠP list reaches 2027-08-31. The feed's real end is the
+        # calendar's (Saturday and Sunday only run on when the PDFs agree with the published ones): see marprom.compose.
+        start=date(2026, 9, 1), end=date(2027, 8, 31),
+        agency=('3', 'Marprom', 'https://marprom.si'),
+        bbox=(46.45, 15.45, 46.70, 15.85),
     ),
 }
 

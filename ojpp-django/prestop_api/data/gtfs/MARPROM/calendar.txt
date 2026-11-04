@@ -1,0 +1,5 @@
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+8727,0,0,0,0,0,1,0,20260707,20261231
+8728,0,0,0,0,0,0,1,20260707,20261231
+pdf-weekday,1,1,1,1,1,0,0,20260901,20270831
+pdf-holiday,0,0,0,0,0,0,0,20260901,20270831

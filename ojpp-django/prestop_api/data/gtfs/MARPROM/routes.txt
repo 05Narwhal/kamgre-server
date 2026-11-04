@@ -1,0 +1,20 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+65,3,G5,Rotovž,3
+67,3,G1,Tezno,3
+68,3,G2,Nova vas,3
+69,3,G3,Mestna krožna linija,3
+70,3,G4,Studenci - Limbuš,3
+71,3,G6,Vzpenjača,3
+73,3,P7,Kamnica,3
+74,3,P8,Limbuš-Pekre,3
+75,3,P9,Zrkovci,3
+76,3,P10,Malečnik,3
+77,3,P11,Razvanje,3
+78,3,P12,Dobrava-Supernova,3
+79,3,P13,Stražun–PC Tezno,3
+80,3,P14,Ledina,3
+81,3,P15,Bresternica,3
+82,3,P16,Brezje,3
+83,3,P17,Košaki,3
+84,3,P18,Pekre,3
+85,3,P19,Dom pod gorco,3
