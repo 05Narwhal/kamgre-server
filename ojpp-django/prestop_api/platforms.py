@@ -13,8 +13,11 @@ departure would start at the same point. Two sources fix that:
   its bay on later days, also when it is not on the board yet.
 
 A trip that starts at such a station starts in its bay (`place`): its first stop is moved there
-and its line begins with the bay's road, so a waiting bus is drawn in the right bay, facing out.
-Rows in `data/platform_overrides.csv` (station, time, destination, bay) win over the board.
+and its line begins with the bay's road, so a waiting bus is drawn in the right bay, facing out. One that ends at such
+a station ends in the free bay it parks in, and the line page's patterns do the same.
+Rows in `data/platform_overrides.csv` (station, time, destination, bay) are the hand route for stations with no
+board: a row with a time is that one departure's bay and wins over the board; a row with an empty time is the bay
+"every departure to this destination" usually uses, read as `usual` (after the board, before the board's history).
 """
 import csv
 import json
@@ -23,6 +26,7 @@ import math
 import re
 import threading
 import time
+import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional
@@ -52,7 +56,7 @@ STATIONS = {
     'ljubljana-ap': {'name': 'Avtobusna postaja Ljubljana', 'place': 'Ljubljana', 'lat': 46.05805, 'lon': 14.51475, 'radius': 200, 'ground': 130,
                      'board': 'ap-ljubljana', 'ids': ['IJPP:1168813', 'IJPP:1126954'],
                      'next_door': {'place': 'Ljubljana', 'lat': 46.058509, 'lon': 14.512924, 'radius': 150, 'ids': ['IJPP:1122804']}},
-    'kranj-ap': {'name': 'Avtobusna postaja Kranj', 'place': 'Kranj', 'lat': 46.2463, 'lon': 14.3547, 'radius': 120, 'ground': 90,
+    'kranj-ap': {'name': 'Avtobusna postaja Kranj', 'place': 'Kranj', 'lat': 46.2463, 'lon': 14.3547, 'radius': 120, 'ground': 130,
                  'ids': ['IJPP:1121237', 'IJPP:1121238']},
     'maribor-ap': {'name': 'Avtobusna postaja Maribor', 'place': 'Maribor', 'lat': 46.55956, 'lon': 15.65575, 'radius': 120, 'ground': 110,
                    'ids': ['IJPP:1127365']},
@@ -70,6 +74,7 @@ STOPWORDS = {'ap', 'avtobusna', 'postaja', 'zp', 'center', 'bs', 'k', 'pri', 'na
 
 _bays: dict = {'stamp': None, 'value': {}}
 _lock = threading.Lock()
+_warned: set = set()   # hand rows already reported (once per process)
 _last_learn: dict[str, float] = {}
 
 
@@ -246,11 +251,32 @@ def learn(now: Optional[float] = None) -> int:
 
 
 def overrides() -> list[dict]:
+    """The rows of `platform_overrides.csv` that name a bay (see the file's header). A row naming a bay its station
+    has no position for is reported once and kept (its text still shows); `bay_for` never moves a bus to it."""
     try:
         with open(OVERRIDES, encoding='utf-8', newline='') as f:
-            return [r for r in csv.DictReader(line for line in f if not line.startswith('#')) if r.get('bay')]
+            rows = [{k: (v or '').strip() for k, v in r.items() if k} for r in csv.DictReader(line for line in f if not line.startswith('#'))]
     except OSError:
         return []
+    rows = [r for r in rows if r.get('bay')]
+    for r in rows:
+        key = station_key(r.get('station'))
+        known = bays(key) if key else {}
+        problem = ('is no station with bays; the row is ignored' if not key
+                   else 'is no bay we have a position for; a bus never moves there' if known and not bay_refs(r['bay'], known) else '')
+        if problem and (r['station'], r['bay']) not in _warned:
+            _warned.add((r['station'], r['bay']))
+            logger.warning('platform_overrides.csv: station %r, bay %r %s', r['station'], r['bay'], problem)
+    return [r for r in rows if station_key(r.get('station'))]
+
+
+def usual_override(station_id: str, destination: str) -> Optional[str]:
+    """The bay a hand row with no time gives for every departure to `destination` at this station, or None."""
+    key = station_key(station_id)
+    for row in overrides():
+        if not row.get('time') and station_key(row.get('station')) == key and same_place(row.get('destination', ''), destination):
+            return row['bay']
+    return None
 
 
 def departure_platform(station_id: str, departure: float, destination: str, seen: Optional[Iterable] = None) -> Optional[str]:
@@ -259,7 +285,7 @@ def departure_platform(station_id: str, departure: float, destination: str, seen
     hhmm = datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M')
     key = station_key(station_id)
     for row in overrides():
-        if station_key(row.get('station')) == key and row.get('time') == hhmm and same_place(row.get('destination', ''), destination):
+        if row.get('time') == hhmm and station_key(row.get('station')) == key and same_place(row.get('destination', ''), destination):
             return row['bay']
     if seen is None:
         seen = station_seen(station_id)
@@ -335,14 +361,16 @@ def usual_platform(station_id: str, departure: float, destination: str, seen: Op
 
 
 def platform_for(station_id: str, departure: float, destination: str, seen: Optional[Iterable] = None) -> tuple[Optional[str], bool]:
-    """(platform text, usual): the departure's own bay (overrides, board), else the bay its destination
-    usually leaves from (`usual` True), else (None, False)."""
+    """(platform text, usual): the departure's own bay (a hand row with its time, else the board), else the bay its
+    destination usually leaves from (`usual` True): a hand row with no time, else the board's history; else (None, False)."""
     if seen is not None:
         seen = list(seen)
     hhmm = datetime.fromtimestamp(departure, LOCAL).strftime('%H:%M')
     exact = departure_platform(station_id, departure, destination, None if seen is None else [s for s in seen if _hhmm(s) == hhmm])
     if exact:
         return exact, False
+    if hand := usual_override(station_id, destination):
+        return hand, True
     usual = usual_platform(station_id, departure, destination, seen)
     return (usual, True) if usual else (None, False)
 
@@ -367,7 +395,7 @@ def bay_for(stop: dict, departure: Optional[float], destination: str, label: str
         platform, usual = platform_for(station, departure, destination, seen)
         refs = bay_refs(platform or '', known)
     if not refs:  # nothing says which bay: it waits in a free one, and none is named
-        free = least_used(station, known)
+        free = free_bays(station, known, destination)
         alternates = [{'ref': r, 'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in free[1:PARK_BAYS]]
         return {**known[free[0]], 'ref': free[0], 'usual': True, 'named': False, 'station': station, 'alternates': alternates}
     # The other bays the board names for it ("27-29"): a bus finding its bay taken stands in a free one of them.
@@ -402,24 +430,54 @@ def least_used(station: str, known: dict, seen: Optional[Iterable] = None) -> li
     return sorted(known, key=lambda r: (used[r], int(r) if r.isdigit() else 10**6, r))
 
 
-def destination_bays(station_id: str, seen: Optional[Iterable] = None) -> list[dict]:
+def free_bays(station: str, known: dict, towards: str, seen: Optional[Iterable] = None) -> list[str]:
+    """The PARK_BAYS bays departures use least, starting at the one `towards` (the place at the trip's other end)
+    always gets: the same in a trip, on any day, and on the line page's pattern, and lines don't all share one bay."""
+    order = least_used(station, known, seen)[:PARK_BAYS]
+    start = zlib.crc32(' '.join(sorted(_words(towards))).encode()) % len(order) if order else 0
+    return order[start:] + order[:start]
+
+
+def destination_bays(station_id: str, seen: Optional[Iterable] = None, towards: str = '') -> list[dict]:
     """Bays a bus ending its trip at a bus station parks in, as [{'lat', 'lon', 'heading'}]: no source says where
-    buses arrive, so the PARK_BAYS bays departures use least (by the board's history), fewest first. No numbers:
-    the map draws the bus there, nothing names the bay."""
+    buses arrive, so the PARK_BAYS bays departures use least (by the board's history), the one its line ends in first
+    (`free_bays`; `towards`: where the trip came from). No numbers: the map draws the bus there, nothing names the bay."""
     station = station_key(station_id) or station_id
     known = bays(station)
     if not known:
         return []
-    order = least_used(station, known, seen)
-    return [{'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in order[:PARK_BAYS]]
+    return [{'lat': known[r]['lat'], 'lon': known[r]['lon'], 'heading': known[r].get('heading')} for r in free_bays(station, known, towards, seen)]
 
 
 def place(stops: list[dict], departure: Optional[float], destination: str) -> tuple[list[dict], Optional[dict]]:
-    """Stops with the first one moved into its bay (a copy), and that bay (or None)."""
+    """Stops (a copy) with the first one moved into its bay and the last into the free bay it parks in (`parked`,
+    never named: no source says where buses arrive), and the first one's bay (or None)."""
     if not stops:
         return stops, None
+    out = list(stops)
     bay = bay_for(stops[0], departure, destination, stops[0].get('replacementLabel') or '')
-    if not bay:
+    if bay:
+        out[0] = {**stops[0], 'lat': bay['lat'], 'lon': bay['lon'], **({'bay': bay['ref'], 'bayUsual': bay['usual']} if bay.get('named', True) else {})}
+    parks = destination_bays(stops[-1].get('gtfsId') or '', towards=stops[0].get('name') or '') if len(stops) > 1 else []
+    if parks:
+        out[-1] = {**stops[-1], 'lat': parks[0]['lat'], 'lon': parks[0]['lon'], 'parked': True}
+    return out, bay
+
+
+def place_leg(stops: list[dict], departure: Optional[float], first: dict, last: dict) -> tuple[list[dict], Optional[dict]]:
+    """A planner's leg (`stops`: gtfsId, name, lat, lon) with its ends where `place` has them on the whole trip, whose
+    first and last stops are `first` and `last`; an end the trip only calls at on its way stays on the feed's point, as
+    the trip's own line does. Also the bay the leg leaves from (or None), as `place`."""
+    if not stops:
         return stops, None
-    first = {**stops[0], 'lat': bay['lat'], 'lon': bay['lon'], **({'bay': bay['ref'], 'bayUsual': bay['usual']} if bay.get('named', True) else {})}
-    return [first, *stops[1:]], bay
+    out = list(stops)
+    bay = None
+    if first.get('gtfsId') and stops[0].get('gtfsId') == first['gtfsId']:
+        bay = bay_for(first, departure, last.get('name') or '')
+        if bay:
+            out[0] = {**stops[0], 'lat': bay['lat'], 'lon': bay['lon']}
+    if len(stops) > 1 and last.get('gtfsId') and stops[-1].get('gtfsId') == last['gtfsId']:
+        parks = destination_bays(last['gtfsId'], towards=first.get('name') or '')
+        if parks:
+            out[-1] = {**stops[-1], 'lat': parks[0]['lat'], 'lon': parks[0]['lon'], 'parked': True}
+    return out, bay

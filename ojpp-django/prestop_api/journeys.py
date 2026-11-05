@@ -59,7 +59,7 @@ PLAN_Q = '''query($origin: PlanLabeledLocationInput!, $destination: PlanLabeledL
         from { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } }
           rentalVehicle { vehicleId vehicleType { formFactor } rentalNetwork { networkId } } }
         to { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } } vehicleParking { name } }
-        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } stoptimes { stop { gtfsId } } }
+        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } stoptimes { stop { gtfsId name } } }
         legGeometry { points } alerts { id } intermediatePlaces { name lat lon stop { gtfsId } } } } } } }'''
 
 
@@ -899,6 +899,27 @@ def _walk_meta(seconds: float) -> dict:
     return {'transit': False, 'interline': False, 'duration': seconds, 'realtime': False, 'platform': None}
 
 
+def _leg_in_bays(l: dict, stops: list[dict]) -> tuple[list[dict], Optional[dict]]:
+    """A bus leg's stops with its ends in the bays its trip's line has them in (platforms.place_leg), and the bay it leaves from."""
+    called = [(s.get('stop') or {}) for s in (l.get('trip') or {}).get('stoptimes') or []]
+    if len(called) < 2 or len(stops) < 2:
+        return stops, None
+    flat = [{**s, 'gtfsId': (s.get('stop') or {}).get('gtfsId')} for s in stops]
+    return platforms.place_leg(flat, _ts(l['start']['scheduledTime']), called[0], called[-1])
+
+
+def walks_reach_bays(legs: list[dict]) -> None:
+    """A bus standing in a bay (`_leg_in_bays`) is a few metres from the point OTP walks to: the walk goes on to the bay."""
+    for a, b in zip(legs, legs[1:]):
+        walk, bus, end, there = (a, b, 'destination', 'origin') if a['mode'] == 'walk' else (b, a, 'origin', 'destination')
+        if walk['mode'] != 'walk' or bus['mode'] != 'bus' or not walk[end].get('stopId') or walk[end].get('stopId') != bus[there].get('stopId'):
+            continue
+        point = [bus[there]['longitude'], bus[there]['latitude']]
+        if [walk[end]['longitude'], walk[end]['latitude']] != point:
+            walk[end] = bus[there]
+            walk['geometry'] = [*walk['geometry'], point] if end == 'destination' else [point, *walk['geometry']]
+
+
 def replacement_walks(legs: list[dict], meta: list[dict]) -> tuple[list[dict], list[dict]]:
     """Replacement buses that stop beside the station (not where OTP puts them, at the station itself):
     the bus leg starts or ends at that stop, and the walk between it and the station is its own leg
@@ -1110,11 +1131,13 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             start_est, end_est = (l['start'].get('estimated') or {}).get('time'), (l['end'].get('estimated') or {}).get('time')
             route = l.get('route') or {}
             geometry = mapping.decode_polyline((l.get('legGeometry') or {}).get('points') or '')
+            placed, bay = None, None
             if transit and _leg_mode(l) == 'bus':
-                stops = [l['from'], *(l.get('intermediatePlaces') or []), l['to']]
+                stops = [s for s in [l['from'], *(l.get('intermediatePlaces') or []), l['to']] if s.get('lat') is not None]
                 # An SŽ replacement bus comes with the railway's shape: route it on the roads.
-                geometry, _ = roads.repair(geometry, [s for s in stops if s.get('lat') is not None], deadline,
-                                           road_only=mapping.is_replacement(route))
+                replacement = mapping.is_replacement(route)
+                placed, bay = (stops, None) if replacement else _leg_in_bays(l, stops)
+                geometry, _ = roads.repair_in_bays(geometry, placed, deadline, road_only=replacement, from_bay=bool(bay))
             if transit and _leg_mode(l) == 'rail':
                 geometry = geometry_lib.trim_spurs(geometry)
             geometry = mapping.thin(geometry)
@@ -1152,6 +1175,10 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 legs[-1]['alertIds'] = [i for i in legs[-1]['alertIds'] if i not in by_id or leg_alerts.concerns(by_id[i], start, end, names)]
             # Notices OTP knows that the alert list leaves out (expired, merged) can't be shown: don't count them.
             legs[-1]['alertIds'] = [i for i in legs[-1]['alertIds'] if i in by_id]
+            if bay:  # it stands in this bay, and parks in that one (platforms.place_leg)
+                legs[-1]['origin'] = {**legs[-1]['origin'], 'latitude': placed[0]['lat'], 'longitude': placed[0]['lon']}
+            if placed and placed[-1].get('parked'):
+                legs[-1]['destination'] = {**legs[-1]['destination'], 'latitude': placed[-1]['lat'], 'longitude': placed[-1]['lon']}
             legs[-1]['alertIds'] = list(dict.fromkeys(legs[-1]['alertIds']))
             if legs[-1]['stopCount'] is None:
                 del legs[-1]['stopCount']
@@ -1190,6 +1217,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             journey_legs.name_replaced_trains(legs, plan_for)
         walked = sum(m['duration'] for leg, m in zip(legs, meta) if leg['mode'] == 'walk')
         legs, meta = replacement_walks(legs, meta)
+        walks_reach_bays(legs)
         sane_walks(legs, meta)
         # The walks added to replacement stops, joined or snapped (sane_walks) change how long the walking is.
         walked = sum(m['duration'] for leg, m in zip(legs, meta) if leg['mode'] == 'walk') - walked
