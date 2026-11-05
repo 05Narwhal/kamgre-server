@@ -1,0 +1,27 @@
+# City transport networks (M3, docs/research/2026-11-04-city-timetables.md). A row with an empty route_id is a whole
+# city feed: every line in it is a city line of that town. A row with a route_id is a national-feed (IJPP) line that the
+# operator lists as city transport, with the same stops and times (>= 90 %), and its proper number. Never by distance.
+# company = the brand riders know; empty when no company runs it under its own name. Checked 2026-11-05: Brežice
+# N0575 N0588 N0589 N0515 N0516, Novo mesto N0553 N0554, Kranj A6200 A6323 A6324, Ptuj A2251, Škofja Loka A6207,
+# Murska Sobota M2034 M2035 M2039 M2062 M2102-M2105, Velenje N0166 N0192 N0657, Celje N0245, Trbovlje/Zagorje N0112
+# N0125-N0129 are school, worker or suburban runs (none in the operator's city timetable), so not here.
+town,company,feed,route_id,number
+Ljubljana,LPP,LPP,,
+Maribor,Marprom,MARPROM,,
+Celje,Nomago,CELEBUS,,
+Novo mesto,Nomago,MONM,,
+Nova Gorica,Nomago,MONG,,
+Koper,Arriva,MOKoper,,
+Kranj,Arriva,MOKranj,,
+Krško,Nomago,MOKrsko,,
+Murska Sobota,AP Murska Sobota,MOMS,,
+Velenje,Nomago,MOVelenje,,
+Postojna,Nomago,Postojna,,
+Ptuj,Arriva,Ptuj,,
+Brežice,Nomago,Brezice,,
+Sevnica,,Sevnica,,
+Jesenice,Arriva,Jesenice,,
+Piran,Arriva,Piran,,
+Škofja Loka,Arriva,IJPP,IJPP:65376,1
+Idrija,Nomago,IJPP,IJPP:58976,L1
+Idrija,Nomago,IJPP,IJPP:55131,L2
