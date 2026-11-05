@@ -186,6 +186,28 @@ CITIES = {
         names=(('Kazarje - prihod', 'Kazarje'), ('Pretnarjeva', 'Pretnerjeva'), ('Kolodvorska cesta', 'Kolodvorska'),
                ('Žel. postaja', 'Železniška postaja'), ('Pod jelovico', 'Pod Jelovico'), ('Pod Kolodvorom', 'Pod kolodvorom')),
     ),
+    'Brezice': City(
+        # A correction of OTP's Brezice feed (docs/research/2026-11-04-city-timetables.md): OTP serves a cut-down 2020
+        # summer timetable all year (Modra 4 runs, Zelena 5). Both lines come from Nomago's posters instead (user,
+        # 2026-11-05): the 2023/24 school-year one, which the page still offers for 1. 9. – 30. 6., and the summer one.
+        feed='Brezice', name='Brežice', own_stops=True,
+        page='https://www.nomago.si/avtobusni-prevozi/mestni-promet/brezice/vozni-red',
+        links=r'https://www\.nomago\.si/storage/app/media/mesta/brezice/[^"\'\s]+\.pdf',
+        files=('Mestni%20avtobus_ZIMSKI%20VOZNI%20RED%202023_2024%20VOZNI%20RED-compressed-compressed.pdf',
+               'VR%20MP%20Bre%C5%BEice-po%C4%8Ditnice.pdf'),
+        reader='nomago_brezice',
+        days='Vozni red in plan vožnje - velja od 1. 9. - 30. 6.',
+        weekdays=(1, 1, 1, 1, 1, 1, 0), holidays_too=(),
+        # The posters print old years; the page offers them for every school year and summer: check it before September.
+        start=date(2026, 9, 1), end=date(2027, 8, 31),
+        agency=('0', 'Mestni avtobus Brežice', 'https://www.nomago.si/avtobusni-prevozi/mestni-promet/brezice'),
+        bbox=(45.88, 15.56, 45.93, 15.64),
+        replaces=(('1', 'all'), ('2', 'all')),
+        # No buses on Sundays and public holidays (both posters).
+        services=(('D', (1, 1, 1, 1, 1, 0, 0), False, (1, 2, 3, 4, 5, 6, 9, 10, 11, 12)),
+                  ('DS', (1, 1, 1, 1, 1, 1, 0), False, (1, 2, 3, 4, 5, 6, 9, 10, 11, 12)),
+                  ('PD', (1, 1, 1, 1, 1, 0, 0), False, (7, 8)), ('PDS', (1, 1, 1, 1, 1, 1, 0), False, (7, 8))),
+    ),
     'CELEBUS': City(
         # A correction of OTP's Celje feed (docs/research/2026-11-04-city-timetables.md): OTP serves 7 of the 1 Sep 2026
         # network's 13 lines and no Saturdays. Its weekday runs match the Word files and stay; lines 3, 6, 7 and 10 gain
