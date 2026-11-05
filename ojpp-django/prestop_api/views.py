@@ -486,7 +486,8 @@ def board(request, stop_id):
     if kind not in ('departure', 'arrival'):
         raise ApiError(422, 'INVALID_KIND', 'kind must be departure or arrival')
     at = parse_time(request.GET.get('at') or mapping.iso(time.time()), 'at')
-    items = sources.board(stop_id, kind, int(at.timestamp()), language(request))
+    # `place=1`: every pole of the stop's place (one marker below z16), each row with its pole's `towards`.
+    items = sources.board(stop_id, kind, int(at.timestamp()), language(request), place=request.GET.get('place') == '1')
     if items is None:
         raise ApiError(404, 'STOP_NOT_FOUND', 'This stop is not in the current timetable.')
     status = 'live' if any(i['quality'] for i in items) else 'scheduled'
@@ -905,6 +906,7 @@ def _with_observed(data: list[dict], found: dict[str, dict]) -> None:
             position = queue.pop(0) if len(queue) > 1 else queue[0]
             stop['observedDelaySeconds'] = delays.get(str(position)) if position is not None else None
         _with_carried(trip['stops'])
+        _with_carried_outside(trip)
 
 
 def _with_carried(stops: list[dict]) -> None:
@@ -919,6 +921,28 @@ def _with_carried(stops: list[dict]) -> None:
         if stop.get('observedDelaySeconds') is not None:
             carried = stop['observedDelaySeconds']
         else:
+            stop['carriedDelaySeconds'] = carried
+
+
+def _with_carried_outside(trip: dict) -> None:
+    """`_with_carried` for an international train's stops outside Slovenia (`stopsBefore`, `stopsAfter`), over its whole
+    run: a stop with no delay of its own that it surely passed (a later stop, here or abroad, has a measured one) gets
+    `carriedDelaySeconds`, the last measured delay before it, or before the first one, that first one's. No official
+    source gives delays abroad, and the feed reports none for some legs (from Zagreb: every stop a bulk 0), so this is
+    an estimate. Only kept measurements count (`observedDelaySeconds`; a live figure ahead is a forecast). Never a 0:
+    an on-time border station says nothing about the train abroad. Stops in Slovenia are left as `_with_carried` had them."""
+    zones = (trip.get('stopsBefore') or [], trip['stops'], trip.get('stopsAfter') or [])
+    if not zones[0] and not zones[2]:
+        return
+    run = [(zone is not trip['stops'], stop) for zone in zones for stop in zone]
+    seen = [i for i, (_, s) in enumerate(run) if s.get('observedDelaySeconds') is not None]
+    if not seen:
+        return
+    carried = run[seen[0]][1]['observedDelaySeconds']
+    for outside, stop in run[:seen[-1]]:
+        if stop.get('observedDelaySeconds') is not None:
+            carried = stop['observedDelaySeconds']
+        elif outside and carried and stop.get('delaySeconds') is None:
             stop['carriedDelaySeconds'] = carried
 
 

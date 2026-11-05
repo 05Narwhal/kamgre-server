@@ -430,6 +430,66 @@ def place_sides(markers: list[dict], stops: list[dict], ways: dict, fixed: set[s
     return len(moved)
 
 
+# ---------------------------------------------------------------- one place on a zoomed-out map (spec 2026-11-04 M8)
+
+PLACE_METERS = 60  # same-name bus markers this close are one place below z16: one marker, one label, one board
+
+
+def places(markers: list[dict]) -> dict[str, str]:
+    """Marker id -> its place's key, for bus markers sharing a place with another (alone: not listed).
+
+    A place is markers with alike names (`similar`) every two of which lie within PLACE_METERS: closest pairs join
+    first and a join that would put two markers further apart is refused, so places never chain along a road and
+    stay at most PLACE_METERS wide. Railway stations are places of their own. The key is the place's smallest
+    marker id. Merging and ids are untouched (`merge`); this only says which markers to draw as one when zoomed out."""
+    bus = [m for m in markers if 'rail' not in m['modes']]
+    keys = [normalize(m['name']) for m in bus]
+    cells: dict[tuple[int, int], list[int]] = {}
+    for i, m in enumerate(bus):
+        cells.setdefault(_cell(m), []).append(i)
+    pairs = []
+    for i, a in enumerate(bus):
+        cy, cx = _cell(a)
+        for j in (j for dy in (-1, 0, 1) for dx in (-1, 0, 1) for j in cells.get((cy + dy, cx + dx), ())):
+            if j > i and (d := meters(a, bus[j])) <= PLACE_METERS and (keys[i] == keys[j] or similar(a['name'], bus[j]['name'])):
+                pairs.append((d, i, j))
+    alike = {(i, j) for _, i, j in pairs}
+    of = list(range(len(bus)))
+    groups: dict[int, list[int]] = {i: [i] for i in range(len(bus))}
+    for _, i, j in sorted(pairs):
+        a, b = of[i], of[j]
+        if a == b or not all((min(x, y), max(x, y)) in alike for x in groups[a] for y in groups[b]):
+            continue
+        for k in groups[b]:
+            of[k] = a
+        groups[a] += groups.pop(b)
+    out: dict[str, str] = {}
+    for group in groups.values():
+        if len(group) > 1:
+            key = min(bus[k]['id'] for k in group)
+            out.update({bus[k]['id']: key for k in group})
+    return out
+
+
+def towards(sequences: list[list[str]], marker_of: dict[str, str], names: dict[str, str], poles: set[str]) -> dict[str, str]:
+    """Pole (marker id, of a place) -> the name of the stop most runs through it go to next, so a place's board can
+    say which pole each row leaves from ("towards Trg"). Member stops count as their marker; a next stop with the
+    pole's own name is skipped (the place's other pole, a stop split by feed). Ties: the name first in order. A pole
+    no run leaves (only arrivals) is not listed."""
+    counts: dict[str, dict[str, int]] = {}
+    for seq in sequences:
+        markers = [marker_of.get(s, s) for s in seq]
+        for i, here in enumerate(markers):
+            if here not in poles:
+                continue
+            own = normalize(names.get(here, ''))
+            nxt = next((m for m in markers[i + 1:] if m != here and names.get(m) and normalize(names[m]) != own), None)
+            if nxt:
+                tally = counts.setdefault(here, {})
+                tally[names[nxt]] = tally.get(names[nxt], 0) + 1
+    return {pole: min(tally, key=lambda name: (-tally[name], name)) for pole, tally in counts.items()}
+
+
 def report(stops: list[dict], merged: list[dict]) -> list[dict]:
     """One row per member of every merged station: how far it is from the station marker."""
     by_id = {s['id']: s for s in stops}

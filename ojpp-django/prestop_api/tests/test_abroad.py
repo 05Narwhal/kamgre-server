@@ -464,3 +464,38 @@ class KeptDelayTests(TestCase):
         with mock.patch.object(abroad, 'crosses', return_value=True), mock.patch('prestop_api.scheduled.loaded_trips', return_value=self.LEGS):
             out = trips._outside_slovenia(static, [{'name': 'Maribor'}, {'name': 'Šentilj'}], self.SERVICE_DATE)
         self.assertEqual(out['stopsAfter'][-1]['observedDelaySeconds'], 300)
+
+
+class CarriedAbroadTests(SimpleTestCase):
+    """M5: stops abroad the train surely passed, with no delay of their own, show the nearest measured one as estimated."""
+
+    @staticmethod
+    def _trip(before, stops, after=()):
+        row = lambda name, **kw: {'name': name, 'abroad': True, **kw}
+        return {'stopsBefore': [row(n, **kw) for n, kw in before], 'stops': [{'name': n, 'observedDelaySeconds': d} for n, d in stops],
+                **({'stopsAfter': [row(n, **kw) for n, kw in after]} if after else {})}
+
+    def carried(self, trip, zone):
+        from prestop_api.views import _with_carried_outside
+        _with_carried_outside(trip)
+        return [s.get('carriedDelaySeconds') for s in trip[zone]]
+
+    def test_from_zagreb_the_first_measured_delay_goes_back_as_estimated(self):
+        trip = self._trip([('Zagreb', {}), ('Zaprešić', {})], [('Dobova', 600), ('Brežice', 720), ('Krško', None)])
+        self.assertEqual(self.carried(trip, 'stopsBefore'), [600, 600])
+        self.assertNotIn('observedDelaySeconds', trip['stopsBefore'][0])  # never shown as measured
+        self.assertNotIn('carriedDelaySeconds', trip['stops'][2])  # Slovenia untouched
+
+    def test_between_measurements_abroad_the_last_one_before_is_carried(self):
+        trip = self._trip([('Wien Hbf', {'observedDelaySeconds': 60}), ('Meidling', {}), ('Graz', {'observedDelaySeconds': 180}), ('Puntigam', {}), ('Spielfeld', {'delaySeconds': 240})], [('Maribor', None), ('Pragersko', 300)])
+        self.assertEqual(self.carried(trip, 'stopsBefore'), [None, 60, None, 180, None])  # a stop with its own figure keeps it
+
+    def test_never_a_zero_and_nothing_without_a_later_measurement(self):
+        self.assertEqual(self.carried(self._trip([('Zagreb', {})], [('Dobova', 0), ('Brežice', 180)]), 'stopsBefore'), [None])
+        self.assertEqual(self.carried(self._trip([('Zagreb', {})], [('Dobova', None), ('Brežice', None)]), 'stopsBefore'), [None])
+        trip = self._trip([], [('Maribor', 300), ('Šentilj', None)], [('Spielfeld', {}), ('Graz', {})])
+        self.assertEqual(self.carried(trip, 'stopsAfter'), [None, None])  # ahead of the last measurement: the live figure's job
+
+    def test_after_slovenia_between_measured_stops(self):
+        trip = self._trip([], [('Ljubljana', 0), ('Dobova', 420)], [('Savski Marof', {}), ('Zagreb', {'observedDelaySeconds': 540}), ('Dugo Selo', {})])
+        self.assertEqual(self.carried(trip, 'stopsAfter'), [420, None, None])

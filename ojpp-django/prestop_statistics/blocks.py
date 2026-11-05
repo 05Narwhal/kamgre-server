@@ -176,7 +176,7 @@ def _covered(feeds: set, now: float):
 def record(schedules, positions: list[dict], updates: dict, now: Optional[float] = None) -> dict:
     """Write who serves which trip now, what vehicles do between trips (VehicleGap) and how much of the day was
     recorded (RecorderDay). `schedules`: collector.ScheduleCache; `updates`: mapping.trip_update_index."""
-    from prestop_statistics.collector import _service_days, position_pass, store_passes
+    from prestop_statistics.collector import _service_days, first_stop_left, position_pass, store_passes
     now = now or time.time()
     seen: dict[str, tuple] = {}
     between: dict[str, Optional[tuple]] = {}  # vehicle -> (lat, lon): in the feed without a trip ("MARPROM:")
@@ -223,7 +223,7 @@ def record(schedules, positions: list[dict], updates: dict, now: Optional[float]
         rows[(service_date, trip_id)] = {
             'vehicle_id': vehicle_id, 'route_id': schedule['routeId'], 'block_id': schedule.get('blockId') or '',
             'start': start, 'end': end, 'delay': delay, 'start_delay': delay if starting else None, 'pattern': pattern_key(schedule)}
-        passed = position_pass(schedule, at, int(v.get('timestamp') or now))
+        passed = first_stop_left((service_date, trip_id), schedule, position_pass(schedule, at, int(v.get('timestamp') or now)), at)
         if passed:
             passes[(service_date, trip_id)] = (schedule, passed)
         closed = _tracker.observe(vehicle_id, trip_id, service_date, _terminus(schedule), at, now)

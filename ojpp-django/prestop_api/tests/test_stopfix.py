@@ -68,6 +68,22 @@ class OverrideTests(SimpleTestCase):
         fixed = stopfix.correct([otp_stop('A', 46.0, 14.0), otp_stop('B', 46.1, 14.0), otp_stop('C', 46.2, 14.0)], none, snaps)
         self.assertEqual([(s['lat'], s['lon']) for s in fixed], [(46.0, 14.0), (46.1006, 14.0), (46.2, 14.0)])
 
+    def test_placed_stops_are_fixed_and_place_their_marker(self):
+        # M9: a stop placed on its lines' road is kept by merge and place_sides (an override still wins over it).
+        places = {stopfix.snap_key('IJPP:2', 46.0, 14.0): [46.0001, 14.0, 11.1, 'osm pole'],
+                  stopfix.snap_key('IJPP:1121103', 45.53824, 13.738235): [45.5, 13.7, 20.0, 'right kerb']}
+        raw = [otp_stop('IJPP:2', 46.0, 14.0), otp_stop('MOX:2', 46.00002, 14.00002), otp_stop('IJPP:3', 46.1, 14.0),
+               otp_stop('IJPP:1121103', 45.53824, 13.738235)]
+        snaps = {stopfix.PLACED: places}
+        fixed = stopfix.placed_ids(raw, self.overrides, snaps)
+        self.assertEqual(fixed, {'IJPP:2'})
+        built = [stop(s['gtfsId'], 'Center', s['lat'], s['lon'], operators=(s['gtfsId'].split(':')[0] + ':x',))
+                 for s in stopfix.correct(raw[:2], self.overrides, snaps)]
+        # Without it the city feed's pole would place the marker (IJPP poles are often across the road).
+        merged, _ = stopgroups.merge(built, fixed=frozenset(fixed))
+        self.assertEqual([(m['latitude'], m['longitude']) for m in merged], [(46.0001, 14.0)])
+        self.assertEqual(stopfix.placed_ids(stopfix.correct(raw, self.overrides, snaps), self.overrides, snaps), set())
+
     def test_applying_twice_changes_nothing(self):
         raw = [otp_stop('IJPP:1121103', 45.53824, 13.738235), otp_stop('IJPP:1123012', 45.53897, 13.738534)]
         once = stopfix.correct(raw, self.overrides, {})

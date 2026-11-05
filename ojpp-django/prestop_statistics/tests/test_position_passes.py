@@ -1,16 +1,15 @@
 """K8 (spec 2026-11-03): every passed stop gets a delay. The feed leaves stops out of its trip updates, so a vehicle's
 position at a stop fills them in (collector.position_pass / store_passes), and a passed stop still without one shows the
 delay carried from the last measured stop (views._with_carried). Patterns from three real trips of 1 Nov 2026."""
-from datetime import date
-
 from django.test import TestCase
+from django.utils import timezone
 
 from prestop_api.views import _with_carried
 from prestop_statistics import collector
 from prestop_statistics.models import TripDelay
 
 DAY = 1_793_487_600  # 2026-11-01 00:00 Europe/Ljubljana
-DATE = date(2026, 11, 1)
+DATE = timezone.localdate()  # store_passes forgets what it holds for service days 2 days back: never a fixed date
 
 
 def schedule(n: int, loop: bool = False) -> dict:
@@ -69,6 +68,45 @@ class PositionPassTests(TestCase):
         collector.store_passes({key: (s, collector.position_pass(s, at(s, 2), DAY + s['bySequence'][2]['scheduledArrival'] + 60))})
         collector.store_passes({key: (s, collector.position_pass(s, at(s, 2), DAY + s['bySequence'][2]['scheduledArrival'] + 90))})
         self.assertEqual(TripDelay.objects.get(trip_id='MARPROM:103381').stop_delays, {'1': 45, '2': 60})  # arrival: first report
+
+
+class FirstStopLeftTests(TestCase):
+    """M7: a bus parked at its first stop, still logged on to its trip, has not left. Trip IJPP:448065 of 3 Nov 2026 read
+    +9 min at its first stop and 4.5 min early at its fourth; waiting there must not count as a delay until it goes."""
+    KEY = (DATE, 'IJPP:parked')
+
+    def setUp(self):
+        collector._at_first.clear()
+
+    def report(self, s, where, stamp):
+        return collector.first_stop_left(self.KEY, s, collector.position_pass(s, where, stamp), where)
+
+    def test_a_bus_that_never_leaves_records_nothing(self):
+        s = schedule(6)
+        dep = DAY + s['bySequence'][1]['scheduledDeparture']
+        for late in (0, 600, 1800):
+            self.assertEqual(self.report(s, at(s, 1), dep + late), {})
+
+    def test_leaving_records_its_last_report_at_the_first_stop(self):
+        s = schedule(6)
+        dep = DAY + s['bySequence'][1]['scheduledDeparture']
+        self.report(s, at(s, 1), dep + 1800)
+        self.assertEqual(self.report(s, at(s, 1), dep + 1830), {})
+        self.assertEqual(self.report(s, at(s, 2), DAY + s['bySequence'][2]['scheduledArrival'] + 1900), {
+            '1': 1830, '2': 1900})
+
+    def test_gps_wander_at_the_stand_is_not_leaving(self):
+        s = schedule(6)
+        dep = DAY + s['bySequence'][1]['scheduledDeparture']
+        self.report(s, at(s, 1), dep + 60)
+        self.assertEqual(self.report(s, at(s, 1, metres=100), dep + 90), {})
+
+    def test_only_counts_once_and_other_stops_pass_through(self):
+        s = schedule(6)
+        dep = DAY + s['bySequence'][1]['scheduledDeparture']
+        self.report(s, at(s, 1), dep + 60)
+        self.assertEqual(self.report(s, at(s, 2), DAY + s['bySequence'][2]['scheduledArrival'] + 70), {'1': 60, '2': 70})
+        self.assertEqual(self.report(s, at(s, 3), DAY + s['bySequence'][3]['scheduledArrival'] + 80), {'3': 80})
 
 
 def stops(observed: dict, n: int) -> list[dict]:
