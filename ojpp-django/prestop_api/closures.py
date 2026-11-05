@@ -539,6 +539,7 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
     for day in sorted({service_date(t) for t in trips}):
         when = date(int(day[:4]), int(day[4:6]), int(day[6:]))
         used: dict[str, tuple[dict, list[dict]]] = {}
+        same: dict[tuple, dict] = {}  # (label, train, stations, times) -> the day's bus
         for a in alerts:
             if not is_closure(a) or day not in _days(a):
                 continue
@@ -584,6 +585,15 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
                 if not calls:
                     continue
                 bus = _timetable_bus(data, ti, ci, col, calls, day, numbers, trains, linked, points, bus_stops, memo, taken)
+                key = (bus['label'], bus['additional'], bus['trainTripId'], tuple(sz.station_key(s.get('name') or '') for s in bus['stops']),
+                       tuple(bus['departures']), tuple(bus['arrivals']))
+                twin = same.get(key)
+                if twin:  # another file of the same timetable (11268 and SŽ's RSS post): one bus, with both notices
+                    twin['alertIds'] = list(dict.fromkeys(twin['alertIds'] + bus['alertIds']))
+                    twin['notices'] = sorted(set(twin['notices']) | set(bus['notices']))
+                    taken.discard(bus['id'])
+                    continue
+                same[key] = bus
                 out['buses'].append(bus)
                 if not bus['trainTripId'] and not bus['additional'] and not col.get('footnotes'):
                     missing.append(bus['label'])

@@ -304,6 +304,19 @@ class PrecedenceTests(SimpleTestCase):
         self.assertEqual(plan['suppressed'], before['suppressed'])
         self.assertEqual(sorted(b['id'] for b in plan['buses']), sorted(b['id'] for b in before['buses']))
 
+    def test_two_copies_of_one_timetable_give_each_train_one_bus(self):
+        """Two notices linking two copies of one PDF (11268 "-dop" and the RSS post 5999422073, 6 Nov 2026) made two
+        identical BUS 2418s, -p0 and -p0-2: one bus, carrying both notices."""
+        sha = TABLES.notices['11248']
+        copied = sztimetables.Timetables({**TABLES.notices, '11147': 'copy'}, {**TABLES.files, 'copy': {**TABLES.files[sha], 'sha256': 'copy'}})
+        plan, once = build('20261014', tables=copied), build('20261014')
+        names_of = lambda p: sorted(mapping.route_name(b['route']) for b in p['buses'] if b.get('source') == 'timetable')
+        self.assertEqual(names_of(plan), names_of(once))
+        self.assertEqual(sorted(b['id'] for b in plan['buses']), sorted(b['id'] for b in once['buses']))
+        ids = {a['id'] for a in ALERTS if closures.notice_id(a) in ('11147', '11248')}
+        self.assertEqual(set(timetabled(plan)['BUS 2400']['alertIds']), ids)
+        self.assertEqual(plan['suppressed'], once['suppressed'])
+
     def test_a_failed_or_missing_timetable_changes_nothing(self):
         failed = sztimetables.Timetables(TABLES.notices, {sha: {**f, 'status': 'failed'} for sha, f in TABLES.files.items()})
         for tables in (failed, None, sztimetables.Timetables({}, {})):
