@@ -1,56 +1,4 @@
 route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
-65,8727,96382,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6889
-65,8727,96384,Pobreška Europark - Univerzitetni kampus - Kamnica,G5,0,6889
-65,8727,96385,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96386,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96387,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96388,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96389,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96390,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96391,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96392,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96393,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96394,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96395,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96396,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96397,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96398,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96399,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96400,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96401,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96402,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96403,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96404,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96405,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96406,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96407,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96408,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6888
-65,8727,96412,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6891
-65,8727,96414,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6891
-65,8727,96415,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96416,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96417,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96418,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96419,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96420,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96421,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96422,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96423,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96424,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96425,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96426,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96427,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96428,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96429,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96430,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96431,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96432,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96433,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96434,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96435,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96436,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96437,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
-65,8727,96438,Mariborski otok - Univerzitetni kampus - Pobreška Europark,G5,1,6890
 73,8727,102032,Avtobusna postaja - Morski jarek,P7,0,6971
 73,8727,102033,Avtobusna postaja - Kamnica,P7,0,6972
 73,8727,102034,Avtobusna postaja - Kamnica,P7,0,6972
@@ -71,30 +19,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 73,8727,102050,Kamnica - Avtobusna postaja,P7,1,6974
 73,8727,102051,Kamnica - Avtobusna postaja,P7,1,6974
 73,8727,102052,Morski jarek - Avtobusna postaja,P7,1,6973
-84,8728,102183,Turnerjeva - Pekre,P18,0,6989
-84,8728,102184,Turnerjeva - Pekre,P18,0,6989
-84,8728,102185,Turnerjeva - Pekre,P18,0,6989
-84,8728,102186,Turnerjeva - Pekre,P18,0,6989
-84,8728,102187,Turnerjeva - Pekre,P18,0,6989
-84,8728,102188,Turnerjeva - Pekre,P18,0,6989
-84,8728,102189,Turnerjeva - Pekre,P18,0,6989
-84,8728,102190,Turnerjeva - Pekre,P18,0,6989
-84,8728,102191,Turnerjeva - Pekre,P18,0,6989
-84,8728,102193,Turnerjeva - Pekre,P18,0,6989
-84,8728,102195,Turnerjeva - Pekre,P18,0,6989
-84,8728,102197,Turnerjeva - Pekre,P18,0,6989
-84,8728,102198,Pekre - Turnerjeva,P18,1,6990
-84,8728,102199,Pekre - Turnerjeva,P18,1,6990
-84,8728,102200,Pekre - Turnerjeva,P18,1,6990
-84,8728,102201,Pekre - Turnerjeva,P18,1,6990
-84,8728,102202,Pekre - Turnerjeva,P18,1,6990
-84,8728,102203,Pekre - Turnerjeva,P18,1,6990
-84,8728,102204,Pekre - Turnerjeva,P18,1,6990
-84,8728,102205,Pekre - Turnerjeva,P18,1,6990
-84,8728,102207,Pekre - Turnerjeva,P18,1,6990
-84,8728,102209,Pekre - Turnerjeva,P18,1,6990
-84,8728,102211,Pekre - Turnerjeva,P18,1,6990
-84,8728,102212,Pekre - Turnerjeva,P18,1,6990
 81,8728,102254,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7011
 81,8728,102255,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7011
 81,8728,102256,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7011
@@ -353,8 +277,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 68,8727,104192,Avtobusna postaja - Ljubljanska - Nova vas,G2,0,7099
 68,8727,104193,Avtobusna postaja - Ljubljanska - Nova vas,G2,0,7099
 68,8727,104194,Avtobusna postaja - Ljubljanska - Nova vas,G2,0,7099
-84,8727,104435,Turnerjeva - Pekre,P18,0,7128
-84,8727,104436,Turnerjeva - Pekre,P18,0,7128
 81,8727,104437,Bresternica - Avtobusna postaja,P15,1,7070
 81,8727,104438,Bresternica - Avtobusna postaja,P15,1,7070
 81,8727,104439,Bresternica - Avtobusna postaja,P15,1,7070
@@ -368,10 +290,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 81,8727,104447,Bresternica - Avtobusna postaja,P15,1,7070
 81,8727,104448,Bresternica - Avtobusna postaja,P15,1,7070
 81,8727,104449,Bresternica - Avtobusna postaja,P15,1,7070
-76,8728,105141,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,8728,105142,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,8728,105146,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
-76,8728,105147,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
 76,8727,105148,Grušova - Trčova Griček - Melje - Avtobusna postaja,P10,1,7206
 76,8727,105149,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
 76,8727,105153,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
@@ -450,26 +368,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 78,8727,104257,Supenova - Dobrava - Avtobusna postaja,P12,1,7123
 79,8727,104258,Avtobusna postaja - Stražun,P13,0,7081
 79,8727,104259,Stražun - Avtobusna postaja,P13,1,7082
-84,8728,104290,Pekre - Turnerjeva,P18,1,6990
-84,8727,104291,Turnerjeva - Pekre,P18,0,7128
-84,8727,104292,Turnerjeva - Pekre,P18,0,7128
-84,8727,104293,Turnerjeva - Pekre,P18,0,7128
-84,8727,104294,Turnerjeva - Pekre,P18,0,7128
-84,8727,104295,Turnerjeva - Pekre,P18,0,7128
-84,8727,104296,Turnerjeva - Pekre,P18,0,7128
-84,8727,104297,Turnerjeva - Pekre,P18,0,7128
-84,8727,104298,Turnerjeva - Pekre,P18,0,7128
-84,8727,104299,Turnerjeva - Pekre,P18,0,7128
-84,8727,104303,Pekre - Turnerjeva,P18,1,7129
-84,8727,104304,Pekre - Turnerjeva,P18,1,7129
-84,8727,104305,Pekre - Turnerjeva,P18,1,7129
-84,8727,104306,Pekre - Turnerjeva,P18,1,7129
-84,8727,104307,Pekre - Turnerjeva,P18,1,7129
-84,8727,104308,Pekre - Turnerjeva,P18,1,7129
-84,8727,104309,Pekre - Turnerjeva,P18,1,7129
-84,8727,104310,Pekre - Turnerjeva,P18,1,7129
-84,8727,104311,Pekre - Turnerjeva,P18,1,7129
-84,8727,104312,Pekre - Turnerjeva,P18,1,7129
 79,8727,104363,Avtobusna postaja - Stražun,P13,0,7081
 79,8727,104364,Avtobusna postaja - Stražun,P13,0,7081
 79,8727,104365,Avtobusna postaja - Stražun,P13,0,7081
@@ -527,12 +425,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 73,8728,104423,Morski jarek - Avtobusna postaja,P7,1,7137
 73,8728,104424,Kamnica - Avtobusna postaja,P7,1,7138
 73,8728,104425,Morski jarek - Avtobusna postaja,P7,1,7137
-84,8727,104426,Turnerjeva - Pekre,P18,0,7128
-84,8727,104430,Pekre - Turnerjeva,P18,1,7129
-84,8727,104431,Pekre - Turnerjeva,P18,1,7129
-84,8727,104432,Pekre - Turnerjeva,P18,1,7129
-84,8727,104433,Turnerjeva - Pekre,P18,0,7128
-84,8727,104434,Turnerjeva - Pekre,P18,0,7128
 82,8727,112109,Avtobusna postaja - Ul. Veljka Vlahovića - Zg. Duplek,P16,0,7432
 82,8727,112110,Avtobusna postaja - Ul. Veljska Vlahovića - Dupleška kanal,P16,0,7431
 82,8727,112111,Avtobusna postaja - Ul. Veljska Vlahovića - Dupleška kanal,P16,0,7431
@@ -599,8 +491,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 82,8728,112172,Dupleška kanal -  Avtobusna postaja,P16,1,7437
 69,8728,112173,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7439
 69,8728,112189,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7440
-69,8727,112205,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112229,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
 85,8727,112251,Avtobusna postaja - Dom pod gorco - Supernova,P19,0,7443
 85,8727,112252,Avtobusna postaja - Dom pod gorco - Supernova,P19,0,7443
 85,8727,112253,Avtobusna postaja - Dom pod gorco - Supernova,P19,0,7443
@@ -695,16 +585,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 69,8728,112369,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7440
 69,8728,112370,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7440
 69,8728,112371,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7440
-69,8727,112372,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112378,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112384,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112395,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112396,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112398,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112405,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112406,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112407,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112408,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
 70,8728,112420,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
 70,8728,112421,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
 70,8728,112422,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
@@ -732,40 +612,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 70,8727,112446,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
 70,8727,112447,Limbuš - Pekre - Poljane - Avtobusna postaja,G4,1,7452
 70,8727,112448,Limbuš - Pekre - Poljane - Avtobusna postaja,G4,1,7452
-69,8727,112822,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112823,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112827,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112828,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112829,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112830,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112831,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112832,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112833,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112834,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112835,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112836,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112837,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112838,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7442
-69,8727,112839,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112840,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112841,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112842,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112843,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112844,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112845,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112848,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112849,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112851,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112852,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112853,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112854,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112856,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112857,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112858,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112859,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112860,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112861,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
-69,8727,112862,Jadranska - Ptujska - Pobrežje - Prlek- Gosposvetska,G3,0,7441
 71,8727,114047,Avtobusna postaja - Vzpenjača,G6,0,7515
 71,8727,114048,Avtobusna postaja - Vzpenjača,G6,0,7515
 71,8727,114049,Avtobusna postaja - Vzpenjača,G6,0,7515
@@ -867,53 +713,6 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 67,8728,114425,Tezno - Avtobusna postaja,G1,1,7528
 67,8728,114426,Tezno - Avtobusna postaja,G1,1,7528
 67,8728,114427,Tezno - Avtobusna postaja,G1,1,7528
-67,8727,114428,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114429,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114430,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114431,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114432,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114433,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114434,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114435,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114436,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114437,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114438,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114439,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114440,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114441,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114442,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114443,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114444,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114445,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114446,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114447,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114448,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114449,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114450,Avtobusna postaja - Tezno,G1,0,7529
-67,8727,114451,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114452,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114453,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114454,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114455,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114456,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114457,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114458,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114459,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114460,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114461,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114462,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114463,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114464,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114465,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114466,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114467,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114468,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114469,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114470,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114471,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114472,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114473,Tezno - Avtobusna postaja,G1,1,7530
-67,8727,114474,Tezno - Avtobusna postaja,G1,1,7530
 83,8727,114524,Šentiljska Hofer - Žp Maribor - E.Leclerc,P17,0,7533
 83,8727,114525,Šentiljska Hofer - Žp Maribor - E.Leclerc,P17,0,7533
 83,8727,114526,Šentiljska Hofer - Žp Maribor - E.Leclerc,P17,0,7533
@@ -977,6 +776,22 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 65,pdf-weekday,G5-plus-wd-s263-2025,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
 65,pdf-weekday,G5-plus-wd-s263-2110,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
 65,pdf-weekday,G5-plus-wd-s263-2145,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-0515,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-0555,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-0635,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-0715,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-0755,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-0925,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1055,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1225,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1355,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1435,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1515,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1555,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1725,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-1855,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-2025,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
+65,site-saturday,G5-plus-sa-s263-2155,Pobreška Europark - Uni. kampus - Kamnica - Mariborski otok,G5,0,6883
 65,pdf-weekday,G5-minus-wd-s57-0505,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
 65,pdf-weekday,G5-minus-wd-s57-0530,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
 65,pdf-weekday,G5-minus-wd-s57-0555,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
@@ -1015,6 +830,22 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 65,pdf-weekday,G5-minus-wd-s57-2050,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
 65,pdf-weekday,G5-minus-wd-s57-2130,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
 65,pdf-weekday,G5-minus-wd-s57-2210,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-0540,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-0620,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-0700,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-0740,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-0910,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1040,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1210,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1340,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1420,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1500,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1540,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1710,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-1840,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-2010,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-2140,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
+65,site-saturday,G5-minus-sa-s57-2210,Kamnica - Univerzitetni kampus - Pobreška Europark,G5,1,6887
 67,pdf-weekday,G1-plus-wd-s1-0500,Avtobusna postaja - Tezno,G1,0,7381
 67,pdf-weekday,G1-plus-wd-s1-0520,Avtobusna postaja - Tezno,G1,0,7381
 67,pdf-weekday,G1-plus-wd-s1-0540,Avtobusna postaja - Tezno,G1,0,7381
@@ -1115,6 +946,30 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 67,pdf-holiday,G1-plus-sp-s1-2110,Avtobusna postaja - Tezno,G1,0,7381
 67,pdf-holiday,G1-plus-sp-s1-2140,Avtobusna postaja - Tezno,G1,0,7381
 67,pdf-holiday,G1-plus-sp-s1-2215,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-0605,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-0635,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-0705,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-0735,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-0805,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-0835,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-0905,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1005,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1105,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1205,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1305,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1335,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1405,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1435,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1505,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1535,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1605,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1705,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1805,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-1905,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-2005,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-2105,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-2205,Avtobusna postaja - Tezno,G1,0,7381
+67,site-saturday,G1-plus-sa-s1-2300,Avtobusna postaja - Tezno,G1,0,7381
 67,pdf-weekday,G1-minus-wd-s393-0435,Tezno - Avtobusna postaja,G1,1,7382
 67,pdf-weekday,G1-minus-wd-s393-0455,Tezno - Avtobusna postaja,G1,1,7382
 67,pdf-weekday,G1-minus-wd-s393-0515,Tezno - Avtobusna postaja,G1,1,7382
@@ -1219,6 +1074,30 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 67,pdf-holiday,G1-minus-sp-s393-2105,Tezno - Avtobusna postaja,G1,1,7382
 67,pdf-holiday,G1-minus-sp-s393-2135,Tezno - Avtobusna postaja,G1,1,7382
 67,pdf-holiday,G1-minus-sp-s393-2210,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0530,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0630,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0700,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0730,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0800,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0830,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0900,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-0930,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1030,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1130,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1230,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1330,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1400,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1430,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1500,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1530,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1600,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1630,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1730,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1830,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-1930,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-2030,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-2130,Tezno - Avtobusna postaja,G1,1,7382
+67,site-saturday,G1-minus-sa-s393-2230,Tezno - Avtobusna postaja,G1,1,7382
 68,pdf-weekday,G2-plus-wd-s1-0500,Avtobusna postaja - Ljubljanska - Nova vas,G2,0,7233
 68,pdf-weekday,G2-plus-wd-s1-0520,Avtobusna postaja - Ljubljanska - Nova vas,G2,0,7233
 68,pdf-weekday,G2-plus-wd-s1-0540,Avtobusna postaja - Ljubljanska - Nova vas,G2,0,7233
@@ -1473,6 +1352,31 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 69,pdf-holiday,G3-plus-sp-s942-2050,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
 69,pdf-holiday,G3-plus-sp-s942-2120,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
 69,pdf-holiday,G3-plus-sp-s942-2200,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0530,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0600,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0630,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0700,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0730,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0800,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0830,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0900,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-0940,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1020,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1100,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1140,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1220,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1300,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1330,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1400,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1430,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1500,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1600,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1700,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1800,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-1900,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-2000,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-2100,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
+69,site-saturday,G3-plus-sa-s942-2200,Tabor Jadranska - Tezno - Pobrežje -  ŽP Maribor - UK Gosp.,G3,0,7235
 69,pdf-weekday,G3-minus-wd-s910-0440,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
 69,pdf-weekday,G3-minus-wd-s910-0505,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
 69,pdf-weekday,G3-minus-wd-s910-0530,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
@@ -1543,47 +1447,70 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 69,pdf-holiday,G3-minus-sp-s910-2025,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
 69,pdf-holiday,G3-minus-sp-s910-2105,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
 69,pdf-holiday,G3-minus-sp-s910-2135,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
-70,pdf-weekday,G4-plus-wd-s1-0500,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-0530,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-0600,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-0625,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-0645,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-0710,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-0730,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-0755,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-0815,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-0840,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-0900,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-0930,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1000,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1030,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1100,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-1130,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1200,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1225,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1245,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1310,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-1335,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1355,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1420,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-1445,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1505,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1530,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1555,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1615,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1640,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1705,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1725,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1750,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1820,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-1850,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-1920,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-1950,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-2020,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-2050,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-plus-wd-s1-2120,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-2150,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
-70,pdf-weekday,G4-plus-wd-s1-2220,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
+69,site-saturday,G3-minus-sa-s910-0610,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-0640,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-0710,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-0740,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-0810,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-0840,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-0920,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1000,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1040,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1120,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1200,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1240,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1310,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1340,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1410,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1510,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1610,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1710,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1810,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-1910,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-2010,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-2110,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+69,site-saturday,G3-minus-sa-s910-2210,Jadranska - Gosposvetska - Prlek - Pobrežje - Ptujska,G3,1,7236
+70,pdf-weekday,G4-plus-wd-s1-0500,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-0530,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-0600,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-0625,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-0645,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-0710,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-0730,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-0755,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-0815,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-0840,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-0900,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-0930,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1000,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1030,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1100,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-1130,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1200,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1225,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1245,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1310,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-1335,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1355,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1420,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-1445,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1505,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1530,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1555,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1615,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1640,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1705,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1725,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1750,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1820,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-1850,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-1920,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-1950,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-2020,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-2050,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
+70,pdf-weekday,G4-plus-wd-s1-2120,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-2150,Avtobusna postaja -  Pekre - Limbuš,G4,0,7579
+70,pdf-weekday,G4-plus-wd-s1-2220,Avtobusna postaja - Poljane - Lesarska šola,G4,0,7449
 70,pdf-holiday,G4-plus-sp-s1-0500,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
 70,pdf-holiday,G4-plus-sp-s1-0530,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
 70,pdf-holiday,G4-plus-sp-s1-0600,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
@@ -1612,24 +1539,24 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 70,pdf-holiday,G4-plus-sp-s1-2040,Avtobusna postaja - Pekre - Limbuš,G4,0,7447
 70,pdf-holiday,G4-plus-sp-s1-2120,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
 70,pdf-holiday,G4-plus-sp-s1-2215,Avtobusna postaja - Lesarska šola - Pekre - Limbuš,G4,0,7445
-70,pdf-weekday,G4-minus-wd-s527-0500,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-0530,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-0600,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-0630,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-0655,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
+70,pdf-weekday,G4-minus-wd-s527-0500,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-0530,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-0600,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-0630,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
+70,pdf-weekday,G4-minus-wd-s527-0655,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
 70,pdf-weekday,G4-minus-wd-s527-0715,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
 70,pdf-weekday,G4-minus-wd-s527-0740,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
-70,pdf-weekday,G4-minus-wd-s527-0800,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s132-0830,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-0845,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s132-0915,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
+70,pdf-weekday,G4-minus-wd-s527-0800,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s132-0830,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-0845,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s132-0915,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
 70,pdf-weekday,G4-minus-wd-s527-0930,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
-70,pdf-weekday,G4-minus-wd-s132-1005,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1030,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s132-1105,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1130,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s132-1205,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1230,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
+70,pdf-weekday,G4-minus-wd-s132-1005,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1030,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s132-1105,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1130,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s132-1205,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1230,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
 70,pdf-weekday,G4-minus-wd-s527-1255,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
 70,pdf-weekday,G4-minus-wd-s527-1315,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
 70,pdf-weekday,G4-minus-wd-s527-1340,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
@@ -1637,22 +1564,22 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 70,pdf-weekday,G4-minus-wd-s527-1425,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
 70,pdf-weekday,G4-minus-wd-s527-1450,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
 70,pdf-weekday,G4-minus-wd-s527-1515,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
-70,pdf-weekday,G4-minus-wd-s527-1535,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1600,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1625,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
+70,pdf-weekday,G4-minus-wd-s527-1535,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1600,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1625,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
 70,pdf-weekday,G4-minus-wd-s527-1645,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
-70,pdf-weekday,G4-minus-wd-s132-1715,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1735,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1755,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
+70,pdf-weekday,G4-minus-wd-s132-1715,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1735,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1755,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
 70,pdf-weekday,G4-minus-wd-s527-1820,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
-70,pdf-weekday,G4-minus-wd-s527-1850,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1920,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-1950,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
+70,pdf-weekday,G4-minus-wd-s527-1850,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1920,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-1950,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
 70,pdf-weekday,G4-minus-wd-s527-2020,Limbuš Lesarska šola - Avtobusna postaja,G4,1,7450
-70,pdf-weekday,G4-minus-wd-s132-2055,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-2120,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s132-2155,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
-70,pdf-weekday,G4-minus-wd-s527-2220,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
+70,pdf-weekday,G4-minus-wd-s132-2055,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-2120,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s132-2155,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
+70,pdf-weekday,G4-minus-wd-s527-2220,Limbuš - Pekre - Studenci - Avtobusna postaja,G4,1,7583
 70,pdf-holiday,G4-minus-sp-s527-0500,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
 70,pdf-holiday,G4-minus-sp-s527-0530,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
 70,pdf-holiday,G4-minus-sp-s527-0600,Limbuš - Pekre - Avtobusna postaja,G4,1,7448
@@ -2017,7 +1944,7 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 74,pdf-weekday,P8-minus-wd-s131-1115,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
 74,pdf-weekday,P8-minus-wd-s131-1230,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
 74,pdf-weekday,P8-minus-wd-s131-1310,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
-74,pdf-weekday,P8-minus-wd-s131-1350,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
+74,pdf-weekday,P8-minus-wd-s131-1400,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
 74,pdf-weekday,P8-minus-wd-s131-1430,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
 74,pdf-weekday,P8-minus-wd-s131-1510,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
 74,pdf-weekday,P8-minus-wd-s131-1550,Pekre - Limbuš - Avtobusna postaja,P8,1,7324
@@ -2079,20 +2006,20 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 75,pdf-holiday,P9-plus-sp-s1-1940,Avtobusna postaja - Zrkovci,P9,0,7325
 75,pdf-holiday,P9-plus-sp-s1-2120,Avtobusna postaja - Dogoše,P9,0,7326
 75,pdf-holiday,P9-plus-sp-s1-2225,Avtobusna postaja - Dogoše,P9,0,7326
-75,pdf-weekday,P9-minus-wd-s380-0503,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-0602,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-0702,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-0807,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s380-0913,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-1107,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s380-1248,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-1402,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-1507,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-1612,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s380-1718,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s380-1848,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s380-2018,Zrkovci - Avtobusna postaja,P9,1,7327
-75,pdf-weekday,P9-minus-wd-s382-2202,Zrkovci - Avtobusna postaja,P9,1,7327
+75,pdf-weekday,P9-minus-wd-s584-0500,Zrkovci - Avtobusna postaja,P9,1,7327
+75,pdf-weekday,P9-minus-wd-s349-0555,Dogoše - Avtobusna postaja,P9,1,7328
+75,pdf-weekday,P9-minus-wd-s349-0655,Dogoše - Avtobusna postaja,P9,1,7328
+75,pdf-weekday,P9-minus-wd-s349-0800,Dogoše - Avtobusna postaja,P9,1,7328
+75,pdf-weekday,P9-minus-wd-s584-0910,Zrkovci - Avtobusna postaja,P9,1,7327
+75,pdf-weekday,P9-minus-wd-s349-1100,Dogoše - Avtobusna postaja,P9,1,7328
+75,pdf-weekday,P9-minus-wd-s584-1245,Zrkovci - Avtobusna postaja,P9,1,7327
+75,pdf-weekday,P9-minus-wd-s349-1355,Dogoše - Avtobusna postaja,P9,1,7328
+75,pdf-weekday,P9-minus-wd-s349-1500,Dogoše - Avtobusna postaja,P9,1,7328
+75,pdf-weekday,P9-minus-wd-s349-1605,Dogoše - Avtobusna postaja,P9,1,7328
+75,pdf-weekday,P9-minus-wd-s584-1715,Zrkovci - Avtobusna postaja,P9,1,7327
+75,pdf-weekday,P9-minus-wd-s584-1845,Zrkovci - Avtobusna postaja,P9,1,7327
+75,pdf-weekday,P9-minus-wd-s584-2015,Zrkovci - Avtobusna postaja,P9,1,7327
+75,pdf-weekday,P9-minus-wd-s349-2155,Dogoše - Avtobusna postaja,P9,1,7328
 75,pdf-holiday,P9-minus-sp-s382-0501,Zrkovci - Avtobusna postaja,P9,1,7327
 75,pdf-holiday,P9-minus-sp-s382-0601,Zrkovci - Avtobusna postaja,P9,1,7327
 75,pdf-holiday,P9-minus-sp-s380-0703,Zrkovci - Avtobusna postaja,P9,1,7327
@@ -2107,26 +2034,23 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 75,pdf-holiday,P9-minus-sp-s380-1848,Zrkovci - Avtobusna postaja,P9,1,7327
 75,pdf-holiday,P9-minus-sp-s380-2018,Zrkovci - Avtobusna postaja,P9,1,7327
 75,pdf-holiday,P9-minus-sp-s382-2201,Zrkovci - Avtobusna postaja,P9,1,7327
-76,pdf-weekday,P10-plus-wd-s600-0520,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
+76,pdf-weekday,P10-plus-wd-s600-0520,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
 76,pdf-weekday,P10-plus-wd-s600-0635,Avtobusna postaja - Trč. Griček - Metava - Grušova,P10,0,7367
 76,pdf-weekday,P10-plus-wd-s596-0659,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
-76,pdf-weekday,P10-plus-wd-s600-0800,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
-76,pdf-weekday,P10-plus-wd-s600-0830,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
-76,pdf-weekday,P10-plus-wd-s600-0910,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
-76,pdf-weekday,P10-plus-wd-s600-1000,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
-76,pdf-weekday,P10-plus-wd-s600-1030,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
-76,pdf-weekday,P10-plus-wd-s600-1110,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,pdf-weekday,P10-plus-wd-s600-0800,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,pdf-weekday,P10-plus-wd-s600-0910,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,pdf-weekday,P10-plus-wd-s600-1030,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
 76,pdf-weekday,P10-plus-wd-s600-1200,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
-76,pdf-weekday,P10-plus-wd-s600-1220,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
-76,pdf-weekday,P10-plus-wd-s600-1320,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
+76,pdf-weekday,P10-plus-wd-s280-1219,Avtobusna postaja - Mal. odc. Trčova - Grušova,P10,0,7203
+76,pdf-weekday,P10-plus-wd-s600-1320,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
 76,pdf-weekday,P10-plus-wd-s600-1440,Avtobusna postaja - Trč. Griček - Metava - Grušova,P10,0,7367
 76,pdf-weekday,P10-plus-wd-s596-1504,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
-76,pdf-weekday,P10-plus-wd-s600-1615,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
+76,pdf-weekday,P10-plus-wd-s600-1615,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
 76,pdf-weekday,P10-plus-wd-s600-1730,Avtobusna postaja - Trč. Griček - Metava - Grušova,P10,0,7367
 76,pdf-weekday,P10-plus-wd-s596-1754,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
-76,pdf-weekday,P10-plus-wd-s600-1855,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
-76,pdf-weekday,P10-plus-wd-s600-2020,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
-76,pdf-weekday,P10-plus-wd-s600-2200,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
+76,pdf-weekday,P10-plus-wd-s600-1855,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,pdf-weekday,P10-plus-wd-s600-2020,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,pdf-weekday,P10-plus-wd-s600-2200,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
 76,pdf-holiday,P10-plus-sp-s600-0530,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
 76,pdf-holiday,P10-plus-sp-s600-0645,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
 76,pdf-holiday,P10-plus-sp-s600-0835,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
@@ -2141,23 +2065,27 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 76,pdf-holiday,P10-plus-sp-s600-2010,Avtobusna postaja - Trč. Griček - Metava - Grušova,P10,0,7367
 76,pdf-holiday,P10-plus-sp-s596-2034,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
 76,pdf-holiday,P10-plus-sp-s600-2210,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7208
+76,site-sunday,P10-plus-su-s600-0830,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,site-sunday,P10-plus-su-s600-1000,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,site-sunday,P10-plus-su-s600-1110,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,site-sunday,P10-plus-su-s600-1220,Avtobusna postaja - Trčova Griček - Grušova,P10,0,7202
+76,pdf-weekday,P10-minus-wd-s290-0445,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
 76,pdf-weekday,P10-minus-wd-s273-0454,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
+76,pdf-weekday,P10-minus-wd-s290-0605,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
 76,pdf-weekday,P10-minus-wd-s273-0614,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
-76,pdf-weekday,P10-minus-wd-s272-0724,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-0849,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s290-0910,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-0715,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-0840,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-0950,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
 76,pdf-weekday,P10-minus-wd-s273-0959,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
-76,pdf-weekday,P10-minus-wd-s290-1040,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-1124,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s290-1150,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s273-1254,Grušova - Trčova Griček - Melje - Avtobusna postaja,P10,1,7206
-76,pdf-weekday,P10-minus-wd-s290-1305,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-1419,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-1539,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-1709,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-1829,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-1954,Grušova - Melje - Avtobusna postaja,P10,1,7211
-76,pdf-weekday,P10-minus-wd-s272-2114,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-1115,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-1245,Grušova - Trčova Griček - Melje - Avtobusna postaja,P10,1,7206
+76,pdf-weekday,P10-minus-wd-s282-1251,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-1410,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-1530,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-1700,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-1820,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-1945,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,pdf-weekday,P10-minus-wd-s290-2105,Grušova - Melje - Avtobusna postaja,P10,1,7211
 76,pdf-holiday,P10-minus-sp-s273-0509,Grušova - Metava - Trčova - galerija - Avtobusna postaja,P10,1,7204
 76,pdf-holiday,P10-minus-sp-s273-0609,Grušova - Trčova Griček - Melje - Avtobusna postaja,P10,1,7372
 76,pdf-holiday,P10-minus-sp-s273-0729,Grušova - Trčova Griček - Melje - Avtobusna postaja,P10,1,7372
@@ -2168,6 +2096,10 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 76,pdf-holiday,P10-minus-sp-s272-1639,Grušova - Melje - Avtobusna postaja,P10,1,7211
 76,pdf-holiday,P10-minus-sp-s273-1859,Grušova - Trčova Griček - Melje - Avtobusna postaja,P10,1,7372
 76,pdf-holiday,P10-minus-sp-s273-2059,Grušova - Trčova Griček - Melje - Avtobusna postaja,P10,1,7372
+76,site-sunday,P10-minus-su-s290-0910,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,site-sunday,P10-minus-su-s290-1040,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,site-sunday,P10-minus-su-s290-1150,Grušova - Melje - Avtobusna postaja,P10,1,7211
+76,site-sunday,P10-minus-su-s290-1305,Grušova - Melje - Avtobusna postaja,P10,1,7211
 77,pdf-weekday,P11-plus-wd-s1-0515,Avtobusna postaja - Betnavska - Razvanje,P11,0,7352
 77,pdf-weekday,P11-plus-wd-s1-0545,Avtobusna postaja - Betnavska - Razvanje,P11,0,7352
 77,pdf-weekday,P11-plus-wd-s1-0615,Avtobusna postaja - Betnavska - Botanični vrt,P11,0,7351
@@ -2218,34 +2150,34 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 77,pdf-holiday,P11-plus-sp-s1-2015,Avtobusna postaja - Betnavska - Razvanje,P11,0,7352
 77,pdf-holiday,P11-plus-sp-s1-2115,Avtobusna postaja - Betnavska - Razvanje,P11,0,7352
 77,pdf-holiday,P11-plus-sp-s1-2230,Avtobusna postaja - Betnavska - Razvanje,P11,0,7352
-77,pdf-weekday,P11-minus-wd-s249-0446,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0516,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0546,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0616,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0648,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0706,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0731,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0748,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0816,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0848,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0916,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-0946,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1048,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1146,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1248,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1316,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1348,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1416,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1448,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1516,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1548,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1616,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1648,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1746,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1848,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-1946,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-2046,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
-77,pdf-weekday,P11-minus-wd-s249-2151,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-0445,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-0515,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-0545,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-0615,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-0645,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-0705,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-0730,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-0745,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-0815,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-0845,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-0915,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-0945,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-1045,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-1145,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-1245,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-1315,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-1345,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-1415,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-1445,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-1515,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-1545,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-1615,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-1645,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-1745,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s704-1845,Botanični vrt - Betnavska - Avtobusna postaja,P11,1,7353
+77,pdf-weekday,P11-minus-wd-s250-1945,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-2045,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
+77,pdf-weekday,P11-minus-wd-s250-2150,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
 77,pdf-holiday,P11-minus-sp-s249-0451,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
 77,pdf-holiday,P11-minus-sp-s249-0516,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
 77,pdf-holiday,P11-minus-sp-s249-0546,Razvanje - Betnavska - Avtobusna postaja,P11,1,7354
@@ -2416,24 +2348,24 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 79,pdf-holiday,P13-plus-sp-s1-2125,Avtobusna postaja - Poštni center Tezno,P13,0,7357
 79,pdf-weekday,P13-minus-wd-s320-0455,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-weekday,P13-minus-wd-s320-0555,Poštni center Tezno - Avtobusna postaja,P13,1,7358
-79,pdf-weekday,P13-minus-wd-s308-0633,Stražun - Avtobusna postaja,P13,1,7082
+79,pdf-weekday,P13-minus-wd-s302-0630,Stražun - Avtobusna postaja,P13,1,7082
 79,pdf-weekday,P13-minus-wd-s320-0715,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-weekday,P13-minus-wd-s320-0755,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-weekday,P13-minus-wd-s320-0835,Poštni center Tezno - Avtobusna postaja,P13,1,7358
-79,pdf-weekday,P13-minus-wd-s308-0918,Stražun - Avtobusna postaja,P13,1,7082
+79,pdf-weekday,P13-minus-wd-s302-0915,Stražun - Avtobusna postaja,P13,1,7082
 79,pdf-weekday,P13-minus-wd-s320-1015,Poštni center Tezno - Avtobusna postaja,P13,1,7358
-79,pdf-weekday,P13-minus-wd-s308-1118,Stražun - Avtobusna postaja,P13,1,7082
+79,pdf-weekday,P13-minus-wd-s302-1115,Stražun - Avtobusna postaja,P13,1,7082
 79,pdf-weekday,P13-minus-wd-s320-1215,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-weekday,P13-minus-wd-s320-1255,Poštni center Tezno - Avtobusna postaja,P13,1,7358
-79,pdf-weekday,P13-minus-wd-s308-1333,Stražun - Avtobusna postaja,P13,1,7082
+79,pdf-weekday,P13-minus-wd-s302-1330,Stražun - Avtobusna postaja,P13,1,7082
 79,pdf-weekday,P13-minus-wd-s320-1415,Poštni center Tezno - Avtobusna postaja,P13,1,7358
-79,pdf-weekday,P13-minus-wd-s308-1458,Stražun - Avtobusna postaja,P13,1,7082
+79,pdf-weekday,P13-minus-wd-s302-1455,Stražun - Avtobusna postaja,P13,1,7082
 79,pdf-weekday,P13-minus-wd-s320-1535,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-weekday,P13-minus-wd-s320-1615,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-weekday,P13-minus-wd-s320-1715,Poštni center Tezno - Avtobusna postaja,P13,1,7358
-79,pdf-weekday,P13-minus-wd-s308-1818,Stražun - Avtobusna postaja,P13,1,7082
+79,pdf-weekday,P13-minus-wd-s302-1815,Stražun - Avtobusna postaja,P13,1,7082
 79,pdf-weekday,P13-minus-wd-s320-1915,Poštni center Tezno - Avtobusna postaja,P13,1,7358
-79,pdf-weekday,P13-minus-wd-s308-2018,Stražun - Avtobusna postaja,P13,1,7082
+79,pdf-weekday,P13-minus-wd-s302-2015,Stražun - Avtobusna postaja,P13,1,7082
 79,pdf-weekday,P13-minus-wd-s320-2115,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-weekday,P13-minus-wd-s320-2215,Poštni center Tezno - Avtobusna postaja,P13,1,7358
 79,pdf-holiday,P13-minus-sp-s308-0506,Stražun - Avtobusna postaja,P13,1,7082
@@ -2512,7 +2444,7 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 81,pdf-weekday,P15-plus-wd-s600-0520,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
 81,pdf-weekday,P15-plus-wd-s600-0600,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
 81,pdf-weekday,P15-plus-wd-s600-0630,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
-81,pdf-weekday,P15-plus-wd-s600-0710,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
+81,pdf-weekday,P15-plus-wd-s600-0705,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
 81,pdf-weekday,P15-plus-wd-s600-0750,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
 81,pdf-weekday,P15-plus-wd-s600-0830,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
 81,pdf-weekday,P15-plus-wd-s600-0910,Avtobusna postaja - Koš. dol - Bresternica,P15,0,7379
@@ -2674,7 +2606,7 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 82,pdf-weekday,P16-minus-wd-s353-1615,Zg. Duplek - Ul. Veljka Vlahovića - Avtobusna postaja,P16,1,7378
 82,pdf-weekday,P16-minus-wd-s353-1645,Zg. Duplek - Ul. Veljka Vlahovića - Avtobusna postaja,P16,1,7378
 82,pdf-weekday,P16-minus-wd-s344-1750,Kanal - Avtobusna postaja,P16,1,7433
-82,pdf-weekday,P16-minus-wd-s353-1835,Zg. Duplek - Ul. Veljka Vlahovića - Avtobusna postaja,P16,1,7378
+82,pdf-weekday,P16-minus-wd-s353-1845,Zg. Duplek - Ul. Veljka Vlahovića - Avtobusna postaja,P16,1,7378
 82,pdf-weekday,P16-minus-wd-s344-1950,Kanal - Avtobusna postaja,P16,1,7433
 82,pdf-weekday,P16-minus-wd-s353-2045,Zg. Duplek - Ul. Veljka Vlahovića - Avtobusna postaja,P16,1,7378
 82,pdf-weekday,P16-minus-wd-s353-2150,Zg. Duplek - Ul. Veljka Vlahovića - Avtobusna postaja,P16,1,7378
@@ -2782,7 +2714,7 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 84,pdf-weekday,P18-plus-wd-s625-0539,Turnerjeva - Pekre,P18,0,7281
 84,pdf-weekday,P18-plus-wd-s935-0605,Turnerjeva - Pekre,P18,0,7281
 84,pdf-weekday,P18-plus-wd-s625-0609,Turnerjeva - Pekre,P18,0,7281
-84,pdf-weekday,P18-plus-wd-s935-0635,Turnerjeva - Pekre,P18,0,7281
+84,pdf-weekday,P18-plus-wd-s935-0625,Turnerjeva - Pekre,P18,0,7281
 84,pdf-weekday,P18-plus-wd-s935-0655,Turnerjeva - Pekre,P18,0,7281
 84,pdf-weekday,P18-plus-wd-s935-0725,Turnerjeva - Pekre,P18,0,7281
 84,pdf-weekday,P18-plus-wd-s935-0755,Turnerjeva - Pekre,P18,0,7281
@@ -2832,11 +2764,37 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 84,pdf-holiday,P18-plus-sp-s935-1940,Turnerjeva - Pekre,P18,0,7281
 84,pdf-holiday,P18-plus-sp-s935-2050,Turnerjeva - Pekre,P18,0,7281
 84,pdf-holiday,P18-plus-sp-s935-2210,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-0610,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-0710,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-0810,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-0910,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1010,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1110,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1210,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1310,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1410,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1510,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1640,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1810,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-1940,Turnerjeva - Pekre,P18,0,7281
+84,site-saturday,P18-plus-sa-s935-2110,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-0610,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-0710,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-0810,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-0910,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-1010,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-1110,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-1210,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-1310,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-1410,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-1610,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-1810,Turnerjeva - Pekre,P18,0,7281
+84,site-sunday,P18-plus-su-s935-2010,Turnerjeva - Pekre,P18,0,7281
 84,pdf-weekday,P18-minus-wd-s151-0500,Pekre - Turnerjeva,P18,1,7282
 84,pdf-weekday,P18-minus-wd-s151-0530,Pekre - Turnerjeva,P18,1,7282
 84,pdf-weekday,P18-minus-wd-s151-0610,Pekre - Turnerjeva,P18,1,7282
 84,pdf-weekday,P18-minus-wd-s151-0640,Pekre - Turnerjeva,P18,1,7282
-84,pdf-weekday,P18-minus-wd-s151-0710,Pekre - Turnerjeva,P18,1,7282
+84,pdf-weekday,P18-minus-wd-s151-0700,Pekre - Turnerjeva,P18,1,7282
 84,pdf-weekday,P18-minus-wd-s151-0740,Pekre - Turnerjeva,P18,1,7282
 84,pdf-weekday,P18-minus-wd-s151-0810,Pekre - Turnerjeva,P18,1,7282
 84,pdf-weekday,P18-minus-wd-s151-0840,Pekre - Turnerjeva,P18,1,7282
@@ -2885,6 +2843,32 @@ route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,shape_id
 84,pdf-holiday,P18-minus-sp-s151-1900,Pekre - Turnerjeva,P18,1,7282
 84,pdf-holiday,P18-minus-sp-s151-2010,Pekre - Turnerjeva,P18,1,7282
 84,pdf-holiday,P18-minus-sp-s151-2130,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-0630,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-0730,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-0830,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-0930,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1030,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1130,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1230,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1330,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1430,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1600,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1730,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-1900,Pekre - Turnerjeva,P18,1,7282
+84,site-saturday,P18-minus-sa-s151-2030,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-0630,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-0730,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-0830,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-0930,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1030,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1130,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1230,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1330,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1430,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1530,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1730,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-1930,Pekre - Turnerjeva,P18,1,7282
+84,site-sunday,P18-minus-su-s151-2100,Pekre - Turnerjeva,P18,1,7282
 85,pdf-weekday,P19-plus-wd-s1-0555,Avtobusna postaja - Dom pod gorco - Supernova,P19,0,7587
 85,pdf-weekday,P19-plus-wd-s1-0710,Avtobusna postaja - Dom pod gorco - Supernova,P19,0,7587
 85,pdf-weekday,P19-plus-wd-s1-0825,Avtobusna postaja - Dom pod gorco - Supernova,P19,0,7587

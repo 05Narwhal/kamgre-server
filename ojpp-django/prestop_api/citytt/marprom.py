@@ -17,6 +17,12 @@ column nearest them, never by their order. Two things on the pages are not depar
   the stop's name, direction and ID are the real fields beside them), and no digit sits in them. Dropped.
 - `*` after a minute (`15*`, set a size smaller to fit the cell) is a line variant, explained by a legend line at the foot
   of the page (G4: "* Vozi do Lesarske šole."): those trips pass a stop the others skip. Kept as the departure's mark.
+
+Some pages are blank, and some published weekend tables differ from what Marprom runs, so the PDFs give each direction's
+stops in order, their school holidays and marks, and the times come from Marprom's interactive timetable
+(vozniredi.marprom.si, user 2026-11-05): one page per stop and date lists every line's departures there. A build reads it
+for a school weekday, a weekday in ŠP, a Saturday and a Sunday ahead (`from_site`); a line whose weekend there differs
+from the published feed's gets its weekend trips rebuilt from it too (`compose`, `weekendFromSite` in the status).
 """
 import collections
 import csv
@@ -401,7 +407,9 @@ def _align(expected: list[list[float]], trips: list[tuple], arrivals: list[tuple
 GTFS_URL = 'https://vozniredi.marprom.si/GTFS/gtfs.zip'
 DELAY = 1.1                    # s between two requests to marprom.si
 WEEKDAY, HOLIDAY = 'pdf-weekday', 'pdf-holiday'   # Monday–Friday; Monday–Friday in the school holidays (ŠP)
-TAGS = {'weekday': 'wd', 'weekday_holiday': 'sp'}
+SATURDAY, SUNDAY = 'site-saturday', 'site-sunday'      # a line's weekend, rebuilt from the site where the published one differs
+SERVICES = {'weekday': WEEKDAY, 'weekday_holiday': HOLIDAY, 'saturday': SATURDAY, 'sunday': SUNDAY}
+TAGS = {'weekday': 'wd', 'weekday_holiday': 'sp', 'saturday': 'sa', 'sunday': 'su'}
 EXTEND_AT = 0.995              # share of equal stop departures (of both sides) that lets Saturday and Sunday run on
 OFF_SHAPE = 50                 # m: a published shape passes a stop this close to count as passing it
 WEEK = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday')
@@ -579,7 +587,7 @@ def _time(minute: int) -> str:
     return f'{minute // 60:02d}:{minute % 60:02d}:00'
 
 
-def compose(city: City, directions: list[dict], published: dict, today: date) -> tuple[dict[str, list[dict]], dict, list[str]]:
+def compose(city: City, directions: list[dict], published: dict, today: date, site_used: bool = False) -> tuple[dict[str, list[dict]], dict, list[str]]:
     """GTFS rows per file name, the facts about the build, and the problems found. `directions`: [{'line', 'dir',
     'doc'}] (`direction()`'s result per PDF). Weekday trips come from the PDFs' tables (chain); Saturday and Sunday keep
     the published trips, which run on to the PDFs' end only when the PDFs agree with them; the summer tables are dropped."""
@@ -605,6 +613,9 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
                  for s in keep if any(calendar[s][d] == '1' for d in WEEK)]
     services = {kind: next((s for s in sorted(keep) if calendar[s][kind] == '1'), None) for kind in ('saturday', 'sunday')}
     services = {k: v for k, v in services.items() if v}
+    weekend = agreement(directions, by_code, routes, trips, services)
+    rebuilt = {kind: sorted(line for line, v in weekend[kind]['lines'].items() if not _line_agrees(v))
+               for kind in services} if site_used else {}
 
     new, stop_rows, unknown = [], [], collections.defaultdict(set)
     names = {sid: r['stop_name'] for sid, r in stops.items()}
@@ -627,7 +638,7 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
         history = [(t['service'], t['stops']) for t in trips.values() if t['route'] == route]
         line_ends = steps_of(history, last_only=True)
         last_page = max(i for i, (code, _) in enumerate(doc['stops']) if code)
-        for kind in ('weekday', 'weekday_holiday'):
+        for kind in ('weekday', 'weekday_holiday', *(k for k in ('saturday', 'sunday') if line in rebuilt.get(k, ()))):
             deps = doc['tables'][kind]
             for trip in chain(deps, run_times(ids, history, deps)):
                 at = trip[-1][0]
@@ -646,7 +657,7 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
                     copy += 1
                     tid = f'{base}-{copy}'
                 ids_used.add(tid)
-                service = WEEKDAY if kind == 'weekday' else HOLIDAY
+                service = SERVICES[kind]
                 per_line[line] += service == WEEKDAY
                 new.append({'route_id': route, 'service_id': service, 'trip_id': tid, 'trip_headsign': headsign or doc['headsign'],
                             'trip_short_name': line, 'direction_id': direction_id or ('0' if d['dir'] == 'plus' else '1'), 'shape_id': shape})
@@ -661,14 +672,16 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
     if problems:
         return {}, {}, problems
 
-    weekend = agreement(directions, by_code, routes, trips, services)
     cal_rows = [dict(r) for r in published['calendar.txt'] if r['service_id'] in keep]
-    for r in cal_rows:
+    for r in cal_rows:   # with the site, a line that disagrees is rebuilt, so the rest agrees
         kind = next((k for k, s in services.items() if s == r['service_id']), None)
-        if kind and weekend[kind]['agrees']:
+        if kind and (weekend[kind]['agrees'] or site_used):
             r['end_date'] = day(end)
     cal_rows += [{'service_id': WEEKDAY, **{x: '1' for x in WEEK}, 'saturday': '0', 'sunday': '0', 'start_date': day(start), 'end_date': day(end)},
                  {'service_id': HOLIDAY, **{x: '0' for x in (*WEEK, 'saturday', 'sunday')}, 'start_date': day(start), 'end_date': day(end)}]
+    cal_rows += [{'service_id': SERVICES[kind], **{x: '0' for x in WEEK}, 'saturday': str(int(kind == 'saturday')), 'sunday': str(int(kind == 'sunday')),
+                  'start_date': day(start), 'end_date': day(end)} for kind in ('saturday', 'sunday') if rebuilt.get(kind)]
+    alike = {k: [s for s in (services.get(k), rebuilt.get(k) and SERVICES[k]) if s] for k in ('saturday', 'sunday')}
     ends = {r['service_id']: r['end_date'] for r in cal_rows}
     dates = {(r['service_id'], r['date']): r for r in published['calendar_dates.txt'] if r['service_id'] in keep}
 
@@ -683,13 +696,17 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
             exception(WEEKDAY, d, '2')
             exception(HOLIDAY, d, '1')
         if holiday(d) and d.weekday() < 6:
-            if services.get('sunday') and day(d) <= ends[services['sunday']]:
-                exception(services['sunday'], d, '1')
-            if d.weekday() == 5 and services.get('saturday') and day(d) <= ends[services['saturday']]:
-                exception(services['saturday'], d, '2')
+            for s in alike['sunday']:
+                if day(d) <= ends[s]:
+                    exception(s, d, '1')
+            for s in alike['saturday'] if d.weekday() == 5 else ():
+                if day(d) <= ends[s]:
+                    exception(s, d, '2')
         d += timedelta(days=1)
 
-    kept = [t['row'] for t in trips.values() if t['service'] in keep]
+    line_of = {route: line for line, route in routes.items()}
+    gone = {(services[k], line) for k, lines in rebuilt.items() for line in lines}   # published weekend trips the site's replace
+    kept = [t['row'] for t in trips.values() if t['service'] in keep and (t['service'], line_of.get(t['route'])) not in gone]
     kept_ids = {r['trip_id'] for r in kept}
     all_trips = [{k: r.get(k, '') for k in TRIP_KEYS} for r in kept] + new
     used = {r['shape_id'] for r in all_trips if r['shape_id']}
@@ -702,8 +719,16 @@ def compose(city: City, directions: list[dict], published: dict, today: date) ->
     last = min(ends[s] for s in (WEEKDAY, HOLIDAY, *services.values()))
     facts = {'end': f'{last[:4]}-{last[4:6]}-{last[6:]}', 'lines': dict(sorted(per_line.items())), 'weekend': weekend,
              'shapes': dict(shapes.counts), 'aloneDepartures': dict(alone), 'noLastStop': sorted(no_last), 'dropped': sorted(ended),
-             'shapesInPublished': len({r['shape_id'] for r in published['shapes.txt']}), 'shapesKept': len(used)}
+             'shapesInPublished': len({r['shape_id'] for r in published['shapes.txt']}), 'shapesKept': len(used),
+             'weekendFromSite': {k: v for k, v in rebuilt.items() if v}}
     return files, facts, problems
+
+
+def _line_agrees(v: dict) -> bool:
+    """One line's weekend agreement: no departures on either side, or equal at EXTEND_AT of both."""
+    if not v['published'] and not v['pdf']:
+        return True
+    return bool(v['published'] and v['pdf'] and v['equal'] / v['published'] >= EXTEND_AT and v['equal'] / v['pdf'] >= EXTEND_AT)
 
 
 def check(files: dict[str, str], today: date) -> list[str]:
@@ -726,8 +751,119 @@ def check(files: dict[str, str], today: date) -> list[str]:
     return problems
 
 
-def make(city: City, src: Fetched, today: date, read=read_pdf) -> tuple[dict[str, str], dict]:
-    """The feed's files (name -> text) and its status from what was fetched; raises BuildError with every problem."""
+SITE_URL = 'https://vozniredi.marprom.si/?stop={stop}&datum={day}'
+SITE_LINE = re.compile(r'Naslednji odhodi za linijo <span[^>]*>\s*(\w+)\s*</span>(.*?)</table>', re.S)
+SITE_ROW = re.compile(r'<td class="tdWidth">\s*(.*?)\s*</td>\s*<td>(.*?)</td>', re.S)
+SITE_DAY = re.compile(r'id="datum"[^>]*value="(\d{4}-\d\d-\d\d)"')
+SITE_AHEAD = 56   # days ahead a sample day is looked for
+
+
+def site_departures(text: str, day: date) -> dict[str, list[tuple[str, list[int]]]] | None:
+    """One page of vozniredi.marprom.si (a stop on a date: every line's departures there, per variant) -> {line:
+    [(variant, [minute of the day])]}; None when the site shows another date than asked (past the dates it has). The
+    times are in the day's order, so one earlier than the one before it is after midnight."""
+    shown = SITE_DAY.search(text)
+    if not shown or shown.group(1) != day.isoformat():
+        return None
+    out: dict[str, list] = {}
+    for line, body in SITE_LINE.findall(text):
+        for label, cells in SITE_ROW.findall(body):
+            mins, prev = [], -1
+            for t in re.findall(r'\b(\d\d):(\d\d)\b', cells):
+                m = int(t[0]) * 60 + int(t[1])
+                while m < prev:
+                    m += 1440
+                mins.append(m)
+                prev = m
+            out.setdefault(line, []).append((html.unescape(re.sub(r'\s+', ' ', label)).strip(), mins))
+    return out
+
+
+def sample_days(today: date, holidays: list[tuple[date, date]]) -> dict[str, date]:
+    """The first day after today of each table: a school weekday, a weekday in the school holidays (ŠP), a Saturday and
+    a Sunday that are no public holiday, within SITE_AHEAD days."""
+    out: dict[str, date] = {}
+    for n in range(1, SITE_AHEAD + 1):
+        d = today + timedelta(days=n)
+        if holiday(d):
+            continue
+        kind = ('saturday' if d.weekday() == 5 else 'sunday' if d.weekday() == 6 else
+                'weekday_holiday' if any(a <= d <= b for a, b in holidays) else 'weekday')
+        out.setdefault(kind, d)
+    return out
+
+
+def from_site(directions: list[dict], by_code: dict, site, days: dict[str, date]) -> dict:
+    """Each PDF page's tables replaced by the site's departures at that stop on a sample day of the table (some PDF pages
+    are blank, the site is what Marprom runs now). The site lists a stop's departures per variant, not per PDF file: a stop
+    only one direction of the line has a page at takes all of the line's; at one both have (a turning point), a variant
+    goes where it went at the stops only one direction has. A variant is a `*` one when the PDFs mark most of its
+    departures. A table the site has no day for keeps the PDF's. Returns what changed."""
+    pages: dict[tuple, list] = collections.defaultdict(list)   # (line, stop id) -> [(direction, stop index)]
+    for d in directions:
+        for i, (code, _) in enumerate(d['doc']['stops']):
+            if code in by_code:
+                pages[d['line'], by_code[code]].append((d, i))
+    stop_ids = sorted({sid for _, sid in pages})
+    answers = {(sid, kind): site(sid, day) for sid in stop_ids for kind, day in days.items()}
+    # the site shows its school-day table in the school holidays too (all stops, 2026-11-05): then the PDFs' ŠP stays
+    holiday_as_weekday = 'weekday_holiday' in days and 'weekday' in days and all(
+        answers[s, 'weekday_holiday'] == answers[s, 'weekday'] for s in stop_ids)
+    used = {k: v for k, v in days.items() if not (holiday_as_weekday and k == 'weekday_holiday')}
+    side: dict[tuple, str] = {}                     # (line, variant) -> direction
+    stars: dict[tuple, collections.Counter] = collections.defaultdict(collections.Counter)
+    for (line, sid), here in pages.items():
+        if len(here) != 1:
+            continue
+        d, i = here[0]
+        for kind in used:
+            pdf = dict(d['doc']['tables'][kind][i])
+            for label, mins in (answers[sid, kind] or {}).get(line, []):
+                side.setdefault((line, label), d['dir'])
+                stars[line, label].update(pdf[m] == '*' for m in mins if m in pdf)
+    starred = {k for k, c in stars.items() if c[True] > c[False]}
+    changed, filled, unplaced = collections.Counter(), collections.Counter(), set()
+    for (line, sid), here in sorted(pages.items(), key=lambda kv: kv[0]):
+        for kind in used:
+            got = answers[sid, kind]
+            if got is None:
+                continue
+            for d, i in here:
+                pdf = dict(d['doc']['tables'][kind][i])
+                deps = []
+                for label, mins in got.get(line, []):
+                    if len(here) > 1 and side.get((line, label)) != d['dir']:
+                        if (line, label) not in side:
+                            unplaced.add(f'{line} {sid}: {label}')
+                        continue
+                    mark = '*' if (line, label) in starred else ''
+                    deps += [(m, mark or pdf.get(m, '')) for m in mins]
+                deps.sort()
+                if deps != sorted(d['doc']['tables'][kind][i]):
+                    changed[line] += 1
+                    filled[line] += not d['doc']['tables'][kind][i]
+                d['doc']['tables'][kind][i] = deps
+    return {'days': {k: v.isoformat() for k, v in sorted(days.items())},
+            'missing': sorted(k for k in days if all(answers[s, k] is None for s in stop_ids)),
+            'holidayAsWeekday': holiday_as_weekday,
+            'changedPages': dict(sorted(changed.items())), 'blankPagesFilled': dict(sorted(filled.items())), 'unplaced': sorted(unplaced)}
+
+
+class Site:
+    """vozniredi.marprom.si, one page at a time through the same pace; keeps every answer's hash for the status."""
+
+    def __init__(self, pace):
+        self.pace, self.hashes = pace, {}
+
+    def __call__(self, stop: str, day: date):
+        data = self.pace(SITE_URL.format(stop=stop, day=day.isoformat()))
+        self.hashes[stop, day.isoformat()] = hashlib.sha256(data).hexdigest()
+        return site_departures(data.decode('utf-8', 'replace'), day)
+
+
+def make(city: City, src: Fetched, today: date, read=read_pdf, site=None) -> tuple[dict[str, str], dict]:
+    """The feed's files (name -> text) and its status from what was fetched; raises BuildError with every problem.
+    `site(stop id, day)`: the site's departures there (site_departures), which replace the PDFs' tables (from_site)."""
     published = _published(src.gtfs)
     directions, problems = [], []
     for f in src.files:
@@ -743,7 +879,15 @@ def make(city: City, src: Fetched, today: date, read=read_pdf) -> tuple[dict[str
     problems += [f'{line} {which} read from two files' for line, which in sorted({k for k in keys if keys.count(k) > 1})]
     if problems:
         raise build.BuildError('\n'.join(problems))
-    rows, facts, found = compose(city, directions, published, today)
+    filled = None
+    if site and directions:
+        by_code = {r['stop_code']: r['stop_id'] for r in published['stops.txt'] if r.get('stop_code')}
+        filled = from_site(directions, by_code, site, sample_days(today, directions[0]['doc']['holiday_ranges']))
+        if 'weekday' in filled['missing'] or 'weekday' not in filled['days']:
+            problems.append(f'the site has no weekday day in the {SITE_AHEAD} days from {today}')
+        if problems:
+            raise build.BuildError('\n'.join(problems))
+    rows, facts, found = compose(city, directions, published, today, site_used=filled is not None)
     problems += found
     files = {name: build.to_text(r) for name, r in rows.items()}
     if not problems:
@@ -757,10 +901,17 @@ def make(city: City, src: Fetched, today: date, read=read_pdf) -> tuple[dict[str
     files['feed_info.txt'] = build.to_text([{'feed_publisher_name': 'KamGre', 'feed_publisher_url': 'https://kamgre.si', 'feed_lang': 'sl',
                                              'feed_start_date': first, 'feed_end_date': facts['end'].replace('-', ''), 'feed_version': version}])
     status = {'status': 'ok', 'version': version, 'end': facts['end'], 'source': city.page.split('{line}')[0], 'files': hashes,
-              'lines': facts['lines'], 'weekend': facts['weekend'], 'shapes': facts['shapes'], 'aloneDepartures': facts['aloneDepartures'], 'noLastStop': facts['noLastStop']}
+              'lines': facts['lines'], 'weekend': facts['weekend'], 'shapes': facts['shapes'], 'aloneDepartures': facts['aloneDepartures'], 'noLastStop': facts['noLastStop'],
+              'weekendFromSite': facts['weekendFromSite']}
+    if filled is not None:
+        pages = getattr(site, 'hashes', {})
+        status['site'] = {'url': SITE_URL.split('?')[0], 'pages': len(pages),
+                          'sha256': hashlib.sha256(''.join(f'{k}{v}' for k, v in sorted(pages.items())).encode()).hexdigest(), **filled}
     return files, status
 
 
 def run(city: City, today: date) -> tuple[dict[str, str], dict]:
-    """Fetch (politely, one file at a time) and build; what manage.py city_timetables calls for this city."""
-    return make(city, fetch(city, today), today)
+    """Fetch (politely, one file at a time) and build; what manage.py city_timetables calls for this city. The site's
+    pages (one per stop and sample day, about 1,800) take some 35 minutes at this pace."""
+    pace = _Pace()
+    return make(city, fetch(city, today, pace), today, site=Site(pace))

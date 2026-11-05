@@ -8,7 +8,8 @@
 
 arriva.si answers only from Slovenia: run it on a PC there (`yarn city-timetables`) and commit the folder. Needs
 OTP, Overpass and Valhalla (ojpp.sh uses the local one on :8002 when it runs). Marprom needs none of them, only
-marprom.si and the published GTFS (about 60 requests, one a second, and some minutes to read the PDFs).
+marprom.si, the published GTFS and vozniredi.marprom.si (about 60 requests for the PDFs and 1,800 for the site's
+stop pages, one a second: some 35 minutes, `--city MARPROM` alone).
 """
 import importlib
 import json
