@@ -144,6 +144,11 @@ def choose(names: list[str], poles: dict[str, dict], pairs: dict[tuple[str, str]
         if chosen[i] is None and avoid and len(options[i]) == 2:
             left = [c for c in tops[i] if c not in avoid.get(n, ())]
             chosen[i] = left[0] if len(left) == 1 else None
+        if chosen[i] is None and len(tops[i]) == 2:
+            # A run up a road and back down it (Celje's line 11 to the castle) calls twice at one stop: the visit
+            # nothing tells takes the pole the other visit did not.
+            taken = {chosen[j] for j, m in enumerate(names) if m == n and j != i and chosen[j] in tops[i]}
+            chosen[i] = next(c for c in tops[i] if c not in taken) if len(taken) == 1 else None
         if chosen[i] is None:
             problems.append(f'"{n}" (stop {i + 1}): no known run or road tells its pole from {", ".join(tops[i])}')
     return chosen, problems
@@ -151,7 +156,9 @@ def choose(names: list[str], poles: dict[str, dict], pairs: dict[tuple[str, str]
 
 def _by_road(chosen: list, tops: list[list[str]], poles: dict[str, dict], length: Callable) -> None:
     """Each stretch of tied stops, routed from the chosen stop before it to the one after it through every choice of
-    their poles: a stop takes the pole that all choices within ROAD_MARGIN of the shortest agree on."""
+    their poles: a stop takes the pole that all choices within ROAD_MARGIN of the shortest agree on. A stretch with more
+    than MOST_CHOICES choices (Celje's line 2b: eight stops in a row with a pole each side) goes a window at a time,
+    each routed on from the stop before it, keeping only the first half's picks: the rest is settled with what follows."""
     i = 0
     while i < len(chosen):
         if chosen[i] is not None:
@@ -160,15 +167,28 @@ def _by_road(chosen: list, tops: list[list[str]], poles: dict[str, dict], length
         j = i
         while j < len(chosen) and chosen[j] is None:
             j += 1
-        combos = list(itertools.islice(itertools.product(*tops[i:j]), MOST_CHOICES + 1))
-        if len(combos) <= MOST_CHOICES:
-            ends = ([chosen[i - 1]] if i else [], [chosen[j]] if j < len(chosen) else [])
-            routed = [(m, c) for c in combos if (m := length([poles[p] for p in ends[0] + list(c) + ends[1]])) is not None]
-            if routed:
-                shortest = min(m for m, _ in routed)
-                near = [c for m, c in routed if m - shortest < ROAD_MARGIN]
-                for k in range(i, j):
-                    picks = {c[k - i] for c in near}
-                    if len(picks) == 1:
-                        chosen[k] = picks.pop()
-        i = j
+        while i < j:
+            w = i + 1
+            while w < j and math.prod(len(t) for t in tops[i:w + 1]) <= MOST_CHOICES:
+                w += 1
+            keep = j if w == j else i + max(1, (w - i) // 2)
+            _route(chosen, tops, poles, length, i, w, keep)
+            i = keep
+
+
+def _route(chosen: list, tops: list[list[str]], poles: dict[str, dict], length: Callable, i: int, w: int, keep: int) -> None:
+    """Stops i … w - 1 routed through every choice of their poles, between the chosen stops next to them; picks
+    stops i … keep - 1."""
+    combos = list(itertools.islice(itertools.product(*tops[i:w]), MOST_CHOICES + 1))
+    if len(combos) > MOST_CHOICES:
+        return
+    before = [chosen[i - 1]] if i and chosen[i - 1] is not None else []
+    after = [chosen[w]] if w < len(chosen) and chosen[w] is not None else []
+    routed = [(m, c) for c in combos if (m := length([poles[p] for p in before + list(c) + after])) is not None]
+    if routed:
+        shortest = min(m for m, _ in routed)
+        near = [c for m, c in routed if m - shortest < ROAD_MARGIN]
+        for k in range(i, keep):
+            picks = {c[k - i] for c in near}
+            if len(picks) == 1:
+                chosen[k] = picks.pop()

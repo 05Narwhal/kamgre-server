@@ -110,6 +110,26 @@ class PoleTests(SimpleTestCase):
         self.assertEqual(poles.choose(['Bolnica', 'ZD', 'Integral'], found, {}, flat, {'ZD': {'IJPP:e'}}),
                          (['IJPP:b', 'IJPP:w', 'IJPP:a'], []))
 
+    def test_the_road_settles_a_stretch_of_more_tied_stops_than_it_routes_at_once(self):
+        found, _ = poles.unify([stop('IJPP:a', 'Integral', 46.4300, 14.0400), stop('IJPP:b', 'Bolnica', 46.4500, 14.0400)]
+                               + [stop(f'IJPP:{n}{side}', f'S{n}', 46.431 + n * 0.002, 14.0400 + d)
+                                  for n in range(8) for side, d in (('w', -0.0001), ('e', 0.0001))], [])
+        names = ['Integral', *(f'S{n}' for n in range(8)), 'Bolnica']
+        calls = []
+        # 2^8 choices, more than MOST_CHOICES: the right-hand (west) poles are the short way round.
+        road = lambda pts: calls.append(len(pts)) or 1000 + 50 * sum(p['id'].endswith('e') for p in pts)  # noqa: E731
+        chosen, problems = poles.choose(names, found, {}, road)
+        self.assertEqual((chosen, problems), (['IJPP:a', *(f'IJPP:{n}w' for n in range(8)), 'IJPP:b'], []))
+        self.assertLessEqual(max(calls), 2 + 6)
+
+    def test_a_stop_called_twice_in_one_run_takes_the_other_pole_the_second_time(self):
+        found, _ = poles.unify([stop('IJPP:a', 'Integral', 46.4410, 14.0400), stop('IJPP:w', 'ZD', 46.4399, 14.0443),
+                                stop('IJPP:e', 'ZD', 46.4397, 14.0444), stop('IJPP:b', 'Bolnica', 46.4380, 14.0500)], [])
+        # Up to Bolnica and back: the road tells the way down (IJPP:e), not the way up.
+        pairs = poles.adjacent([['IJPP:b', 'IJPP:e', 'IJPP:a']])
+        self.assertEqual(poles.choose(['Integral', 'ZD', 'Bolnica', 'ZD', 'Integral'], found, pairs),
+                         (['IJPP:a', 'IJPP:w', 'IJPP:b', 'IJPP:e', 'IJPP:a'], []))
+
 
     def test_no_overpass_server_answering_reuses_the_last_answer_for_the_same_query(self):
         import requests
