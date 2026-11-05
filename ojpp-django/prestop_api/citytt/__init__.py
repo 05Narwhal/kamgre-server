@@ -186,6 +186,45 @@ CITIES = {
         names=(('Kazarje - prihod', 'Kazarje'), ('Pretnarjeva', 'Pretnerjeva'), ('Kolodvorska cesta', 'Kolodvorska'),
                ('Žel. postaja', 'Železniška postaja'), ('Pod jelovico', 'Pod Jelovico'), ('Pod Kolodvorom', 'Pod kolodvorom')),
     ),
+    'CELEBUS': City(
+        # A correction of OTP's Celje feed (docs/research/2026-11-04-city-timetables.md): OTP serves 7 of the 1 Sep 2026
+        # network's 13 lines and no Saturdays. Its weekday runs match the Word files and stay; lines 3, 6, 7 and 10 gain
+        # their Saturdays (and 3 its school-day runs), 1a, 2b, 4, 5, 8, 9 and 11 come from the files only.
+        feed='CELEBUS', name='Celje', own_stops=True,
+        page='https://moc.celje.si/za-obcane/promet-in-mobilnost/celebus/',
+        links=r'https://res\.cloudinary\.com/celje/raw/upload/v\d+/Linija_\d+[ab]?_\d{4}-\d\d\.docx',
+        files=tuple(f'Linija_{n}_2026-09.docx' for n in ('1a', '1b', '2a', '2b', '3', '4', '5', '6', '7', '8', '9', '10', '11')),
+        reader='nomago_celje',
+        days='Od 1. 9. 2026 veljajo novi vozni redi.',
+        weekdays=(1, 1, 1, 1, 1, 1, 0), holidays_too=(),
+        # The files print "01.09.2026 - 30.06.2029", but DŠ follows each school year's holidays: check the files and
+        # gov.si's calendar again before the next one.
+        start=date(2026, 9, 1), end=date(2027, 8, 31),
+        agency=('1', 'CELEBUS/Nomago', 'https://www.nomago.si'),   # OTP's own Celje operator, CELEBUS:1
+        bbox=(46.17, 15.15, 46.32, 15.40),
+        # OTP's route ids where it has the line (1B also has a one-run variant, CELEBUS:1282, which stays OTP's).
+        line_ids=(('1a', '1A', '1A'), ('2b', '2B', '2B'), ('3', '1277', '3'), ('4', '4', '4'), ('5', '5', '5'),
+                  ('6', '1273', '6'), ('7', '1274', '7'), ('8', '8', '8'), ('9', '9', '9'), ('10', '1276', '10'),
+                  ('11', '11', '11')),
+        unread=('1b', '2a'),   # weekdays only, both match OTP's
+        # Line 11's last two stops before Celje ŽP, line 4's two in the old town: neither OTP, IJPP nor OSM has a pole by
+        # these names (2026-11-05).
+        unplaced=('Celje Cesta na grad bife', 'Celje Skalna klet', 'Celje občina', 'Celje Glavni trg'),
+        # OTP's name ("(PL)" URL-encoded); OSM's spelled out; line 2b's Dobrova stops in the order its runs pass them
+        # (Lokrovec Čerčnik, the crossroads, the pole by the motorway, Nova vas).
+        names=(('Bukovžlak Gobec K', 'Bukovžlak Gobec K %28PL%29'), ('Celje Ostrožno GD', 'Ostrožno gasilski dom'),
+               ('Dobrova K (Celje)', 'Dobrova pri Celju križišče'), ('Dobrova pri Celju', 'Dobrova pri Celju AC'),
+               ('Celje Dečkova GD', 'Dečkova gasilski dom'), ('Celje Inpos', 'Inpos PL')),
+        replaces=(('1A', 'add'), ('2B', 'add'), ('1277', 'add'), ('4', 'add'), ('5', 'add'), ('1273', 'add'),
+                  ('1274', 'add'), ('8', 'add'), ('9', 'add'), ('1276', 'add'), ('11', 'add')),
+        only_services=(('1277', ('SO', 'DS')), ('1273', ('SO',)), ('1274', ('SO',)), ('1276', ('SO',))),
+        # D* = working days, SO = Saturdays but public holidays, DŠ = working days 1 Sep - 24 Jun but the New Year and
+        # May Day school holidays (the files' legend; the dates from gov.si's 2026/27 calendar, the same in every region).
+        services=(('D', (1, 1, 1, 1, 1, 0, 0), False), ('SO', (0, 0, 0, 0, 0, 1, 0), False),
+                  ('DS', (1, 1, 1, 1, 1, 0, 0), False, (9, 10, 11, 12, 1, 2, 3, 4, 5, 6))),
+        breaks=(('DS', ((date(2026, 12, 25), date(2027, 1, 2)), (date(2027, 4, 27), date(2027, 5, 2)),
+                        (date(2027, 6, 25), date(2027, 6, 30)))),),
+    ),
     'MARPROM': City(
         feed='MARPROM', name='Maribor',
         page='https://www.marprom.si/koda-linije_nova/{line}_nova/',   # one page per line: {line} is its code in lower case
