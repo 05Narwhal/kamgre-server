@@ -291,6 +291,19 @@ class PrecedenceTests(SimpleTestCase):
         self.assertFalse([b for b in plan['buses'] if b.get('trainTripId') == train])
         self.assertTrue(closures.decides(plan['decided'][(early['id'], '20261014')], '2442'))
 
+    def test_a_timetable_kept_under_zamudils_number_is_found_by_its_title(self):
+        """OTP has the notice under SŽ's number, its PDF came with zamudil's record of it (a number of its own): 11270
+        Ptuj - Ormož on 5 Nov 2026 guessed 29 trains away instead of the timetable's 4."""
+        sha = TABLES.notices['11248']
+        moved = sztimetables.Timetables({**{n: s for n, s in TABLES.notices.items() if s != sha}, '5990000001': sha},
+                                        {**TABLES.files, sha: {**TABLES.files[sha], 'notices': ['5990000001']}})
+        alerts = [a for a in ALERTS if closures.notice_id(a) != '11147']  # its title differs: it would be guessed
+        plan, before = build('20261014', tables=moved, alerts=alerts), build('20261014', alerts=alerts)
+        self.assertTrue(timetabled(before))
+        self.assertEqual(sorted(timetabled(plan)), sorted(timetabled(before)))
+        self.assertEqual(plan['suppressed'], before['suppressed'])
+        self.assertEqual(sorted(b['id'] for b in plan['buses']), sorted(b['id'] for b in before['buses']))
+
     def test_a_failed_or_missing_timetable_changes_nothing(self):
         failed = sztimetables.Timetables(TABLES.notices, {sha: {**f, 'status': 'failed'} for sha, f in TABLES.files.items()})
         for tables in (failed, None, sztimetables.Timetables({}, {})):

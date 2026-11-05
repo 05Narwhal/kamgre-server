@@ -506,6 +506,17 @@ def _seconds(hhmm: str) -> int:
     return int(hours) * 3600 + int(minutes) * 60
 
 
+def timetable_files(tables: sztimetables.Timetables, alert: dict) -> list[dict]:
+    """The timetables of an alert's notice: those of its number, else those of the notice with its title. OTP has a
+    notice under SŽ's number, while its PDF may have come with zamudil's record of it, which has a number of its own
+    (11270 Ptuj - Ormož on 5 Nov 2026: indexed as 6000151599, so its 29 trains were guessed away, not the PDF's 4)."""
+    found = tables.files_for(notice_id(alert))
+    key = title_key(alert.get('title') or '')
+    if found or not key:
+        return found
+    return [tables.files[sha] for sha in sorted(tables.files) if title_key(tables.files[sha].get('title') or '') == key]
+
+
 def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.Timetables, stop_index: dict, points: dict[str, list],
                     bus_stops: list[dict]) -> dict:
     """The buses SŽ's replacement timetables run on the service days of `trips` (see `plan`)."""
@@ -532,8 +543,9 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
             if not is_closure(a) or day not in _days(a):
                 continue
             number = notice_id(a)
-            data = tables.file_on(number, when)
-            if not data and any(f.get('status') in ('ok', 'unsure') for f in tables.files_for(number)):
+            files = timetable_files(tables, a)
+            data = next((f for f in files if sztimetables.valid_on(f, when)), None)
+            if not data and any(f.get('status') in ('ok', 'unsure') for f in files):
                 # Its timetable runs no bus that day (it lists other days): every train runs.
                 out['decided'][(a['id'], day)] = {'all': True, 'yes': frozenset(), 'no': frozenset()}
                 continue
