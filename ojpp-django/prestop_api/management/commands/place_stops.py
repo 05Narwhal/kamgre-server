@@ -1,7 +1,7 @@
 """Place bus stops on the road the lines through them use (M9, rules in stopplace.py). Report first, then apply.
 
-    manage.py place_stops --poles poles.json            # report only (docs/research/2026-11-04-stop-placement.csv)
-    manage.py place_stops --poles poles.json --write    # also write data/stop_places.json, which stopfix applies
+    manage.py place_stops --poles poles.json --locate http://127.0.0.1:8002/locate          # report only (docs/research/2026-11-04-stop-placement.csv)
+    manage.py place_stops --poles poles.json --locate http://127.0.0.1:8002/locate --write  # also write data/stop_places.json, which stopfix applies
     manage.py place_stops --feeds IJPP --stops IJPP:1123642,IJPP:1123643
 
 Each bus pattern's shape is its feed shape map-matched onto the roads, as served (`roads.matched`), read from the
@@ -20,6 +20,7 @@ import math
 from collections import Counter, defaultdict
 from pathlib import Path
 
+import requests
 from django.core.management.base import BaseCommand
 
 from prestop_api import geometry, mapping, roads, stopfix, stopplace
@@ -29,6 +30,7 @@ ROUTES_Q = '{ routes(transportModes: [BUS, COACH]) { gtfsId } }'
 PATTERNS_Q = '''query($ids: [String]) { routes(ids: $ids) { gtfsId shortName mode agency { gtfsId }
   patterns { code stops { gtfsId name lat lon } patternGeometry { points } } } }'''
 CHUNK = 100
+LOCATE_CHUNK = 100  # points per Valhalla /locate request
 REPORT = Path(__file__).resolve().parents[5] / 'docs' / 'research' / '2026-11-04-stop-placement.csv'
 ORDER_SLACK = 5.0  # m: in stop order, a moved stop must project where it would on its own near its line's pass
 AROUND = 80.0      # m along the line either side of the pass searched for that projection
@@ -66,8 +68,10 @@ class Command(BaseCommand):
         parser.add_argument('--poles', default='', help='JSON {stop id: [lat, lon]} of OSM poles tagged with the stop id')
         parser.add_argument('--report', default=str(REPORT), help='CSV report path')
         parser.add_argument('--write', action='store_true', help='write data/stop_places.json')
+        parser.add_argument('--locate', default='', help="a local Valhalla's /locate URL (http://127.0.0.1:8002/locate): "
+                                                         'kerb moves of a pole nearer another road are dropped')
 
-    def handle(self, *args, feeds='', stops='', poles='', report=str(REPORT), write=False, **options):
+    def handle(self, *args, feeds='', stops='', poles='', report=str(REPORT), write=False, locate='', **options):
         overrides, snaps = stopfix.tables()
         base = {k: v for k, v in snaps.items() if k != stopfix.PLACED}  # served positions without placement
         tagged = {k: tuple(v) for k, v in json.loads(Path(poles).read_text(encoding='utf-8')).items()} if poles else {}
@@ -82,6 +86,14 @@ class Command(BaseCommand):
                 answers[sid] = {'lat': stop['lat'], 'lon': stop['lon'], 'metres': 0.0, 'why': stop['skip'], 'move': False}
             else:
                 answers[sid] = stopplace.place(stop['lat'], stop['lon'], [p[:3] for p in passes[sid]], tagged.get(sid))
+        kerb = sorted(sid for sid, a in answers.items() if a['move'] and a['why'] == 'right kerb')
+        if locate and kerb:
+            near = self._nearest_roads(locate, [(info[s]['lat'], info[s]['lon']) for s in kerb])
+            for sid, road in zip(kerb, near):
+                answers[sid] = stopplace.place(info[sid]['lat'], info[sid]['lon'], [p[:3] for p in passes[sid]], tagged.get(sid), road)
+            self.stdout.write(f'{len(kerb)} kerb moves checked against the nearest road ({sum(r is None for r in near)} unanswered)')
+        elif kerb:
+            self.stdout.write(self.style.WARNING('no --locate: kerb moves are not checked for a nearer side road'))
         dropped = self._keep_order(patterns, answers, passes)
         legs = self._legs(patterns, answers)
 
@@ -197,6 +209,19 @@ class Command(BaseCommand):
         for n in range(0, len(new), 500):
             cached.update(roads.legs.get_many(new[n:n + 500]))
         return {'before': len(before), 'after': len(after), 'new': len(set(new) - cached)}
+
+    @staticmethod
+    def _nearest_roads(url: str, points: list[tuple[float, float]]) -> list:
+        """Metres from each point to the nearest road a bus may use (Valhalla /locate, bus costing), None if unanswered."""
+        out = []
+        for n in range(0, len(points), LOCATE_CHUNK):
+            chunk = points[n:n + LOCATE_CHUNK]
+            body = {'locations': [{'lat': lat, 'lon': lon} for lat, lon in chunk], 'costing': 'bus', 'verbose': False}
+            answer = requests.post(url, json=body, timeout=(5, 60)).json()
+            for (lat, lon), loc in zip(chunk, answer):
+                edges = (loc or {}).get('edges') or []
+                out.append(min((stopplace._metres(lat, lon, e['correlated_lat'], e['correlated_lon']) for e in edges), default=None))
+        return out
 
     # ------------------------------------------------------------ output
 

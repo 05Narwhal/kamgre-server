@@ -12,8 +12,12 @@ Rules (spec 2026-11-04, "Placement (M9)"):
   order, `geometry.project_stops`) and its direction of travel there. Patterns that pass more than AGREE metres apart
   use different roads: a person looks.
 - One way: the kerb on the right of travel (KERB metres off the road's centre line). Both ways (a two-way pole): the
-  centre line.
+  centre line, which in practice means no move: a pole served both ways that stands MIN_MOVE or more off the lines'
+  road sits in a turnaround or lay-by the map-matched shape skips (Edge sample, 2026-11-05), so only OSM's tagged
+  pole moves it ('two-way bay' otherwise, listed for a person).
 - A pole the feed puts clearly on the left of travel (more than SIDE_SLACK metres) is not moved: it would cross the road.
+- A pole nearer another road a bus may use than the lines' road (`road`, metres to the nearest one, from Valhalla's
+  /locate; ROAD_SLACK) stands on a side road, service road or bay the shape skips: not moved ('other road').
 - Moves only MIN_MOVE..MAX_MOVE metres: closer is already fine, further is listed for a person.
 """
 import math
@@ -29,7 +33,8 @@ SIDE_SLACK = 4.0   # m left of the centre line a pole may stand (GPS noise) befo
 POLE_NEAR = 25.0   # m: OSM's tagged pole counts only this close to the lines' road point
 MIN_MOVE = 8.0     # m: a stop closer than this to its place stays where it is
 MAX_MOVE = 60.0    # m: a longer move is listed for a person, not applied
-LOOK = 15.0        # m before and after the stop over which the direction of travel is read
+ROAD_SLACK = 5.0   # m: a road this much nearer the pole than the lines' road is another road (it stands by that one)
+LOOK = 15.0       # m before and after the stop over which the direction of travel is read
 
 
 def _kx(lat: float) -> float:
@@ -71,10 +76,12 @@ def _mean_heading(headings: list[float]) -> float:
     return (math.degrees(math.atan2(x, y)) + 360) % 360
 
 
-def place(lat: float, lon: float, passes: list[tuple[float, float, float]], pole: Optional[tuple[float, float]] = None) -> dict:
-    """Where a stop at (lat, lon) belongs, given where each pattern through it passes (`passing`) and OSM's tagged
-    pole. {'lat', 'lon', 'metres', 'why', 'move'}: `move` is True only for a move this module applies; otherwise
-    `why` says what a person should know ('no line', 'lines disagree', 'other side', 'close', 'far')."""
+def place(lat: float, lon: float, passes: list[tuple[float, float, float]], pole: Optional[tuple[float, float]] = None,
+          road: Optional[float] = None) -> dict:
+    """Where a stop at (lat, lon) belongs, given where each pattern through it passes (`passing`), OSM's tagged
+    pole and `road`, the metres from (lat, lon) to the nearest road a bus may use (None: not known).
+    {'lat', 'lon', 'metres', 'why', 'move'}: `move` is True only for a move this module applies; otherwise `why` says
+    what a person should know ('no line', 'lines disagree', 'other side', 'other road', 'two-way bay', 'close', 'far')."""
     out = {'lat': lat, 'lon': lon, 'metres': 0.0, 'move': False}
     if not passes:
         return {**out, 'why': 'no line'}
@@ -101,4 +108,8 @@ def place(lat: float, lon: float, passes: list[tuple[float, float, float]], pole
         return {**out, 'lat': lat, 'lon': lon, 'why': 'close', 'move': False}
     if metres > MAX_MOVE:
         return {**out, 'why': 'far', 'move': False}
+    if why == 'two-way centre':
+        return {**out, 'why': 'two-way bay', 'move': False}
+    if why == 'right kerb' and road is not None and road + ROAD_SLACK < _metres(lat, lon, mlat, mlon):
+        return {**out, 'why': 'other road', 'move': False}
     return {**out, 'move': True}

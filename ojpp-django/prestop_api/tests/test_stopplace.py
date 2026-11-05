@@ -43,11 +43,22 @@ class PlaceTests(SimpleTestCase):
         self.assertFalse(out['move'])
         self.assertEqual(out['why'], 'other side')
 
-    def test_two_way_pole_stays_on_the_centre_line(self):
-        out = stopplace.place(north(15), LON, [passes_at(road(), 0), passes_at(road(False), 0)])
-        self.assertTrue(out['move'])
-        self.assertEqual(out['why'], 'two-way centre')
-        self.assertAlmostEqual(out['lat'], LAT, places=6)
+    def test_two_way_pole_off_the_road_is_a_bay_only_a_tagged_pole_moves(self):
+        # Served both ways yet 15 m off the road: a turnaround or lay-by the shape skips (Mali Slatnik obračališče).
+        both = [passes_at(road(), 0), passes_at(road(False), 0)]
+        out = stopplace.place(north(15), LON, both)
+        self.assertEqual((out['move'], out['why']), (False, 'two-way bay'))
+        self.assertAlmostEqual(out['lat'], LAT, places=6)  # where the centre line would be, for the report
+        tagged = stopplace.place(north(15), LON, both, pole=(north(4), LON))
+        self.assertEqual((tagged['move'], tagged['why']), (True, 'osm pole'))
+
+    def test_pole_by_another_road_stays(self):
+        # 20 m off the lines' road but 2 m from a side road (Odranci): it stands there, the shape skips that road.
+        side = stopplace.place(north(-20), LON, [passes_at(road(), 0)], road=2.0)
+        self.assertEqual((side['move'], side['why']), (False, 'other road'))
+        # The lines' road is the nearest one (a pole drawn in a field or on a roof): moved to its kerb.
+        field = stopplace.place(north(-20), LON, [passes_at(road(), 0)], road=19.0)
+        self.assertEqual((field['move'], field['why']), (True, 'right kerb'))
 
     def test_close_and_far_are_not_moved(self):
         close = stopplace.place(north(-6), LON, [passes_at(road(), 0)])
