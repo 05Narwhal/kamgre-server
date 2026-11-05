@@ -52,6 +52,18 @@ class PlaceTests(SimpleTestCase):
         tagged = stopplace.place(north(15), LON, both, pole=(north(4), LON))
         self.assertEqual((tagged['move'], tagged['why']), (True, 'osm pole'))
 
+    def test_a_shape_turning_back_at_the_stop_is_two_way(self):
+        # Črnomelj Šecop: the line drives up a dead-end spur to the stop and back; the matched shape turns at its tip,
+        # so the heading there means nothing. A pole east of the tip must not be pulled to a "kerb" across the spur.
+        spur = [[LON, north(-200)], [LON, north(-100)], [LON, LAT], [LON, north(-100)], [LON, north(-200)]]
+        cum = geometry.cumulative(spur)
+        lat, lon, heading = stopplace.passing(spur, cum, 200.0)
+        self.assertIsNone(heading)
+        out = stopplace.place(north(-10), east(12), [(lat, lon, heading)])
+        self.assertEqual((out['move'], out['why']), (False, 'two-way bay'))
+        tagged = stopplace.place(north(-10), east(12), [(lat, lon, heading)], pole=(north(-2), east(3)))
+        self.assertEqual((tagged['move'], tagged['why']), (True, 'osm pole'))
+
     def test_pole_by_another_road_stays(self):
         # 20 m off the lines' road but 2 m from a side road (Odranci): it stands there, the shape skips that road.
         side = stopplace.place(north(-20), LON, [passes_at(road(), 0)], road=2.0)

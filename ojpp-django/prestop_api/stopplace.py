@@ -14,7 +14,8 @@ Rules (spec 2026-11-04, "Placement (M9)"):
 - One way: the kerb on the right of travel (KERB metres off the road's centre line). Both ways (a two-way pole): the
   centre line, which in practice means no move: a pole served both ways that stands MIN_MOVE or more off the lines'
   road sits in a turnaround or lay-by the map-matched shape skips (Edge sample, 2026-11-05), so only OSM's tagged
-  pole moves it ('two-way bay' otherwise, listed for a person).
+  pole moves it ('two-way bay' otherwise, listed for a person). A shape that turns back at the stop (a dead-end spur
+  the match cuts short) has no direction there and counts as both ways.
 - A pole the feed puts clearly on the left of travel (more than SIDE_SLACK metres) is not moved: it would cross the road.
 - A pole nearer another road a bus may use than the lines' road (`road`, metres to the nearest one, from Valhalla's
   /locate; ROAD_SLACK) stands on a side road, service road or bay the shape skips: not moved ('other road').
@@ -41,13 +42,22 @@ def _kx(lat: float) -> float:
     return KY * math.cos(math.radians(lat))
 
 
-def passing(coords: list, cum: list[float], along: float) -> tuple[float, float, float]:
-    """(lat, lon, heading) where a shape passes a stop projected at `along` metres; heading in degrees from north."""
-    lon, lat = geometry.point_at(coords, cum, along)
+def _bearing(lat: float, a: tuple, b: tuple) -> float:
+    return (math.degrees(math.atan2((b[0] - a[0]) * _kx(lat), (b[1] - a[1]) * KY)) + 360) % 360
+
+
+def passing(coords: list, cum: list[float], along: float) -> tuple[float, float, Optional[float]]:
+    """(lat, lon, heading) where a shape passes a stop projected at `along` metres; heading in degrees from north.
+    Heading None: the shape turns back there (a dead-end spur or turnaround it cuts short, Črnomelj Šecop), so the
+    pass has no direction of travel and `place` treats the pole as served both ways."""
+    p = geometry.point_at(coords, cum, along)
+    lon, lat = p
     a = geometry.point_at(coords, cum, max(0.0, along - LOOK))
     b = geometry.point_at(coords, cum, min(cum[-1], along + LOOK))
-    heading = (math.degrees(math.atan2((b[0] - a[0]) * _kx(lat), (b[1] - a[1]) * KY)) + 360) % 360
-    return lat, lon, heading
+    if _metres(lat, lon, a[1], a[0]) > 1 and _metres(lat, lon, b[1], b[0]) > 1 \
+            and _gap(_bearing(lat, a, p), _bearing(lat, p, b)) > TWO_WAY:
+        return lat, lon, None
+    return lat, lon, _bearing(lat, a, b)
 
 
 def _offset(lat: float, lon: float, heading: float, metres: float) -> tuple[float, float]:
@@ -89,8 +99,8 @@ def place(lat: float, lon: float, passes: list[tuple[float, float, float]], pole
     mlon = sum(p[1] for p in passes) / len(passes)
     if max(_metres(mlat, mlon, p[0], p[1]) for p in passes) > AGREE:
         return {**out, 'why': 'lines disagree'}
-    headings = [p[2] for p in passes]
-    two_way = any(_gap(a, b) > TWO_WAY for a in headings for b in headings)
+    headings = [p[2] for p in passes if p[2] is not None]
+    two_way = len(headings) < len(passes) or any(_gap(a, b) > TWO_WAY for a in headings for b in headings)
     if two_way:
         target, why = (mlat, mlon), 'two-way centre'
     else:
