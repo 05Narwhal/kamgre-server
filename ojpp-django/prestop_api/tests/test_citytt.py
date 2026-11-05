@@ -252,6 +252,19 @@ class BuildTests(SimpleTestCase):
         self.assertLess(build.geometry.distance(shape[0], [a['lon'], a['lat']]), 30)
         self.assertEqual(shape[-1], [b['lon'], b['lat']])
 
+    def test_a_stop_up_a_spur_keeps_the_spur_when_the_turn_round_is_cut(self):
+        # Celje pod gradom m. stands 70 m up a dead end off the road from Polule; the router drove 400 m on to turn
+        # round and came back up the spur. Cutting the turn round must not leave the stop 77 m off the drawing.
+        a = {'name': 'Polule', 'lon': 15.26224, 'lat': 46.21597}
+        b = {'name': 'pod gradom', 'lon': 15.26411, 'lat': 46.21599}
+        turned = [[15.26227, 46.21595], [15.26235, 46.21565], [15.26355, 46.21542], [15.26371, 46.21541],
+                  [15.26342, 46.21494], [15.26231, 46.21258], [15.26218, 46.21227], [15.26226, 46.21246],
+                  [15.26225, 46.21321], [15.26371, 46.21541], [b['lon'], b['lat']]]
+        self.assertFalse(build.roads.plausible(turned, a, b))
+        shape = build.road_shape([a, b], route=lambda window: [turned])
+        self.assertEqual(shape[-1], [b['lon'], b['lat']])
+        self.assertLess(build.geometry.cumulative(shape)[-1], 400)
+
     def test_a_leg_that_stays_implausible_fails(self):
         a = {'name': 'A', 'lon': 13.571053, 'lat': 45.518658}
         b = {'name': 'B', 'lon': 13.5776012, 'lat': 45.5162499}

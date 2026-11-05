@@ -1,2 +1,2 @@
 feed_publisher_name,feed_publisher_url,feed_lang,feed_start_date,feed_end_date,feed_version
-KamGre,https://kamgre.si,sl,20260901,20270831,9e45a56cb079
+KamGre,https://kamgre.si,sl,20260901,20270831,28424b013386

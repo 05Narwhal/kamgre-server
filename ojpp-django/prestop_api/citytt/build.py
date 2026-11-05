@@ -377,6 +377,20 @@ def feed_legs(city: City) -> dict[tuple[str, str], list]:
     return out
 
 
+def _reaching(cut: list, raw: list) -> list:
+    """An untangled leg that still reaches its stops. Untangling cuts a turn round where the bus first passes the stop,
+    but a stop up a spur is never passed: Celje pod gradom m. stands 70 m up a dead end off the road from Polule, and the
+    cut leg ended 77 m short, so the drawing skipped the spur on the way out and every later stop failed the check. An
+    end further than OFF_SHAPE from the routed one goes on to it."""
+    if len(cut) < 2:
+        return cut
+    if geometry.distance(cut[-1], raw[-1]) > OFF_SHAPE:
+        cut = cut + [raw[-1]]
+    if geometry.distance(cut[0], raw[0]) > OFF_SHAPE:
+        cut = [raw[0]] + cut
+    return cut
+
+
 def road_shape(points: list[dict], route=roads.route_window, known: Optional[dict] = None, borrowed: Optional[list] = None) -> list:
     """Coordinates along the roads through the stops (Valhalla, bus costing); raises BuildError on a missing or
     implausible leg. A leg that loops out of its first stop or into its last to turn round is cut where the bus first
@@ -390,7 +404,7 @@ def road_shape(points: list[dict], route=roads.route_window, known: Optional[dic
             raise BuildError(f'no road route through {window[0]["name"]} … {window[-1]["name"]}')
         for a, b, leg in zip(window, window[1:], legs):
             if len(leg) > 2 and not roads.plausible(leg, a, b):
-                leg = roads.untangle(leg)
+                leg = _reaching(roads.untangle(leg), leg)
             if (len(leg) < 2 or not roads.plausible(leg, a, b)) and (a.get('id'), b.get('id')) in (known or {}):
                 leg = known[(a['id'], b['id'])]
                 if borrowed is not None:
