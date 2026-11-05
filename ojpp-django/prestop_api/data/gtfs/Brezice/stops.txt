@@ -1,0 +1,19 @@
+stop_id,stop_name,stop_lat,stop_lon
+10,Brežice Občina,45.904020,15.592930
+11,Brežice gimnazija,45.907720,15.591360
+12,Brežice stadion,45.911770,15.590610
+13,Brežice Intermarket,45.918460,15.596630
+14,Cesta bratov Milavcev,45.915840,15.590990
+15,Brežice stadion,45.911900,15.590510
+16,Brežice gimnazija,45.907750,15.591260
+17,Brežice Zdravstveni dom,45.907730,15.594640
+18,Maistrova,45.907890,15.597480
+19,Brežice AP,45.907600,15.600890
+2,Murnova,45.906930,15.609210
+3,Kregarjeva,45.905570,15.609010
+4,Prežihova 1,45.904480,15.606180
+5,Prežihova 2,45.905730,15.605220
+6,Trdinova,45.904260,15.601410
+7,Pokopališče,45.900300,15.596570
+8,Cankarjeva,45.902110,15.597020
+9,Brežice Market,45.904600,15.596920

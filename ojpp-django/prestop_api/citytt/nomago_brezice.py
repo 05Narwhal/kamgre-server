@@ -8,7 +8,7 @@ Modra loops from Brežice AP through Trnje and back (Mon–Fri); Zelena loops fr
 town (Mon–Sat mornings, Mon–Fri afternoons), a half-day's last run ending at Občina and its first leaving AP (but the
 summer afternoon's, from Intermarket). Every
 run keeps the same minutes between stops (the posters' columns), so a run is its start, first and last stop. Stop names
-are OTP's (`Brezice` feed), whose ids are the posters' stop numbers; stadion and gimnazija have a pole each way.
+are OTP's (`Brezice` feed), whose ids are the posters' stop numbers (POLES); stadion and gimnazija have a pole each way.
 
 A poster whose bytes change is a ValueError (the build keeps the last good folder): read it and type its times again.
 """
@@ -22,6 +22,10 @@ ZELENA = ('Brežice Intermarket', 'Cesta bratov Milavcev', 'Brežice stadion', '
           'Maistrova', 'Brežice AP', 'Murnova', 'Kregarjeva', 'Prežihova 1', 'Prežihova 2', 'Trdinova', 'Pokopališče',
           'Cankarjeva', 'Brežice Market', 'Brežice Občina', 'Brežice gimnazija', 'Brežice stadion', 'Brežice Intermarket')
 ZELENA_AT = (0, 2, 3, 4, 5, 6, 8, 10, 11, 12, 13, 15, 17, 18, 19, 20, 22, 23, 27)
+# The posters' stop numbers, OTP's ids (build.py: they outweigh OTP's patterns): southbound from Cesta bratov
+# Milavcev both lines take stadion 15 and gimnazija 16, the poles across the road from 11 and 12.
+POLES = (('19', '2', '3', '4', '5', '9', '10', '11', '12', '14', '15', '16', '17', '18', '19'),
+         ('13', '14', '15', '16', '17', '18', '19', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'))
 AP, OBCINA, END = 6, 15, 18  # Zelena: the first half-day run starts at AP, the last ends at Občina
 
 

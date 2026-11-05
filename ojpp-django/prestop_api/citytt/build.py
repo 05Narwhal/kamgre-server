@@ -41,6 +41,7 @@ rel["type"="route"]["route"="bus"]({b});out body;'''
 OFF_SHAPE = 50   # m: a stop further than this from its trip's routed shape fails the build
 SERVICE = 'redni'
 FETCH_GAP = 1.0  # s between two requests to the operator
+PRINTED = 10      # weight of a run whose timetable prints its poles' ids (reader.POLES) against OTP's and OSM's runs
 
 
 class BuildError(Exception):
@@ -520,7 +521,11 @@ def build(city: City, src: Sources, today: date, route=roads.route_window, lengt
         read_as = {n: poles.misread(n, all_poles) for t in tables for n in t['stops'] if not poles.candidates(n, all_poles, city.name)}
         tables = [{**t, 'stops': [read_as.get(n) or n for n in t['stops']]} for t in tables]
         notes += [f'read "{n}" as "{m}"' for n, m in sorted(read_as.items()) if m]
-    pairs = poles.merged(poles.adjacent(src.feed_runs), poles.adjacent(src.osm_runs, alias))
+    # A timetable that prints its stops' numbers (Brežice's posters: OTP's stop ids) knows its poles: those runs
+    # (reader.POLES) outweigh every pattern (OTP's Zelena takes the other side's poles on Modra's road).
+    printed = poles.adjacent([[f'{city.feed}:{s}' for s in run] for run in getattr(reader, 'POLES', ())])
+    pairs = poles.merged(poles.adjacent(src.feed_runs), poles.adjacent(src.osm_runs, alias),
+                         {k: PRINTED * v for k, v in printed.items()})
     # Every distinct run of stops is placed once; one the road leaves tied then avoids the poles the other direction
     # of its line took for the same name.
     key = lambda t: (t['line'], t.get('direction', 0), tuple(t['stops']))  # noqa: E731

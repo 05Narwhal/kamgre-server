@@ -1,0 +1,31 @@
+{
+ "status": "ok",
+ "version": "130d3e27cd6a",
+ "end": "2027-08-31",
+ "source": "https://www.nomago.si/avtobusni-prevozi/mestni-promet/brezice/vozni-red",
+ "files": [
+  {
+   "file": "Mestni%20avtobus_ZIMSKI%20VOZNI%20RED%202023_2024%20VOZNI%20RED-compressed-compressed.pdf",
+   "url": "https://www.nomago.si/storage/app/media/mesta/brezice/Mestni%20avtobus_ZIMSKI%20VOZNI%20RED%202023_2024%20VOZNI%20RED-compressed-compressed.pdf",
+   "sha256": "bf312f43d70481ffe20f93f8577c8e9dcc99fd5c1da9d9ce3581dadf3f0babd1"
+  },
+  {
+   "file": "VR%20MP%20Bre%C5%BEice-po%C4%8Ditnice.pdf",
+   "url": "https://www.nomago.si/storage/app/media/mesta/brezice/VR%20MP%20Bre%C5%BEice-po%C4%8Ditnice.pdf",
+   "sha256": "9a10910d137da23a4e52aeaf09e2f014ff674fcac711a934d8830ae91b9b0756"
+  }
+ ],
+ "lines": {
+  "1": 21,
+  "2": 14
+ },
+ "services": {
+  "1 out D": 15,
+  "1 out PD": 6,
+  "2 out D": 4,
+  "2 out DS": 4,
+  "2 out PD": 2,
+  "2 out PDS": 4
+ },
+ "built": "2026-11-05"
+}

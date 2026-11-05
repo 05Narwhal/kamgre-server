@@ -1,0 +1,2 @@
+agency_id,agency_name,agency_url,agency_timezone,agency_lang
+0,Mestni avtobus Brežice,https://www.nomago.si/avtobusni-prevozi/mestni-promet/brezice,Europe/Ljubljana,sl

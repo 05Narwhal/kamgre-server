@@ -58,3 +58,19 @@ class CorrectionTests(SimpleTestCase):
         rows, _ = build.calendar(self.city, {'D', 'DS', 'PD', 'PDS'})
         self.assertEqual(sorted(r['service_id'] for r in rows), ['D', 'DS', 'PD', 'PDS'])
         self.assertTrue(all(r['sunday'] == '0' for r in rows))
+
+    def test_printed_poles_outweigh_otps_patterns(self):
+        """The posters number their stops (OTP's ids): Modra's return takes stadion 15 / gimnazija 16, though OTP's
+        Zelena patterns (two runs) take 12 / 11 on the same road."""
+        from prestop_api.citytt import poles
+        self.assertEqual([len(p) for p in nomago_brezice.POLES], [len(nomago_brezice.MODRA), len(nomago_brezice.ZELENA)])
+        at = lambda i, n: {'id': f'Brezice:{i}', 'name': n, 'lat': 45.9, 'lon': 15.59}  # noqa: E731
+        all_poles, _ = poles.unify([at(14, 'Cesta bratov Milavcev'), at(12, 'Brežice stadion'), at(15, 'Brežice stadion'),
+                                    at(11, 'Brežice gimnazija'), at(16, 'Brežice gimnazija'),
+                                    at(17, 'Brežice Zdravstveni dom')], [])
+        otp = [['Brezice:14', 'Brezice:12', 'Brezice:11', 'Brezice:17']] * 2 + [['Brezice:14', 'Brezice:15', 'Brezice:16', 'Brezice:17']]
+        printed = poles.adjacent([[f'Brezice:{s}' for s in run] for run in nomago_brezice.POLES])
+        pairs = poles.merged(poles.adjacent(otp), {k: build.PRINTED * v for k, v in printed.items()})
+        chosen, problems = poles.choose(['Cesta bratov Milavcev', 'Brežice stadion', 'Brežice gimnazija',
+                                         'Brežice Zdravstveni dom'], all_poles, pairs)
+        self.assertEqual((chosen, problems), (['Brezice:14', 'Brezice:15', 'Brezice:16', 'Brezice:17'], []))

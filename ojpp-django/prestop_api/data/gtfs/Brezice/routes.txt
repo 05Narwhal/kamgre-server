@@ -1,0 +1,3 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+1,0,1,Modra,3
+2,0,2,Zelena,3
