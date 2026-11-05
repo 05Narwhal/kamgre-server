@@ -25,7 +25,7 @@ tables of a line are the columns of one service each. What the reader makes of t
   (ISO dates), so a build can check them.
 
 `parse` returns one table per (line, service): `{'line', 'title', 'stops', 'runs', 'direction', 'service', 'notes',
-'valid_from', 'valid_to'}`, runs sorted by first departure, runs with fewer than two calls dropped. Every direction is
+'valid_from', 'valid_to'}`, runs sorted by first departure, runs with fewer than two calls dropped, stops no run calls left out. Every direction is
 `Odhod` (a loop or there-and-back in one column): `direction` 0. A layout the reader does not know, or a time that goes
 back inside a run, is a ValueError naming the file, the line and the stop.
 """
@@ -289,8 +289,11 @@ def read(xml: bytes, name: str = '<docx>') -> list[dict]:
     for service, cols in columns.items():
         runs = [(n, r) for n, r in cols if sum(1 for v in r if v) >= 2]
         runs.sort(key=lambda nr: (_minutes(next(v for v in nr[1] if v)), nr[0]))
+        # A stop no run of the service calls is not on its way (line 2b's runs all skip Ostrožno): left out.
+        keep = [i for i in range(len(stops)) if any(r[i] for _, r in runs)]
         if runs:
-            tables.append({'line': line, 'title': title, 'stops': stops, 'runs': [r for _, r in runs], 'direction': 0,
+            tables.append({'line': line, 'title': title, 'stops': [stops[i] for i in keep],
+                           'runs': [[r[i] for i in keep] for _, r in runs], 'direction': 0,
                            'service': service, 'notes': [sentence],
                            'valid_from': f'{v.group(3)}-{v.group(2)}-{v.group(1)}', 'valid_to': f'{v.group(6)}-{v.group(5)}-{v.group(4)}'})
     if not tables:

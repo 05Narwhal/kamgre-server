@@ -52,10 +52,13 @@ class TenTests(SimpleTestCase):
         self.assertEqual(set(self.tables), {'D', 'SO'})
         for t in self.tables.values():
             self.assertEqual((t['line'], t['title'], t['direction']), ('10', 'Bukovžlak-Ljubečna', 0))
-            self.assertEqual((t['stops'][0], t['stops'][-1], len(t['stops'])), ('Celje ŽP', 'Celje ŽP', 35))
+            self.assertEqual((t['stops'][0], t['stops'][-1]), ('Celje ŽP', 'Celje ŽP'))
             self.assertEqual(t['notes'], ['Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029'])
             self.assertEqual((t['valid_from'], t['valid_to']), ('2026-09-01', '2029-06-30'))
-            self.assertTrue(all(len(r) == 35 for r in t['runs']))
+            self.assertTrue(all(len(r) == len(t['stops']) for r in t['runs']))
+            # The file's 35 stops less the 7 every run passes (I) or skips (-): no stop is on no run's way.
+            self.assertTrue(all(any(r[i] for r in t['runs']) for i in range(len(t['stops']))))
+        self.assertEqual(len(self.d['stops']), 28)
         self.assertEqual(starts(self.d), ['05:30', '07:30', '11:30', '13:30', '15:30', '17:30'])
         self.assertEqual(ends(self.d), ['06:15', '08:15', '12:15', '14:15', '16:15', '18:15'])
         self.assertEqual((starts(self.tables['SO']), ends(self.tables['SO'])), (['13:30'], ['14:15']))
@@ -63,21 +66,22 @@ class TenTests(SimpleTestCase):
     def test_calls(self):
         run = self.d['runs'][0]
         self.assertEqual(run[:3], ['05:30', '05:32', '05:34'])
-        self.assertEqual(self.d['stops'][9], 'Trnovlje pri Celju Gaji')
-        self.assertIsNone(run[9])                 # I: passes without stopping
-        self.assertEqual(self.d['stops'][10:12], ['Začret K', 'Začret'])
-        self.assertEqual((run[10], run[11]), ('05:46', None))
+        # Out, Trnovlje pri Celju Gaji is passed (I) and Začret skipped (-) by every run: only the way back has them.
+        self.assertEqual(self.d['stops'][8:10], ['Trnovlje Etra', 'Začret K'])
+        self.assertEqual((run[8], run[9]), ('05:44', '05:46'))
+        self.assertEqual(self.d['stops'].count('Trnovlje pri Celju Gaji'), 1)
+        self.assertEqual(run[self.d['stops'].index('Trnovlje pri Celju Gaji')], '06:01')
 
     def test_arrival_and_departure_rows_are_one_call_with_the_later_time(self):
         i = self.d['stops'].index('Ljubečna OŠ')
         self.assertEqual([r[i] for r in self.d['runs']], ['05:55', '07:55', '11:55', '13:55', '15:55', '17:55'])
-        self.assertEqual(len(self.d['stops']), 35)      # the two rows without a name are no stops
         for t in self.tables.values():
             for r in t['runs']:
                 self.assertNotIn('05:52', r)
                 self.assertNotIn('13:52', r)
-        self.assertEqual(self.d['runs'][0][i - 1], None)   # Ljubečna Opekarna, passed (I)
-        self.assertEqual(self.d['runs'][0][i + 1], None)   # Ljubečna Ropan, passed (I)
+        # The two rows without a name are no stops; Ljubečna Opekarna and Ropan, passed (I), are none either.
+        self.assertEqual(self.d['stops'][i - 1:i + 2], ['Ljubečna GD', 'Ljubečna OŠ', 'Ljubečna nadvoz'])
+        self.assertEqual(self.d['runs'][0][i - 1:i + 2], ['05:51', '05:55', '05:57'])
 
     def test_a_file_object_and_bytes_read_the_same(self):
         data = (FIXTURES / 'celje-10.docx').read_bytes()
