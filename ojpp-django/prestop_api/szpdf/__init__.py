@@ -11,7 +11,7 @@ import pdfplumber
 from . import layout, ocr, tables, texts
 
 SCHEMA = 1
-PARSER = 4 # bump when parsing changes: every cached PDF is parsed again
+PARSER = 5 # bump when parsing changes: every cached PDF is parsed again
 
 
 def parse(path) -> dict:

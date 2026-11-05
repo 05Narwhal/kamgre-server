@@ -88,6 +88,19 @@ class ParseTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             sz_list.check([])
 
+    def test_a_notice_without_its_days_is_named_as_not_read(self):
+        page = PAGE.replace('16.11.2026-19.11.2026', '')
+        self.assertEqual(sz_list.left_out(page, sz_list.parse(page)), ['11341 OBVESTILO: Skrajšana relacija avtovlakov: Bohinjska Bistrica - Podbrdo (16. - 19. november).'])
+        self.assertEqual(sz_list.left_out(PAGE, sz_list.parse(PAGE)), [])
+
+    def test_the_import_names_the_notices_it_could_not_read(self):
+        page = PAGE.replace('16.11.2026-19.11.2026', '')
+        out = StringIO()
+        with tempfile.TemporaryDirectory() as tmp, override_settings(PRESTOP_SZ_LIST_FILE=str(Path(tmp) / 'sz-list.json')), \
+                mock.patch('sys.stdin', mock.Mock(buffer=mock.Mock(read=lambda n: page.encode()))):
+            call_command('sz_notices', '--import', stdout=out)
+        self.assertIn('Not read (no dates or no heading): 11341 OBVESTILO', out.getvalue())
+
 
 class SpanTests(SimpleTestCase):
     def days(self, html):
@@ -104,6 +117,23 @@ class SpanTests(SimpleTestCase):
 
     def test_a_title_without_days_takes_the_lists_dates(self):
         self.assertEqual(self.days(WORKS), [(date(2026, 11, 9), date(2026, 11, 18))])
+
+    def test_every_dated_title_of_the_list_saved_on_5_november_is_read(self):
+        # Titles of SŽ's list saved 5 Nov 2026 (sz-download-3.html, 49 notices): their days come from the title.
+        cases = {
+            ('26.10.2026-06.11.2026', 'Vozni red nadomestnega prevoza: Ptuj / Moškanjci - Ormož in obratno (26. - 30. 10. in 3. - 6. 11.).'):
+                [(date(2026, 10, 26), date(2026, 10, 30)), (date(2026, 11, 3), date(2026, 11, 6))],
+            ('15.11.2026-30.11.2026', 'Vozni red nadomestnega prevoza: Divača - Koper in obratno (15., 16. ter 29. in 30. november).'):
+                [(date(2026, 11, d), date(2026, 11, d)) for d in (15, 16, 29, 30)],
+            ('15.11.2026-17.11.2026', 'Vozni red nadomestnega prevoza: Ivanjkovci - Ljutomer / Murska Sobota in obratno (15. in 17. 11.).'):
+                [(date(2026, 11, 15), date(2026, 11, 15)), (date(2026, 11, 17), date(2026, 11, 17))],
+            ('14.11.2026-15.11.2026', 'Vozni red nadomestnega prevoza: Maribor - Špilje (A) in obratno (14. - 15. november).'):
+                [(date(2026, 11, 14), date(2026, 11, 15))],
+            ('07.11.2026-11.11.2026', 'Vozni red nadomestnega prevoza: Ljubljana – Jesenice – Beljak (A) in obratno (7. – 11. november).'):
+                [(date(2026, 11, 7), date(2026, 11, 11))],
+        }
+        for (days, title), spans in cases.items():
+            self.assertEqual(self.days(item(1, days, title, 'x')), spans, title)
 
 
 class Uploaded(SimpleTestCase):

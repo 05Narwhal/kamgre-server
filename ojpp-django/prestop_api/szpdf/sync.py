@@ -205,6 +205,7 @@ def run(directory, notices: list, fetch=download, now: datetime | None = None) -
             'status': max((f['status'] for f in files), key=RANK.get) if files else 'missing',
             'columns': sum(len(t['columns']) for f in files for t in f['tables']),
             'problems': sum(len(f['problems']) for f in files),
+            'why': next((p for f in files for p in f['problems']), ''),
             'errors': [f'{u}: {errors[u]}' for u in n['urls'] if u in errors and u not in resolved],
         })
     return rows

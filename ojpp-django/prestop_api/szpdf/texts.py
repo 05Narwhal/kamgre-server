@@ -14,18 +14,18 @@ def fold(text: str) -> str:
     return re.sub(r'\s+', ' ', text.replace('–', '-')).strip().lower()
 
 
-def _days(text: str, year: int | None = None) -> tuple[list[date] | None, bool]:
-    """The dates written in `text` ("10., 11., 17. 10. ter 24. in 25. 10. 2026") and whether it is a range
-    ("Od … do …"). A month or year applies to every day before it that has none, `year` to days without one;
-    None if unreadable."""
+def _days(text: str, year: int | None = None) -> tuple[list[date] | None, int]:
+    """The dates written in `text` ("10., 11., 17. 10. ter 24. in 25. 10. 2026") and how many ranges ("Od … do …")
+    it has. A month or year applies to every day before it that has none, `year` to days without one; None if
+    unreadable."""
     items: list[list] = []
     after_number = False
-    ranged = False
+    ranged = 0
     for tok in re.findall(r'\d+|\bdo\b|[,;]|\bin\b|\bter\b|[a-zčšž]+', fold(text)):
         if not tok.isdigit():
-            ranged |= tok == 'do'
+            ranged += tok == 'do'
             if tok not in (',', ';', 'in', 'ter', 'do', 'od'):
-                return None, False
+                return None, 0
             after_number = False
             continue
         n = int(tok)
@@ -41,17 +41,20 @@ def _days(text: str, year: int | None = None) -> tuple[list[date] | None, bool]:
     try:
         days = [date(y or year, m, d) for d, m, y in items]
     except (TypeError, ValueError):
-        return None, False
+        return None, 0
     return days or None, ranged
 
 
 def validity(text: str) -> dict | None:
-    """"Velja v dneh" → {'from', 'to', 'dates'}: a range has dates None, a list of days names each day."""
-    days, ranged = _days(text)
-    if not days or (ranged and len(days) != 2) or days != sorted(days):
+    """"Velja v dneh" → {'from', 'to', 'dates'}: a range has dates None, a list of days names each day, and so do
+    several ranges ("Od 26. do 30. 10. ter od 3. do 6. 11. 2026")."""
+    days, ranges = _days(text)
+    if not days or (ranges and len(days) != 2 * ranges) or days != sorted(days):
         return None
+    if ranges > 1:
+        days = [date.fromordinal(k) for a, b in zip(days[::2], days[1::2]) for k in range(a.toordinal(), b.toordinal() + 1)]
     iso = [d.isoformat() for d in days]
-    return {'from': iso[0], 'to': iso[-1], 'dates': None if ranged else iso}
+    return {'from': iso[0], 'to': iso[-1], 'dates': None if ranges == 1 else iso}
 
 
 _RULES = [
@@ -64,8 +67,10 @@ _RULES = [
     (r'prevoz se opravi preko (preko )?mejnega prehoda [a-z]+', 'info'),
     (r'vlak st\. \d+ vozi do postajalisca [a-z ]+\. potniki v smeri [a-z ]+ prestopijo na postaji [a-z ]+!?', 'info'),
 ]
-_TRAIN_RUNS = re.compile(r'dne (?P<days>[\d. ,]+(?:(?:in|ter) [\d. ,]+)*) se nadomestni prevoz '
-                         r'(?:na relaciji (?P<a>[a-z .]+?) ?- ?(?P<b>[a-z .]+?) |med (?P<c>[a-z .]+?) in (?P<d>[a-z .]+?) )?ne opravlja; vozi vlak ?!?'
+# Also "v dneh 15. in 29. 11. 2026 se nadomestni prevoz NE IZVAJA - vozi vlak!" (Divača - Koper, November 2026).
+_TRAIN_RUNS = re.compile(r'(?:v dneh|dne) (?P<days>[\d. ,]+(?:(?:in|ter) [\d. ,]+)*) se nadomestni prevoz '
+                         r'(?:na relaciji (?P<a>[a-z .]+?) ?- ?(?P<b>[a-z .]+?) |med (?P<c>[a-z .]+?) in (?P<d>[a-z .]+?) )?'
+                         r'ne (?:opravlja|izvaja) ?[;-] ?vozi vlak ?!?'
                          r'(?: vlaki vozijo po objavljenem voznem redu vlakov in ne po voznem redu nadomestnega prevoza!?)?')
 
 

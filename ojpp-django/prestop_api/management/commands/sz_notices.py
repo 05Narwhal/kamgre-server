@@ -37,9 +37,14 @@ class Command(BaseCommand):
     def save(self, body: bytes) -> None:
         if len(body) > sz_list.LIMIT:
             raise CommandError(f'More than {sz_list.LIMIT} bytes: this is not the page. The notices stay as they were.')
+        page = body.decode('utf-8', 'replace')
+        notices = sz_list.parse(page)
         try:
-            sz_list.save(sz_list.parse(body.decode('utf-8', 'replace')), time.time())
+            sz_list.save(notices, time.time())
         except ValueError as e:
             raise CommandError(f'Not saved, the notices stay as they were: {e}') from e
         except OSError as e:
             raise CommandError(f'Not saved: {e}') from e
+        missed = sz_list.left_out(page, notices)
+        if missed:
+            self.stdout.write(f'Not read (no dates or no heading): {"; ".join(missed)}')

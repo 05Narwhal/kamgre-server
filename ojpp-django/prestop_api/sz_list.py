@@ -86,6 +86,21 @@ def parse(page: str) -> list[dict]:
     return out
 
 
+def left_out(page: str, notices: list[dict]) -> list[str]:
+    """The page's notices parse() could not read (no days or no heading), as "<id> <title>" for the import's summary."""
+    read = {n['id'] for n in notices}
+    found = list(ITEM.finditer(page))
+    out = []
+    for i, match in enumerate(found):
+        if match.group(1) in read:
+            continue
+        chunk = page[match.end():found[i + 1].start() if i + 1 < len(found) else len(page)]
+        heading = HEADING.search(chunk)
+        title = re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', heading.group(1)))).strip() if heading else ''
+        out.append(f'{match.group(1)} {title[:120] or "(no heading)"}')
+    return out
+
+
 def check(notices) -> list[dict]:
     """`notices` as parse() gives them, or ValueError: nothing else may replace the notices people see."""
     if not isinstance(notices, list) or not notices or not all(isinstance(n, dict) and n.get('id') and n.get('title') for n in notices):
