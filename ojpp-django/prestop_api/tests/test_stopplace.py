@@ -85,3 +85,20 @@ class StopfixPlacesTests(SimpleTestCase):
         self.assertEqual(stopfix.correct([placed], none, snaps), [placed])
         [hand] = stopfix.correct([self.otp_stop('A', LAT, LON)], {'stops': {'A': (1.0, 2.0)}, 'names': {}}, snaps)
         self.assertEqual((hand['lat'], hand['lon']), (1.0, 2.0))
+
+
+class PlaceStopsOrderTests(SimpleTestCase):
+    """manage.py place_stops drops a move after which a line would pass its stops in another order."""
+
+    def test_a_move_that_jumps_past_the_previous_stop_is_dropped(self):
+        from prestop_api.management.commands.place_stops import Command
+        coords = road()
+        stops = [{'gtfsId': 'A', 'lat': LAT, 'lon': east(-100)}, {'gtfsId': 'B', 'lat': LAT, 'lon': east(100)}]
+        pattern = {'shape': coords, 'cum': geometry.cumulative(coords), 'stops': stops}
+        passes = {'A': [(*passes_at(coords, -100), 0, 0, 100.0)], 'B': [(*passes_at(coords, 100), 0, 1, 300.0)]}
+        good = {'A': {'lat': north(-3), 'lon': east(-100), 'move': True, 'why': 'right kerb'},
+                'B': {'lat': north(-3), 'lon': east(100), 'move': True, 'why': 'right kerb'}}
+        self.assertEqual(Command()._keep_order([pattern], good, passes), 0)
+        jump = {**good, 'B': {'lat': north(-3), 'lon': east(-150), 'move': True, 'why': 'right kerb'}}
+        self.assertEqual(Command()._keep_order([pattern], jump, passes), 1)
+        self.assertEqual((jump['B']['move'], jump['B']['why'], jump['A']['move']), (False, 'order', True))
