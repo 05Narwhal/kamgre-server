@@ -1,0 +1,14 @@
+stop_id,stop_name,stop_lat,stop_lon
+1,Krško A. postaja,45.956818,15.493705
+4,Krško Osnovna šola Jurija Dalmatina,45.959122,15.494501
+26,Krško Resa,45.958546,15.499055
+27,Kremen odcep,45.957943,15.504865
+28,Kremen 9A,45.962444,15.506610
+29,Kremen - Loke,45.966011,15.510079
+30,Bučerca,45.971893,15.514481
+31,Bučerca odcep,45.973442,15.515489
+32,Sremič,45.983341,15.491169
+33,Sremič Radej,45.984596,15.488131
+34,Tri lučke,45.972916,15.492276
+35,Sremič gozd,45.964375,15.493859
+37,Sremič Božič,45.979752,15.486984

@@ -1,0 +1,2 @@
+agency_id,agency_name,agency_url,agency_timezone,agency_lang
+1,Mestni avtobus Krško,https://www.nomago.si/avtobusni-prevozi/mestni-promet/krsko-vozni-red,Europe/Ljubljana,sl

@@ -76,3 +76,16 @@ file runs none of line 15 (`supplement.fill`); should Ridango publish Sunday run
   one finds its run; not yet seen live on a Sunday), checked against the PDF minute by minute (2026-11-05); stops and line 15 as Ridango's,
   the drawing OTP's pattern `MOKranj:4153:0:02`.
 - Days: Sundays and the public holidays from 8 Nov 2026 to 30 Jun 2027 (`calendar_dates.txt`). Check the PDF again by then.
+
+## MOKrsko (Krško, line Sremič)
+
+A correction of OTP's Krško feed (`replaces.txt`: line `4`, mode `add`): only the Sremič line's runs are read here.
+
+- Why: Nomago's poster (`vozni-red-krsko-sremic-krsko-03112025.pdf` on nomago.si's Krško timetable page, valid from 3 Nov
+  2025, no end printed) runs a loop from the bus station at 08:45 and 12:00 "ob torkih in petkih v času šolskega pouka",
+  while OTP's copy of the line (`MOKrsko:4`) ended on 23 Jun 2026, so Sremič's stops had no bus this school year.
+- The runs are OTP's (trip ids `4_0845`, `4_1200`, stops, times and the drawing of pattern `MOKrsko:4:0:01`), checked
+  against the poster minute by minute (2026-11-05).
+- Days (`SOL`): Tuesdays and Fridays, 1 Sep 2026 – 24 Jun 2027, without the school holidays of the Posavska region
+  (gov.si, "Podrobnejša navodila o šolskem koledarju za OŠ 2026/2027", 5 Feb 2026: autumn 26–30 Oct, New Year
+  25 Dec – 2 Jan, winter **15–19 Feb** (first group), May Day 27 Apr – 2 May). Check the poster again for 2027/28.
