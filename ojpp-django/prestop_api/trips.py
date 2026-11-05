@@ -145,7 +145,7 @@ def _build_static(t: dict, deadline: Optional[float] = None) -> Optional[dict]:
     distances = stop_distances(geometry, stops)
     length = cumulative(geometry)[-1] if len(geometry) > 1 else 0.0
     return {
-        'id': t['gtfsId'], 'routeId': route.get('gtfsId'), 'routeName': mapping.route_name(route) or '?',
+        'id': t['gtfsId'], 'routeId': route.get('gtfsId'), 'routeName': mapping.route_name(route) or '?', **mapping.city_of(route),
         'operatorId': (route.get('agency') or {}).get('gtfsId') or f'{t["gtfsId"].split(":")[0]}:unknown',
         'mode': mapping.mode_of(route.get('mode')), 'color': f'#{route["color"]}' if route.get('color') else None,
         'destination': goes or stopfix.renamed(stops[-1].get('gtfsId'), stops[-1].get('name')) or t.get('tripHeadsign') or '', 'directionId': mapping.direction_key(t.get('directionId')),
@@ -408,6 +408,7 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True, dw
                 stops[-1]['lanePlatform'] = lane  # drawn on this track in 3D, never said (spec 2026-11-03 L2)
     return {
         **{k: static[k] for k in ('id', 'routeId', 'routeName', 'operatorId', 'mode', 'color', 'destination', 'directionId', 'patternId', 'length')},
+        **({'city': static['city']} if static.get('city') else {}),
         'serviceDate': entry['serviceDate'].isoformat(), 'realtime': realtime,
         # The shape is still being routed (see roads.py), or the bay it leaves from is about to be
         # announced (platforms.py): fetch the trip again shortly.
@@ -514,7 +515,7 @@ def build_line(route: dict, day: date, deadline: Optional[float] = None) -> tupl
         origin, destination = ends  # named by where most of its buses go, not by the feed's long name
         long_name = f'{origin} – {destination}'
     line = {
-        'id': route['gtfsId'], 'name': mapping.route_name(route) or route['gtfsId'], 'longName': long_name,
+        'id': route['gtfsId'], 'name': mapping.route_name(route) or route['gtfsId'], 'longName': long_name, **mapping.city_of(route),
         'operatorId': agency.get('gtfsId') or f'{route["gtfsId"].split(":")[0]}:unknown', 'operatorName': agency.get('name') or '',
         'mode': mapping.mode_of(route.get('mode')), 'color': f'#{route["color"]}' if route.get('color') else None,
         'origin': origin, 'destination': destination, 'serviceDate': day.isoformat(), 'patterns': patterns[:12],

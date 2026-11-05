@@ -43,3 +43,23 @@ class CityNetworksTests(SimpleTestCase):
             feeds, routes = citynet.read(path)
         self.assertEqual(list(feeds), ['F'])
         self.assertEqual(routes, {})
+
+
+class CityFieldTests(SimpleTestCase):
+    def test_payloads_spread_city_only_for_city_lines(self):
+        from prestop_api import mapping
+        self.assertEqual(mapping.city_of({'gtfsId': 'IJPP:58976', 'shortName': 'N6217'})['city']['number'], 'L1')
+        self.assertEqual(mapping.city_of({'gtfsId': 'MOKranj:3', 'shortName': '3'})['city']['label'],
+                         'Mestni promet Kranj · Arriva')
+        self.assertEqual(mapping.city_of({'shortName': '1'}, 'Jesenice:1')['city']['town'], 'Jesenice')
+        self.assertEqual(mapping.city_of({'gtfsId': 'IJPP:63286', 'shortName': 'N0245'}), {})
+
+    def test_a_cross_feed_copy_of_a_city_run_is_one_bus_same_feed_twins_stay(self):
+        from prestop_api import mapping
+        city = {'town': 'Kranj', 'number': '1', 'company': 'Arriva', 'label': 'Mestni promet Kranj · Arriva'}
+        row = lambda trip, name: {'tripId': trip, 'routeName': name, 'scheduledAt': '2026-11-05T08:00:00+01:00',
+                                  'destination': 'Planina', 'mode': 'bus', 'city': city}
+        runs: dict = {}
+        self.assertIsNone(mapping.copy_of(row('MOKranj:a', '1'), runs))
+        self.assertIsNotNone(mapping.copy_of(row('IJPP:b', 'A6999'), runs))  # the national feed's copy, named otherwise
+        self.assertIsNone(mapping.copy_of(row('MOKranj:c', '1'), runs))  # its own second bus (twin-buses-are-real)

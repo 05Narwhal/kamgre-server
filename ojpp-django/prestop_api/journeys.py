@@ -1125,7 +1125,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
                 'operatorId': (route.get('agency') or {}).get('gtfsId') if transit else None,
                 'routeId': route.get('gtfsId') if transit else None,
                 'tripId': (l.get('trip') or {}).get('gtfsId') if transit else None,
-                'routeName': mapping.route_name(route) if transit else '',
+                'routeName': mapping.route_name(route) if transit else '', **(mapping.city_of(route) if transit else {}),
                 'headsign': _headsign(l) if transit else None,
                 # A town's station keeps its own name ("Kranj AP"), not the town's.
                 'origin': _leg_place(l['from'], req['origin'] if i == 0 and not from_town else None),

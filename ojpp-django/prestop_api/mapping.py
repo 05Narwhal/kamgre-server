@@ -68,6 +68,13 @@ def route_name(route: dict) -> str:
     return (route.get('shortName') or route.get('longName') or route.get('gtfsId', '')).strip()
 
 
+def city_of(route: dict, route_id: Optional[str] = None) -> dict:
+    """{'city': {number, town, company, label}} for a city line (citynet.py, M3), else {}: spread into a payload."""
+    from . import citynet
+    found = citynet.city(route_id or route.get('gtfsId'), route_name(route))
+    return {'city': found} if found else {}
+
+
 def route_ends(route: dict) -> tuple[str, str]:
     """Origin/destination labels: the route's long name, else the two termini its variants' headsigns ("A - B") name
     most often (A6335 has no long name; most variants run Rateče – Ljubljana AP, one Rateče – Jesenice Integral)."""
@@ -471,7 +478,7 @@ def build_vehicles(positions: Iterable[dict], trip_updates: dict, trips: dict, r
             'latitude': round(pos['latitude'], 6), 'longitude': round(pos['longitude'], 6),
             'mode': mode_of(route.get('mode')),
             'operatorId': route.get('agencyId') or f'{feed}:unknown',
-            'routeId': route_id, 'routeName': route_name(route) or '?',
+            'routeId': route_id, 'routeName': route_name(route) or '?', **city_of(route, route_id),
             'destination': info.get('destination') or info.get('headsign') or '',
             'nextStop': stop_names.get(stop_id) if stop_id else None,
             'bearing': float(bearing) % 360 if isinstance(bearing, (int, float)) else None,
@@ -607,7 +614,9 @@ def copy_of(row: dict, runs: dict) -> Optional[dict]:
     a row repeats another feed's only while that feed lists at least as many. A train number runs once, so a train is
     one row however many trips list it (LP 4208 on two routes of one feed, 23 Oct 2026)."""
     trip = row.get('tripId') or row.get('id') or ''
-    by_feed = runs.setdefault((row.get('routeName'), row.get('scheduledAt'), fold(row.get('destination') or '')), {})
+    city = row.get('city') or {}  # a city line by its network's number: an IJPP copy of a city run named A6206 is line 1 (M3)
+    name = f"{city['town']}:{city['number']}" if city.get('number') and city.get('town') else row.get('routeName')
+    by_feed = runs.setdefault((name, row.get('scheduledAt'), fold(row.get('destination') or '')), {})
     same = next((r for rows in by_feed.values() for r in rows
                  if (row.get('tripId') and r.get('tripId') == row['tripId']) or (row.get('mode') == 'rail' and r.get('mode') == 'rail')), None)
     if same is not None:
@@ -665,7 +674,7 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
             'id': f'{trip_id}@{day}/{st.get("stopPosition", 0)}',
             'stopId': stop_id, 'tripId': trip_id, 'routeId': route_id,
             'operatorId': (route.get('agency') or {}).get('gtfsId') or f'{route_id.split(":")[0]}:unknown',
-            'routeName': route_name(route) or '?', 'mode': mode_of(route.get('mode')),
+            'routeName': route_name(route) or '?', **city_of(route, route_id), 'mode': mode_of(route.get('mode')),
             'destination': other_end or st.get('headsign') or trip.get('tripHeadsign') or '',
             'scheduledAt': iso(scheduled),
             'effectiveAt': iso(effective) if realtime and not canceled else None,

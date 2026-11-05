@@ -22,7 +22,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
-from . import citytt, city_feeds, coverage, geometry, mapping, maplinks, operator_notices, platforms, sources, stopservice, supplement, sz_list, trips, variants, warm
+from . import citynet, citytt, city_feeds, coverage, geometry, mapping, maplinks, operator_notices, platforms, sources, stopservice, supplement, sz_list, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
@@ -322,7 +322,8 @@ def capabilities(request):
     for r in routes.values():
         if not r.get('agencyId'):
             continue
-        op = operators.setdefault(r['agencyId'], {'id': r['agencyId'], 'name': r.get('agencyName') or r['agencyId'], 'modes': set()})
+        name = citynet.operator_name(r['agencyId']) or r.get('agencyName') or r['agencyId']  # one style for city feeds (M3)
+        op = operators.setdefault(r['agencyId'], {'id': r['agencyId'], 'name': name, 'modes': set()})
         op['modes'].add(mapping.mode_of(r.get('mode')))
     try:
         from . import gbfs
@@ -719,7 +720,8 @@ def statistics_routes(request):
         operator = companies.canonical(r.get('agencyId'), ids) or f'{r["gtfsId"].split(":")[0]}:unknown'
         item = {'id': r['gtfsId'], 'name': mapping.route_name(r) or r['gtfsId'], 'operatorId': operator,
                 'mode': mapping.mode_of(r.get('mode')), 'origin': origin, 'destination': destination,
-                'directions': mapping.route_directions(r), 'qualities': ['observed'], **groups.get(r['gtfsId'], variants.of(r['gtfsId']))}
+                'directions': mapping.route_directions(r), 'qualities': ['observed'], **mapping.city_of(r),
+                **groups.get(r['gtfsId'], variants.of(r['gtfsId']))}
         if q and q not in mapping.fold(f'{item["name"]} {origin} {destination} {item["via"] or ""}'):
             continue
         if not run_by(item['operatorId']) or (mode and item['mode'] != mode):
