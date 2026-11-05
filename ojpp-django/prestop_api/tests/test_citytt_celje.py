@@ -195,3 +195,18 @@ class FourTests(SimpleTestCase):
         self.assertEqual(starts(d), ['09:20', '10:20', '11:20', '13:20', '14:20', '15:20', '16:20', '17:20', '18:20', '20:20'])
         self.assertEqual(starts(so), ['09:20', '11:20', '13:20', '14:20', '16:20', '18:20'])
         self.assertEqual((ends(d)[-1], ends(so)[-1]), ('21:15', '19:15'))
+
+
+class NationalPoleTests(SimpleTestCase):
+    """Line 5's Čret and Teharje stops are only in the national feed: a correction falls back to its poles."""
+
+    def test_a_stop_the_feed_and_osm_lack_takes_the_national_pole(self):
+        from prestop_api.citytt import build, poles
+        own = [{'id': 'CELEBUS:1', 'name': 'Celje AP', 'lat': 46.23, 'lon': 15.27}]
+        national = [{'id': 'IJPP:1130959', 'name': 'Čret Pišek', 'lat': 46.21, 'lon': 15.29},
+                    {'id': 'IJPP:5', 'name': 'Celje AP', 'lat': 46.23, 'lon': 15.27}]
+        found, _ = poles.unify(own, [])
+        lacking = {n for n in ['Celje AP', 'Čret Pišek'] if not poles.candidates(n, found, 'Celje')}
+        self.assertEqual(sorted(poles.fallback(lacking, national, 'Celje')), ['IJPP:1130959'])  # never a second Celje AP
+        self.assertEqual(build.stop_id('IJPP:1130959', 'CELEBUS'), 'ijpp1130959')  # apart from the feed's own numbers
+        self.assertEqual(build.stop_id('IJPP:1130959'), '1130959')

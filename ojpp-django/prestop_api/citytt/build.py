@@ -58,6 +58,7 @@ class Sources:
     osm_stops: list = field(default_factory=list)
     osm_runs: list = field(default_factory=list)
     feed_legs: dict = field(default_factory=dict)   # a correction's: OTP's drawing of two stops in a row (feed_legs)
+    national_stops: list = field(default_factory=list)  # a correction's: the national feed's poles (national_poles)
 
 
 # ---------------------------------------------------------------- fetching
@@ -113,9 +114,19 @@ def feed_poles(city: City) -> tuple[list[dict], list[list[str]]]:
     own = lambda s: s['id'].startswith(f'{city.feed}:')  # noqa: E731
     stops = [{'id': s['id'], 'name': s['name'], 'lat': s['latitude'], 'lon': s['longitude']} for s in sources.stops.get().value['all']
              if 'rail' not in s['modes'] and own(s) == city.own_stops and south <= s['latitude'] <= north and west <= s['longitude'] <= east
-             # an own OSM pole ('osm<node>', written by stop_id) comes from OSM again; OTP's own 'osm=<node>' ids stay (Postojna)
-             and not (city.own_stops and re.match(r'osm\d', s['id'].split(':', 1)[1]))]
+             # an own OSM or national pole ('osm<node>', 'ijpp<id>', written by stop_id) comes from there again; OTP's own
+             # 'osm=<node>' ids stay (Postojna)
+             and not (city.own_stops and re.match(r'(osm|ijpp)\d', s['id'].split(':', 1)[1]))]
     return stops, [p['stops'] for p in sources.patterns.get().value['patterns']]
+
+
+def national_poles(city: City) -> list[dict]:
+    """A correction's fallback (`own_stops`): the national feed's bus stops in the city, for a stop its own feed and
+    OSM both lack (Celje line 5's Čret and Teharje poles are only in IJPP)."""
+    from .. import sources
+    south, west, north, east = _wider(city.bbox)
+    return [{'id': s['id'], 'name': s['name'], 'lat': s['latitude'], 'lon': s['longitude']} for s in sources.stops.get().value['all']
+            if s['id'].startswith('IJPP:') and 'rail' not in s['modes'] and south <= s['latitude'] <= north and west <= s['longitude'] <= east]
 
 
 def osm_poles(city: City) -> tuple[list[dict], list[list[str]]]:
@@ -213,8 +224,11 @@ def _hms(s: int) -> str:
 
 def stop_id(pole_id: str, own: str = '') -> str:
     """The feed's id for a pole: the national stop's number ('IJPP:1121067' -> '1121067'), 'osm<node>' for an OSM pole,
-    and a stop of the feed the folder replaces (`own`, 'Ptuj:21' -> '21') its own id."""
+    and a stop of the feed the folder replaces (`own`, 'Ptuj:21' -> '21') its own id; there a national pole is
+    'ijpp<number>', apart from the feed's own numbers."""
     feed, raw = pole_id.split(':', 1)
+    if own and feed == 'IJPP':
+        return f'ijpp{raw}'
     return raw if feed in ('IJPP', own) else f'osm{raw}' if feed == 'osm' else f'{feed}-{raw}'
 
 
@@ -485,6 +499,9 @@ def build(city: City, src: Sources, today: date, route=roads.route_window, lengt
     renamed = {(line, code): sid for line, code, sid in city.line_services}
     tables = [{**t, 'service': renamed.get((t['line'], t['service']), t['service'])} if 'service' in t else t for t in tables]
     all_poles, alias = poles.unify(src.feed_stops, src.osm_stops)
+    if src.national_stops:  # a stop neither the feed nor OSM has a pole for takes the national feed's
+        lacking = {n for t in tables for n in t['stops'] if not poles.candidates(n, all_poles, city.name)}
+        all_poles.update(poles.fallback(lacking, src.national_stops, city.name))
     if getattr(reader, 'OCR', False):  # a misread name no pole is named like takes the pole name it clearly is
         read_as = {n: poles.misread(n, all_poles) for t in tables for n in t['stops'] if not poles.candidates(n, all_poles, city.name)}
         tables = [{**t, 'stops': [read_as.get(n) or n for n in t['stops']]} for t in tables]

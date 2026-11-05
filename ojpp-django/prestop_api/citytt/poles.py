@@ -57,6 +57,11 @@ def unify(feed_stops: list[dict], osm_stops: list[dict]) -> tuple[dict[str, dict
     return poles, alias
 
 
+def fallback(names: set[str], stops: list[dict], town: str = '') -> dict[str, dict]:
+    """The stops ({'id', 'name', 'lat', 'lon'}) named like one of `names`, as poles."""
+    return {s['id']: {**s, 'names': [s['name']]} for s in stops if any(alike(n, s['name'], town) for n in names)}
+
+
 def adjacent(runs: Iterable[list[str]], alias: Optional[dict] = None) -> dict[tuple[str, str], float]:
     """(a, b) -> how many known runs serve pole b at most GAP stops after pole a, each counting 1 / the stops between
     (+1): the next stop counts fully. OSM's relations are not all right (some list the other side's pole), so a

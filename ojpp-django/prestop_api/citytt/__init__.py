@@ -207,12 +207,18 @@ CITIES = {
                   ('6', '1273', '6'), ('7', '1274', '7'), ('8', '8', '8'), ('9', '9', '9'), ('10', '1276', '10'),
                   ('11', '11', '11')),
         unread=('1b', '2a'),   # weekdays only, both match OTP's
-        # Line 11's last two stops before Celje ŽP, line 4's two in the old town: neither OTP, IJPP nor OSM has a pole by
-        # these names (2026-11-05).
-        unplaced=('Celje Cesta na grad bife', 'Celje Skalna klet', 'Celje občina', 'Celje Glavni trg'),
+        # Line 11's last two stops before Celje ŽP, line 4's two in the old town, line 5's turn at Vrhe, line 8's hill
+        # stops and line 9's two at Zadobrova (the files mark them "(PL)"): neither OTP, IJPP nor OSM has a pole by these
+        # names (2026-11-05).
+        unplaced=('Celje Cesta na grad bife', 'Celje Skalna klet', 'Celje občina', 'Celje Glavni trg', 'Vrhe Sv.Ana (PL)',
+                  'Zg.Polule Belej (PL)', 'Zg.Polule (PL)', 'Zg.Polule Lovski dom (PL)', 'Maistrova-Lovska koča K. (PL)',
+                  'Lisce 2 (PL)', 'Lisce-Anski vrh kapela (PL)', 'Košnica/Celju 62 (PL)', 'Košnica/Celju Kragolnik (PL)',
+                  'Košnica/Celju Igrišče (PL)', 'Košnica/Celju Cvetrežnik (PL)', 'Košnica/Celju Križ (PL)',
+                  'Zadobrova Kveder (PL)', 'Zadobrova Vogrinc (PL)'),
         # OTP's name ("(PL)" URL-encoded); OSM's spelled out; line 2b's Dobrova stops in the order its runs pass them
         # (Lokrovec Čerčnik, the crossroads, the pole by the motorway, Nova vas).
-        names=(('Bukovžlak Gobec K', 'Bukovžlak Gobec K %28PL%29'), ('Celje Ostrožno GD', 'Ostrožno gasilski dom'),
+        names=(('Bukovžlak Gobec K', 'Bukovžlak Gobec K %28PL%29'), ('Tremerje obr.', 'Tremerje'),
+               ('Leskovec/Ljubečni Limbo', 'Leskovec/Ljubečni'), ('Celje Ostrožno GD', 'Ostrožno gasilski dom'),
                ('Dobrova K (Celje)', 'Dobrova pri Celju križišče'), ('Dobrova pri Celju', 'Dobrova pri Celju AC'),
                ('Celje Dečkova GD', 'Dečkova gasilski dom'), ('Celje Inpos', 'Inpos PL')),
         replaces=(('1A', 'add'), ('2B', 'add'), ('1277', 'add'), ('4', 'add'), ('5', 'add'), ('1273', 'add'),
