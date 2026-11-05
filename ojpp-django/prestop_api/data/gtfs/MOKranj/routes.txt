@@ -1,0 +1,2 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+4153,MP_Kranj,4153,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,3

@@ -19,6 +19,10 @@ day the folder runs that line, OTP's runs of the line are dropped (Koper's line 
 than OTP has it); `add`: the folder's runs come on top of OTP's (two of Koper's line 2 runs OTP lacks); `all`: OTP's
 runs of the line are dropped on every day of the folder's dates, whether the folder runs it that day or not (Postojna's
 school runs, which OTP also runs through the school holidays).
+
+A folder with a `fills.txt` (route_id) is not a feed of its own: its runs of those lines join the operator's file of the
+same id (Kranj's), on the days that file runs none of the line. Ridango's Kranj file has no Sunday service, while Arriva's
+timetable runs line 15 on Sundays and holidays (NEP, 10 runs) and OTP's older copy has them (Nov 2026).
 """
 import csv
 import io
@@ -46,7 +50,7 @@ KRANJ_COLORS = {'1': '00AEEF', '2': 'FFF200', '3': 'A54786', '4': 'EC008C', '5':
 
 
 FOLDER_CHECK = 10  # s between looks into LOCAL_GTFS: owns() asks for every vehicle and trip (900 per vehicle update)
-_folder: dict = {'at': float('-inf'), 'value': {}}
+_folder: dict = {'at': float('-inf'), 'value': ({}, {})}
 
 
 def feeds() -> dict[str, str]:
@@ -60,11 +64,22 @@ def feeds() -> dict[str, str]:
     return out
 
 
-def _hand_kept() -> dict[str, str]:
+def _folders() -> tuple[dict[str, str], dict[str, str]]:
+    """(hand-kept feeds, fills of an operator's file): feedId -> directory."""
     if time.monotonic() - _folder['at'] >= FOLDER_CHECK:
-        found = {d.name: str(d) for d in sorted(LOCAL_GTFS.iterdir()) if (d / 'trips.txt').is_file()} if LOCAL_GTFS.is_dir() else {}
-        _folder.update(at=time.monotonic(), value=found)
+        found = [d for d in sorted(LOCAL_GTFS.iterdir()) if (d / 'trips.txt').is_file()] if LOCAL_GTFS.is_dir() else []
+        _folder.update(at=time.monotonic(), value=({d.name: str(d) for d in found if not (d / 'fills.txt').is_file()},
+                                                   {d.name: str(d) for d in found if (d / 'fills.txt').is_file()}))
     return _folder['value']
+
+
+def _hand_kept() -> dict[str, str]:
+    return _folders()[0]
+
+
+def _fills() -> dict[str, str]:
+    """Folders whose runs join the operator's file of the same feed (fills.txt), when local feeds are on."""
+    return _folders()[1] if getattr(settings, 'PRESTOP_LOCAL_GTFS', True) else {}
 
 
 def _local_zip(folder: str) -> bytes:
@@ -170,16 +185,47 @@ def parse(feed: str, data: bytes) -> dict:
     for d in _rows(z, 'calendar_dates.txt'):
         exceptions[(d['service_id'], d['date'])] = d.get('exception_type') == '1'
     replaces = {q(r['route_id']): (r.get('mode') or 'replace').strip() for r in _rows(z, 'replaces.txt') if r.get('route_id')}
+    fills = {q(r['route_id']) for r in _rows(z, 'fills.txt') if r.get('route_id')}
+    return {'feed': feed, 'routes': routes, 'trips': trips, 'stops': stops, 'shapes': shapes, 'calendar': calendar,
+            'exceptions': exceptions, **_index(trips), 'replaces': replaces, 'fills': fills}
+
+
+def _index(trips: dict) -> dict:
     by_stop: dict[str, list[tuple[str, int]]] = {}
+    stop_routes: dict[str, set] = {}
     for tid, t in trips.items():
         for i, s in enumerate(t['stops']):
             by_stop.setdefault(s['stopId'], []).append((tid, i))
-    stop_routes: dict[str, set] = {}
-    for t in trips.values():
-        for s in t['stops']:
             stop_routes.setdefault(s['stopId'], set()).add(t['routeId'])
-    return {'feed': feed, 'routes': routes, 'trips': trips, 'stops': stops, 'shapes': shapes, 'calendar': calendar,
-            'exceptions': exceptions, 'byStop': by_stop, 'stopRoutes': stop_routes, 'replaces': replaces}
+    return {'byStop': by_stop, 'stopRoutes': stop_routes}
+
+
+def fill(base: dict, extra: dict) -> dict:
+    """The operator's file with a fills folder's runs of the lines in its fills.txt, on each day the file runs none of
+    that line: should the operator publish such runs again, theirs win day by day (services renamed `fill-<id>`)."""
+    ns = lambda sid: f'fill-{sid}'  # noqa: E731
+    calendar = {**base['calendar'], **{ns(sid): cal for sid, cal in extra['calendar'].items()}}
+    exceptions = {**base['exceptions'], **{(ns(sid), d): v for (sid, d), v in extra['exceptions'].items()}}
+    last = max([c[1] for c in base['calendar'].values()] + [d for (_, d), v in base['exceptions'].items() if v], default='')
+    trips = dict(base['trips'])
+    for route in extra['fills']:
+        own = {t['serviceId'] for t in base['trips'].values() if t['routeId'] == route}
+        for sid in {t['serviceId'] for t in extra['trips'].values() if t['routeId'] == route}:
+            cal = extra['calendar'].get(sid)
+            start = min(([cal[0]] if cal else []) + [d for (s, d) in extra['exceptions'] if s == sid], default='')
+            day = datetime.strptime(start, '%Y%m%d').date() if start else None
+            while day is not None and day.strftime('%Y%m%d') <= last:
+                if runs(extra, sid, day) and any(runs(base, b, day) for b in own):
+                    exceptions[(ns(sid), day.strftime('%Y%m%d'))] = False
+                day += timedelta(days=1)
+        for tid, t in extra['trips'].items():
+            if t['routeId'] == route and tid not in trips:
+                trips[tid] = {**t, 'serviceId': ns(t['serviceId']), 'shapeId': ns(t['shapeId']) if t['shapeId'] else ''}
+    routes = {**{rid: r for rid, r in extra['routes'].items() if rid in extra['fills']}, **base['routes']}
+    stops = {**extra['stops'], **base['stops']}
+    shapes = {**base['shapes'], **{ns(k): v for k, v in extra['shapes'].items()}}
+    return {**base, 'routes': routes, 'trips': trips, 'stops': stops, 'shapes': shapes, 'calendar': calendar,
+            'exceptions': exceptions, **_index(trips)}
 
 
 def _load() -> dict[str, dict]:
@@ -196,6 +242,11 @@ def _load() -> dict[str, dict]:
             if len(data) > LIMIT:
                 raise UpstreamError(f'{url} exceeds {LIMIT} bytes')
             out[feed] = parse(feed, data)
+            if feed in _fills():
+                try:
+                    out[feed] = fill(out[feed], parse(feed, _local_zip(_fills()[feed])))
+                except (zipfile.BadZipFile, KeyError, ValueError, OSError) as e:
+                    logger.warning('Fills for %s failed: %r', feed, e)
         except (requests.RequestException, zipfile.BadZipFile, KeyError, ValueError, OSError, UpstreamError) as e:
             logger.warning('Supplementary GTFS %s failed: %r', feed, e)
     if feeds() and not out:

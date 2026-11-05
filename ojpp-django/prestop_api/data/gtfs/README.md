@@ -63,3 +63,16 @@ rebuilds it (about 60 requests, one a second, and some minutes to read the PDFs)
   the foot of the page names it ("Vozi do Lesarske šole."): such trips pass a stop the others skip.
 - Each file is checked as supplement.py reads it; an unreadable file, a stop code the published feed lacks, or a line
   without weekday trips fails the build and leaves this folder as it was.
+
+## MOKranj (Kranj, line 15 on Sundays and holidays)
+
+Not a feed of its own: `fills.txt` makes its runs join the operator's file (Ridango, `PRESTOP_KRANJ_GTFS_URL`) on each day that
+file runs none of line 15 (`supplement.fill`); should Ridango publish Sunday runs again, theirs win day by day.
+
+- Why: Ridango's file has weekday and Saturday services only (no `calendar_dates.txt`), while Arriva's line 15 PDF
+  (`Linija-15-KOLODVOR-PLANINA-PRIMSKOVO-DOLNOV-KRANJ-KOLODVOR.pdf` on arriva.si's Kranj timetable page, no validity printed) runs
+  10 runs "NEP" (Sundays and holidays), 08:52 … 17:22, so Kranj's Sundays were empty.
+- The runs are OTP's copy of them (derp-si's older merge of Ridango's file, service `3`, trip ids `AMYxu0GhpG_155450` …, kept so a live bus naming
+  one finds its run; not yet seen live on a Sunday), checked against the PDF minute by minute (2026-11-05); stops and line 15 as Ridango's,
+  the drawing OTP's pattern `MOKranj:4153:0:02`.
+- Days: Sundays and the public holidays from 8 Nov 2026 to 30 Jun 2027 (`calendar_dates.txt`). Check the PDF again by then.

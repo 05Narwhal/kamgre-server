@@ -1,0 +1,11 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,shape_id
+4153,NEP,AMYxu0GhpG_155450,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155454,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155458,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155461,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155466,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155469,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155474,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155477,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155482,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP
+4153,NEP,AMYxu0GhpG_155485,PROGA 15: Kolodvor-Planina-Dolnov-OŠ S.Jenko-Kranj-Kolodvor,0,4153-NEP

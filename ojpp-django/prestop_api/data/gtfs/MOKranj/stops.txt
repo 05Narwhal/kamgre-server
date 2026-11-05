@@ -1,0 +1,13 @@
+stop_id,stop_name,stop_lat,stop_lon
+9,Kranj Planina otok,46.23754,14.36468
+18,Kranj Globus,46.24197,14.35546
+31,Kranj Pokopališče,46.23687,14.36931
+80,Kranj OŠ S.Žagar,46.23531,14.36008
+102,Kranj Vodovodni stolp,46.24847,14.35953
+109,Kranj Primskovo,46.24654,14.36373
+112,Kranj AP,46.24597,14.35471
+120,Kranj Novi dom,46.23866,14.35923
+121,Kranj Plinarna,46.24308,14.37031
+139,Kranj Savska cesta,46.23472,14.35748
+144,Kranj Stolpnice,46.23259,14.36343
+150,Kranj kolodvor,46.23844,14.34921

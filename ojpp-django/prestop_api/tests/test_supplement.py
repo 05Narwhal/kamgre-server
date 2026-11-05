@@ -151,6 +151,69 @@ class LocalFeedTests(SimpleTestCase):
             self.assertEqual(supplement.feeds(), {})
 
 
+FILLS = {
+    'agency.txt': 'agency_id,agency_name,agency_url,agency_timezone\nMP_Kranj,MP_Kranj,MP_Kranj,Europe/Ljubljana\n',
+    'routes.txt': ('route_id,agency_id,route_short_name,route_long_name,route_type\n'
+                   '4015,MP_Kranj,4015,PROGA 1: Prebačevo-Kranj kolodvor,3\n4153,MP_Kranj,4153,PROGA 15: Kolodvor-Planina-Kolodvor,3\n'),
+    'stops.txt': 'stop_id,stop_name,stop_lat,stop_lon\n150,Kranj AP,46.24,14.35\n31,Kranj Pokopališče,46.237,14.369\n9,Kranj Planina otok,46.2375,14.3647\n',
+    'trips.txt': ('route_id,service_id,trip_id,trip_headsign,direction_id,shape_id\n'
+                  '4153,NEP,AMY_1,PROGA 15: Kolodvor-Planina-Kolodvor,0,F\n4015,V,every_1,PROGA 1: Prebačevo-Kranj kolodvor,0,\n'),
+    'stop_times.txt': ('trip_id,arrival_time,departure_time,stop_id,stop_sequence\n'
+                       'AMY_1,08:52:00,08:52:00,150,1\nAMY_1,09:01:00,09:01:00,9,2\nAMY_1,09:04:00,09:04:00,31,3\n'
+                       'every_1,09:00:00,09:00:00,150,1\nevery_1,09:10:00,09:10:00,31,2\n'),
+    'shapes.txt': 'shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence\nF,46.24,14.35,1\nF,46.237,14.369,2\n',
+    'calendar.txt': ('service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n'
+                     'NEP,0,0,0,0,0,0,1,20261011,20270630\nV,1,1,1,1,1,1,1,20261011,20270630\n'),
+    'calendar_dates.txt': 'service_id,date,exception_type\nNEP,20261014,1\n',
+    'fills.txt': 'route_id\n4153\n4015\n',
+}
+SUNDAY = date(2026, 10, 18)
+
+
+class FillTests(SimpleTestCase):
+    """A fills folder (fills.txt) adds runs to the operator's file of the same feed on the days it runs none of that line:
+    Kranj's line 15 on Sundays and holidays, which Ridango's file lacks."""
+
+    def setUp(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as z:
+            for name, text in FILLS.items():
+                z.writestr(name, text)
+        self.feed = supplement.fill(feed(), supplement.parse('MOKranj', buf.getvalue()))
+        runs = lambda trip, day: supplement.runs(self.feed, self.feed['trips'][trip]['serviceId'], day)  # noqa: E731
+        self.runs = runs
+
+    def test_its_runs_join_the_operators_file_on_days_it_has_none_of_the_line(self):
+        self.assertTrue(self.runs('MOKranj:AMY_1', SUNDAY))
+        self.assertFalse(self.runs('MOKranj:AMY_1', MONDAY))
+        self.assertTrue(self.runs('MOKranj:AMY_1', date(2026, 10, 14)))  # a holiday in the folder; the file skips that Wednesday
+        self.assertEqual(self.feed['trips']['MOKranj:AMY_1']['shapeId'], 'fill-F')
+        self.assertIn('fill-F', self.feed['shapes'])
+        self.assertIn(('MOKranj:AMY_1', 0), self.feed['byStop']['MOKranj:150'])
+        self.assertIn('MOKranj:4153', self.feed['stopRoutes']['MOKranj:9'])
+
+    def test_the_operators_own_runs_of_the_line_win_day_by_day(self):
+        self.assertFalse(self.runs('MOKranj:every_1', MONDAY))            # the file runs line 1 on weekdays
+        self.assertFalse(self.runs('MOKranj:every_1', date(2026, 10, 17)))  # and on Saturdays
+        self.assertTrue(self.runs('MOKranj:every_1', SUNDAY))
+        self.assertTrue(self.runs('MOKranj:every_1', date(2026, 10, 14)))  # the file's weekday run is off that day
+        self.assertTrue(self.runs('MOKranj:every_1', date(2026, 11, 2)))   # past the file's dates: nothing to compare
+        self.assertTrue(self.runs('MOKranj:xfp_155095', MONDAY))
+        self.assertEqual(self.feed['routes']['MOKranj:4015']['color'], '00AEEF')  # the operator's route stays
+
+    def test_kranjs_folder_is_a_fill_not_a_feed(self):
+        with self.settings(PRESTOP_LOCAL_GTFS=True, PRESTOP_KRANJ_GTFS_URL=''):
+            self.assertNotIn('MOKranj', supplement.feeds())
+            self.assertIn('MOKranj', supplement._fills())
+        kept = supplement.parse('MOKranj', supplement._local_zip(str(supplement.LOCAL_GTFS / 'MOKranj')))
+        self.assertEqual(kept['fills'], {'MOKranj:4153'})
+        self.assertEqual(len(kept['trips']), 10)  # Arriva's line 15 PDF: NEP 08:52 … 17:22
+        self.assertEqual(sorted(t['stops'][0]['departure'] // 60 for t in kept['trips'].values()),
+                         [532, 592, 652, 682, 772, 802, 892, 922, 1016, 1042])
+        self.assertTrue(all(supplement.runs(kept, 'NEP', d) for d in (date(2026, 11, 8), date(2026, 12, 25), date(2027, 3, 29))))
+        self.assertFalse(supplement.runs(kept, 'NEP', date(2026, 11, 9)))
+
+
 CORRECTION = {
     'agency.txt': 'agency_id,agency_name,agency_url,agency_timezone\nA,Arriva d.o.o.,https://arriva.si,Europe/Ljubljana\n',
     'routes.txt': 'route_id,agency_id,route_short_name,route_long_name,route_type\n9,A,9,Koper AP - Potniški terminal,3\n2,A,2,Semedela - Bolnica,3\n',
