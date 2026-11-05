@@ -9,7 +9,9 @@ GPS-surveyed stops drift off the road. Two corrections apply, in this order of t
    `replacement` adds the stop where SŽ's replacement buses leave from (next to the station,
    not at it) — see replacement.py, and `keep` keeps a stop on the map and in search though it
    has no trip in the next days (stopservice.py hides those).
-2. Automatic snapping: a stop more than SNAP_METERS from a road buses can use moves to the
+2. Placement on the road its lines use (`stopplace.py`, `manage.py place_stops`, cached in
+   `data/stop_places.json` by stop id and feed position): moves of 8-60 m to the right-hand kerb.
+3. Automatic snapping: a stop more than SNAP_METERS from a road buses can use moves to the
    nearest road point (Valhalla `locate`, cached in `data/stop_snaps.json` by stop id and
    position). A stop that would move more than MAX_SNAP_METERS stays put and is listed in the
    report for a person to check. `manage.py snap_stops` fills the cache and writes the report;
@@ -34,6 +36,8 @@ DATA = Path(__file__).resolve().parent / 'data'
 OVERRIDES = DATA / 'stop_overrides.csv'
 SNAPS = DATA / 'stop_snaps.json'
 REPORT = DATA / 'stop_report.csv'
+PLACES = DATA / 'stop_places.json'  # manage.py place_stops: stops moved onto the road their lines use (stopplace.py)
+PLACED = '@places'  # the snaps entry holding PLACES (snap keys always contain a stop id before the '@')
 SNAP_METERS = 40       # a stop further than this from a bus road is snapped onto it
 MAX_SNAP_METERS = 150  # ... unless the road is further than this: then a person checks it
 TYPES = {'stop', 'station', 'replacement', 'keep'}
@@ -89,9 +93,22 @@ def read_snaps(path: Path = SNAPS) -> dict:
         return {}
 
 
+def read_places(path: Path = PLACES) -> dict:
+    """snap key -> [lat, lon, metres moved, why] for the stops `manage.py place_stops` moves onto their lines' road."""
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+
+
 def snapped(stop_id: str, lat: float, lon: float, snaps: dict) -> Optional[tuple[float, float]]:
-    """The road position for a stop that is off the road by more than SNAP_METERS but not MAX_SNAP_METERS."""
-    hit = snaps.get(snap_key(stop_id, lat, lon))
+    """The place on its lines' road (`stopplace`, the PLACED entry of `snaps`), else the road position for a stop
+    that is off the road by more than SNAP_METERS but not MAX_SNAP_METERS."""
+    key = snap_key(stop_id, lat, lon)
+    placed = (snaps.get(PLACED) or {}).get(key)
+    if placed:
+        return placed[0], placed[1]
+    hit = snaps.get(key)
     if hit and SNAP_METERS < hit[2] <= MAX_SNAP_METERS:
         return hit[0], hit[1]
     return None
@@ -127,7 +144,7 @@ STAMP_EVERY = 10  # s between checks for an edited file (a stat per stop was mos
 
 
 def _stamp():
-    return tuple(os.stat(p).st_mtime if p.exists() else None for p in (OVERRIDES, SNAPS))
+    return tuple(os.stat(p).st_mtime if p.exists() else None for p in (OVERRIDES, SNAPS, PLACES))
 
 
 def tables() -> tuple[dict, dict]:
@@ -139,7 +156,7 @@ def tables() -> tuple[dict, dict]:
     with _lock:
         _loaded['checked'] = now
         if _loaded['stamp'] != stamp:
-            _loaded.update(stamp=stamp, overrides=read_overrides(), snaps=read_snaps())
+            _loaded.update(stamp=stamp, overrides=read_overrides(), snaps={**read_snaps(), PLACED: read_places()})
         return _loaded['overrides'], _loaded['snaps']
 
 
