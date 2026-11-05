@@ -400,7 +400,7 @@ class FeedTests(SimpleTestCase):
 
     def test_jesenice_is_untouched(self):
         self.assertEqual([r['id'] for r in citytt.health(self.today)], ['city-timetables:Jesenice', 'city-timetables:Piran', 'city-timetables:Ptuj', 'city-timetables:MOKoper',
-                                                                                  'city-timetables:MARPROM'])
+                                                                                  'city-timetables:Postojna', 'city-timetables:MARPROM'])
 
 
 class FetchTests(SimpleTestCase):
