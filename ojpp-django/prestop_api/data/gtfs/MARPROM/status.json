@@ -1,7 +1,7 @@
 {
  "status": "ok",
- "version": "3017d403d35a",
- "end": "2026-12-31",
+ "version": "689c79d8dc03",
+ "end": "2027-08-31",
  "source": "https://www.marprom.si/koda-linije_nova/",
  "files": [
   {
@@ -207,7 +207,7 @@
   "G4": 82,
   "G5": 75,
   "G6": 119,
-  "P10": 37,
+  "P10": 34,
   "P11": 54,
   "P12": 38,
   "P13": 43,
@@ -223,9 +223,9 @@
  },
  "weekend": {
   "saturday": {
-   "equal": 10386,
+   "equal": 10621,
    "published": 11192,
-   "pdf": 10822,
+   "pdf": 11073,
    "lines": {
     "G1": {
      "equal": 611,
@@ -250,7 +250,7 @@
     "G5": {
      "equal": 1,
      "published": 572,
-     "pdf": 336
+     "pdf": 352
     },
     "G6": {
      "equal": 990,
@@ -258,14 +258,14 @@
      "pdf": 990
     },
     "P10": {
-     "equal": 246,
+     "equal": 415,
      "published": 415,
-     "pdf": 246
+     "pdf": 415
     },
     "P11": {
-     "equal": 409,
+     "equal": 417,
      "published": 417,
-     "pdf": 409
+     "pdf": 417
     },
     "P12": {
      "equal": 812,
@@ -273,9 +273,9 @@
      "pdf": 812
     },
     "P13": {
-     "equal": 176,
+     "equal": 184,
      "published": 184,
-     "pdf": 176
+     "pdf": 184
     },
     "P14": {
      "equal": 575,
@@ -298,9 +298,9 @@
      "pdf": 403
     },
     "P18": {
-     "equal": 664,
+     "equal": 676,
      "published": 676,
-     "pdf": 677
+     "pdf": 689
     },
     "P19": {
      "equal": 400,
@@ -318,17 +318,17 @@
      "pdf": 465
     },
     "P9": {
-     "equal": 250,
+     "equal": 288,
      "published": 288,
-     "pdf": 250
+     "pdf": 288
     }
    },
    "agrees": false
   },
   "sunday": {
-   "equal": 6025,
+   "equal": 6092,
    "published": 6138,
-   "pdf": 6038,
+   "pdf": 6243,
    "lines": {
     "G1": {
      "equal": 429,
@@ -356,14 +356,14 @@
      "pdf": 705
     },
     "P10": {
-     "equal": 0,
+     "equal": 46,
      "published": 92,
-     "pdf": 0
+     "pdf": 184
     },
     "P11": {
-     "equal": 246,
+     "equal": 255,
      "published": 255,
-     "pdf": 246
+     "pdf": 255
     },
     "P12": {
      "equal": 520,
@@ -381,9 +381,9 @@
      "pdf": 468
     },
     "P18": {
-     "equal": 612,
+     "equal": 624,
      "published": 624,
-     "pdf": 625
+     "pdf": 637
     },
     "P7": {
      "equal": 409,
@@ -400,9 +400,9 @@
   }
  },
  "shapes": {
-  "published trip": 1621,
-  "published trip with more stops": 175,
-  "published shape": 203
+  "published trip": 1942,
+  "published trip with more stops": 126,
+  "published shape": 116
  },
  "aloneDepartures": {
   "P8": 7,
@@ -412,5 +412,55 @@
  "noLastStop": [
   "P18 minus: Turnerjeva"
  ],
- "built": "2026-11-04"
+ "weekendFromSite": {
+  "saturday": [
+   "G1",
+   "G3",
+   "G5",
+   "P18"
+  ],
+  "sunday": [
+   "P10",
+   "P18"
+  ]
+ },
+ "site": {
+  "url": "https://vozniredi.marprom.si/",
+  "pages": 0,
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "days": {
+   "saturday": "2026-11-07",
+   "sunday": "2026-11-08",
+   "weekday": "2026-11-06",
+   "weekday_holiday": "2026-12-28"
+  },
+  "missing": [],
+  "holidayAsWeekday": true,
+  "changedPages": {
+   "G4": 25,
+   "G5": 1,
+   "P10": 95,
+   "P11": 6,
+   "P13": 2,
+   "P15": 30,
+   "P16": 18,
+   "P18": 53,
+   "P8": 16,
+   "P9": 14
+  },
+  "blankPagesFilled": {
+   "G4": 4,
+   "G5": 1,
+   "P10": 69,
+   "P11": 5,
+   "P13": 1,
+   "P15": 0,
+   "P16": 0,
+   "P18": 0,
+   "P8": 0,
+   "P9": 13
+  },
+  "unplaced": []
+ },
+ "built": "2026-11-05"
 }

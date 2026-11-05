@@ -369,6 +369,90 @@ class FeedTests(SimpleTestCase):
         with self.assertRaisesRegex(build.BuildError, r'G9: stop codes not in the published feed: s9 Epsilon'):
             marprom.make(MARPROM, src, self.today, read=lambda data: docs)
 
+    def site(self, answers, missing=()):
+        """A fake vozniredi.marprom.si: answers {(stop id, table): [(variant, ['HH:MM'])]} for line G9; a table in `missing`
+        has no day on the site."""
+        kinds = {v: k for k, v in marprom.sample_days(self.today, [(date(2026, 12, 28), date(2026, 12, 31))]).items()}
+        asked = []
+
+        def site(stop, day):
+            asked.append((stop, day))
+            kind = kinds[day]
+            if kind in missing:
+                return None
+            return {'G9': [(label, [marprom.minutes(t) for t in times]) for label, times in answers.get((stop, kind), [])]}
+        return site, asked
+
+    def test_the_site_fills_a_blank_pdf_page_and_replaces_the_tables(self):
+        blank = {**PDF, '002': {**PDF['002'], 'weekday': []}}                    # Beta's weekday page is blank in the PDF
+        answers = {(sid, kind): [('Alfa - Delta', PDF[code][kind])] for sid, code in (('10', '001'), ('20', '002'), ('30', '003'))
+                   for kind in marprom.KINDS}
+        answers['30', 'weekday'] = [('Alfa - Delta', ['05:10', '05:55', '06:10'])]    # the site has Gama's 06:10 the PDF lacks
+        site, asked = self.site(answers)
+        src, read = fetched(tables=blank)
+        files, status = marprom.make(MARPROM, src, self.today, read=read, site=site)
+        self.assertEqual(len(asked), 3 * 4)                                     # one page per stop and table
+        feed = self.feed(files)
+        weekday = sorted(t['id'] for t in feed['trips'].values() if t['serviceId'] == 'pdf-weekday')
+        self.assertEqual(weekday, ['MARPROM:G9-plus-wd-s1-0500', 'MARPROM:G9-plus-wd-s1-0600', 'MARPROM:G9-plus-wd-s2-0550'])
+        self.assertEqual([s['departure'] // 60 for s in feed['trips']['MARPROM:G9-plus-wd-s1-0600']['stops']], [360, 365, 370, 375])
+        self.assertEqual(status['site']['days'], {'saturday': '2026-11-07', 'sunday': '2026-11-08', 'weekday': '2026-11-05', 'weekday_holiday': '2026-12-28'})
+        self.assertEqual((status['site']['blankPagesFilled'], status['site']['changedPages']), ({'G9': 1}, {'G9': 2}))
+        self.assertTrue(status['weekend']['saturday']['agrees'])
+
+    def test_a_line_whose_weekend_the_site_disagrees_with_is_rebuilt_from_the_site(self):
+        answers = {(sid, kind): [('Alfa - Delta', PDF[code][kind])] for sid, code in (('10', '001'), ('20', '002'), ('30', '003'))
+                   for kind in marprom.KINDS}
+        answers.update({(sid, 'saturday'): [('Alfa - Delta', [t])] for sid, t in (('10', '06:30'), ('20', '06:35'), ('30', '06:40'))})
+        site, _ = self.site(answers)
+        src, read = fetched()
+        files, status = marprom.make(MARPROM, src, self.today, read=read, site=site)
+        self.assertEqual(status['weekendFromSite'], {'saturday': ['G9']})
+        self.assertEqual(status['end'], '2027-08-31')
+        feed = self.feed(files)
+        self.assertEqual(self.running(feed, date(2026, 11, 7)), ['G9-plus-sa-s1-0630'])   # the published s1 (06:00) is gone
+        self.assertEqual(self.running(feed, date(2027, 3, 6)), ['G9-plus-sa-s1-0630'])
+        self.assertEqual(self.running(feed, date(2027, 3, 7)), ['u1'])                   # Sunday agrees: published, run on
+        self.assertEqual(self.running(feed, date(2027, 5, 1)), ['u1'])                   # a Saturday holiday: Sunday's
+        self.assertEqual(self.running(feed, date(2026, 10, 31)), ['u1'])
+
+    def test_a_site_showing_its_school_day_table_in_the_holidays_keeps_the_pdfs_holiday_table(self):
+        answers = {(sid, kind): [('Alfa - Delta', PDF[code]['weekday' if kind == 'weekday_holiday' else kind])]
+                   for sid, code in (('10', '001'), ('20', '002'), ('30', '003')) for kind in marprom.KINDS}
+        site, _ = self.site(answers)
+        src, read = fetched()
+        files, status = marprom.make(MARPROM, src, self.today, read=read, site=site)
+        self.assertTrue(status['site']['holidayAsWeekday'])
+        self.assertEqual([t['id'] for t in self.feed(files)['trips'].values() if t['serviceId'] == 'pdf-holiday'], ['MARPROM:G9-plus-sp-s1-0530'])
+
+    def test_a_table_the_site_has_no_day_for_keeps_the_pdfs_and_no_weekday_fails(self):
+        weekday = {(sid, 'weekday'): [('Alfa - Delta', PDF[code]['weekday'])] for sid, code in (('10', '001'), ('20', '002'), ('30', '003'))}
+        site, _ = self.site(weekday, missing=('weekday_holiday', 'saturday', 'sunday'))
+        src, read = fetched()
+        files, status = marprom.make(MARPROM, src, self.today, read=read, site=site)
+        self.assertEqual(status['site']['missing'], ['saturday', 'sunday', 'weekday_holiday'])
+        self.assertEqual(status['site']['changedPages'], {})
+        self.assertTrue(status['weekend']['saturday']['agrees'])       # the PDF's tables, kept
+        self.assertIn('MARPROM:G9-plus-sp-s1-0530', self.feed(files)['trips'])
+        site, _ = self.site({}, missing=('weekday',))
+        with self.assertRaisesRegex(build.BuildError, 'the site has no weekday day'):
+            marprom.make(MARPROM, src, self.today, read=read, site=site)
+
+    def test_a_site_page_is_read_per_line_and_variant_and_another_date_is_none(self):
+        row = lambda label, times: f'<tr><td class="tdWidth"> {label}</td><td>{"   ".join(times)}  </td></tr>'  # noqa: E731
+        text = ('<input id="datum" name="datum" value="2026-11-09" min="2026-10-26" />'
+                '<b>Naslednji odhodi za linijo <span class="x linija-G6">G6</span> </b><table>' + row('AP - Vzpenjača', ['23:30', '23:50', '00:20']) + '</table>'
+                '<b>Naslednji odhodi za linijo <span class="x">G4</span> </b><table>' + row('AP -  Pekre', ['05:00']) + row('AP &#8211; Gorca', ['07:55']) + '</table>')
+        self.assertEqual(marprom.site_departures(text, date(2026, 11, 9)),
+                         {'G6': [('AP - Vzpenjača', [1410, 1430, 1460])], 'G4': [('AP - Pekre', [300]), ('AP – Gorca', [475])]})
+        self.assertIsNone(marprom.site_departures(text, date(2027, 1, 4)))   # past the site's last date it shows another day
+
+    def test_sample_days_skip_public_holidays(self):
+        days = marprom.sample_days(date(2026, 12, 23), [(date(2026, 12, 28), date(2026, 12, 31))])
+        self.assertEqual(days['saturday'], date(2027, 1, 9))       # 26 Dec and 2 Jan are public holidays
+        self.assertEqual(days['weekday_holiday'], date(2026, 12, 28))
+        self.assertEqual(days['weekday'], date(2026, 12, 24))
+
     def test_a_missing_page_a_wrong_line_or_no_weekday_trips_fails(self):
         src, _ = fetched()
         with self.assertRaisesRegex(build.BuildError, 'not a readable PDF'):
