@@ -599,7 +599,8 @@ def timetable_runs(now: float, before: int, after: int) -> list[dict]:
 
 def running(now: float, margin: int = 1800) -> list[dict]:
     """Runs of these timetables on the road around `now` (from `margin` s before their first departure to as long after
-    their last arrival), as mapping.match_run takes them: {'id', 'stops': [(lat, lon, scheduled epoch)], 'stopIds'}."""
+    their last arrival), as mapping.match_run takes them: {'id', 'routeId', 'date' (YYYYMMDD), 'stops': [(lat, lon,
+    scheduled epoch)], 'stopIds', 'sequences'}."""
     out = []
     today = datetime.fromtimestamp(now, LOCAL).date()
     for feed in _feeds().values():
@@ -607,6 +608,8 @@ def running(now: float, margin: int = 1800) -> list[dict]:
             base = day_start(day)
             for t in feed['trips'].values():
                 if base + t['stops'][0]['departure'] - margin <= now <= base + t['stops'][-1]['arrival'] + margin and runs(feed, t['serviceId'], day):
-                    out.append({'id': t['id'], 'stops': [(feed['stops'][s['stopId']]['lat'], feed['stops'][s['stopId']]['lon'], base + s['departure'])
-                                                         for s in t['stops']], 'stopIds': [s['stopId'] for s in t['stops']]})
+                    out.append({'id': t['id'], 'routeId': t['routeId'], 'date': day.strftime('%Y%m%d'),
+                                'stops': [(feed['stops'][s['stopId']]['lat'], feed['stops'][s['stopId']]['lon'], base + s['departure'])
+                                          for s in t['stops']], 'stopIds': [s['stopId'] for s in t['stops']],
+                                'sequences': [s['sequence'] for s in t['stops']]})
     return out

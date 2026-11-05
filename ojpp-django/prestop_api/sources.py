@@ -163,7 +163,32 @@ def _load_positions():
 
 
 def _load_trip_updates():
-    return _with_old_ids(supplement.with_own_ids(mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024))))
+    index = _with_old_ids(supplement.with_own_ids(mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024))))
+    return with_inferred(index, time.time())
+
+
+# Runs of the hand-kept timetables a live bus was placed on by its path (_load_vehicles, N3): Marprom's feed names
+# them by its own trip ids, which no board knows. Each gets a trip update of its own under our run id, with the delay
+# the bus has against our times at its next stop, so boards, trip pages and journeys read it like any feed's.
+INFERRED_AGE = 180  # s an inferred update outlives the last report that placed its bus
+inferred_updates: dict[str, tuple[dict, float]] = {}
+
+
+def _infer_update(run_id: str, stop_id: Optional[str], delay: int, call: dict, now: float):
+    item = {'stopId': stop_id, 'arrival': {'delay': delay}, 'departure': {'delay': delay}}
+    if call.get('stopSequence') is not None:
+        item['stopSequence'] = call['stopSequence']
+    inferred_updates[run_id] = ({'trip': {'tripId': run_id, 'startDate': call.get('startDate')}, 'updates': [item], 'inferred': True}, now)
+
+
+def with_inferred(index: dict, now: float) -> dict:
+    """The trip-update index with the inferred updates still fresh, never over the feed's own for a run."""
+    for run_id, (update, at) in list(inferred_updates.items()):
+        if at < now - INFERRED_AGE:
+            inferred_updates.pop(run_id, None)
+        else:
+            index.setdefault(run_id, update)
+    return index
 
 
 positions = Cached(_load_positions, ttl=5, max_stale=120, revalidate=30)
@@ -363,19 +388,33 @@ def _load_vehicles(drops: Optional[list] = None):
             guess = infer_trip(updates.get(t), index, route_index)
             if guess:
                 infos[t] = {**(infos.get(t) or {}), **{k: v for k, v in guess.items() if v}}
+    # A hand-kept timetable's bus under a trip id that timetable lacks (Marprom's own numbering, or a bare 'MARPROM:',
+    # N3, 5 Nov) is drawn on its line either way, but placed on our run only by the path it follows (below).
+    foreign = {id(e) for e, t in zip(pos.value, trip_ids) if t and supplement.stale(t)}
     live = mapping.build_vehicles(pos.value, updates, infos, route_index, stop_names(), history=motion_history, drops=drops)
     # Vehicles the feed sends without a trip: on the map with the run of the operators' own timetables they are seen
     # to run (mapping.LooseVehicles), marked inferred; one that is a drawn vehicle under another id stays off.
     now = time.time()
-    loose = [e for e in pos.value if not mapping.entity_trip(e, updates)]
-    for e, run_id, delay, stop_id in loose_vehicles.assign(loose, [v['tripId'] for v in live if v.get('tripId')], motion_history,
-                                                           lambda: supplement.running(now), now, drops):
+    loose = [e for e in pos.value if not mapping.entity_trip(e, updates) or id(e) in foreign]
+    by_vehicle = {v['id']: v for v in live if v.get('tripId') and supplement.stale(v['tripId'])}
+    placed_ids = set()
+    for e, run_id, delay, stop_id, call in loose_vehicles.assign(loose, [v['tripId'] for v in live if v.get('tripId') and v['id'] not in by_vehicle],
+                                                                 motion_history, lambda: supplement.running(now), now, drops):
+        trip = (e['vehicle'].get('trip') or {})
         placed = {**e, 'vehicle': {**e['vehicle'], 'trip': {'tripId': run_id}, 'stopId': stop_id}}
         for v in mapping.build_vehicles([placed], updates, {run_id: supplement.trip_info(run_id)}, route_index, stop_names(), now, motion_history):
             v['quality'] = 'inferred'
-            if v['delaySeconds'] is None:
-                v['delaySeconds'] = delay
+            if v['delaySeconds'] is None or trip.get('tripId'):
+                v['delaySeconds'] = delay  # the feed's own delay is against its own timetable, not ours
+            placed_ids.add(v['id'])
+            live = [w for w in live if w['id'] != v['id']]
             live.append(v)
+            if trip.get('tripId'):
+                _infer_update(run_id, stop_id, delay, call, now)
+    # The others stay drawn on their line, with no trip page to open (never the feed's id: it 404s).
+    for vehicle_id, v in by_vehicle.items():
+        if vehicle_id not in placed_ids:
+            v['tripId'] = None
     from . import sz
     for v in live:
         if v['mode'] == 'rail':
@@ -387,8 +426,13 @@ def _load_vehicles(drops: Optional[list] = None):
     except UpstreamError as e:
         logger.warning('Scheduled trains unavailable: %r', e)
         trains = []
-    # City buses of the hand-kept timetables (no live positions) by their timetable too.
-    trains += scheduled.city_buses(now, frozenset(v['tripId'] for v in live if v.get('tripId')), drops)
+    # City buses of the hand-kept timetables (no live positions) by their timetable too; not on a line whose buses report
+    # live now (Marprom, N3): one not placed on a run is drawn on its line already, a timetable copy would sit beside it.
+    reporting = {((e.get('vehicle') or {}).get('trip') or {}).get('routeId') for e in pos.value} - {None, ''}
+    skip = {v['tripId'] for v in live if v.get('tripId')}
+    if any(supplement.owns(r) for r in reporting):
+        skip |= {r['id'] for r in supplement.running(now, margin=300) if r.get('routeId') in reporting}
+    trains += scheduled.city_buses(now, frozenset(skip), drops)
     broken = [v for v in trains if not mapping.fits_contract(v)]
     if broken:
         logger.warning('Timetable vehicles left out, they break the contract: %s', ', '.join(str(v.get('id')) for v in broken[:5]))

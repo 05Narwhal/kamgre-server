@@ -169,6 +169,85 @@ class LooseVehicleTests(SimpleTestCase):
         self.assertEqual(self.replay([a], {'IJPP:1': path(a, 60, self.T, self.T + 900), 'IJPP:2': other}), {})
 
 
+class NamedLooseVehicleTests(SimpleTestCase):
+    """N3: Marprom's feed names its buses by its own trip ids (MARPROM:113449), none of them in our timetable, and its
+    line (routeId). Such a bus is matched to its line's runs only, stays on its run, and is drawn whether or not."""
+    T = NOW - NOW % 3600
+
+    def replay(self, runs, buses, start=300, end=900, loose=None):
+        """`buses` {vehicle id: (route id, path)} under foreign trip ids. Placed runs per bus, and the drops noted."""
+        loose, drawn, placed, notes = loose or mapping.LooseVehicles(), mapping.MotionHistory(), {}, []
+        for at in range(self.T + start, self.T + end, 30):
+            entities = []
+            for vid, (route, track) in buses.items():
+                t, lat, lon = next(p for p in reversed(track) if p[0] <= at)
+                entities.append({'id': vid, 'vehicle': {'trip': {'tripId': 'MARPROM:113449', 'routeId': route}, 'vehicle': {'id': vid},
+                                                        'timestamp': str(t), 'position': {'latitude': lat, 'longitude': lon}}})
+                drawn.observe(vid, t, lat, lon, at)  # drawn on the map under the feed's id
+            drops = []
+            for e, run_id, delay, stop_id, call in loose.assign(entities, (), drawn, lambda: runs, at, drops):
+                placed.setdefault(e['id'], set()).add(run_id)
+                self.last = (run_id, delay, stop_id, call)
+            notes += drops
+        return placed, notes
+
+    def line(self, run_id, route, start, **kw):
+        r = run(run_id, start, **kw)
+        return {**r, 'routeId': route, 'date': '20261105', 'stopIds': [f'M:{i}' for i in range(len(r['stops']))],
+                'sequences': list(range(1, len(r['stops']) + 1))}
+
+    def test_a_bus_is_matched_to_its_own_lines_run_only(self):
+        """Lines 6 and 7 share these stops at these times: by the path alone it is unclear, by the line it is not."""
+        six, seven = self.line('M:6a', 'MARPROM:6', self.T), self.line('M:7a', 'MARPROM:7', self.T + 60)
+        placed, notes = self.replay([six, seven], {'MARPROM:1': ('MARPROM:6', path(six, 60, self.T, self.T + 900))})
+        self.assertEqual(placed, {'MARPROM:1': {'M:6a'}})
+        stop = self.last[2]  # the next stop's sequence in our run, and the run's day, for its trip update
+        self.assertEqual(self.last[3], {'stopSequence': int(stop.split(':')[1]) + 1, 'startDate': '20261105'})
+        self.assertEqual(notes, [])
+        self.assertIsNone(mapping.match_run(path(six, 60, self.T, self.T + 600), [six, seven], self.T + 600))
+
+    def test_a_bus_stays_on_its_run_while_it_fits(self):
+        """The next run of the line catches up (4 min behind, a bus running late): the one it was on still fits."""
+        a = run('M:a', self.T)
+        later = run('M:b', self.T + 240)
+        track = path(a, 120, self.T + 300, self.T + 700)
+        self.assertIsNone(mapping.match_run(track, [a, later], self.T + 700))
+        self.assertEqual(mapping.match_run(track, [a, later], self.T + 700, prefer='M:a')[0], 'M:a')
+        self.assertIsNone(mapping.match_run(track, [a, later], self.T + 700, prefer='M:gone'))  # a run it left decides nothing
+
+    def test_two_buses_on_one_run_or_no_fit_stay_unplaced_and_unnoted(self):
+        """Never two on one run; a bus whose path fits nothing stays drawn under its line (no 'no trip id' note), and a
+        bus beside it is no copy of it: the feed reports each bus once."""
+        six = self.line('M:6a', 'MARPROM:6', self.T)
+        bus = path(six, 60, self.T, self.T + 900)
+        beside = [(t, lat, lon + 0.0004) for t, lat, lon in bus]
+        placed, notes = self.replay([six], {'MARPROM:1': ('MARPROM:6', bus), 'MARPROM:2': ('MARPROM:6', beside)})
+        self.assertEqual((placed, notes), ({}, []))
+        standing = [(self.T + i * 30, 46.0, 15.6) for i in range(40)]
+        self.assertEqual(self.replay([six], {'MARPROM:3': ('MARPROM:6', standing)}), ({}, []))
+
+    def test_recorded_marprom_buses_find_their_runs(self):
+        """5 Nov 17:52-18:00, local-live: 38 buses, none under an id of ours (24 Marprom numbers, the rest a bare
+        'MARPROM:'). Within 8 minutes 23 are on a run of their own line, no run twice; the rest stand or wait to start."""
+        import json
+        from pathlib import Path
+        fx = json.loads((Path(__file__).parent / 'fixtures' / 'marprom' / 'live-2026-11-05.json').read_text())
+        runs = [{**r, 'stops': [tuple(s) for s in r['stops']]} for r in fx['runs']]
+        line = {r['id']: r['routeId'] for r in runs}
+        loose, drawn, placed = mapping.LooseVehicles(), mapping.MotionHistory(), {}
+        for frame in fx['frames']:
+            entities = [{'id': vid, 'vehicle': {'trip': {'tripId': trip, 'routeId': route}, 'vehicle': {'id': vid}, 'timestamp': str(ts),
+                                                'position': {'latitude': lat, 'longitude': lon}}} for vid, trip, route, ts, lat, lon in frame['vehicles']]
+            for e in entities:
+                drawn.observe(e['id'], int(e['vehicle']['timestamp']), *(e['vehicle']['position'][k] for k in ('latitude', 'longitude')), frame['now'])
+            out = loose.assign(entities, (), drawn, lambda: runs, frame['now'], [])
+            placed = {mapping.entity_vehicle_id(e): run_id for e, run_id, *_ in out}
+            routes = {mapping.entity_vehicle_id(e): e['vehicle']['trip']['routeId'] for e, *_ in out}
+            self.assertTrue(all(line[run_id] == routes[vid] for vid, run_id in placed.items()))
+        self.assertEqual(placed, fx['placed'])
+        self.assertEqual(len(set(placed.values())), len(placed))
+
+
 def stoptime(trip, first, last, dep=36000, rt=None, state='SCHEDULED'):
     return {'serviceDay': 1791496800, 'scheduledArrival': dep, 'scheduledDeparture': dep,
             'realtimeArrival': rt or dep, 'realtimeDeparture': rt or dep, 'realtime': rt is not None, 'realtimeState': state,

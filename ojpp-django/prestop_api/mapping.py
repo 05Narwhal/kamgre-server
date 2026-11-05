@@ -311,11 +311,12 @@ def same_path(track: list, reports: list) -> Optional[bool]:
     return True if compared >= 3 else None
 
 
-def match_run(track: list, runs: list[dict], now: float) -> Optional[tuple[str, int, int]]:
+def match_run(track: list, runs: list[dict], now: float, prefer: Optional[str] = None) -> Optional[tuple[str, int, int]]:
     """(run id, delay s, index of its next stop) of the run a vehicle without a trip is on, from its recent path
     `track` [(epoch, lat, lon)], oldest first; `runs` [{'id', 'stops': [(lat, lon, scheduled epoch)]}]. A run fits when
     the path passed RUN_STOPS of its stops with delays within RUN_SPREAD of each other (in time order: a loop's stops
-    count on the pass that fits) and the vehicle is not past its end. Only one run may fit clearly; None otherwise.
+    count on the pass that fits) and the vehicle is not past its end. Only one run may fit clearly; None otherwise,
+    unless `prefer` (the run it was on) still fits: a bus stays on its run while a later one catches up with it.
     The next stop follows the last one passed (on a loop the app needs it to place the bus on the right pass)."""
     fits = []
     for r in runs:
@@ -333,6 +334,9 @@ def match_run(track: list, runs: list[dict], now: float) -> Optional[tuple[str, 
             nxt += 1  # passed since, by the timetable and its delay
         fits.append((-len(best[0]), abs(best[1]), r['id'], int(round(best[1])), min(nxt, len(r['stops']) - 1)))
     fits.sort()
+    kept = next((f for f in fits if prefer is not None and f[2] == prefer), None)
+    if kept:
+        return kept[2], kept[3], kept[4]
     if not fits or (len(fits) > 1 and fits[1][0] == fits[0][0] and fits[1][1] - fits[0][1] < RUN_CLEAR):
         return None
     return fits[0][2], fits[0][3], fits[0][4]
@@ -351,17 +355,22 @@ class LooseVehicles:
         self.tracks = MotionHistory(size=80, age=self.TRACK)
         self.copies: dict[str, tuple[str, float]] = {}  # vehicle id -> (the drawn vehicle it is, when last seen so)
         self.taken: dict[str, float] = {}
+        self.runs: dict[str, tuple[str, float]] = {}  # vehicle id -> (the run it was placed on, when)
 
     def assign(self, entities: list[dict], drawn_runs: Iterable[str], drawn: MotionHistory, runs, now: float,
-               drops: Optional[list] = None) -> list[tuple[dict, str, int, Optional[str]]]:
-        """(entity, run id, delay s, next stop id) for each of `entities` (no trip, fresh position) found on a run of `runs()` (called
-        only when needed) that no drawn vehicle runs: `drawn_runs` this update, `drawn` their recent reports. The
-        others' 'no trip id' notes (build_vehicles) get the reason they stay off the map."""
+               drops: Optional[list] = None) -> list[tuple[dict, str, int, Optional[str], dict]]:
+        """(entity, run id, delay s, next stop id, {'stopSequence', 'startDate'} of that stop) for each of `entities`
+        (fresh position) found on a run of `runs()` (called only when needed) that no drawn vehicle runs: `drawn_runs`
+        this update, `drawn` their recent reports. An entity naming a line (`trip.routeId`) is matched to that line's
+        runs only, and stays on its run while that still fits. The others' 'no trip id' notes (build_vehicles) get the
+        reason they stay off the map. An entity under a trip id the timetable lacks (Marprom's own numbering, N3) is a
+        vehicle of its own, drawn either way: never taken for a copy, never noted."""
         from . import coverage
         from .geometry import KY, _kx
         for run_id in drawn_runs:
             self.taken[run_id] = now
         self.taken = {k: t for k, t in self.taken.items() if t >= now - self.TAKEN}
+        self.runs = {k: r for k, r in self.runs.items() if r[1] >= now - self.TRACK}
         last = drawn.last()
         found: dict[int, tuple] = {}
         reasons: dict[int, str] = {}
@@ -373,33 +382,41 @@ class LooseVehicles:
                 continue
             lat, lon = pos['latitude'], pos['longitude']
             track = self.tracks.observe(vehicle_id, int(v.get('timestamp') or 0), lat, lon, now)
-            kx = _kx(lat)
-            near = [k for k, (_, la, lo) in last.items() if k != vehicle_id and math.hypot((lo - lon) * kx, (la - lat) * KY) <= self.AROUND]
-            verdicts = {k: same_path(track, drawn.recent(k)) for k in near}
-            was = self.copies.get(vehicle_id)
-            other = next((k for k, same in verdicts.items() if same), None)
-            if other is None and was and was[1] >= now - self.STICK and verdicts.get(was[0]) is None:
-                other = was[0]  # too few of its reports fall within this path yet: still that one
-            if other is not None:
-                self.copies[vehicle_id] = (other, now if verdicts.get(other) else was[1])
-                reasons[id(e)] = 'no trip id, a drawn vehicle'
-                continue
-            self.copies.pop(vehicle_id, None)
+            trip = v.get('trip') or {}
+            named = bool(trip.get('tripId'))
+            if not named:
+                kx = _kx(lat)
+                near = [k for k, (_, la, lo) in last.items() if k != vehicle_id and math.hypot((lo - lon) * kx, (la - lat) * KY) <= self.AROUND]
+                verdicts = {k: same_path(track, drawn.recent(k)) for k in near}
+                was = self.copies.get(vehicle_id)
+                other = next((k for k, same in verdicts.items() if same), None)
+                if other is None and was and was[1] >= now - self.STICK and verdicts.get(was[0]) is None:
+                    other = was[0]  # too few of its reports fall within this path yet: still that one
+                if other is not None:
+                    self.copies[vehicle_id] = (other, now if verdicts.get(other) else was[1])
+                    reasons[id(e)] = 'no trip id, a drawn vehicle'
+                    continue
+                self.copies.pop(vehicle_id, None)
             if candidates is None:
                 candidates = [r for r in runs() if r['id'] not in self.taken]
-            match = match_run(track, candidates, now)
+            line = trip.get('routeId')
+            mine = [r for r in candidates if not line or r.get('routeId') in (None, line)]
+            match = match_run(track, mine, now, prefer=(self.runs.get(vehicle_id) or (None,))[0])
             if match:
                 run_id, delay, nxt = match
-                stop_ids = next(r for r in candidates if r['id'] == run_id).get('stopIds') or []
-                found[id(e)] = (e, run_id, delay, stop_ids[nxt] if nxt < len(stop_ids) else None)
-            else:
+                r = next(r for r in mine if r['id'] == run_id)
+                stop_ids, sequences = r.get('stopIds') or [], r.get('sequences') or []
+                call = {'stopSequence': sequences[nxt] if nxt < len(sequences) else None, 'startDate': r.get('date')}
+                found[id(e)] = (e, run_id, delay, stop_ids[nxt] if nxt < len(stop_ids) else None, call)
+            elif not named:
                 reasons[id(e)] = 'no trip id, no run fits'
         per_run = Counter(found_run[1] for found_run in found.values())
         out = []
         for key, placed in found.items():
             if per_run[placed[1]] == 1:
                 out.append(placed)
-            else:
+                self.runs[entity_vehicle_id(placed[0])] = (placed[1], now)
+            elif not ((placed[0].get('vehicle') or {}).get('trip') or {}).get('tripId'):
                 reasons[key] = 'no trip id, two on one run'
         if drops is not None:
             placed = {id(p[0]) for p in out}
