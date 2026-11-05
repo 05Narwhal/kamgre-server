@@ -114,6 +114,14 @@ def snapped(stop_id: str, lat: float, lon: float, snaps: dict) -> Optional[tuple
     return None
 
 
+def placed_ids(raw_stops: Iterable[dict], overrides: dict, snaps: dict) -> set[str]:
+    """Ids of the raw (feed-position) stops that `correct` puts at their place on their lines' road (not overridden):
+    their lines know the side, so `stopgroups.merge` puts their marker there and `place_sides` leaves it."""
+    places = snaps.get(PLACED) or {}
+    return {s['gtfsId'] for s in raw_stops if s.get('lat') is not None and s.get('lon') is not None
+            and s['gtfsId'] not in overrides['stops'] and snap_key(s['gtfsId'], s['lat'], s['lon']) in places}
+
+
 def corrected(stop_id: str, lat: float, lon: float, overrides: dict, snaps: dict) -> tuple[float, float]:
     """A stop's position after the override table, then the road snap."""
     if stop_id in overrides['stops']:

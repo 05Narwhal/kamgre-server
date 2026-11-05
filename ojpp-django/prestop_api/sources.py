@@ -62,13 +62,15 @@ def _load_stops():
         feeds = {s['gtfsId'].split(':', 1)[0] for s in extra}
         raw = [s for s in raw if s['gtfsId'].split(':', 1)[0] not in feeds] + extra
     # No stop abroad: KamGre shows Slovenia only (abroad.py).
+    # Hand-placed poles and those placed on their lines' road (stopplace.py) stay put and place their merged marker.
+    fixed = frozenset(overrides['stops']) | stopfix.placed_ids(raw, overrides, snaps)
     raw = [s for s in stopfix.correct(raw, overrides, snaps) if not abroad.is_abroad_stop(s.get('name'), s.get('gtfsId'))]
     built = mapping.build_stops(raw)
     # Stops that are the same physical stop or station become one (see stopgroups.py).
     ways, ends, sequences = _stop_directions(built)
-    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends, frozenset(overrides['stops']))
+    merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends, fixed)
     # Each side of a stop on its own side of the road (Slovenia drives on the right), at OSM's pole when one is close.
-    stopgroups.place_sides(merged, built, ways, set(overrides['stops']) | set(overrides['stations']), stopfix.osm_poles())
+    stopgroups.place_sides(merged, built, ways, fixed | set(overrides['stations']), stopfix.osm_poles())
     # Same-name poles close together are one marker below z16 (the map draws them so; ids and boards unchanged).
     place_of = stopgroups.places(merged)
     for i, station in enumerate(merged):
