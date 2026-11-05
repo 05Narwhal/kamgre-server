@@ -1,0 +1,142 @@
+{
+ "status": "ok",
+ "version": "47c7f71bfe6e",
+ "end": "2027-08-31",
+ "source": "https://moc.celje.si/za-obcane/promet-in-mobilnost/celebus/",
+ "files": [
+  {
+   "file": "Linija_1a_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354497/Linija_1a_2026-09.docx",
+   "sha256": "ad15749d5a1d75d97591fdf75e9db3dc5b82e71bc471bd40b7febb4a5191dcd6"
+  },
+  {
+   "file": "Linija_1b_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354497/Linija_1b_2026-09.docx",
+   "sha256": "d0a49d9a20e1e84fa39a06a74230ec9c07f223d9cee465cbdf4c6d40488c5c44"
+  },
+  {
+   "file": "Linija_2a_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354498/Linija_2a_2026-09.docx",
+   "sha256": "ac195a26b39c5506dcbff785f354b06529b725f2b599bddb8a99ecbcfabc4176"
+  },
+  {
+   "file": "Linija_2b_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354498/Linija_2b_2026-09.docx",
+   "sha256": "aec2691c8e0ee1efcc7283e7a4f91111e25ab3e6b01dd2295ead3a4383350d4b"
+  },
+  {
+   "file": "Linija_3_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354500/Linija_3_2026-09.docx",
+   "sha256": "59af71f39c0b4a9b47911eb56b4b23698dfc5289638c1df8d7e2c8bbcec6a5da"
+  },
+  {
+   "file": "Linija_4_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354500/Linija_4_2026-09.docx",
+   "sha256": "a7f105bdb1b2ca664b2d894bad5ef53d643ed6e942d7e03b41503e182fc01d69"
+  },
+  {
+   "file": "Linija_5_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354500/Linija_5_2026-09.docx",
+   "sha256": "7ffc81f1556b5683c3900e7062a8a239626fea6e8495022af0960b89522ad2b8"
+  },
+  {
+   "file": "Linija_6_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354502/Linija_6_2026-09.docx",
+   "sha256": "15d3f96cf3bc2729d77988631c2efe66d500dafd3b4e15d01b2506ce973fed11"
+  },
+  {
+   "file": "Linija_7_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354503/Linija_7_2026-09.docx",
+   "sha256": "e506399a1269f2cdab854cfa511339c398a04631dc27ae7df146ffe9f0f9d417"
+  },
+  {
+   "file": "Linija_8_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354503/Linija_8_2026-09.docx",
+   "sha256": "a309377caf5b3d9a2e2f98182e0d96e9d4c878886cd712667f1efb6821944902"
+  },
+  {
+   "file": "Linija_9_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354505/Linija_9_2026-09.docx",
+   "sha256": "d3d575e43863f093c6206ac6c276756a305c310ba2d3b720942aac60afad7ce7"
+  },
+  {
+   "file": "Linija_10_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354505/Linija_10_2026-09.docx",
+   "sha256": "21dbcca3a6239e7459ff669f2ec49a0f2b54bd413f761021ef6021d8a727a9fe"
+  },
+  {
+   "file": "Linija_11_2026-09.docx",
+   "url": "https://res.cloudinary.com/celje/raw/upload/v1788354509/Linija_11_2026-09.docx",
+   "sha256": "d129914f0e9cd8c5d2aabe9e37254b628e0913ce5d48de2286affa4d9cff0e9d"
+  }
+ ],
+ "lines": {
+  "11": 13,
+  "1273": 7,
+  "1274": 4,
+  "1276": 1,
+  "1277": 10,
+  "1A": 25,
+  "2B": 30,
+  "4": 16,
+  "5": 14,
+  "8": 8,
+  "9": 8
+ },
+ "services": {
+  "11 out D": 9,
+  "11 out SO": 4,
+  "1273 out SO": 7,
+  "1274 out SO": 4,
+  "1276 out SO": 1,
+  "1277 out DS": 2,
+  "1277 out SO": 8,
+  "1A out D": 18,
+  "1A out SO": 7,
+  "2B out D": 21,
+  "2B out SO": 9,
+  "4 out D": 10,
+  "4 out SO": 6,
+  "5 out D": 10,
+  "5 out SO": 4,
+  "8 out D": 8,
+  "9 out D": 6,
+  "9 out SO": 2
+ },
+ "notes": [
+  "1a 0 D (Linija_1a_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "1a 0 SO (Linija_1a_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "1b 0 D (Linija_1b_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "2a 0 D (Linija_2a_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "2b 0 D (Linija_2b_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "2b 0 SO (Linija_2b_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "3 0 D (Linija_3_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "3 0 DS (Linija_3_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "3 0 SO (Linija_3_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "4 0 D (Linija_4_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "4 0 SO (Linija_4_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "5 0 D (Linija_5_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "5 0 SO (Linija_5_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "6 0 D (Linija_6_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "6 0 SO (Linija_6_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "7 0 D (Linija_7_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "7 0 SO (Linija_7_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "8 0 D (Linija_8_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "9 0 D (Linija_9_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "9 0 SO (Linija_9_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "10 0 D (Linija_10_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "10 0 SO (Linija_10_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "11 0 D (Linija_11_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "11 0 SO (Linija_11_2026-09.docx): Čas veljavnosti voznega reda:01.09.2026 - 30.06.2029",
+  "4 0 D: left out, no pole: Celje občina, Celje Glavni trg",
+  "4 0 SO: left out, no pole: Celje občina, Celje Glavni trg",
+  "5 0 D: left out, no pole: Vrhe Sv.Ana (PL)",
+  "5 0 SO: left out, no pole: Vrhe Sv.Ana (PL)",
+  "8 0 D: left out, no pole: Zg.Polule Belej (PL), Zg.Polule (PL), Zg.Polule Lovski dom (PL), Maistrova-Lovska koča K. (PL), Lisce 2 (PL), Lisce-Anski vrh kapela (PL), Košnica/Celju 62 (PL), Košnica/Celju Kragolnik (PL), Košnica/Celju Igrišče (PL), Košnica/Celju Cvetrežnik (PL), Košnica/Celju Križ (PL)",
+  "9 0 D: left out, no pole: Zadobrova Kveder (PL), Zadobrova Vogrinc (PL), Zadobrova Kveder (PL)",
+  "9 0 SO: left out, no pole: Zadobrova Kveder (PL), Zadobrova Vogrinc (PL), Zadobrova Kveder (PL)",
+  "11 0 D: left out, no pole: Celje Cesta na grad bife, Celje Skalna klet",
+  "11 0 SO: left out, no pole: Celje Cesta na grad bife, Celje Skalna klet"
+ ],
+ "built": "2026-11-05"
+}

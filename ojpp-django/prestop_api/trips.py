@@ -452,9 +452,9 @@ def load_line(route_id: str, day: Optional[date] = None) -> Optional[dict]:
         return hit
     route = supplement.otp_route(route_id, day) if supplement.owns(route_id) else None
     route = route or otp().query(LINE_Q, {'id': route_id, 'date': _yyyymmdd(day)}).get('route')
+    route = supplement.corrected_route(route, day) if route else supplement.added_route(route_id, day)
     if not route:
         return None
-    route = supplement.corrected_route(route, day)
     line, complete = build_line(route, day, time.monotonic() + LINE_ROAD_WAIT)
     _lines.put(key, line, None if complete else PARTIAL_TTL)
     return line

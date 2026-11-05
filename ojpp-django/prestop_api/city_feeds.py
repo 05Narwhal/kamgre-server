@@ -21,9 +21,9 @@ log = logging.getLogger(__name__)
 WINDOW = 14  # days ahead
 
 # Every city network (spec 2026-11-04): does it normally run on Saturdays? All run on weekdays. MONM: none, as Nomago's
-# timetables say (M-A2); Postojna: Saturday mornings, lines 1 and 2 (the poster, M-A2); CELEBUS is only what its feed
-# shows so far: M-A2 checks it against its operator's timetable.
-FEEDS = {'LPP': True, 'MARPROM': True, 'CELEBUS': False, 'MONM': False, 'MONG': True, 'MOKoper': True, 'MOKranj': True, 'MOKrsko': True,
+# timetables say (M-A2); Postojna: Saturday mornings, lines 1 and 2 (the poster, M-A2); CELEBUS: ten lines on Saturdays
+# (the city's 2026-09 timetables, data/gtfs/CELEBUS, M-A2).
+FEEDS = {'LPP': True, 'MARPROM': True, 'CELEBUS': True, 'MONM': False, 'MONG': True, 'MOKoper': True, 'MOKranj': True, 'MOKrsko': True,
          'MOMS': True, 'MOVelenje': True, 'Postojna': True, 'Ptuj': True, 'Brezice': True, 'Sevnica': False, 'Jesenice': True,
          'Piran': True}
 

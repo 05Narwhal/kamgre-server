@@ -443,6 +443,14 @@ def corrected_route(route: dict, day: date) -> dict:
     return {**route, 'patterns': patterns + _patterns(feed, rid, day)}
 
 
+def added_route(route_id: str, day: date) -> Optional[dict]:
+    """A line only a correction has, in trips.LINE_Q's shape: OTP has no such route (Celje's 1A, 2B, 4, 5, 8, 9, 11,
+    the new network of 1 Sep 2026), and the line page found nothing."""
+    feed = _correction(route_id)
+    route = feed and feed['routes'].get(route_id)
+    return {**route, 'patterns': _patterns(feed, route_id, day)} if route else None
+
+
 def _patterns(feed: dict, route_id: str, day: date) -> list[dict]:
     start = day_start(day)
     patterns: dict[tuple, dict] = {}

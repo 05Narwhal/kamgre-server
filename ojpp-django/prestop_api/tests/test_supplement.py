@@ -146,7 +146,7 @@ class LocalFeedTests(SimpleTestCase):
 
     def test_the_folders_are_feeds_when_turned_on(self):
         with self.settings(PRESTOP_LOCAL_GTFS=True, PRESTOP_KRANJ_GTFS_URL=''):
-            self.assertEqual(set(supplement.feeds()), {'Jesenice', 'MARPROM', 'MOKoper', 'Piran', 'Postojna', 'Ptuj', 'Sevnica'})
+            self.assertEqual(set(supplement.feeds()), {'CELEBUS', 'Jesenice', 'MARPROM', 'MOKoper', 'Piran', 'Postojna', 'Ptuj', 'Sevnica'})
         with self.settings(PRESTOP_LOCAL_GTFS=False, PRESTOP_KRANJ_GTFS_URL=''):
             self.assertEqual(supplement.feeds(), {})
 
@@ -231,6 +231,14 @@ class CorrectionTests(SimpleTestCase):
         self.assertEqual([len(p['tripsForDate']) for p in saturday['patterns']], [1, 0])
         other = {'gtfsId': 'MOKoper:4', 'patterns': []}
         self.assertIs(supplement.corrected_route(other, THURSDAY), other)
+
+    def test_a_line_otp_does_not_have_is_the_corrections_own(self):
+        # Celje's line 4: new on 1 Sep 2026, in the folder only; its line page was 404.
+        line = supplement.added_route('MOKoper:2', THURSDAY)
+        self.assertEqual([[t['gtfsId'] for t in p['tripsForDate']] for p in line['patterns']], [['MOKoper:fix-2-1']])
+        self.assertEqual(supplement.added_route('MOKoper:2', SATURDAY)['patterns'][0]['tripsForDate'], [])
+        self.assertIsNone(supplement.added_route('MOKoper:4', THURSDAY))
+        self.assertIsNone(supplement.added_route('IJPP:4', THURSDAY))
 
     def test_otps_stops_list_the_lines_it_adds(self):
         self.assertEqual([r['gtfsId'] for r in supplement.added_lines()['MOKoper:200']], ['MOKoper:2', 'MOKoper:9'])

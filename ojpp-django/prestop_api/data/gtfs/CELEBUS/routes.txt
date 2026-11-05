@@ -1,0 +1,12 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+11,1,11,Skalna klet – Celjski grad,3
+1273,1,6,Polule – Zagrad,3
+1274,1,7,Babno – Medlog,3
+1276,1,10,Bukovžlak – Ljubečna,3
+1277,1,3,Hudinja – Škofja vas,3
+1A,1,1A,Čopova – Lava most,3
+2B,1,2B,Nova vas – Lokrovec Čerčnik,3
+4,1,4,Nakupovalna,3
+5,1,5,Pokopališče – Teharje – Vrhe,3
+8,1,8,Polule – Košnica – Tremerje,3
+9,1,9,Trnovlje – Ljubečna,3

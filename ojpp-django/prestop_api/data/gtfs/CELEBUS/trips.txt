@@ -1,0 +1,137 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,shape_id
+11,D,11-0-D-0625,Celje ŽP,0,11
+11,D,11-0-D-0800,Celje ŽP,0,11
+11,D,11-0-D-0930,Celje ŽP,0,11
+11,D,11-0-D-1100,Celje ŽP,0,11
+11,D,11-0-D-1230,Celje ŽP,0,11
+11,D,11-0-D-1400,Celje ŽP,0,11
+11,D,11-0-D-1530,Celje ŽP,0,11
+11,D,11-0-D-1710,Celje ŽP,0,11
+11,D,11-0-D-1900,Celje ŽP,0,11
+11,SO,11-0-SO-0930,Celje ŽP,0,11
+11,SO,11-0-SO-1230,Celje ŽP,0,11
+11,SO,11-0-SO-1530,Celje ŽP,0,11
+11,SO,11-0-SO-1900,Celje ŽP,0,11
+1273,SO,1273-0-SO-0825,Celje ŽP,0,1273
+1273,SO,1273-0-SO-0925,Celje ŽP,0,1273
+1273,SO,1273-0-SO-1025,Celje ŽP,0,1273
+1273,SO,1273-0-SO-1125,Celje ŽP,0,1273
+1273,SO,1273-0-SO-1210,Celje ŽP,0,1273
+1273,SO,1273-0-SO-1310,Celje ŽP,0,1273
+1273,SO,1273-0-SO-1510,Celje ŽP,0,1273-2
+1274,SO,1274-0-SO-0845,Celje ŽP,0,1274
+1274,SO,1274-0-SO-1045,Celje ŽP,0,1274
+1274,SO,1274-0-SO-1230,Celje ŽP,0,1274
+1274,SO,1274-0-SO-1430,Celje ŽP,0,1274
+1276,SO,1276-0-SO-1330,Celje ŽP,0,1276
+1277,DS,1277-0-DS-0555,Celje ŽP,0,1277
+1277,DS,1277-0-DS-0655,Celje ŽP,0,1277
+1277,SO,1277-0-SO-0755,Celje ŽP,0,1277
+1277,SO,1277-0-SO-0855,Celje ŽP,0,1277
+1277,SO,1277-0-SO-0955,Celje ŽP,0,1277
+1277,SO,1277-0-SO-1055,Celje ŽP,0,1277
+1277,SO,1277-0-SO-1155,Celje ŽP,0,1277
+1277,SO,1277-0-SO-1255,Celje ŽP,0,1277
+1277,SO,1277-0-SO-1355,Celje ŽP,0,1277
+1277,SO,1277-0-SO-1455,Celje ŽP,0,1277
+1A,D,1A-0-D-0630,Celje ŽP,0,1A
+1A,D,1A-0-D-0710,Celje ŽP,0,1A
+1A,D,1A-0-D-0750,Celje ŽP,0,1A
+1A,D,1A-0-D-0830,Celje ŽP,0,1A
+1A,D,1A-0-D-0910,Celje ŽP,0,1A
+1A,D,1A-0-D-0950,Celje ŽP,0,1A
+1A,D,1A-0-D-1030,Celje ŽP,0,1A
+1A,D,1A-0-D-1110,Celje ŽP,0,1A
+1A,D,1A-0-D-1150,Celje ŽP,0,1A
+1A,D,1A-0-D-1230,Celje ŽP,0,1A
+1A,D,1A-0-D-1310,Celje ŽP,0,1A
+1A,D,1A-0-D-1350,Celje ŽP,0,1A
+1A,D,1A-0-D-1430,Celje ŽP,0,1A
+1A,D,1A-0-D-1510,Celje ŽP,0,1A
+1A,D,1A-0-D-1550,Celje ŽP,0,1A
+1A,D,1A-0-D-1630,Celje ŽP,0,1A
+1A,D,1A-0-D-1910,Celje ŽP,0,1A
+1A,D,1A-0-D-1950,Celje ŽP,0,1A
+1A,SO,1A-0-SO-0750,Celje ŽP,0,1A
+1A,SO,1A-0-SO-0950,Celje ŽP,0,1A
+1A,SO,1A-0-SO-1150,Celje ŽP,0,1A
+1A,SO,1A-0-SO-1350,Celje ŽP,0,1A
+1A,SO,1A-0-SO-1550,Celje ŽP,0,1A
+1A,SO,1A-0-SO-1800,Celje ŽP,0,1A
+1A,SO,1A-0-SO-1950,Celje ŽP,0,1A
+2B,D,2B-0-D-0500,Celeiapark,0,2B
+2B,D,2B-0-D-0543,Celeiapark,0,2B-2
+2B,D,2B-0-D-0623,Celeiapark,0,2B-2
+2B,D,2B-0-D-0703,Celeiapark,0,2B-2
+2B,D,2B-0-D-0743,Celeiapark,0,2B-2
+2B,D,2B-0-D-0823,Celeiapark,0,2B-2
+2B,D,2B-0-D-0943,Celeiapark,0,2B-2
+2B,D,2B-0-D-1023,Celeiapark,0,2B-2
+2B,D,2B-0-D-1103,Celeiapark,0,2B-2
+2B,D,2B-0-D-1143,Celeiapark,0,2B-2
+2B,D,2B-0-D-1223,Celeiapark,0,2B-2
+2B,D,2B-0-D-1303,Celeiapark,0,2B-2
+2B,D,2B-0-D-1343,Celeiapark,0,2B-2
+2B,D,2B-0-D-1423,Celeiapark,0,2B-2
+2B,D,2B-0-D-1503,Celeiapark,0,2B-3
+2B,D,2B-0-D-1543,Celeiapark,0,2B-2
+2B,D,2B-0-D-1623,Celeiapark,0,2B-2
+2B,D,2B-0-D-1703,Celeiapark,0,2B-2
+2B,D,2B-0-D-1743,Celeiapark,0,2B-2
+2B,D,2B-0-D-1823,Celeiapark,0,2B-2
+2B,D,2B-0-D-1903,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-0820,Celeiapark,0,2B
+2B,SO,2B-0-SO-0923,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-1023,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-1223,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-1423,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-1523,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-1723,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-1923,Celeiapark,0,2B-2
+2B,SO,2B-0-SO-2023,Celeiapark,0,2B-2
+4,D,4-0-D-0920,Celje ŽP,0,4
+4,D,4-0-D-1020,Celje ŽP,0,4
+4,D,4-0-D-1120,Celje ŽP,0,4
+4,D,4-0-D-1320,Celje ŽP,0,4
+4,D,4-0-D-1420,Celje ŽP,0,4
+4,D,4-0-D-1520,Celje ŽP,0,4
+4,D,4-0-D-1620,Celje ŽP,0,4
+4,D,4-0-D-1720,Celje ŽP,0,4
+4,D,4-0-D-1820,Celje ŽP,0,4
+4,D,4-0-D-2020,Celje ŽP,0,4
+4,SO,4-0-SO-0920,Celje ŽP,0,4
+4,SO,4-0-SO-1120,Celje ŽP,0,4
+4,SO,4-0-SO-1320,Celje ŽP,0,4
+4,SO,4-0-SO-1420,Celje ŽP,0,4
+4,SO,4-0-SO-1620,Celje ŽP,0,4
+4,SO,4-0-SO-1820,Celje ŽP,0,4
+5,D,5-0-D-0640,Celje ŽP,0,5
+5,D,5-0-D-0740,Celje ŽP,0,5
+5,D,5-0-D-0840,Celje ŽP,0,5
+5,D,5-0-D-0940,Celje ŽP,0,5
+5,D,5-0-D-1040,Celje ŽP,0,5
+5,D,5-0-D-1140,Celje ŽP,0,5
+5,D,5-0-D-1240,Celje ŽP,0,5
+5,D,5-0-D-1340,Celje ŽP,0,5
+5,D,5-0-D-1440,Celje ŽP,0,5
+5,D,5-0-D-1540,Celje ŽP,0,5
+5,SO,5-0-SO-0840,Celje ŽP,0,5
+5,SO,5-0-SO-1040,Celje ŽP,0,5
+5,SO,5-0-SO-1340,Celje ŽP,0,5
+5,SO,5-0-SO-1540,Celje ŽP,0,5
+8,D,8-0-D-0605,Celje ŽP,0,8
+8,D,8-0-D-0705,Celje ŽP,0,8
+8,D,8-0-D-0805,Celje ŽP,0,8
+8,D,8-0-D-1005,Celje ŽP,0,8
+8,D,8-0-D-1205,Celje ŽP,0,8
+8,D,8-0-D-1305,Celje ŽP,0,8
+8,D,8-0-D-1405,Celje ŽP,0,8
+8,D,8-0-D-1505,Celje ŽP,0,8
+9,D,9-0-D-0630,Celje ŽP,0,9
+9,D,9-0-D-0830,Celje ŽP,0,9
+9,D,9-0-D-1230,Celje ŽP,0,9
+9,D,9-0-D-1430,Celje ŽP,0,9
+9,D,9-0-D-1630,Celje ŽP,0,9
+9,D,9-0-D-1830,Celje ŽP,0,9
+9,SO,9-0-SO-0830,Celje ŽP,0,9
+9,SO,9-0-SO-1230,Celje ŽP,0,9
