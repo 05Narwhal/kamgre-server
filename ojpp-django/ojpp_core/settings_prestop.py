@@ -109,6 +109,11 @@ PRESTOP_SZ_NEWS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NE
 PRESTOP_ARRIVA_UPLOAD_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_ARRIVA_UPLOAD_FILE', default=str(root / 'data/arriva-posts.json'))
 # SŽ's list of disruptions as last saved from a browser and uploaded (sz_list.py).
 PRESTOP_SZ_LIST_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIST_FILE', default=str(root / 'data/sz-list.json'))
+# Our own reader of SŽ's site (prestop_api/szsite, `manage.py szsite`): FlareSolverr's URL (empty: it cannot solve
+# Cloudflare's check, so it needs a clearance file) and its state folder (clearance, last good copies), by default
+# `szsite` beside the list file above.
+PRESTOP_SZSITE_SOLVER = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_SOLVER', default='')
+PRESTOP_SZSITE_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_DIR', default=os.path.join(os.path.dirname(PRESTOP_SZ_LIST_FILE), 'szsite') if PRESTOP_SZ_LIST_FILE else '')
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))
