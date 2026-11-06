@@ -112,6 +112,8 @@ PRESTOP_SZ_LIST_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIST_F
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))
+# The nightly look at the hand-kept city timetables (prestop_api/citytt/watch.py, `manage.py citytt_check`): its last answer, for /health.
+PRESTOP_CITYTT_CHECK_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_CITYTT_CHECK_FILE', default=str(root / 'data/citytt-check.json'))
 # Road routing (bus costing) for bus patterns without a usable shape; empty disables it.
 # Routed legs are stored in the database, so the public FOSSGIS server sees each once.
 # Tests never route (they would reach the public server from a background thread).
