@@ -249,12 +249,14 @@ class ClientTests(SimpleTestCase):
             self.assertEqual(site[2]['proxies'], {'http': 'http://127.0.0.1:40000', 'https': 'http://127.0.0.1:40000'})
         solver_calls = [x[2] for x in c.http.calls if 'solver' in x[1]]
         self.assertTrue(all('proxies' not in k for k in solver_calls))
-        solve = [k['json'] for k in solver_calls if k['json']['cmd'] == 'request.get'][0]
-        self.assertEqual(solve['proxy'], {'url': 'http://127.0.0.1:40000'})
+        # FlareSolverr ignores a request's proxy inside a session: the browser's proxy is set when the session is made.
+        by_cmd = {k['json']['cmd']: k['json'] for k in solver_calls}
+        self.assertEqual(by_cmd['sessions.create']['proxy'], {'url': 'http://127.0.0.1:40000'})
+        self.assertNotIn('proxy', by_cmd['request.get'])
         direct = client(answer)
         direct.ajax('aktivni_vlaki')
         self.assertTrue(all('proxies' not in s[2] for s in direct.http.site()))
-        self.assertNotIn('proxy', [k[2]['json'] for k in direct.http.calls if 'solver' in k[1]][1])
+        self.assertTrue(all('proxy' not in k[2]['json'] for k in direct.http.calls if 'solver' in k[1]))
 
     def test_session_is_destroyed_even_when_solving_fails(self):
         def answer(method, url, kwargs):
@@ -413,6 +415,18 @@ class JobTests(SimpleTestCase):
         self.assertEqual(loop.step(), 'live')
         self.assertTrue(all(not t.backoff.due(now[0] + 59) for t in loop.tasks))
         self.assertIsNone(loop.step())
+
+    def test_a_failed_once_run_is_recorded_under_its_jobs(self):
+        # /status and /health read the job names (active_trains, notices, ...), as the loop records them, not the task names.
+        fake = mock.Mock()
+        fake.ajax.side_effect = SiteError('challenge', 'no solver configured')
+        fake.get.side_effect = SiteError('down', 'HTTP 502')
+        for name in ('live', 'status', 'boards'):
+            with self.assertRaises(SiteError):
+                jobs.run_once(name, fake, self.store, self.ids(), code='42300')
+        every = self.store.status()
+        self.assertEqual({j: every[j]['error'] for j in every},
+                         {'active_trains': 'challenge', 'notices': 'down', 'works': 'down', 'delays': 'down', 'board-42300': 'down'})
 
     def test_live_tasks_sleep_at_night(self):
         loop = jobs.Loop(mock.Mock(), self.store, self.ids(), clock=lambda: 1000.0, wall=lambda: T0 + 8 * 3600)

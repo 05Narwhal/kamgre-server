@@ -157,6 +157,10 @@ class Task:
         return now >= self.next_at and self.backoff.due(now) and (not self.service_only or in_service(wall))
 
 
+# The stored jobs (what /status and /health name) each task fills; a board's job is `board-<code>`.
+JOBS = {'live': ('active_trains',), 'status': ('notices', 'works', 'delays')}
+
+
 class Loop:
     """Runs the tasks one at a time, forever (or until `stop` is set)."""
 
@@ -164,7 +168,7 @@ class Loop:
                  clock: Callable[[], float] = time.monotonic, wall: Callable[[], float] = time.time):
         self.client, self.store, self.clock, self.wall = client, store, clock, wall
         self.boards = Boards(ids)
-        self.tasks = [Task('live', LIVE_EVERY, fetch_live, ('active_trains',)), Task('status', STATUS_EVERY, fetch_status, ('notices', 'works', 'delays'), service_only=False),
+        self.tasks = [Task('live', LIVE_EVERY, fetch_live, JOBS['live']), Task('status', STATUS_EVERY, fetch_status, JOBS['status'], service_only=False),
                       Task('boards', BOARD_EVERY, self.boards, ())]
 
     def step(self) -> Optional[str]:
@@ -201,14 +205,21 @@ class Loop:
 
 
 def run_once(name: str, client: Client, store: Store, ids: Optional[StationIds] = None, code: Optional[str] = None) -> dict:
-    """One fetch of a job ('live', 'status' or 'boards') for `manage.py szsite --once`: its summary plus 'seconds'."""
+    """One fetch of a job ('live', 'status' or 'boards') for `manage.py szsite --once`: its summary plus 'seconds'.
+    A SiteError is recorded under the job's stored names, as the loop does, then raised."""
     started = time.monotonic()
-    if name == 'live':
-        summary = fetch_live(client, store)
-    elif name == 'status':
-        summary = fetch_status(client, store)
-    elif name == 'boards':
-        summary = Boards(ids)(client, store, code=code or next(iter(BOARDS)))
-    else:
+    code = code or next(iter(BOARDS))
+    if name not in ('live', 'status', 'boards'):
         raise ValueError(f'unknown job {name!r} (live, status or boards)')
+    try:
+        if name == 'live':
+            summary = fetch_live(client, store)
+        elif name == 'status':
+            summary = fetch_status(client, store)
+        else:
+            summary = Boards(ids)(client, store, code=code)
+    except SiteError as e:
+        for job in JOBS.get(name, (f'board-{code}',)):
+            store.fail(job, e.kind)
+        raise
     return {**summary, 'seconds': round(time.monotonic() - started, 1)}

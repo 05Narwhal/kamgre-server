@@ -195,9 +195,10 @@ class Client:
         if not self.solver_url:
             raise SiteError('challenge', 'no solver configured')
         try:
-            self._solver({'cmd': 'sessions.create', 'session': SESSION})
+            # The browser's proxy belongs to the session: FlareSolverr ignores a request's own proxy inside one.
+            self._solver({'cmd': 'sessions.create', 'session': SESSION, **({'proxy': {'url': self.proxy}} if self.proxy else {})})
             out = self._solver({'cmd': 'request.get', 'url': self.base + SOLVE_PAGE, 'session': SESSION,
-                                'maxTimeout': SOLVE_TIMEOUT_MS, **({'proxy': {'url': self.proxy}} if self.proxy else {})})
+                                'maxTimeout': SOLVE_TIMEOUT_MS})
             solution = out.get('solution') or {}
             cookies = {c['name']: c['value'] for c in solution.get('cookies') or [] if isinstance(c, dict) and c.get('name')}
             if 'cf_clearance' not in cookies:

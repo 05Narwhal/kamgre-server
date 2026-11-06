@@ -229,9 +229,11 @@ requests themselves, ≈ 5,000 a day × ~1 KB ≈ **5 MB/day**, well inside the 
 
 **Turn it off:** `PRESTOP_SZSITE=off`, then `yarn server:push` (stops the units and Docker; the API falls back by itself).
 
-**Untested on the VM:** FlareSolverr's arm64 image and the WARP container have only run on a PC; from this PC FlareSolverr did
-not pass SŽ's Cloudflare check (home IP or WARP; the research doc has the runs). If `/status` keeps showing `challenge`
-errors on the VM, turn it off: derp-si, zamudil.si and `yarn server:update --sz <file>` (the hand route) keep working.
+**Tested on a PC, not yet on the VM:** the same FlareSolverr image (v3.5.2, amd64) passes SŽ's Cloudflare check from the home
+IP in ~13 s, WARP not needed. The reader then ran 50 min unattended and solved again by itself when Cloudflare re-challenged
+after 30 min (6 Nov; the research doc has the runs). So leave `PRESTOP_SZSITE_WARP=off` unless the VM's IP is refused. The
+arm64 image and the WARP container have not run on the VM yet. If `/status` keeps showing `challenge` errors there, turn it
+off: derp-si, zamudil.si and `yarn server:update --sz <file>` (the hand route) keep working.
 
 ## Files
 

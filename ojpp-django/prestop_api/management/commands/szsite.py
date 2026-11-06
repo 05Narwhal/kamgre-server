@@ -48,8 +48,7 @@ class Command(BaseCommand):
         if once:
             try:
                 summary = jobs.run_once(once, client, store, code=station)
-            except SiteError as e:
-                store.fail(once if once != 'boards' else f'board-{station or "42300"}', e.kind)
+            except SiteError as e:  # run_once has recorded it under the job's names
                 raise CommandError(str(e))
             self.stdout.write(f'{once}: ' + ' '.join(f'{k}={v}' for k, v in summary.items()))
             return
