@@ -1892,7 +1892,7 @@ def tab_usage(w):
         return panel('Users per day', day_bars(u, cw - 4, 6, 'users', per_day=True), cw, f'peak {peak:,}')
 
     def fresh(cw):
-        return panel('New users per day', day_bars(u, cw - 4, 6, 'new', style='ok'), cw, f'{sum(x["new"] for x in days):,} in this period')
+        return panel('New users per day', day_bars(u, cw - 4, 6, 'new', style='ok'), cw, f'{sum(x["new"] for x in days):,} · counted on return')
 
     def requests(cw):
         return panel('Requests per day', day_bars(u, cw - 4, 6, 'requests'), cw, f'{sum(x["requests"] for x in chart_days(u)):,} shown')
@@ -1916,7 +1916,7 @@ def tab_usage(w):
         vals = [g[2][-1]['joined'] for g in groups]
         body = bars(vals, cw - 4, 6, labels=[g[1] for g in groups], label=short, style='ok',
                     tips=lambda i: [f'{vals[i]:,} users so far', groups[i][0], f'{sum(x["new"] for x in groups[i][2]):,} joined then'])
-        return panel('All users so far', body, cw, 'finished onboarding')
+        return panel('All users so far', body, cw, 'came back after the tour')
 
     def table(cw, title, items, first):
         cols = cw - 4

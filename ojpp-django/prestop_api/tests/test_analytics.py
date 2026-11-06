@@ -80,3 +80,20 @@ class CountingTests(TestCase):
         self.assertEqual(response.status_code, 204)
         day = analytics.local_day(datetime.now().timestamp())
         self.assertEqual(self.r.pfcount(f'analytics:new:{day}'), 1)
+
+    def test_robots_and_test_browsers_are_requests_but_never_people(self):
+        robots = ['Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                  'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; bingbot/2.0) Chrome/116.0 Safari/537.36',
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 HeadlessChrome/141.0 Safari/537.36',
+                  'Mozilla/5.0 (Linux; Android 11; moto g power) AppleWebKit/537.36 Chrome/141.0 Mobile Safari/537.36 Chrome-Lighthouse',
+                  'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)', 'curl/8.5.0', 'python-requests/2.32', '']
+        for n, agent in enumerate(robots):
+            self.call('/api/v1/vehicles', ip=f'203.0.113.{n}', agent=agent)
+            self.client.post('/api/v1/stats/hello', HTTP_CF_CONNECTING_IP=f'203.0.113.{n}', HTTP_USER_AGENT=agent)
+        cubot = 'Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 Chrome/141.0 Mobile Safari/537.36'
+        self.call('/api/v1/vehicles', agent=cubot)  # a phone, not a robot
+        self.client.post('/api/v1/stats/hello', HTTP_CF_CONNECTING_IP='198.51.100.7', HTTP_USER_AGENT=cubot)
+        day = analytics.local_day(datetime.now().timestamp())
+        self.assertEqual((self.r.pfcount(f'analytics:uv:{day}'), self.r.pfcount(f'analytics:new:{day}')), (1, 1))
+        analytics.flush()
+        self.assertEqual(AnalyticsHour.objects.get(route='vehicles').count, len(robots) + 1)

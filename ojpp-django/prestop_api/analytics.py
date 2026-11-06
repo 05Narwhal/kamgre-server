@@ -8,13 +8,16 @@ Unique visitors are a HyperLogLog per day of hash(IP + browser family + a random
 lives in Redis only until its day is over, so a visitor cannot be followed from one day to the next; IPs and their
 hashes are never stored. Each night the finished day's HyperLogLogs (also per platform: iOS, Android or desktop, and
 installed app or browser when the app says so with `display=` on /capabilities) are saved to AnalyticsDay as bytes,
-so any period can be merged. New users: the app's one POST /stats/hello after onboarding, counted the same way
-(once per visitor a day). Requests without the proxy's client IP header come from the server itself and are skipped.
+so any period can be merged. New users: the app's one POST /stats/hello when someone who finished the tour comes back
+on a later day, counted the same way (once per visitor a day) on the day they come back. Robots, link previews and
+test browsers count as requests but never as visitors or new users. Requests without the proxy's client IP header come
+from the server itself and are skipped.
 """
 import base64
 import bisect
 import hashlib
 import logging
+import re
 import secrets
 import threading
 import time
@@ -67,6 +70,16 @@ def platform(agent: str) -> str:
     return 'other'
 
 
+# "bot/" and "bot-" catch Googlebot/2.1, bingbot/2.0, Slackbot-LinkExpanding; a phone called CUBOT is not one.
+AUTOMATED = re.compile(r'bot/|bot-|\bbot\b|telegrambot|crawl|spider|slurp|headless|lighthouse|pagespeed|playwright|puppeteer'
+                       r'|selenium|phantomjs|facebookexternalhit|^curl/|^wget/|python-|^go-http|^java/|^node|^axios', re.I)
+
+
+def automated(agent: str) -> bool:
+    """Search robots, link previews, headless and test browsers and scripts: counted as requests, never as people."""
+    return not agent.strip() or bool(AUTOMATED.search(agent))
+
+
 def browser(agent: str) -> str:
     for key, name in (('Edg', 'edge'), ('Firefox', 'firefox'), ('FxiOS', 'firefox'), ('SamsungBrowser', 'samsung'),
                       ('CriOS', 'chrome'), ('Chrome', 'chrome'), ('Safari', 'safari')):
@@ -99,20 +112,23 @@ def record(r, route: str, status: int, seconds: float, ip: str, agent: str, disp
     ms = max(0, int(seconds * 1000))
     field = f'{route}|{status // 100}xx'
     hour_key = f'analytics:h:{int(now // 3600)}'
-    day = local_day(now)
-    who = visitor(r, ip, agent, day)
-    uv = f'analytics:uv:{day.isoformat()}'
-    days = [uv, f'{uv}:{platform(agent)}'] + ([f'{uv}:{display}'] if display in DISPLAYS else [])
     pipe = r.pipeline(transaction=False)
     pipe.hincrby(hour_key, field, 1).hincrby(hour_key, f'{field}|ms', ms)
     pipe.hincrby(hour_key, f'{field}|b{bisect.bisect_left(BUCKETS_MS, ms)}', 1).expire(hour_key, HOUR_TTL)
-    for key in days:
-        pipe.pfadd(key, who).expire(key, DAY_TTL)
+    if not automated(agent):
+        day = local_day(now)
+        who = visitor(r, ip, agent, day)
+        uv = f'analytics:uv:{day.isoformat()}'
+        for key in [uv, f'{uv}:{platform(agent)}'] + ([f'{uv}:{display}'] if display in DISPLAYS else []):
+            pipe.pfadd(key, who).expire(key, DAY_TTL)
     pipe.execute()
 
 
 def hello(ip: str, agent: str, now: Optional[float] = None) -> None:
-    """A new user finished onboarding (POST /stats/hello): counted once per visitor and day."""
+    """A new user came back (POST /stats/hello): the app sends it once, on the first launch on a later day than the
+    one the tour was finished (tour-state.ts). Counted once per visitor and day; robots and test browsers never."""
+    if automated(agent):
+        return
     now = time.time() if now is None else now
     r = _redis()
     day = local_day(now)
