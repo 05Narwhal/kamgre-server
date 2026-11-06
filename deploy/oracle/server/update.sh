@@ -122,7 +122,7 @@ bash "$DEPLOY/server/keep-stats.sh" check
 
 step "Services"
 systemctl enable -q prestop-web prestop-collector prestop-push prestop-ingest caddy redis-server postgresql
-systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer prestop-szpdf.timer prestop-nightly.timer
+systemctl enable -q --now vnstat prestop-backup.timer prestop-watchdog.timer prestop-egress.timer prestop-szpdf.timer prestop-nightly.timer prestop-citytt-check.timer
 # changed <name> <unit> [files]: true when the unit or the files differ from the last deploy (or the unit is down).
 changed() {
   local f="$STATE/.deploy-sum-$1" s; s=$({ systemctl cat "$2"; cat "${@:3}"; } 2>/dev/null | sha256sum)
@@ -149,6 +149,8 @@ fi
 systemctl start prestop-egress.service || true
 # Read the SŽ timetables now rather than at the next timer run: a new parser version re-reads every cached PDF.
 systemctl start --no-block prestop-szpdf.service || true
+# The city timetable check (/health cityTimetables) once now, so a new deploy shows the state right away.
+systemctl start --no-block prestop-citytt-check.service || true
 
 step "Health check"
 for i in $(seq 30); do

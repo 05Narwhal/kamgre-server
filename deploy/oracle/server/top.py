@@ -1185,6 +1185,13 @@ def alerts():
         quiet = (h.get('cityFeeds') or {}).get('empty')
         if quiet:
             out.append(('warn', 'data', f'city feeds with no trips on a coming day: {", ".join(sorted({e["feed"] for e in quiet}))}'))
+        # The nightly check (citytt_check): feeds that ended, expire within 14 days or have a new source timetable.
+        # `info` states (a site that did not answer) are not shown; `yarn city-timetables --update` is the fix.
+        order = ['expired', 'new', 'unavailable', 'expires', 'failed']
+        due = sorted((f for f in (h.get('cityTimetables') or {}).get('feeds') or [] if f.get('level') == 'warn'),
+                     key=lambda f: order.index(f['state']) if f.get('state') in order else len(order))
+        if due:
+            out.append(('warn', 'data', 'City timetables: ' + ' · '.join(f['text'] for f in due) + ' (yarn city-timetables --update)'))
         if h.get('maintenance'):
             out.append(('warn', 'data', 'maintenance notice is on'))
     if e:

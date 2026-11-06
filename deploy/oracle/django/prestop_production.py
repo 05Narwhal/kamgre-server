@@ -46,6 +46,8 @@ PRESTOP_ARRIVA_UPLOAD_FILE = '/var/lib/prestop/arriva-posts.json'
 PRESTOP_SZ_LIST_FILE = '/var/lib/prestop/sz-list.json'
 # Each train's usual track, rebuilt on Sundays by the night window (server/nightly.sh); the app's copy until then.
 PRESTOP_SZ_USUAL_TRACKS_FILE = '/var/lib/prestop/sz_tracks.json'
+# The nightly city timetable check's result (prestop-citytt-check.timer writes, /health reads).
+PRESTOP_CITYTT_CHECK_FILE = '/var/lib/prestop/citytt-check.json'
 
 # Reuse database connections between requests (peer auth over the local socket).
 DATABASES['default']['CONN_MAX_AGE'] = 60
