@@ -104,6 +104,24 @@ class WholeTrainByBusTests(SimpleTestCase):
         self.assertNotEqual((v['latitude'], v['longitude']), (46.30, 14.18))
         self.assertEqual(v['nextStop'], 'Lesce-Bled AP')
 
+    def test_a_late_bus_past_its_timetable_keeps_the_train_off_the_rails(self):
+        # LPV 2418 on 5 Nov 2026 (all of it a bus, SŽ's timetable of 2. - 6. 11.): SŽ still reported the number after the
+        # bus's timetable had ended, and the train came back on the rails at SŽ's coordinates ("Live, SŽ").
+        # +30 min against the train at Jesenice (T0+2400 + 1800): the bus is 10 min behind its own T0+3600.
+        report = {'2428': {'number': '2428', 'category': 'LPV', 'delay': 1800, 'next': 'JESENICE', 'coords': (46.43, 14.05), 'at': T0 + 3790}}
+        shown = run_map(plan_of([TRAIN], [BUS]), [TRAIN], T0 + 3800, live=report)
+        self.assertNotIn(TRAIN['id'], shown)
+        v = shown[BUS['id']]
+        self.assertEqual((v['mode'], v['replacesTrain'], v['nextStop'], v['delaySource']), ('bus', 'LPV 2428', 'Jesenice AP', 'sz'))
+        self.assertNotEqual((v['latitude'], v['longitude']), (46.43, 14.05))
+
+    def test_the_bus_of_another_day_leaves_the_train_alone(self):
+        # The same trip id runs every day: yesterday's bus is no reason to hide today's train.
+        plan = plan_of([TRAIN])
+        plan['sections'][TRAIN['id']] = [{'start': T0 - 86_400, 'end': T0 - 86_400 + 3600, 'fromIndex': 0, 'toIndex': 4, 'busTripId': 'IJPP:sub-y'}]
+        shown = run_map(plan, [TRAIN], T0 + 900)
+        self.assertEqual(shown[TRAIN['id']]['mode'], 'rail')
+
     def test_one_delay_on_the_map_the_board_the_trip_and_the_journey(self):
         plan = plan_of([TRAIN], [BUS])
         feed = update(TRAIN, 'Lesce-Bled', 1200)

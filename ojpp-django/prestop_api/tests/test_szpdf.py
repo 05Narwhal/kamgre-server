@@ -17,7 +17,7 @@ from unittest import mock
 from django.test import SimpleTestCase
 
 from prestop_api import szpdf
-from prestop_api.szpdf import texts
+from prestop_api.szpdf import tables, texts
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'szpdf'
 IDS = sorted(p.stem for p in FIXTURES.glob('*.pdf'))
@@ -257,6 +257,10 @@ class TextTests(SimpleTestCase):
             '17. in 18. 10. ter 24. in 25.10. 2026': ('2026-10-17', '2026-10-25',
                                                       ['2026-10-17', '2026-10-18', '2026-10-24', '2026-10-25']),
             '22. 10. in 23. 10. 2026': ('2026-10-22', '2026-10-23', ['2026-10-22', '2026-10-23']),
+            # SŽ, Ptuj / Moškanjci - Ormož (5 Nov 2026): two ranges are their days
+            'Od 26. do 30. 10. ter od 3. do 6. 11. 2026': ('2026-10-26', '2026-11-06', [
+                '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30',
+                '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']),
         }
         for text, (start, end, dates) in cases.items():
             self.assertEqual(texts.validity(text), {'from': start, 'to': end, 'dates': dates}, text)
@@ -274,10 +278,28 @@ class TextTests(SimpleTestCase):
             'Vozi ob nedeljah': ('sundays', None),
             'dne 19. 10. se nadomestni prevoz NE opravlja; VOZI VLAK!': ('train_runs_on', ['2026-10-19']),
             'Prevoz se opravi preko preko mejnega prehoda Sočerga': ('info', None),
+            # SŽ, Divača - Koper (5 Nov 2026)
+            'v dneh 15. in 29. 11. 2026 se nadomestni prevoz NE IZVAJA - vozi vlak!': ('train_runs_on', ['2026-11-15', '2026-11-29']),
+            'v dneh 16. in 30. 11. 2026 se nadomestni prevoz NE IZVAJA - vozi vlak': ('train_runs_on', ['2026-11-16', '2026-11-30']),
             'Vozi ob praznikih in ob polni luni': (None, None),
         }
         for text, (rule, dates) in cases.items():
             self.assertEqual(texts.footnote_rule(text, year), (rule, dates), text)
+
+    def test_a_time_printed_with_a_dot_is_a_time(self):
+        # SŽ, Ivanjkovci - Ljutomer / Murska Sobota (5 Nov 2026), row Veržej
+        self.assertEqual(tables.cell_value('10.04'), ('time', '10:04'))
+        self.assertEqual(tables.cell_value('17::00'), ('time', '17:00'))
+        self.assertEqual(tables.cell_value('10.4'), ('bad', '10.4'))
+
+    def test_the_sync_names_every_timetable_it_could_not_read(self):
+        from prestop_api.management.commands.szpdf_sync import unread_line
+        rows = [{'id': '11326', 'status': 'ok', 'title': 'Celje - Žalec', 'why': '', 'errors': []},
+                {'id': '11348', 'status': 'unsure', 'title': 'Ivanjkovci - Ljutomer', 'why': 'row Veržej: cell "1O.04" unreadable', 'errors': []},
+                {'id': '9457', 'status': 'missing', 'title': 'Divača - Buzet', 'why': '', 'errors': ['https://x/a.pdf: HTTP 404']}]
+        self.assertEqual(unread_line(rows), 'Not read: 11348 unsure "Ivanjkovci - Ljutomer" (row Veržej: cell "1O.04" unreadable); '
+                                            '9457 missing "Divača - Buzet" (HTTP 404)')
+        self.assertEqual(unread_line(rows[:1]), '')
 
     def test_a_day_the_train_runs_on_part_of_the_line(self):
         text = 'dne 19. 10. se nadomestni prevoz na relaciji Ljubljana - Lesce Bled NE opravlja; VOZI VLAK!'
@@ -343,6 +365,19 @@ class TablesWithTheirOwnValidityTests(SimpleTestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.doc = szpdf.parse(FIXTURES.parent / 'szpdf-tables' / '3240668341.pdf')
+
+    def test_an_arrow_beside_the_first_station_leaves_its_row_alone(self):
+        # 11328, Ptuj / Moškanjci - Ormož (9. - 13. 11. 2026): both directions in one table, each with its arrow. The
+        # arrows' shafts once merged the Ptuj row into "POSTAJA / OPOMBA" (failed: no train label, P/O cells unreadable).
+        doc = szpdf.parse(FIXTURES.parent / 'szpdf-tables' / '11328.pdf')
+        self.assertEqual(doc['status'], 'ok', doc['problems'])
+        down, up = doc['tables']
+        self.assertEqual(down['stations'], ['Ptuj', 'MOŠKANJCI', 'Zamušani', 'Osluševci', 'Velika Nedelja', 'ORMOŽ'])
+        self.assertEqual([(c['train'], c['calls']) for c in down['columns']],
+                         [('640', [{'station': 'Ptuj', 'dep': '10:11'}, {'station': 'ORMOŽ', 'arr': '10:41'}])])
+        self.assertEqual([c['train'] for c in up['columns']], ['2501', '2503', '2519'])
+        self.assertEqual(up['columns'][0]['calls'][0], {'station': 'ORMOŽ', 'dep': '10:22'})
+        self.assertEqual(up['columns'][0]['calls'][-1], {'station': 'MOŠKANJCI', 'arr': '11:02'})
 
     def test_the_file_covers_every_table_and_each_column_has_the_days_of_its_table(self):
         self.assertEqual(self.doc['status'], 'ok', self.doc['problems'])

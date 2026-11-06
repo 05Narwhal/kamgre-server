@@ -18,6 +18,16 @@ from prestop_api.szpdf import sync
 from prestop_api.upstream import UpstreamError
 
 
+def unread_line(rows: list[dict]) -> str:
+    """One line naming every notice whose timetable was not read well (its buses are not planned), and why."""
+    bad = [r for r in rows if r['status'] != 'ok']
+    if not bad:
+        return ''
+    def why(r):
+        return r.get('why') or ', '.join(sorted({e.rsplit(': ', 1)[-1] for e in r['errors']})) or r['status']
+    return 'Not read: ' + '; '.join(f'{r["id"]} {r["status"]} "{r["title"][:50]}" ({why(r)[:90]})' for r in bad)
+
+
 class Command(BaseCommand):
     help = "Read the SŽ notices' replacement-timetable PDFs into PRESTOP_SZ_TIMETABLES_DIR."
 
@@ -46,6 +56,9 @@ class Command(BaseCommand):
                                   f'{r["title"][:60]}{extra}')
         self.stdout.write(f'{len(rows)} notices with a timetable PDF: '
                           + ', '.join(f'{n} {s}' for s, n in sorted(counts.items())) + f' → {settings.PRESTOP_SZ_TIMETABLES_DIR}')
+        unread = unread_line(rows)
+        if unread:
+            self.stdout.write(unread)
 
     def notices(self, source: str) -> list:
         if source:

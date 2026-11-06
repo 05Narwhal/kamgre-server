@@ -74,7 +74,10 @@ def grids(page, page_index: int) -> list[Grid]:
     the last row off 11125's table."""
     plain = page.filter(lambda o: o.get('object_type') != 'curve')
     out = []
-    for t in plain.find_tables():
+    # An arrow's shaft is a thin rect: its 2 pt ends, snapped with the lines around them, merged the line under
+    # "POSTAJA / OPOMBA" into the next one, and the first station into the header (11328, 11346). Edges that short are
+    # never grid lines, so they go before snapping.
+    for t in plain.find_tables({'edge_min_length_prefilter': 3}):
         rows = [(r.bbox[1], r.bbox[3]) for r in t.rows]
         xs = [(c.bbox[0], c.bbox[2]) for c in t.columns]
         cells = [[[] for _ in xs] for _ in rows]

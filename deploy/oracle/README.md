@@ -195,6 +195,48 @@ sudoedit /etc/prestop/prestop.env            # BACKUP_RCLONE_REMOTE=r2:prestop-b
 sudo systemctl start prestop-backup && journalctl -u prestop-backup -n 5
 ```
 
+## SŽ reader
+
+Our own reader of SŽ's passenger site (potniski.sz.si): live trains and delays, the notices list, works on the lines and the
+platforms of the busiest stations (`prestop_api/szsite/`, research in `docs/research/2026-11-05-sz-website-reader.md`). It is
+**off** until you turn it on; with it off the API reads derp-si's scraper and zamudil.si as before. With it on it is the first
+source and those stay behind it as fallbacks (each URL list in `prestop_production.py`; the reader answers 503 when its copy is
+stale, so the next source is used). Its notices list (saved every 15 minutes) leads zamudil.si's notices while it is
+under an hour old, taking zamudil's train numbers along for the same timetable; `PRESTOP_SZSITE_NOTICES=off` puts zamudil.si
+first again. Its works ("Dela na progi", drawn along the track between the stations SŽ names) lead zamudil.si's maintenance
+the same way; `PRESTOP_SZSITE_WORKS=off` puts zamudil.si first again.
+
+**Cost: $0.** Nothing is created in Oracle Cloud: Docker (Ubuntu's `docker.io`), a FlareSolverr container and our reader run on
+the existing A1 VM, bound to `127.0.0.1` only. Downloads from SŽ (≈ 0.6–2.2 GB/day) are inbound and free; outbound is only the
+requests themselves, ≈ 5,000 a day × ~1 KB ≈ **5 MB/day**, well inside the 8,000 GB egress guard (which stays as it is).
+
+**Memory.** FlareSolverr is capped at 1.5 GB, the optional WARP proxy at 256 MB, the reader at 300 MB. `prestop-szsite-guard`
+(every minute) pauses the reader and the solver when the VM's available memory falls under **2 GB** and resumes them above 3 GB.
+
+**Turn it on**
+
+1. In `server:top` check the available memory first: it needs **≥ 3.5 GB available** beside today's services (the guard
+   pauses it under 2 GB). If there is less, leave it off.
+2. On the server, `sudoedit /etc/prestop/prestop.env`: set `PRESTOP_SZSITE=on` (the line is added, as `off`, by the first push
+   after this change). Optionally `PRESTOP_SZSITE_WARP=on` to send the solver and the reader through Cloudflare's free,
+   anonymous WARP proxy (a container of its own; not tied to the Cloudflare account that runs the tunnel).
+3. On your computer: `yarn server:push`. `update.sh` runs `server/szsite.sh`, which installs Docker once, pulls FlareSolverr
+   (`ghcr.io/flaresolverr/flaresolverr:v3.5.2`) and starts `prestop-szsite-solver`, `prestop-szsite` and the guard timer.
+4. Check: `curl -s https://api.kamgre.si/api/v1/health` lists `sz:site-notices`, `sz:site-works` and `sz:site-live`
+   (`sz:site-classes` once the reader reads train sets); in `server:top` the **Sources** line names any that are not live, and
+   the services list shows `prestop-szsite*`. On the server: `journalctl -u prestop-szsite -n 30` and
+   `curl -s 127.0.0.1:8095/status`.
+
+**Turn it off:** `PRESTOP_SZSITE=off`, then `yarn server:push` (stops the units and Docker; the API falls back by itself).
+
+**Tested on a PC, not yet on the VM:** the same FlareSolverr image (v3.5.2, amd64) passes SŽ's Cloudflare check from the home
+IP in ~13 s, WARP not needed. The reader then ran 50 min unattended and solved again by itself when Cloudflare re-challenged
+after 30 min (6 Nov; the research doc has the runs). The WARP path also passed (6 Nov, one round, not the 30-min re-challenge):
+our own `prestop-warp:local` image with the unit's flags, the solver's browser and the reader's plain requests both left from
+the same WARP IP (not the home IP), and `--once` live/status/boards all worked from an empty state. WARP is optional: turn it on
+to keep the VM's IP hidden from SŽ. The arm64 images have not run on the VM yet. If `/status` keeps showing `challenge` errors there, turn it
+off: derp-si, zamudil.si and `yarn server:update --sz <file>` (the hand route) keep working.
+
 ## Files
 
 | Path | Purpose |

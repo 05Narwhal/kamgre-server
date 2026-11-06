@@ -87,6 +87,25 @@ class SuppressionTests(SimpleTestCase):
         shown = self.run_at([bus, split], T0 + 600, live=report)
         self.assertEqual([v['tripId'] for v in shown], ['IJPP:bus'])
 
+    def test_a_fed_train_position_is_left_out_on_the_stretch_its_bus_runs(self):
+        # LP 3225, 6 Nov 2026: BUS 3225 runs Mirna Peč -> Novo mesto; the feed's position of the train is drawn up to
+        # Mirna Peč (its own stretch) and never on the way to Novo mesto beside the bus.
+        bus = trip('bus', 'BUS 32252', ['Borovnica', 'Logatec', 'Postojna'], T0 + 1200, mode='BUS')
+        train = trip('train', 'LP 3225', ['Ljubljana', 'Brezovica', 'Borovnica', 'Logatec', 'Postojna'], T0)
+
+        def fed(next_stop, name=None):
+            return {'id': 'IJPP:453437', 'mode': 'rail', 'tripId': 'IJPP:train', 'nextStopId': next_stop and f'IJPP:{next_stop}',
+                    'nextStop': name or next_stop, 'quality': 'observed'}
+        with mock.patch.object(scheduled.timetable, 'get', return_value=mock.Mock(value=[bus, train])):
+            keep = scheduled.off_replaced([fed('Borovnica')], T0 + 1150)
+            drops = []
+            gone = scheduled.off_replaced([fed('Logatec'), fed(None, 'Postojna')], T0 + 1500, drops)
+            later = scheduled.off_replaced([fed('Logatec')], T0 + 4000)  # after the bus's times: no bus runs
+        self.assertEqual(len(keep), 1)
+        self.assertEqual(gone, [])
+        self.assertEqual([d['reason'] for d in drops], ['a bus runs this stretch'] * 2)
+        self.assertEqual(len(later), 1)
+
     def test_every_replacement_trip_of_the_day_is_drawn_while_it_runs(self):
         buses = [trip(f'b{i}', f'BUS 1000{i}', ['Ljubljana', 'Logatec'], T0 + i * 3600, mode='BUS') for i in range(5)]
         seen = set()

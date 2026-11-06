@@ -46,6 +46,16 @@ PRESTOP_ARRIVA_UPLOAD_FILE = '/var/lib/prestop/arriva-posts.json'
 PRESTOP_SZ_LIST_FILE = '/var/lib/prestop/sz-list.json'
 # Each train's usual track, rebuilt on Sundays by the night window (server/nightly.sh); the app's copy until then.
 PRESTOP_SZ_USUAL_TRACKS_FILE = '/var/lib/prestop/sz_tracks.json'
+# Our own SŽ website reader first when it is on (server/szsite.sh, README: SŽ reader); derp-si's scraper and
+# the rest stay behind it as fallbacks. Its server answers 503 when its copy is stale, so the next URL is used.
+if env('PRESTOP_SZSITE', default='off') == 'on':
+    from ojpp_core.settings_prestop import PRESTOP_SZ_LIVE_URL, PRESTOP_SZ_TRACKS_URL  # noqa: E402
+    _SZSITE = f"http://127.0.0.1:{env('PRESTOP_SZSITE_PORT', default='8095')}"
+    PRESTOP_SZ_LIVE_URL = [f'{_SZSITE}/active_trains'] + [u for u in PRESTOP_SZ_LIVE_URL if not u.startswith(_SZSITE)]
+    PRESTOP_SZ_TRACKS_URL = [f'{_SZSITE}/train_data'] + [u for u in PRESTOP_SZ_TRACKS_URL if not u.startswith(_SZSITE)]
+    PRESTOP_SZSITE_STATUS_URL = f'{_SZSITE}/status'  # /health sz:site-*
+    PRESTOP_SZSITE_NOTICES = env('PRESTOP_SZSITE_NOTICES', default='on') == 'on'  # its list ahead of zamudil.si
+    PRESTOP_SZSITE_WORKS = env('PRESTOP_SZSITE_WORKS', default='on') == 'on'  # its works ahead of zamudil.si's
 
 # Reuse database connections between requests (peer auth over the local socket).
 DATABASES['default']['CONN_MAX_AGE'] = 60

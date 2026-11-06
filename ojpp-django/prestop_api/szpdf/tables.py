@@ -13,7 +13,7 @@ VEHICLE = re.compile(r'(BUS|8\+1)\s*(\*?)\s*(\d*)')
 TRAIN = re.compile(r'(\d+)(?:/(\d{1,2}))?')
 # A connecting bus between trains: "318/4211", "*2424/**2494 / 4219" (stars mark which footnote goes with which train).
 CONNECTION = re.compile(r'\**\d{3,}(?:\s*/\s*\**\d{3,})+')
-TIME = re.compile(r'(\d{1,2})\s*:+\s*(\d{2})')  # 10088 prints "17::00"
+TIME = re.compile(r'(\d{1,2})\s*(?::+|\.)\s*(\d{2})')  # 10088 prints "17::00", 11348 "10.04"
 PASSES = {'I', '|', 'l', '1'}
 MAX_STEP = 180
 

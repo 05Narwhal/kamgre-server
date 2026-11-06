@@ -1,0 +1,6 @@
+[Unit]
+Description=Prestop SŽ reader memory guard (stops it under 2 GB available, starts it again above 3 GB)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/prestop/deploy/server/szsite-guard.sh watch

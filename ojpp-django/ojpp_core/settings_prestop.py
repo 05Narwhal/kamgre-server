@@ -109,6 +109,21 @@ PRESTOP_SZ_NEWS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NE
 PRESTOP_ARRIVA_UPLOAD_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_ARRIVA_UPLOAD_FILE', default=str(root / 'data/arriva-posts.json'))
 # SŽ's list of disruptions as last saved from a browser and uploaded (sz_list.py).
 PRESTOP_SZ_LIST_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIST_FILE', default=str(root / 'data/sz-list.json'))
+# Our own reader of SŽ's site (prestop_api/szsite, `manage.py szsite`): FlareSolverr's URL (empty: it cannot solve
+# Cloudflare's check, so it needs a clearance file) and its state folder (clearance, last good copies), by default
+# `szsite` beside the list file above.
+PRESTOP_SZSITE_SOLVER = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_SOLVER', default='')
+PRESTOP_SZSITE_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_DIR', default=os.path.join(os.path.dirname(PRESTOP_SZ_LIST_FILE), 'szsite') if PRESTOP_SZ_LIST_FILE else '')
+# Optional proxy for both the solver and the plain requests after it (the clearance cookie is tied to one exit IP),
+# e.g. the anonymous WARP container's http://127.0.0.1:40000 (server/szsite.sh). Empty: direct.
+PRESTOP_SZSITE_PROXY = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_PROXY', default='')
+# The reader's /status (szsite/health.py: /health sz:site-*); empty = the reader is not listed. The server sets it with PRESTOP_SZSITE=on.
+PRESTOP_SZSITE_STATUS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_STATUS_URL', default='')
+# SŽ's list (above) ahead of zamudil.si's notices while it is fresh (closures.read_notices): on with the reader, where
+# it saves the list every 15 minutes (`PRESTOP_SZSITE_NOTICES=off` puts zamudil.si first again).
+PRESTOP_SZSITE_NOTICES = False if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_NOTICES', default='off') == 'on'
+# SŽ's works (the reader's PRESTOP_SZSITE_DIR/works.json) ahead of zamudil.si's maintenance while fresh (szsite/works.py).
+PRESTOP_SZSITE_WORKS = False if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_WORKS', default='off') == 'on'
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))

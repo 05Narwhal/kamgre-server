@@ -451,6 +451,33 @@ def _end_name(stop: dict) -> Optional[str]:
     return abroad.place(name) if abroad.is_abroad_stop(name, stop.get('gtfsId')) else name
 
 
+def off_replaced(fed: list[dict], now: Optional[float] = None, drops: Optional[list] = None) -> list[dict]:
+    """The feed's own train positions (GTFS-RT) without those on a stretch the day's plan runs by bus: the bus is
+    drawn there (replacement.py), never the train beside it on the rails. Before the bus takes over and after it the
+    train stays. The train's next stop is matched by id, else by station name."""
+    from . import coverage
+    now = now or time.time()
+    replaced = _derive()['sections']
+    if not any(v.get('mode') == 'rail' and v.get('tripId') in replaced for v in fed):
+        return fed
+    trips = {t['id']: t for t in timetable.get().value if t['id'] in replaced}
+    out = []
+    for v in fed:
+        sections = replaced_by.active(replaced.get(v.get('tripId')), now, BOARDING) if v.get('mode') == 'rail' else []
+        trip = trips.get(v.get('tripId')) if sections else None
+        stop = None
+        if trip:
+            ids = [s.get('gtfsId') for s in trip['stops']]
+            keys = [sz.station_key(s.get('name') or '') for s in trip['stops']]
+            name = sz.station_key(v.get('nextStop') or '')
+            stop = ids.index(v['nextStopId']) if v.get('nextStopId') in ids else keys.index(name) if name and name in keys else None
+        if stop is not None and any(replaced_by.inside(s, stop) for s in sections):
+            coverage.note(drops, 'a bus runs this stretch', v)
+            continue
+        out.append(v)
+    return out
+
+
 def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), live: Optional[dict] = None,
              updates: Optional[dict] = None, drops: Optional[list] = None) -> list[dict]:
     """Trains and SŽ replacement buses by their timetable, moved by their live delay (trainlive.py): SŽ's report

@@ -783,7 +783,11 @@ def _iso_day(value) -> Optional[str]:
 def line_works() -> list[dict]:
     """Every work in the maintenance copy as a lineWork (contract): {id, title, message, relation, validFrom,
     validTo, geometry, sourceUrl}; works without dates or a line of two points are left out. Worked out once per
-    copy (polled hourly)."""
+    copy (polled hourly). SŽ's own list leads while our reader keeps it fresh (szsite/works.py, PRESTOP_SZSITE_WORKS)."""
+    from .szsite import works as sz_works
+    ours = sz_works.line_works()
+    if ours is not None:
+        return ours
     found = copy(WORKS) if enabled() else None
     data = (found or {}).get('data') or {}
     stamp = (found or {}).get('fetchedAt'), id(data)
@@ -803,6 +807,12 @@ def line_works() -> list[dict]:
                     'validFrom': start, 'validTo': end, 'geometry': line, 'sourceUrl': url})
     _works.update(stamp=stamp, value=out)
     return out
+
+
+def works_source() -> str:
+    """The /health id of the works `line_works` gives now."""
+    from .szsite import works as sz_works
+    return 'sz:site-works' if sz_works.copy() is not None else 'sz:zamudil-works'
 
 
 def works_between(first: date, last: date) -> list[dict]:

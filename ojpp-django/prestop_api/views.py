@@ -119,6 +119,7 @@ def all_sources():
         *_zamudil_sources(),
         _sz_news_source(),
         *sz_list.health(),
+        *_szsite_sources(),
         # Arriva's site notices: the server can be shut out of the site (ConnectTimeout from Oracle on 2026-10-15),
         # so /health says when they are missing instead of the disruptions list just lacking them.
         _arriva_source(),
@@ -199,6 +200,12 @@ def outages(srcs: list[dict], now: Optional[float] = None) -> list[dict]:
         if now - since > OUTAGE:
             out.append({'id': s['id'], 'status': s['status'], 'since': s.get('since'), 'minutes': int((now - since) // 60)})
     return out
+
+
+def _szsite_sources():
+    """Our reader of SŽ's website (notices, works, train sets, live trains), when it runs on this server."""
+    from .szsite import health
+    return health.health()
 
 
 def _zamudil_sources():
@@ -1077,7 +1084,7 @@ def rail_works(request):
     last = _day_param_named(request, 'to') or first
     if last < first or (last - first).days > zamudil.WORKS_AHEAD or last > today + timedelta(days=zamudil.WORKS_AHEAD):
         raise ApiError(422, 'INVALID_DATES', f'from..to must be in order, at most {zamudil.WORKS_AHEAD} days and at most {zamudil.WORKS_AHEAD} days ahead')
-    return envelope(zamudil.works_between(first, last), 'scheduled', used=['sz:zamudil-works'])
+    return envelope(zamudil.works_between(first, last), 'scheduled', used=[zamudil.works_source()])
 
 
 @require_GET

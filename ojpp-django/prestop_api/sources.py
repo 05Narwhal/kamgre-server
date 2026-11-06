@@ -384,6 +384,7 @@ def _load_vehicles(drops: Optional[list] = None):
     try:
         from . import scheduled
         trains = scheduled.vehicles(skip_trips=frozenset(v['tripId'] for v in live if v.get('tripId')), updates=updates, drops=drops)
+        live = scheduled.off_replaced(live, drops=drops)  # N13: a fed train on a stretch its bus runs is the bus (N-B)
     except UpstreamError as e:
         logger.warning('Scheduled trains unavailable: %r', e)
         trains = []

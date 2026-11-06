@@ -1,0 +1,26 @@
+[Unit]
+Description=Prestop SŽ website reader (live trains, notices, works, platforms; serves the API on 127.0.0.1:8095)
+After=network-online.target prestop-szsite-solver.service
+Wants=network-online.target prestop-szsite-solver.service
+
+[Service]
+User=prestop
+Group=prestop
+EnvironmentFile=/etc/prestop/prestop.env
+WorkingDirectory=/opt/prestop/app
+# Refuses to start while the VM has under 2 GB available (the API and database come first); Restart= tries again.
+ExecStartPre=/bin/bash /opt/prestop/deploy/server/szsite-guard.sh check
+ExecStart=/opt/prestop/venv/bin/python manage.py szsite
+Restart=on-failure
+RestartSec=60
+# A small polling loop beside the API on the free A1 VM: low priority, bounded memory.
+Nice=5
+CPUQuota=50%
+MemoryMax=300M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
