@@ -186,6 +186,7 @@ class ReadNoticesTests(Uploaded):
 
     def read(self, raw):
         with (mock.patch.object(closures.operator_notices.sz_news, 'peek', return_value=mock.Mock(value=[])),
+              mock.patch.object(closures, 'datetime', FirstOfNovember),
               mock.patch.object(closures.operator_notices, 'sz_timetable_records', return_value=[self.POST])):
             return {r['ID_ovire'][0] for r in closures._with_posted_timetables(raw)}
 
