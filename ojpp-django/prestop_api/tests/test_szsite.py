@@ -236,6 +236,26 @@ class ClientTests(SimpleTestCase):
         again = Client('', str(c.path.parent), http=Http(answer))
         self.assertEqual((again.clearance['cookies']['cf_clearance'], again.clearance['userAgent']), ('abc', 'Edge/157'))
 
+    def test_proxy_carries_the_solver_browser_and_site_requests_but_not_the_solver_call(self):
+        def answer(method, url, kwargs):
+            if 'solver' in url:
+                return Resp(200, json.dumps(SOLVED))
+            return Resp(200, '[]') if kwargs['cookies'].get('cf_clearance') == 'abc' else CHALLENGE
+        c = Client('http://solver:8191', tempfile.mkdtemp(), http=Http(answer), clock=lambda: 0.0, sleep=lambda s: None,
+                   proxy='http://127.0.0.1:40000')
+        c.min_gap = 0
+        self.assertEqual(c.ajax('aktivni_vlaki'), '[]')
+        for site in c.http.site():
+            self.assertEqual(site[2]['proxies'], {'http': 'http://127.0.0.1:40000', 'https': 'http://127.0.0.1:40000'})
+        solver_calls = [x[2] for x in c.http.calls if 'solver' in x[1]]
+        self.assertTrue(all('proxies' not in k for k in solver_calls))
+        solve = [k['json'] for k in solver_calls if k['json']['cmd'] == 'request.get'][0]
+        self.assertEqual(solve['proxy'], {'url': 'http://127.0.0.1:40000'})
+        direct = client(answer)
+        direct.ajax('aktivni_vlaki')
+        self.assertTrue(all('proxies' not in s[2] for s in direct.http.site()))
+        self.assertNotIn('proxy', [k[2]['json'] for k in direct.http.calls if 'solver' in k[1]][1])
+
     def test_session_is_destroyed_even_when_solving_fails(self):
         def answer(method, url, kwargs):
             if 'solver' not in url:

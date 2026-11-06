@@ -102,8 +102,11 @@ def read_body(resp, limit: int) -> str:
 
 class Client:
     def __init__(self, solver_url: str, state_dir: str, base: str = BASE, http: Optional[Any] = None,
-                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep):
+                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep,
+                 proxy: str = ''):
         self.solver_url = (solver_url or '').strip()
+        # One exit for the solver's browser and our plain requests: Cloudflare ties the clearance to it.
+        self.proxy = (proxy or '').strip()
         self.base = base.rstrip('/')
         self.path = Path(state_dir) / 'clearance.json'
         self.min_gap = MIN_GAP
@@ -164,7 +167,8 @@ class Client:
             headers['X-Requested-With'] = 'XMLHttpRequest'
         try:
             resp = self.http.request(method, self.base + path, headers=headers, cookies=self.clearance['cookies'],
-                                     timeout=TIMEOUT, stream=True, **kwargs)
+                                     timeout=TIMEOUT, stream=True,
+                                     **({'proxies': {'http': self.proxy, 'https': self.proxy}} if self.proxy else {}), **kwargs)
             try:
                 body = read_body(resp, LIMIT)
             finally:
@@ -193,7 +197,7 @@ class Client:
         try:
             self._solver({'cmd': 'sessions.create', 'session': SESSION})
             out = self._solver({'cmd': 'request.get', 'url': self.base + SOLVE_PAGE, 'session': SESSION,
-                                'maxTimeout': SOLVE_TIMEOUT_MS})
+                                'maxTimeout': SOLVE_TIMEOUT_MS, **({'proxy': {'url': self.proxy}} if self.proxy else {})})
             solution = out.get('solution') or {}
             cookies = {c['name']: c['value'] for c in solution.get('cookies') or [] if isinstance(c, dict) and c.get('name')}
             if 'cf_clearance' not in cookies:

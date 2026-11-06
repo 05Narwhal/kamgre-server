@@ -114,6 +114,9 @@ PRESTOP_SZ_LIST_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_LIST_F
 # `szsite` beside the list file above.
 PRESTOP_SZSITE_SOLVER = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_SOLVER', default='')
 PRESTOP_SZSITE_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_DIR', default=os.path.join(os.path.dirname(PRESTOP_SZ_LIST_FILE), 'szsite') if PRESTOP_SZ_LIST_FILE else '')
+# Optional proxy for both the solver and the plain requests after it (the clearance cookie is tied to one exit IP),
+# e.g. the anonymous WARP container's http://127.0.0.1:40000 (server/szsite.sh). Empty: direct.
+PRESTOP_SZSITE_PROXY = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_PROXY', default='')
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))

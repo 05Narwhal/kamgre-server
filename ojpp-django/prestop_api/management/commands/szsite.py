@@ -37,7 +37,7 @@ class Command(BaseCommand):
         if not directory:
             raise CommandError('PRESTOP_SZSITE_DIR is not set')
         logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)s %(message)s')
-        client = Client(getattr(settings, 'PRESTOP_SZSITE_SOLVER', ''), directory)
+        client = Client(getattr(settings, 'PRESTOP_SZSITE_SOLVER', ''), directory, proxy=getattr(settings, 'PRESTOP_SZSITE_PROXY', ''))
         if clearance:
             try:
                 with open(clearance, encoding='utf-8') as f:

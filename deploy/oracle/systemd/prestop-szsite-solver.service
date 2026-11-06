@@ -1,0 +1,20 @@
+[Unit]
+Description=Prestop SŽ reader: FlareSolverr (solves SŽ's Cloudflare check; 127.0.0.1:8191 only)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+ExecStartPre=/bin/bash /opt/prestop/deploy/server/szsite-guard.sh check
+ExecStartPre=-/usr/bin/docker rm -f prestop-flaresolverr
+# Host network, listening on loopback only (HOST=127.0.0.1): never reachable from outside the VM.
+# Its browser lives only while a check is solved (~0.7 GB, 1.2 GB at worst): hard cap 1.5 GB, no swap.
+ExecStart=/usr/bin/docker run --rm --name prestop-flaresolverr --network host \
+  -e HOST=127.0.0.1 -e PORT=8191 -e TZ=Europe/Ljubljana -e LOG_LEVEL=info \
+  --memory 1500m --memory-swap 1500m --pids-limit 512 --shm-size 256m --security-opt no-new-privileges \
+  ghcr.io/flaresolverr/flaresolverr:v3.5.2
+ExecStop=/usr/bin/docker stop -t 20 prestop-flaresolverr
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

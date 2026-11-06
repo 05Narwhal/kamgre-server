@@ -1,0 +1,20 @@
+[Unit]
+Description=Prestop SŽ reader: anonymous Cloudflare WARP proxy (127.0.0.1:40000 only; optional, PRESTOP_SZSITE_WARP=on)
+After=docker.service network-online.target
+Requires=docker.service
+Before=prestop-szsite-solver.service
+
+[Service]
+ExecStartPre=-/usr/bin/docker rm -f prestop-warp
+# Proxy mode only: no NET_ADMIN and no tun device, so it cannot change the VM's routes. The anonymous
+# registration (no Cloudflare account) is kept in /var/lib/prestop/warp.
+ExecStart=/usr/bin/docker run --rm --name prestop-warp --network host \
+  -v /var/lib/prestop/warp:/var/lib/cloudflare-warp \
+  --memory 256m --memory-swap 256m --pids-limit 128 --security-opt no-new-privileges \
+  prestop-warp:local
+ExecStop=/usr/bin/docker stop -t 10 prestop-warp
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

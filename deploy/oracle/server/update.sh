@@ -102,6 +102,10 @@ fi
 # Only the old default is replaced; a value set by hand stays.
 sed -i 's/^PRESTOP_TRAFFIC_PER_MINUTE=300$/PRESTOP_TRAFFIC_PER_MINUTE=1200/' /etc/prestop/prestop.env
 
+step "SŽ website reader"
+# Off unless PRESTOP_SZSITE=on in prestop.env; runs before "Services" so the API restarts with its URLs (README: SŽ reader).
+bash "$DEPLOY/server/szsite.sh" || echo "SŽ reader step failed; the API keeps derp-si and zamudil.si (journalctl -u prestop-szsite)"
+
 step "Statistics copy"
 # Reliability and typical travel times are months of observed delays: a copy before anything touches
 # the database, and a check after (missing rows are put back and the deploy stops). keep-stats.sh
