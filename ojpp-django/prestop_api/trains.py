@@ -61,10 +61,14 @@ def find_run(number: str, day: date) -> Optional[dict]:
     return (abroad.main_run(runs) if len(runs) > 1 else None) or next(iter(runs), None)
 
 
-def vehicle_of(number: str) -> Optional[dict]:
-    """The train on the map now, if it is on its way."""
+def vehicle_of(number: str, trip: Optional[dict] = None) -> Optional[dict]:
+    """The train on the map now, if it is on its way; else the replacement bus running its part of `trip` now (one of
+    its `replacedSections`' buses), so the train page opens on what the rider is in (N2)."""
     snap = sources.vehicles.peek()
-    return next((v for v in (snap.value if snap else []) if v.get('mode') == 'rail' and v.get('trainNumber') == number), None)
+    vehicles = snap.value if snap else []
+    train = next((v for v in vehicles if v.get('mode') == 'rail' and v.get('trainNumber') == number), None)
+    buses = {s['busTripId'] for s in (trip or {}).get('replacedSections') or []}
+    return train or next((v for v in vehicles if v.get('replacement') and v.get('tripId') in buses), None)
 
 
 def train(number: str, day: date, lang: str) -> Optional[dict]:
@@ -92,7 +96,7 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
         alerts = []
     category, _ = sz.train_parts(mapping.route_name(run['route']))
     return {'number': number, 'name': mapping.route_name(run['route']) or number, 'category': category, 'date': day.isoformat(),
-            'routeId': route_id, 'tripId': run['id'], 'trip': trip, 'vehicle': vehicle_of(number) if day == scheduled.service_day() else None,
+            'routeId': route_id, 'tripId': run['id'], 'trip': trip, 'vehicle': vehicle_of(number, trip) if day == scheduled.service_day() else None,
             'alerts': alerts, **({'trainClass': planned} if (planned := zamudil.class_of(number, day)) else {}), **stay_links(number, day, run)}
 
 

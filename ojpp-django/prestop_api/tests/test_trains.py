@@ -99,6 +99,20 @@ class TrainEndpointTests(TestCase):
         with mock.patch.object(scheduled, 'timetable', fixed([run])):
             self.assertEqual(self.client.get('/api/v1/trains/999').status_code, 404)
 
+    def test_a_train_run_by_a_replacement_bus_now_has_that_bus_as_its_vehicle(self):
+        # N2: EC 115's Slovenian run, Jesenice – Ljubljana by bus: the train page opens on the bus, not on nothing
+        bus = {'id': 'IJPP:sub-1', 'mode': 'bus', 'replacement': True, 'replacesTrain': 'EC 115', 'tripId': 'IJPP:sub-20261106-453036-0'}
+        other = {**bus, 'id': 'IJPP:sub-2', 'tripId': 'IJPP:sub-20261106-999-0'}
+        trip = {'replacedSections': [{'fromIndex': 0, 'toIndex': 3, 'busTripId': 'IJPP:sub-20261106-453036-0', 'busName': 'BUS 115'}]}
+        snap = mock.Mock(value=[other, bus])
+        with mock.patch.object(sources.vehicles, 'peek', return_value=snap):
+            self.assertEqual(trains.vehicle_of('115', trip), bus)
+            self.assertIsNone(trains.vehicle_of('115', {}))  # no bus runs a part of it: no vehicle
+        # the train itself on the rails wins over its bus
+        train = train_vehicle('115', 60)
+        with mock.patch.object(sources.vehicles, 'peek', return_value=mock.Mock(value=[bus, train])):
+            self.assertEqual(trains.vehicle_of('115', trip), train)
+
     def test_runs_of_another_day_come_from_that_days_timetable(self):
         run = {'id': 'IJPP:t310', 'route': {'gtfsId': 'IJPP:r310', 'shortName': 'RG 310', 'mode': 'RAIL'}, 'serviceDay': SERVICE_DAY + 86_400}
         with mock.patch.object(scheduled, 'day_timetable', return_value=fixed([run])) as day:
