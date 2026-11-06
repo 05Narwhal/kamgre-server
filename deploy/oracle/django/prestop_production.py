@@ -53,6 +53,7 @@ if env('PRESTOP_SZSITE', default='off') == 'on':
     _SZSITE = f"http://127.0.0.1:{env('PRESTOP_SZSITE_PORT', default='8095')}"
     PRESTOP_SZ_LIVE_URL = [f'{_SZSITE}/active_trains'] + [u for u in PRESTOP_SZ_LIVE_URL if not u.startswith(_SZSITE)]
     PRESTOP_SZ_TRACKS_URL = [f'{_SZSITE}/train_data'] + [u for u in PRESTOP_SZ_TRACKS_URL if not u.startswith(_SZSITE)]
+    PRESTOP_SZSITE_STATUS_URL = f'{_SZSITE}/status'  # /health sz:site-*
 
 # Reuse database connections between requests (peer auth over the local socket).
 DATABASES['default']['CONN_MAX_AGE'] = 60

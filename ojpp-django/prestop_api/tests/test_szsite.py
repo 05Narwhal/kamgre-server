@@ -14,7 +14,7 @@ import requests
 from django.test import SimpleTestCase, override_settings
 
 from prestop_api import sz, sz_list, tracks
-from prestop_api.szsite import jobs, parse
+from prestop_api.szsite import health, jobs, parse
 from prestop_api.szsite.client import AJAX, Backoff, Client, SiteError, clearance_from
 from prestop_api.szsite.serve import Server
 from prestop_api.szsite.store import Store
@@ -471,3 +471,39 @@ class ServeTests(SimpleTestCase):
         self.assertEqual(status['jobs']['works']['count'], 1)
         self.assertTrue(status['inService'])
         self.assertEqual(self.get('/nothing')[0], 404)
+
+
+class HealthTests(SimpleTestCase):
+    """/health sz:site-*: from the reader's /status, nothing listed while it is off."""
+
+    def setUp(self):
+        health._last.update(at=0.0, value=None)
+
+    def status(self, **jobs_):
+        return {'now': T0, 'inService': True, 'jobs': {k: {'at': at, 'ok': ok, 'error': None, 'count': 3} for k, (at, ok) in jobs_.items()}}
+
+    def by_id(self, rows):
+        return {r['id']: r['status'] for r in rows}
+
+    def test_off_lists_nothing(self):
+        with override_settings(PRESTOP_SZSITE_STATUS_URL=''):
+            self.assertEqual(health.health(T0, fetch=lambda url: self.fail('fetched')), [])
+
+    def test_fresh_stale_failed_and_classes_left_out(self):
+        rows = health.entries(self.status(notices=(T0 - 60, True), works=(T0 - 3 * 3600, True), active_trains=(T0 - 20, False)), T0)
+        self.assertEqual(self.by_id(rows), {'sz:site-notices': 'live', 'sz:site-works': 'stale', 'sz:site-live': 'stale'})
+        self.assertEqual(rows[0]['updatedAt'], '2026-10-26T19:12:20Z')
+
+    def test_night_keeps_live_and_no_answer_is_unavailable(self):
+        night = dict(self.status(active_trains=(T0 - 3 * 3600, True)), inService=False)
+        self.assertEqual(self.by_id(health.entries(night, T0))['sz:site-live'], 'live')
+        down = health.entries(None, T0)
+        self.assertEqual({r['status'] for r in down}, {'unavailable'})
+        self.assertIn('sz:site-classes', self.by_id(down))
+
+    def test_cached_between_health_calls(self):
+        calls = []
+        with override_settings(PRESTOP_SZSITE_STATUS_URL='http://127.0.0.1:8095/status'):
+            for at in (T0, T0 + 5, T0 + 20):
+                health.health(at, fetch=lambda url: calls.append(url) or self.status(notices=(at, True)))
+        self.assertEqual(len(calls), 2)
