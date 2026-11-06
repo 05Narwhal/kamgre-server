@@ -26,6 +26,11 @@ from .parse import DAYS
 logger = logging.getLogger(__name__)
 FRESH = 3600  # s: the reader saves the works every 15 minutes; an older copy no longer leads
 KIND = 'dela na progi'
+# SŽ files some notices under "Dela na progi" that are not works: "DODATNO: Avtobusni prevoz …", "OBVESTILO: Vlak vozi
+# samo do/s …", "OPOZORILO: Nakladanje vozil …". A title with its own capital label is a work only with this one.
+LABEL = re.compile(r'^\s*([A-ZČŠŽĆĐ][A-ZČŠŽĆĐ ]{3,}):')
+WORK_LABEL = 'DELA NA PROGI'
+NEAR_STATION = 1000.0  # m: a relation's name with no station ("Kresnica" for Kresnice) is the station this near the item
 SOURCE = BASE + SOLVE_PAGE
 _memo: dict = {'stamp': None, 'value': None}
 
@@ -93,7 +98,8 @@ def convert(items: list, station: Callable[[str, list], Optional[list]], follow:
             continue
         near = point(item)
         for entry in entries(item):
-            if KIND not in entry['kind'].lower():
+            label = LABEL.match(entry['title'])
+            if KIND not in entry['kind'].lower() or (label and label.group(1).strip() != WORK_LABEL):
                 continue
             start, end = days(entry['days'])
             found = pairs(entry['relation'])
@@ -123,8 +129,11 @@ def _station_finder(stop_index: dict) -> Callable[[str, list], Optional[list]]:
     stations = closures.stations_of(stop_index)
 
     def station(name: str, near: list) -> Optional[list]:
-        found = stations.railway(name)
+        # A name the feed spells otherwise: the railway station at the item's point, if there is one.
+        found = stations.railway(name) or stations.rail
         best = min(found, key=lambda s: geometry.distance(near, [s['longitude'], s['latitude']]), default=None)
+        if best and found is stations.rail and geometry.distance(near, [best['longitude'], best['latitude']]) > NEAR_STATION:
+            best = None
         return [best['longitude'], best['latitude']] if best else None
     return station
 

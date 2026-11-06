@@ -31,15 +31,14 @@ def along(chord):
 class ConvertTests(SimpleTestCase):
     def test_only_works_one_line_per_station_pair(self):
         found = works.convert(items(), anywhere, along)
-        # 17 "Dela na progi" entries in the saved page; "Jesenice / Kranj / Kamnik / Domžale - Ljubljana" is four lines
-        self.assertEqual(len(found), 20)
-        self.assertFalse(any('nadomestn' in w['title'].lower() for w in found))
+        # 17 "Dela na progi" entries in the saved page, 14 of them works ("DELA NA PROGI: …"); the bus link
+        # Lesce Bled - Bled Jezero ("DODATNO"), "OBVESTILO: Vlak vozi samo do/s postaje Ljubljana Šiška" and the car
+        # train's loading times ("OPOZORILO") are notices filed under that kind
+        self.assertEqual(len(found), 14)
+        self.assertTrue(all(w['title'].startswith('DELA NA PROGI') for w in found))
         zalog = [w for w in found if w['relation'] == 'Ljubljana - Ljubljana Zalog']
         self.assertEqual([(w['validFrom'], w['validTo']) for w in zalog], [('2026-11-10', '2026-11-13')])  # the entry, not the bus's 15 Nov
-        self.assertTrue(zalog[0]['title'].startswith('DELA NA PROGI'))
-        gorenjska = sorted(w['id'] for w in found if w['relation'].startswith('Jesenice /'))
-        self.assertEqual(len(gorenjska), 4)
-        self.assertTrue(all(i.endswith(('-1', '-2', '-3', '-4')) for i in gorenjska))
+        self.assertFalse(any(w['relation'].startswith(('Jesenice /', 'Bled Jezero', 'Nova Gorica')) for w in found))
         for w in found:
             self.assertGreater(len(w['geometry']), 2)
             self.assertTrue(w['sourceUrl'].startswith('https://'))
@@ -48,6 +47,17 @@ class ConvertTests(SimpleTestCase):
     def test_a_relation_off_the_track_or_unknown_is_left_out(self):
         self.assertEqual(works.convert(items(), anywhere, lambda chord: chord), [])  # not followed: no straight line
         self.assertEqual(works.convert(items(), lambda name, near: None, along), [])
+
+    def test_a_relation_of_several_lines_numbers_them(self):
+        item = dict(WORK, Relacija=['Kranj / Kamnik - Ljubljana'])
+        self.assertEqual([w['id'] for w in works.convert([item], anywhere, along)], ['sz-9001-1', 'sz-9001-2'])
+
+    def test_a_name_with_no_station_is_the_station_at_the_items_point(self):
+        stops = {'all': STOPS['all'] + [{'id': 'IJPP:3', 'name': 'Kresnice', 'modes': ['rail'], 'latitude': 46.1033, 'longitude': 14.7914}]}
+        station = works._station_finder(stops)
+        self.assertEqual(station('Kresnica', [14.7913, 46.1032]), [14.7914, 46.1033])
+        self.assertIsNone(station('Kresnica', [14.70, 46.20]))  # nothing within NEAR_STATION
+        self.assertEqual(station('Ljubljana', [14.7913, 46.1032]), [14.510, 46.058])  # a known name is never swapped
 
     def test_relation_pairs(self):
         self.assertEqual(works.pairs('Šentjur-Celje'), [('Šentjur', 'Celje')])
