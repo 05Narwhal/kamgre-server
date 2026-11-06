@@ -21,7 +21,12 @@ INSTALLED_APPS = ['prestop_data', 'prestop_api', 'prestop_statistics', 'prestop_
 
 # Load shedding for /api/v1 so a public server stays inside its free outbound allowance
 # (prestop_api/traffic.py). Off locally; the production settings turn it on.
-MIDDLEWARE = [MIDDLEWARE[0], 'prestop_api.analytics.AnalyticsMiddleware', 'prestop_api.traffic.TrafficGuardMiddleware', *MIDDLEWARE[1:]]
+# ETag + 304 for every GET (request budget, spec N16): a client that already holds an unchanged answer (the country's stops, the
+# alerts, the rail lines) is sent a header instead of the body, which is what the egress allowance is spent on. Inside the guard,
+# so a refused visitor never reaches it; outside CORS/Common, so the validator covers the final headers. StableEtagMiddleware
+# (prestop_api/etag.py) is inside it, so the ETag is set before ConditionalGet looks: the body minus its `generatedAt` second.
+MIDDLEWARE = [MIDDLEWARE[0], 'prestop_api.analytics.AnalyticsMiddleware', 'prestop_api.traffic.TrafficGuardMiddleware',
+              'django.middleware.http.ConditionalGetMiddleware', 'prestop_api.etag.StableEtagMiddleware', *MIDDLEWARE[1:]]
 # Usage counts in Redis, flushed to Postgres by the collector (prestop_api/analytics.py); off under manage.py test.
 PRESTOP_ANALYTICS = 'test' not in sys.argv[1:2] and env.bool('PRESTOP_ANALYTICS', default=True)
 PRESTOP_ANALYTICS_REDIS_URL = env('PRESTOP_ANALYTICS_REDIS_URL', default='')
