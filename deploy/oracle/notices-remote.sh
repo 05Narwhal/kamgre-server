@@ -5,24 +5,33 @@
 #   over SSH to `manage.py arriva_notices --import`.
 # - SŽ: its list of disruptions is in no open feed, so you save the page in your browser and pass the file with --sz; it
 #   goes to `manage.py sz_notices --import`, and the replacement timetables it links are read at once.
+# - City timetables: the folders `yarn city-timetables --update` rebuilt (prestop_api/data/gtfs/<feed>/) travel with --city,
+#   without a deploy; that run reads and sends nothing else.
 #
 #   yarn server:update                 # Arriva: read and send
 #   yarn server:update --sz page.html  # ... and SŽ's list, saved from potniski.sz.si/ovire-in-izredne-spremembe
 #   yarn server:update --check         # only read Arriva's here and say how many there are
+#   yarn server:update --city [feed…]  # only the hand-kept city timetables: send the folders that differ
 #   bash backend/deploy/oracle/notices-remote.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 check=""
 sz_page=""
+city=""
+city_feeds=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --check) check=1; shift ;;
     --sz)
       [ $# -ge 2 ] || { echo "--sz needs the saved page's file." >&2; exit 2; }
       sz_page="$2"; shift 2 ;;
-    *) echo "Usage: yarn server:update [--check] [--sz <saved page>]" >&2; exit 2 ;;
+    --city)
+      city=1; shift
+      while [ $# -gt 0 ] && [[ "$1" != -* ]]; do city_feeds+=("$1"); shift; done ;;
+    *) echo "Usage: yarn server:update [--check] [--sz <saved page>] | --city [feed…]" >&2; exit 2 ;;
   esac
 done
+[ -z "$city" ] || { [ -z "$check$sz_page" ] || { echo "--city is its own run: leave out --check and --sz." >&2; exit 2; }; }
 if [ -n "$sz_page" ]; then
   [ -f "$sz_page" ] || sz_page="$(wslpath "$sz_page" 2>/dev/null || echo "$sz_page")"  # a Windows path, through yarn
   [ -f "$sz_page" ] || { echo "No such file: $sz_page" >&2; exit 1; }
@@ -30,6 +39,57 @@ if [ -n "$sz_page" ]; then
   listed="$(grep -c 'id="heading-' "$sz_page" || true)"
   [ "$listed" -gt 0 ] || { echo "$sz_page has no notices of SŽ's list. Save the whole page, or the list's outer HTML (not its text)." >&2; exit 1; }
   echo "==> SŽ's list: $listed notices in $sz_page"
+fi
+
+connect() {
+  CONFIG="$HERE/config.local"
+  [ -f "$CONFIG" ] || { echo "Copy config.local.example to config.local and fill it in." >&2; exit 1; }
+  # shellcheck source=/dev/null
+  . <(tr -d '\r' < "$CONFIG")
+  : "${SSH_TARGET:?set SSH_TARGET in config.local}"
+  ssh_opts=(-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30)
+  if [ -n "${SSH_KEY:-}" ]; then
+    [ -f "$SSH_KEY" ] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
+    ssh_opts+=(-i "$SSH_KEY")
+  fi
+}
+
+# --city: the hand-kept city timetables. Only folders that differ travel (rsync compares them), the way push.sh copies the
+# backend (root-owned, no deploy). The API's workers swap on HUP only when something changed; the collector is left alone
+# (it reads the folders again on its own cache), so no restart drops its delay memory.
+if [ -n "$city" ]; then
+  ROOT="$(cd "$HERE/../../.." && pwd)"
+  GTFS="backend/ojpp-django/prestop_api/data/gtfs"
+  if [ ${#city_feeds[@]} -eq 0 ]; then   # the hand-kept ones: folders that carry a status.json
+    for d in "$ROOT/$GTFS"/*/; do [ -f "${d}status.json" ] && city_feeds+=("$(basename "$d")"); done
+  fi
+  [ ${#city_feeds[@]} -gt 0 ] || { echo "No city timetable folders found in $GTFS." >&2; exit 1; }
+  paths=()
+  for f in "${city_feeds[@]}"; do
+    [ -f "$ROOT/$GTFS/$f/status.json" ] || { echo "$f is not a hand-kept city folder (no $GTFS/$f/status.json)." >&2; exit 1; }
+    paths+=("$GTFS/$f")
+  done
+  dirty="$(git -C "$ROOT" status --porcelain -- "${paths[@]}" 2>/dev/null || true)"
+  if [ -n "$dirty" ]; then
+    echo "Uncommitted changes in these folders (yarn city-timetables --update commits them first):" >&2
+    printf '%s\n' "$dirty" | sed 's/^/    /' >&2
+  fi
+  connect
+  sent=""
+  for f in "${city_feeds[@]}"; do
+    out="$(rsync -azi --delete --chown=root:root --chmod=D755,F644 --rsync-path='sudo rsync' --exclude='__pycache__/' \
+      -e "ssh ${ssh_opts[*]}" "$ROOT/$GTFS/$f/" "$SSH_TARGET:/opt/prestop/app/prestop_api/data/gtfs/$f/")" || { echo "Could not copy $f." >&2; exit 1; }
+    n="$(printf '%s\n' "$out" | grep -c '^[<>c*]' || true)"
+    if [ "$n" -gt 0 ]; then echo "==> $f: $n files sent"; sent=1; else echo "    $f: the server has it already"; fi
+  done
+  if [ -n "$sent" ]; then
+    echo "==> Loading the new timetables (the API swaps its workers, nobody is dropped)"
+    ssh "${ssh_opts[@]}" "$SSH_TARGET" "sudo systemctl kill -s HUP --kill-whom=main prestop-web && cd /tmp && sudo prestop-manage citytt_check" \
+      || echo "The folders are on the server; the API reads them within 6 hours, or at the next deploy." >&2
+  else
+    echo "Nothing to send."
+  fi
+  exit 0
 fi
 
 posts="$(mktemp)"
@@ -57,16 +117,7 @@ if [ -n "$check" ]; then
 fi
 [ -z "$failed" ] || [ -n "$sz_page" ] || exit 1
 
-CONFIG="$HERE/config.local"
-[ -f "$CONFIG" ] || { echo "Copy config.local.example to config.local and fill it in." >&2; exit 1; }
-# shellcheck source=/dev/null
-. <(tr -d '\r' < "$CONFIG")
-: "${SSH_TARGET:?set SSH_TARGET in config.local}"
-ssh_opts=(-o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30)
-if [ -n "${SSH_KEY:-}" ]; then
-  [ -f "$SSH_KEY" ] || { echo "SSH key not found: $SSH_KEY" >&2; exit 1; }
-  ssh_opts+=(-i "$SSH_KEY")
-fi
+connect
 
 # The files land owned by the API's user; the commands are on the server from the first `yarn server:push` that has them.
 if [ -z "$failed" ]; then
