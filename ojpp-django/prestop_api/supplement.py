@@ -298,6 +298,18 @@ def replaced(route_id: Optional[str], day: date) -> bool:
     return any(t['routeId'] == route_id and runs(feed, t['serviceId'], day) for t in feed['trips'].values())
 
 
+def superseded(trip_id: str, route_id: Optional[str], day: date, known: bool = True) -> bool:
+    """A live bus's run that a correction leaves with no board row and no trip page (N3, 6 Nov): OTP's run of a line
+    the correction replaces on that service day (corrected_board drops its calls), or a run OTP does not know (`known`
+    False) on a line the correction answers for. The correction's own runs are never superseded."""
+    feed = _correction(route_id or '')
+    if feed is None or not trip_id or _trip(feed, trip_id) is not None:
+        return False
+    if route_id not in feed['routes'] and route_id not in feed['replaces']:
+        return False
+    return not known or replaced(route_id, day)
+
+
 def leg_replaced(leg: dict) -> bool:
     """A journey leg (OTP's) riding a run a correction replaces (supplement.replaced), by the day it starts."""
     at = (leg.get('start') or {}).get('scheduledTime') or ''

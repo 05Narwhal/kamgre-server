@@ -9,7 +9,7 @@
 | rentals              | OTP rental stations and floating vehicles  | 60 s    |
 | boards, journeys     | OTP per request (realtime already applied) | —       |
 """
-from datetime import datetime
+from datetime import date, datetime
 import json
 import logging
 import threading
@@ -370,6 +370,20 @@ motion_history = mapping.MotionHistory()
 loose_vehicles = mapping.LooseVehicles()
 
 
+def _service_day(trip: dict, now: float) -> date:
+    """The service day a feed entity's run started on: its `startDate`, else today."""
+    try:
+        return datetime.strptime(trip.get('startDate') or '', '%Y%m%d').date()
+    except ValueError:
+        return datetime.fromtimestamp(now, supplement.LOCAL).date()
+
+
+def _on_line(entity: dict, route_id: str) -> dict:
+    """A copy of a feed entity naming its line, so LooseVehicles matches it to that line's runs only."""
+    v = entity.get('vehicle') or {}
+    return {**entity, 'vehicle': {**v, 'trip': {**(v.get('trip') or {}), 'routeId': route_id}}}
+
+
 def _load_vehicles(drops: Optional[list] = None):
     """`drops`: collects each feed entity or timetable train left out and why (coverage.note)."""
     pos = positions.get()
@@ -381,7 +395,8 @@ def _load_vehicles(drops: Optional[list] = None):
     own = {t for t in trip_ids if t and supplement.owns(t)}
     infos = trip_info.get_many([t for t in trip_ids if t and t not in own])
     infos.update({t: info for t in own if (info := supplement.trip_info(t))})
-    unknown = [t for t in trip_ids if t and (infos.get(t) or {}).get('routeId') not in route_index]
+    known = {t for t, info in infos.items() if info.get('routeId')}
+    unknown =[t for t in trip_ids if t and (infos.get(t) or {}).get('routeId') not in route_index]
     if unknown and _safe(patterns):
         index = patterns.get().value
         for t in unknown:
@@ -390,13 +405,24 @@ def _load_vehicles(drops: Optional[list] = None):
                 infos[t] = {**(infos.get(t) or {}), **{k: v for k, v in guess.items() if v}}
     # A hand-kept timetable's bus under a trip id that timetable lacks (Marprom's own numbering, or a bare 'MARPROM:',
     # N3, 5 Nov) is drawn on its line either way, but placed on our run only by the path it follows (below).
-    foreign = {id(e) for e, t in zip(pos.value, trip_ids) if t and supplement.stale(t)}
+    # Likewise OTP's run of a line a correction (replaces.txt) replaces that day, or a run OTP lacks on such a line
+    # (Brežice 1, 2, Koper 9, Postojna, N3, 6 Nov): placed on the correction's runs of that line.
+    now = time.time()
+    stale_trips = {t for t in trip_ids if t and supplement.stale(t)}
+    lines: dict[int, str] = {}
+    for e, t in zip(pos.value, trip_ids):
+        trip = (e.get('vehicle') or {}).get('trip') or {}
+        route = (infos.get(t) or {}).get('routeId') or trip.get('routeId')
+        if t and t not in stale_trips and supplement.superseded(t, route, _service_day(trip, now), t in known):
+            lines[id(e)] = route
+    foreign_trips = stale_trips | {t for e, t in zip(pos.value, trip_ids) if id(e) in lines}
+    foreign = {id(e) for e, t in zip(pos.value, trip_ids) if t in foreign_trips}
     live = mapping.build_vehicles(pos.value, updates, infos, route_index, stop_names(), history=motion_history, drops=drops)
     # Vehicles the feed sends without a trip: on the map with the run of the operators' own timetables they are seen
     # to run (mapping.LooseVehicles), marked inferred; one that is a drawn vehicle under another id stays off.
-    now = time.time()
-    loose = [e for e in pos.value if not mapping.entity_trip(e, updates) or id(e) in foreign]
-    by_vehicle = {v['id']: v for v in live if v.get('tripId') and supplement.stale(v['tripId'])}
+    loose = [_on_line(e, lines[id(e)]) if id(e) in lines else e
+             for e in pos.value if not mapping.entity_trip(e, updates) or id(e) in foreign]
+    by_vehicle = {v['id']: v for v in live if v.get('tripId') in foreign_trips}
     placed_ids = set()
     for e, run_id, delay, stop_id, call in loose_vehicles.assign(loose, [v['tripId'] for v in live if v.get('tripId') and v['id'] not in by_vehicle],
                                                                  motion_history, lambda: supplement.running(now), now, drops):
