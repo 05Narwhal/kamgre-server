@@ -1084,7 +1084,7 @@ def rail_works(request):
     last = _day_param_named(request, 'to') or first
     if last < first or (last - first).days > zamudil.WORKS_AHEAD or last > today + timedelta(days=zamudil.WORKS_AHEAD):
         raise ApiError(422, 'INVALID_DATES', f'from..to must be in order, at most {zamudil.WORKS_AHEAD} days and at most {zamudil.WORKS_AHEAD} days ahead')
-    return envelope(zamudil.works_between(first, last), 'scheduled', used=['sz:zamudil-works'])
+    return envelope(zamudil.works_between(first, last), 'scheduled', used=[zamudil.works_source()])
 
 
 @require_GET
