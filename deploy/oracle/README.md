@@ -201,7 +201,9 @@ Our own reader of SŽ's passenger site (potniski.sz.si): live trains and delays,
 platforms of the busiest stations (`prestop_api/szsite/`, research in `docs/research/2026-11-05-sz-website-reader.md`). It is
 **off** until you turn it on; with it off the API reads derp-si's scraper and zamudil.si as before. With it on it is the first
 source and those stay behind it as fallbacks (each URL list in `prestop_production.py`; the reader answers 503 when its copy is
-stale, so the next source is used).
+stale, so the next source is used). Its notices list (saved every 15 minutes) leads zamudil.si's notices while it is
+under an hour old, taking zamudil's train numbers along for the same timetable; `PRESTOP_SZSITE_NOTICES=off` puts zamudil.si
+first again.
 
 **Cost: $0.** Nothing is created in Oracle Cloud: Docker (Ubuntu's `docker.io`), a FlareSolverr container and our reader run on
 the existing A1 VM, bound to `127.0.0.1` only. Downloads from SŽ (≈ 0.6–2.2 GB/day) are inbound and free; outbound is only the
