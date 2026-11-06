@@ -59,6 +59,11 @@ def label(network: dict) -> str:
     return f"{name} · {network['company']}" if network.get('company') else name
 
 
+def city_feed(gtfs_id: Optional[str]) -> bool:
+    """Whether a stop or route id ('MOKranj:112') belongs to a whole city feed (not a national-feed city line)."""
+    return bool(gtfs_id) and ':' in gtfs_id and gtfs_id.split(':', 1)[0] in _table()[0]
+
+
 def city(route_id: Optional[str], route_name: Optional[str] = None) -> Optional[dict]:
     """The optional `city` field for a line: {'number', 'town', 'company', 'label'}, or None for other lines.
 

@@ -34,7 +34,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 
-from . import mapping
+from . import citynet, mapping
 from .upstream import UpstreamError, get_json
 
 logger = logging.getLogger(__name__)
@@ -101,10 +101,13 @@ def _nearby(stops: list[dict], spec: dict, mode: str) -> list[dict]:
 def resolve(stops: list[dict]) -> dict:
     """Station key -> {'ids': its feed stops now, 'nextDoor': its railway station's}: from the stop index (feed
     stops with 'id', 'name', 'latitude', 'longitude', 'modes'). A station's stops are the bus stops at that place in
-    its radius whose name says bus station ("Ljubljana AP", "Avtobusna postaja Ljubljana"), nearest first."""
+    its radius whose name says bus station ("Ljubljana AP", "Avtobusna postaja Ljubljana"), nearest first. A city
+    feed's pole is never one (N7): Kranj's city buses stop at their own "Kranj AP" poles on the street, Marprom's at
+    "AP Mlinska"; taken as the station they were drawn starting and parking in intercity bays."""
     out = {}
     for key, spec in STATIONS.items():
-        ids = [s['id'] for s in _nearby(stops, spec, 'bus') if _station_name(s.get('name') or '', spec)]
+        ids = [s['id'] for s in _nearby(stops, spec, 'bus')
+               if _station_name(s.get('name') or '', spec) and not citynet.city_feed(s.get('id'))]
         door = spec.get('next_door')
         out[key] = {'ids': ids, 'nextDoor': [s['id'] for s in _nearby(stops, door, 'rail')][:1] if door else []}
     return out
