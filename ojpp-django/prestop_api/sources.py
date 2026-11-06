@@ -75,11 +75,19 @@ def _load_stops():
     merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends, fixed)
     # Each side of a stop on its own side of the road (Slovenia drives on the right), at OSM's pole when one is close.
     stopgroups.place_sides(merged, built, ways, fixed | set(overrides['stations']), stopfix.osm_poles())
-    # Same-name poles close together are one marker below z16 (the map draws them so; ids and boards unchanged).
+    # Poles close together are one marker below z16 (the map draws them so; ids and boards unchanged), named after
+    # its busiest pole.
     place_of = stopgroups.places(merged)
+    marker_of = {member: ids[0] for member, ids in groups.items() if ids}
+    busy: dict[str, int] = {}
+    for seq in sequences:
+        for marker in {marker_of.get(s, s) for s in seq}:
+            busy[marker] = busy.get(marker, 0) + 1
+    place_name = stopgroups.place_names(place_of, {s['id']: s['name'] for s in merged}, busy)
     for i, station in enumerate(merged):
         if station['id'] in place_of:
-            merged[i] = station = {**station, 'placeKey': place_of[station['id']]}
+            key = place_of[station['id']]
+            merged[i] = station = {**station, 'placeKey': key, 'placeName': place_name[key]}
         # Where SŽ's replacement buses leave from when that is beside the station, not at it.
         nearby = [r for sid in station.get('memberIds') or [station['id']] for r in overrides['replacement'].get(sid, [])]
         if nearby:
@@ -95,8 +103,7 @@ def _load_stops():
     places: dict[str, list[str]] = {}
     for marker, key in place_of.items():
         places.setdefault(key, []).append(marker)
-    marker_of = {member: ids[0] for member, ids in groups.items() if ids}
-    names = {s['id']: s['name'] for s in merged}
+    names ={s['id']: s['name'] for s in merged}
     pole_towards = stopgroups.towards(sequences, marker_of, names, set(place_of))
     return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways, 'bayStations': platforms.resolve(built),
             'places': places, 'towards': pole_towards}
@@ -679,7 +686,7 @@ _boards: dict[tuple, tuple[float, int, Optional[list[dict]]]] = {}
 
 
 def place_poles(stop_id: str) -> list[str]:
-    """The markers of the place `stop_id` is in (same-name poles within 60 m, stopgroups.places), key first;
+    """The markers of the place `stop_id` is in (poles within 40 m, same-name ones within 60 m: stopgroups.places), key first;
     just `stop_id` when it is in none."""
     snap = stops.peek() or stops.get()
     value = snap.value
