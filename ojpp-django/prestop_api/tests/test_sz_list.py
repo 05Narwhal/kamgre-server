@@ -174,6 +174,12 @@ class RecordTests(Uploaded):
         self.assertEqual(sz_list.records(date(2026, 11, 1)), [])
 
 
+class FirstOfNovember(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 11, 1, 12, tzinfo=tz or LOCAL)
+
+
 class ReadNoticesTests(Uploaded):
     POST = {'ID_ovire': ['1000000001'], 'Naslov': ['Post'], 'Relacija': ['X'], 'Cas': ['02.11.2026-06.11.2026'], 'Opis': ['<p><a href="https://potniski.sz.si/wp-content/uploads/2026/10/Ljubljana-Jesenice.pdf">x</a></p>'],
             'CasVir': ['title'], 'Povezava': ['https://potniski.sz.si/wp-content/uploads/2026/10/Ljubljana-Jesenice.pdf'], 'Vir': ['potniski.sz.si']}
@@ -194,6 +200,36 @@ class ReadNoticesTests(Uploaded):
 
     def test_without_an_upload_the_posts_are_read_as_before(self):
         self.assertEqual(self.read([]), {'1000000001'})
+
+    def leading(self, theirs, at=None):
+        self.upload(at=at or datetime.now().timestamp())
+        with (override_settings(PRESTOP_SZSITE_NOTICES=True), mock.patch.object(closures.zamudil, 'notice_records', return_value=theirs),
+              mock.patch.object(closures.operator_notices.sz_news, 'peek', return_value=None), mock.patch.object(closures, 'datetime', FirstOfNovember)):
+            return closures.read_notices()
+
+    def test_with_the_reader_on_szs_list_leads_and_takes_zamudils_trains(self):
+        known = {'ID_ovire': ['5'], 'Naslov': ['z'], 'Opis': [f'<p><a href="{PDF}">z</a></p>'], 'Vlaki': [['2418', '2424']], 'VlakiPoDnevih': [{'2026-11-09': ['2418']}]}
+        other = {'ID_ovire': ['6'], 'Naslov': ['only zamudil'], 'Opis': ['<p>no timetable</p>'], 'Vlaki': [['640']]}
+        raw, source = self.leading([known, other])
+        self.assertEqual(source, 'szsite')
+        records = {r['ID_ovire'][0]: r for r in raw}
+        self.assertEqual(sorted(records), ['11268', '11285', '6', '9459'])  # SŽ's number, not zamudil's, for the same PDF
+        self.assertEqual(records['11285']['Vlaki'], [['2418', '2424']])
+        self.assertEqual(records['11285']['VlakiPoDnevih'], [{'2026-11-09': ['2418']}])
+        self.assertEqual(records['11285']['CasVir'], ['title'])
+        self.assertNotIn('Vlaki', records['11268'])
+
+    def test_a_stale_list_or_the_switch_off_puts_zamudil_first_again(self):
+        known = {'ID_ovire': ['5'], 'Naslov': ['z'], 'Opis': [f'<p><a href="{PDF}">z</a></p>']}
+        stale = datetime.now().timestamp() - closures.READER_FRESH - 60
+        self.assertEqual(self.leading([known], at=stale)[1], 'zamudil')
+        self.upload(at=datetime.now().timestamp())
+        with mock.patch.object(closures.zamudil, 'notice_records', return_value=[known]), mock.patch.object(closures.operator_notices.sz_news, 'peek', return_value=None):
+            self.assertEqual(closures.read_notices()[1], 'zamudil')  # PRESTOP_SZSITE_NOTICES off (tests' default)
+
+    def test_with_zamudil_off_the_list_alone_is_an_answer(self):
+        raw, source = self.leading([])
+        self.assertEqual((source, sorted(r['ID_ovire'][0] for r in raw)), ('szsite', ['11268', '11285', '9459']))
 
     def test_an_upload_changes_the_version_the_notices_are_read_again_by(self):
         with mock.patch.object(closures.zamudil, 'version', return_value=()), mock.patch.object(closures.operator_notices.sz_news, 'peek', return_value=None):

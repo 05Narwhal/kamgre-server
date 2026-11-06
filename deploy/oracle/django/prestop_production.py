@@ -54,6 +54,7 @@ if env('PRESTOP_SZSITE', default='off') == 'on':
     PRESTOP_SZ_LIVE_URL = [f'{_SZSITE}/active_trains'] + [u for u in PRESTOP_SZ_LIVE_URL if not u.startswith(_SZSITE)]
     PRESTOP_SZ_TRACKS_URL = [f'{_SZSITE}/train_data'] + [u for u in PRESTOP_SZ_TRACKS_URL if not u.startswith(_SZSITE)]
     PRESTOP_SZSITE_STATUS_URL = f'{_SZSITE}/status'  # /health sz:site-*
+    PRESTOP_SZSITE_NOTICES = env('PRESTOP_SZSITE_NOTICES', default='on') == 'on'  # its list ahead of zamudil.si
 
 # Reuse database connections between requests (peer auth over the local socket).
 DATABASES['default']['CONN_MAX_AGE'] = 60

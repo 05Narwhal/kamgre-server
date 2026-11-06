@@ -119,6 +119,9 @@ PRESTOP_SZSITE_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_DIR'
 PRESTOP_SZSITE_PROXY = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_PROXY', default='')
 # The reader's /status (szsite/health.py: /health sz:site-*); empty = the reader is not listed. The server sets it with PRESTOP_SZSITE=on.
 PRESTOP_SZSITE_STATUS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_STATUS_URL', default='')
+# SŽ's list (above) ahead of zamudil.si's notices while it is fresh (closures.read_notices): on with the reader, where
+# it saves the list every 15 minutes (`PRESTOP_SZSITE_NOTICES=off` puts zamudil.si first again).
+PRESTOP_SZSITE_NOTICES = False if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_NOTICES', default='off') == 'on'
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))

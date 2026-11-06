@@ -780,11 +780,23 @@ notice_urls = Mirrors('PRESTOP_SZ_NOTICES_URL')
 _points_of: dict = {'raw': None, 'value': None}
 
 
+READER_FRESH = 3600  # s: our reader saves SŽ's list every 15 minutes; an older list no longer leads
+
+
+def reader_leads(now: Optional[float] = None) -> bool:
+    """SŽ's own list leads the notices (PRESTOP_SZSITE_NOTICES, on with our reader) while it is fresh."""
+    upload = sz_list.loaded() if getattr(settings, 'PRESTOP_SZSITE_NOTICES', False) else None
+    return bool(upload) and (time.time() if now is None else now) - upload['at'] < READER_FRESH
+
+
 def read_notices() -> tuple[Optional[list], str]:
-    """SŽ's notices as records of its old notices feed, from the first source that has them: zamudil.si's copies of
-    today on (zamudil.notice_records; a list without closures is an answer too), else PRESTOP_SZ_NOTICES_URL. With
-    them the timetables SŽ's own posts link for days ahead, which zamudil.si lists only on their day. (None, '') when
-    no source is set up; UpstreamError when the notices URLs fail and zamudil has no copy."""
+    """SŽ's notices as records of its old notices feed, from the first source that has them: SŽ's own list while our
+    reader keeps it fresh (`_list_first`), else zamudil.si's copies of today on (zamudil.notice_records; a list
+    without closures is an answer too), else PRESTOP_SZ_NOTICES_URL. With them the timetables SŽ's own posts link for
+    days ahead, which zamudil.si lists only on their day. (None, '') when no source is set up; UpstreamError when the
+    notices URLs fail and zamudil has no copy."""
+    if reader_leads():
+        return _with_posted_timetables(_list_first(zamudil.notice_records() or [])), 'szsite'
     found = zamudil.notice_records()
     if found is not None:
         return _with_posted_timetables(found), 'zamudil'
@@ -792,6 +804,34 @@ def read_notices() -> tuple[Optional[list], str]:
         return _with_posted_timetables(notice_urls.get_json(limit=8 * 1024 * 1024, timeout=(4, 20))), 'feed'
     posted = _with_posted_timetables([])
     return (posted, 'posts') if posted else (None, '')
+
+
+def _hrefs(record: dict) -> set[str]:
+    return {html.unescape(href) for text in (record.get('Opis') or []) if isinstance(text, str) for href in re.findall(r'href="([^"]+)"', text)}
+
+
+def _list_first(theirs: list) -> list:
+    """SŽ's list leads: each of its timetables is the record (SŽ's own number, title and days), with the trains
+    zamudil's record of the same PDF names (of the same title when two notices share one PDF); zamudil's other
+    records follow, for what the list lacks."""
+    ours = sz_list.records(datetime.now(LOCAL).date())
+    by_pdf: dict[str, list] = {}
+    for record in theirs:
+        if isinstance(record, dict):
+            for href in _hrefs(record):
+                by_pdf.setdefault(href, []).append(record)
+    taken: set[int] = set()
+    for record in ours:
+        same = [r for r in by_pdf.get(record['Povezava'][0], []) if id(r) not in taken]
+        if not same:
+            continue
+        key = title_key(record['Naslov'][0])
+        match = next((r for r in same if title_key((r.get('Naslov') or [''])[0] or '') == key), same[0])
+        taken.add(id(match))
+        for field in ('Vlaki', 'VlakiPoDnevih'):
+            if isinstance(match.get(field), list) and match[field]:
+                record[field] = [match[field][0]]
+    return [*ours, *(r for r in theirs if id(r) not in taken)]
 
 
 def _with_posted_timetables(raw):
@@ -843,7 +883,7 @@ def _notices_version() -> tuple:
 def notices_changed():
     """A source changed since the notices were read (a poll every 10 minutes): read them again in the background, so
     boards and plans follow within a minute without a request waiting."""
-    if not zamudil.enabled():
+    if not zamudil.enabled() and not getattr(settings, 'PRESTOP_SZSITE_NOTICES', False):
         return
     stamp = _notices_version()
     if stamp != _notices['version']:
@@ -1129,7 +1169,7 @@ def notices_source() -> dict:
     alerts, feed = sources.alerts_raw.peek(), points.peek()
     in_otp = bool(alerts and any(notice_id(a) for a in alerts.value))
     # zamudil's notices without a closure today are an answer too
-    feed_ok = bool(feed and not feed.error and (_notices['raw'] or _notices['source'] == 'zamudil'))
+    feed_ok = bool(feed and not feed.error and (_notices['raw'] or _notices['source'] in ('zamudil', 'szsite')))
     if in_otp or feed_ok:
         status = 'live'
     elif _notices['raw'] or not alerts or not (feed or points._last_error):
