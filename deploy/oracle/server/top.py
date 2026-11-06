@@ -44,6 +44,12 @@ HEALTH_URL = 'http://127.0.0.1:8066/api/v1/health'
 API_PORT = 8066
 SERVICES = ['prestop-web', 'prestop-collector', 'prestop-push', 'prestop-ingest', 'caddy', 'cloudflared', 'postgresql', 'redis-server']
 TIMERS = ['prestop-egress', 'prestop-watchdog', 'prestop-szpdf', 'prestop-nightly', 'prestop-backup']
+# Our SŽ website reader (README: SŽ reader), only while PRESTOP_SZSITE=on. Job intervals as in prestop_api/szsite/jobs.py.
+SZSITE_UNITS = ['prestop-szsite', 'prestop-szsite-solver', 'prestop-szsite-warp']
+SZSITE_JOBS = [('active_trains', 'live trains', 30), ('notices', 'notices', 900), ('works', 'works', 900), ('delays', 'delays', 900)]
+SZSITE_BOARD_EVERY = 300
+WARP_TRACE = 'https://www.cloudflare.com/cdn-cgi/trace'
+WARP_EVERY = 60        # s between checks of the WARP exit (one small request through the proxy)
 TABS = [('overview', 'Overview'), ('system', 'System'), ('services', 'Services'), ('traffic', 'Traffic'),
         ('data', 'Data'), ('learning', 'Learning'), ('logs', 'Logs'), ('usage', 'Usage')]
 HISTORY = 900          # samples kept for the graphs (30 min at 2 s)
@@ -895,8 +901,101 @@ def timers():
     return {'timers': rows, 'backups': backups}
 
 
+WARP = {'at': 0.0, 'last': None, 'ips': []}  # the WARP exits seen while top runs: [(ip, colo, first seen)]
+
+
+def warp_exit(proxy, now=None):
+    """{'ip', 'colo', 'warp'} of the proxy's exit (Cloudflare's trace page), at most every WARP_EVERY s, or {'error'}."""
+    now = time.time() if now is None else now
+    if WARP['last'] is not None and now - WARP['at'] < WARP_EVERY:
+        return WARP['last']
+    try:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({'http': proxy, 'https': proxy}))
+        with opener.open(WARP_TRACE, timeout=8) as r:
+            trace = dict(line.split('=', 1) for line in r.read().decode('utf-8', 'replace').splitlines() if '=' in line)
+        out = {'ip': trace.get('ip', '?'), 'colo': trace.get('colo', ''), 'warp': trace.get('warp', '?')}
+        if not WARP['ips'] or WARP['ips'][-1][0] != out['ip']:
+            WARP['ips'] = (WARP['ips'] + [(out['ip'], out['colo'], now)])[-10:]
+    except Exception as e:  # noqa: BLE001 - shown in the panel
+        out = {'error': (str(e) or type(e).__name__).splitlines()[0][:100]}
+    WARP.update(at=now, last=out)
+    return out
+
+
+def szsite():
+    """The SŽ reader: on or off, its units, each job from its /status, today's solves and the WARP exit."""
+    env = read_env()
+    if env.get('PRESTOP_SZSITE') != 'on':
+        return {'on': False}
+    port = re.match(r'\d+', env.get('PRESTOP_SZSITE_PORT', '')) or None
+    proxy = env.get('PRESTOP_SZSITE_PROXY', '')
+    out = {'on': True, 'warp_on': env.get('PRESTOP_SZSITE_WARP') == 'on', 'proxy': proxy,
+           'paused': os.path.exists('/run/prestop-szsite-paused'), 'jobs': {}, 'in_service': True}
+    info = systemctl_show([u + '.service' for u in SZSITE_UNITS], 'Id,ActiveState,ActiveEnterTimestamp')
+    out['units'] = {u: {'state': info.get(u + '.service', {}).get('ActiveState') or 'unknown',
+                        'since': ts_of(info.get(u + '.service', {}).get('ActiveEnterTimestamp'))} for u in SZSITE_UNITS}
+    try:
+        with urllib.request.urlopen(f'http://127.0.0.1:{port[0] if port else 8095}/status', timeout=2) as r:
+            st = json.loads(r.read())
+        out['jobs'], out['in_service'] = st.get('jobs') or {}, bool(st.get('inService', True))
+    except (OSError, ValueError) as e:
+        out['status_error'] = (str(e) or type(e).__name__)[:100]
+    try:
+        with open(os.path.join(env.get('PRESTOP_SZSITE_DIR') or STATE_DIR + '/szsite', 'clearance.json'), encoding='utf-8') as f:
+            out['cleared_at'] = float(json.load(f).get('at') or 0) or None
+    except (OSError, ValueError, AttributeError):
+        out['cleared_at'] = None
+    solves = []
+    try:  # journalctl -g exits 1 when nothing matches
+        raw = sh(['journalctl', '--no-pager', '-u', 'prestop-szsite.service', '--since', 'today', '-o', 'short-unix', '-g', 'new clearance'], timeout=8)
+        solves = [float(line.split()[0]) for line in raw.splitlines() if line[:1].isdigit()]
+    except Exception:  # noqa: BLE001
+        pass
+    out['solves'] = solves
+    out['warp'] = warp_exit(proxy) if proxy else None
+    out['warp_ips'] = list(WARP['ips'])
+    try:
+        mem = {}
+        for line in sh(['docker', 'stats', '--no-stream', '--format', '{{.Name}}\t{{.MemUsage}}'], timeout=10).splitlines():
+            name, _, use = line.partition('\t')
+            mem[name.removeprefix('prestop-')] = use.split('/')[0].strip()
+        out['mem'] = mem
+    except Exception:  # noqa: BLE001
+        out['mem'] = {}
+    return out
+
+
+def szsite_jobs(z, now=None):
+    """(label, state, count, at, error) per reader job; the boards as one row (how many are fresh, the oldest)."""
+    now = time.time() if now is None else now
+    jobs = z.get('jobs') or {}
+
+    def state(j, every):
+        if not j or not j.get('at'):
+            return 'unavailable'
+        if not j.get('ok'):
+            return 'error'
+        return 'live' if now - float(j['at']) <= 2 * every + 120 else 'stale'
+    rows = []
+    for key, label, every in SZSITE_JOBS:
+        j = jobs.get(key)
+        st = 'live' if key == 'active_trains' and j and j.get('ok') and not z.get('in_service', True) else state(j, every)
+        rows.append((label, st, (j or {}).get('count'), (j or {}).get('at'), (j or {}).get('error')))
+    boards = {k: v for k, v in jobs.items() if k.startswith('board-') and isinstance(v, dict)}
+    if boards:
+        states = [state(v, SZSITE_BOARD_EVERY) for v in boards.values()]
+        fresh = sum(s == 'live' for s in states)
+        errors = sorted({v.get('error') for v in boards.values() if not v.get('ok') and v.get('error')})
+        worst = 'live' if fresh == len(states) else 'error' if 'error' in states else 'stale'
+        rows.append(('boards', worst, f'{fresh}/{len(states)}', min(float(v.get('at') or 0) for v in boards.values()) or None,
+                     ', '.join(errors) or None))
+    else:
+        rows.append(('boards', 'unavailable', None, None, None))
+    return rows
+
+
 def logs():
-    units = [SAMPLER.unit(s) for s in SERVICES] + [t for t in TIMERS]
+    units = [SAMPLER.unit(s) for s in SERVICES] + [t for t in TIMERS] + SZSITE_UNITS
     cmd = ['journalctl', '--no-pager', '-o', 'json', '-p', 'warning', '--since', '24 hours ago', '-n', '500']
     for u in units:
         cmd += ['-u', u + '.service']
@@ -1142,12 +1241,34 @@ def start_pollers():
     every = lambda: UI['interval']  # noqa: E731
     for name, fn, ev in (('sample', SAMPLER, every), ('traffic', traffic, every), ('health', health, lambda: max(3, UI['interval'])),
                          ('egress', egress, lambda: 30), ('db', databases, lambda: 10), ('timers', timers, lambda: 15),
-                         ('logs', logs, lambda: 15), ('learning', learning, lambda: 60), ('usage', usage, lambda: 60)):
+                         ('logs', logs, lambda: 15), ('learning', learning, lambda: 60), ('usage', usage, lambda: 60),
+                         ('szsite', szsite, lambda: 15)):
         POLL[name] = Poller(name, fn, ev)
     for p in POLL.values():
         p.start()
 
 # ---------------------------------------------------------------- what needs a look
+
+
+def szsite_alerts(z, now=None):
+    """The SŽ reader's alerts (Data tab): a unit down, no /status, a job failing, paused, or WARP not hiding the VM's IP."""
+    if not z or not z.get('on'):
+        return []
+    out = []
+    for u, d in z['units'].items():
+        if (u != 'prestop-szsite-warp' or z['warp_on']) and d['state'] != 'active':
+            out.append(('bad' if d['state'] in ('failed', 'inactive', 'unknown') else 'warn', 'data', f'SŽ reader: {svc_name(u)} is {d["state"]}'))
+    if z.get('paused'):
+        out.append(('warn', 'data', 'SŽ reader paused: memory low (szsite-guard)'))
+    if z.get('status_error'):
+        out.append(('bad', 'data', f'SŽ reader not answering: {z["status_error"]}'))
+    for label, st, _, _, err in szsite_jobs(z, now):
+        if st in ('error', 'stale') and not z.get('status_error'):
+            out.append(('bad' if err in ('challenge', 'blocked') else 'warn', 'data', f'SŽ reader {label}: {err or st}'))
+    w = z.get('warp')
+    if z['warp_on'] and (not w or w.get('error') or w.get('warp') not in ('on', 'plus')):
+        out.append(('bad', 'data', f'WARP not hiding the VM: {(w or {}).get("error") or "warp=" + str((w or {}).get("warp"))}'))
+    return out
 
 
 def alerts():
@@ -1216,6 +1337,7 @@ def alerts():
             out.append(('warn', 'services', 'no database backup found'))
         elif time.time() - b[-1][2] > 30 * 3600:
             out.append(('warn', 'services', f'last backup {ago(b[-1][2])}'))
+    out += szsite_alerts(val('szsite'))
     if lg:
         n = sum(1 for x in lg if x['p'] <= 3 and x['t'] > time.time() - 3600)
         if n:
@@ -1640,7 +1762,53 @@ def tab_data(w):
                 kv('keys', ' · '.join(f'{k} {v}' for k, v in r['keys'].items()) or '0'),
                 kv('ops', (f'{r["ops"]}/s  ', 'text')) + spark(DB_HIST['ops'], max(0, iw - 22), style='rx', name='operations a second')]
         return panel('Redis', body, cw, f'{r["version"]} · up {dur(r["uptime"])}')
-    return columns(w, [api], [sources]) + columns(w, [postgres], [redis_])
+    return columns(w, [api], [sources]) + columns(w, [postgres], [redis_]) + szsite_panel(w)
+
+
+def szsite_panel(w, z=None, now=None):
+    """The SŽ reader (README: SŽ reader): units, solves, the WARP exit and each job; nothing while it is off."""
+    z = val('szsite') if z is None else z
+    if not z or not z.get('on'):
+        return []
+    now = time.time() if now is None else now
+    mem = z.get('mem') or {}
+    names = {'prestop-szsite': ('reader', None), 'prestop-szsite-solver': ('solver', 'flaresolverr'), 'prestop-szsite-warp': ('warp', 'warp')}
+    units = []
+    for u, d in z['units'].items():
+        if u == 'prestop-szsite-warp' and not z['warp_on']:
+            continue
+        label, box = names.get(u, (u, None))
+        units += [('● ', status_style(d['state'])), (label + ' ', 'text'), (mem[box] + '   ' if box in mem else '  ', 'dim')]
+    body = [kv('Units', *units, lw=13)]
+    if z.get('paused'):
+        body.append(kv('Paused', ('memory under 2 GB: szsite-guard stopped it', 'warn'), lw=13))
+    solves = z.get('solves') or []
+    body.append(kv('Clearance', (f'solved {ago(z["cleared_at"])}' if z.get('cleared_at') else 'none yet', 'text'),
+                   (f'  · {len(solves)} solve{"s" * (len(solves) != 1)} today' + (f', last {clock(solves[-1])}' if solves else ''), 'dim'), lw=13))
+    wp = z.get('warp')
+    if not z['warp_on']:
+        body.append(kv('WARP', ('off', 'dim'), ("  SŽ sees this VM's own IP", 'faint'), lw=13))
+    elif not wp:
+        body.append(kv('WARP', ('● ', 'bad'), ('on, but no PRESTOP_SZSITE_PROXY', 'bad'), lw=13))
+    elif wp.get('error'):
+        body.append(kv('WARP', ('● ', 'bad'), (f'proxy check failed: {wp["error"]}', 'bad'), lw=13))
+    else:
+        hidden = wp.get('warp') in ('on', 'plus')
+        ips = z.get('warp_ips') or []
+        body.append(kv('WARP', ('● ', 'ok' if hidden else 'bad'), (f'warp={wp.get("warp")} ', 'text' if hidden else 'bad'),
+                       (f'exit {wp.get("ip")} {wp.get("colo", "")}', 'text'),
+                       (f'  · {len(ips)} exit IP{"s" * (len(ips) != 1)} since top started' if ips else '', 'dim'), lw=13))
+    if z.get('status_error'):
+        body.append(kv('Status', ('● ', 'bad'), (f'no answer: {z["status_error"]}', 'bad'), lw=13))
+    else:
+        body += [[], L(cell('job', 14, 'dim'), cell('state', 13, 'dim'), cell('count', 8, 'dim', True), cell('  updated', 14, 'dim'), ('error', 'dim'))]
+        for label, st, count, at, err in szsite_jobs(z, now):
+            body.append(L(('● ', status_style(st)), cell(label, 12, 'text'), cell(st, 13, status_style(st)),
+                          cell('–' if count is None else count, 8, 'text', True), cell('  ' + (ago(at) if at else '–'), 14, 'dim'),
+                          (err or '', 'bad' if err in ('challenge', 'blocked') else 'warn')))
+        if not z.get('in_service', True):
+            body.append(L(('live trains are not fetched 00:30–04:30', 'faint')))
+    return panel('SŽ reader', body, w, 'our reader of potniski.sz.si')
 
 
 def tab_learning(w):

@@ -231,8 +231,10 @@ requests themselves, ≈ 5,000 a day × ~1 KB ≈ **5 MB/day**, well inside the 
 
 **Tested on a PC, not yet on the VM:** the same FlareSolverr image (v3.5.2, amd64) passes SŽ's Cloudflare check from the home
 IP in ~13 s, WARP not needed. The reader then ran 50 min unattended and solved again by itself when Cloudflare re-challenged
-after 30 min (6 Nov; the research doc has the runs). So leave `PRESTOP_SZSITE_WARP=off` unless the VM's IP is refused. The
-arm64 image and the WARP container have not run on the VM yet. If `/status` keeps showing `challenge` errors there, turn it
+after 30 min (6 Nov; the research doc has the runs). The WARP path also passed (6 Nov, one round, not the 30-min re-challenge):
+our own `prestop-warp:local` image with the unit's flags, the solver's browser and the reader's plain requests both left from
+the same WARP IP (not the home IP), and `--once` live/status/boards all worked from an empty state. WARP is optional: turn it on
+to keep the VM's IP hidden from SŽ. The arm64 images have not run on the VM yet. If `/status` keeps showing `challenge` errors there, turn it
 off: derp-si, zamudil.si and `yarn server:update --sz <file>` (the hand route) keep working.
 
 ## Files

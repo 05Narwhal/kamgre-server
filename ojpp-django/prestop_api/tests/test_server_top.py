@@ -131,6 +131,73 @@ class UsageTests(TestCase):
 
 
 @skipUnless(TOP_PY.exists(), 'the deploy bundle is not next to this checkout')
+class SzsiteTests(SimpleTestCase):
+    """The SŽ reader panel on the Data tab and its alerts (README: SŽ reader)."""
+    NOW = 1_800_000_000.0
+
+    def reader(self, **kw):
+        active = {'state': 'active', 'since': self.NOW - 600}
+        jobs = {'active_trains': {'at': self.NOW - 20, 'ok': True, 'error': None, 'count': 26},
+                'notices': {'at': self.NOW - 300, 'ok': True, 'error': None, 'count': 50},
+                'works': {'at': self.NOW - 300, 'ok': True, 'error': None, 'count': 48},
+                'delays': {'at': self.NOW - 300, 'ok': True, 'error': None, 'count': 15},
+                'board-42300': {'at': self.NOW - 60, 'ok': True, 'error': None, 'count': 13},
+                'board-43400': {'at': self.NOW - 90, 'ok': True, 'error': None, 'count': 9}}
+        z = {'on': True, 'warp_on': True, 'proxy': 'http://127.0.0.1:40000', 'paused': False, 'in_service': True,
+             'units': {u: dict(active) for u in top.SZSITE_UNITS}, 'jobs': jobs, 'cleared_at': self.NOW - 900,
+             'solves': [self.NOW - 900], 'warp': {'ip': '2a09:bac1::75', 'colo': 'VIE', 'warp': 'on'},
+             'warp_ips': [('2a09:bac1::75', 'VIE', self.NOW - 900)], 'mem': {'flaresolverr': '612MiB', 'warp': '41MiB'}}
+        z.update(kw)
+        return z
+
+    def test_a_healthy_reader_through_warp_draws_at_every_width_with_no_alert(self):
+        z = self.reader()
+        for w in (80, 104, 160):
+            drawn = text(top.fit(x, w) for x in top.szsite_panel(w, z, self.NOW))
+            for word in ('SŽ reader', 'solver', '612MiB', 'warp=on', 'exit 2a09:bac1::75 VIE', 'live trains', 'boards', '2/2', '1 solve today'):
+                self.assertIn(word, drawn)
+            self.assertTrue(all(len(x) == w for x in drawn.splitlines()))
+        self.assertEqual(top.szsite_alerts(z, self.NOW), [])
+
+    def test_off_draws_nothing_and_warp_off_says_the_vm_ip_shows(self):
+        self.assertEqual(top.szsite_panel(120, {'on': False}, self.NOW), [])
+        self.assertEqual(top.szsite_alerts({'on': False}, self.NOW), [])
+        z = self.reader(warp_on=False, proxy='', warp=None)
+        z['units']['prestop-szsite-warp']['state'] = 'inactive'  # not wanted, so not an alert
+        self.assertIn("SŽ sees this VM's own IP", text(top.szsite_panel(120, z, self.NOW)))
+        self.assertEqual(top.szsite_alerts(z, self.NOW), [])
+
+    def test_a_challenge_a_stale_board_a_dead_solver_and_warp_off_are_alerts(self):
+        z = self.reader(warp={'ip': '46.122.96.203', 'colo': 'VIE', 'warp': 'off'})
+        z['jobs']['active_trains'].update(ok=False, error='challenge')
+        z['jobs']['board-43400']['at'] = self.NOW - 3600
+        z['units']['prestop-szsite-solver']['state'] = 'failed'
+        said = {t for _, _, t in top.szsite_alerts(z, self.NOW)}
+        self.assertEqual(said, {'SŽ reader: szsite-solver is failed', 'SŽ reader live trains: challenge', 'SŽ reader boards: stale',
+                                'WARP not hiding the VM: warp=off'})
+        drawn = text(top.szsite_panel(120, z, self.NOW))
+        self.assertIn('challenge', drawn)
+        self.assertIn('1/2', drawn)
+
+    def test_live_trains_resting_at_night_is_not_stale(self):
+        z = self.reader(in_service=False)
+        z['jobs']['active_trains']['at'] = self.NOW - 3 * 3600
+        self.assertEqual(top.szsite_alerts(z, self.NOW), [])
+
+    def test_the_warp_exit_is_checked_once_a_minute_and_new_ips_are_kept(self):
+        top.WARP.update(at=0.0, last=None, ips=[])
+        answers = iter([b'ip=1.1.1.1\ncolo=VIE\nwarp=on\n', b'ip=2.2.2.2\ncolo=MXP\nwarp=on\n'])
+        opener = mock.Mock()
+        opener.open.side_effect = lambda *a, **k: mock.MagicMock(**{'__enter__.return_value.read.return_value': next(answers)})
+        with mock.patch.object(top.urllib.request, 'build_opener', return_value=opener):
+            self.assertEqual(top.warp_exit('http://p', 100)['ip'], '1.1.1.1')
+            self.assertEqual(top.warp_exit('http://p', 130)['ip'], '1.1.1.1')  # not asked again yet
+            self.assertEqual(top.warp_exit('http://p', 161)['ip'], '2.2.2.2')
+        self.assertEqual([ip for ip, _, _ in top.WARP['ips']], ['1.1.1.1', '2.2.2.2'])
+        top.WARP.update(at=0.0, last=None, ips=[])
+
+
+@skipUnless(TOP_PY.exists(), 'the deploy bundle is not next to this checkout')
 class MouseTests(SimpleTestCase):
     def view(self, lines):
         return {'regions': top.regions(lines), 'mouse': None}
