@@ -9,7 +9,7 @@
 | rentals              | OTP rental stations and floating vehicles  | 60 s    |
 | boards, journeys     | OTP per request (realtime already applied) | —       |
 """
-from datetime import datetime
+from datetime import date, datetime
 import json
 import logging
 import threading
@@ -75,11 +75,19 @@ def _load_stops():
     merged, groups = stopgroups.merge(built, overrides['merge'], overrides['stations'], ways, ends, fixed)
     # Each side of a stop on its own side of the road (Slovenia drives on the right), at OSM's pole when one is close.
     stopgroups.place_sides(merged, built, ways, fixed | set(overrides['stations']), stopfix.osm_poles())
-    # Same-name poles close together are one marker below z16 (the map draws them so; ids and boards unchanged).
+    # Poles close together are one marker below z16 (the map draws them so; ids and boards unchanged), named after
+    # its busiest pole.
     place_of = stopgroups.places(merged)
+    marker_of = {member: ids[0] for member, ids in groups.items() if ids}
+    busy: dict[str, int] = {}
+    for seq in sequences:
+        for marker in {marker_of.get(s, s) for s in seq}:
+            busy[marker] = busy.get(marker, 0) + 1
+    place_name = stopgroups.place_names(place_of, {s['id']: s['name'] for s in merged}, busy)
     for i, station in enumerate(merged):
         if station['id'] in place_of:
-            merged[i] = station = {**station, 'placeKey': place_of[station['id']]}
+            key = place_of[station['id']]
+            merged[i] = station = {**station, 'placeKey': key, 'placeName': place_name[key]}
         # Where SŽ's replacement buses leave from when that is beside the station, not at it.
         nearby = [r for sid in station.get('memberIds') or [station['id']] for r in overrides['replacement'].get(sid, [])]
         if nearby:
@@ -95,8 +103,7 @@ def _load_stops():
     places: dict[str, list[str]] = {}
     for marker, key in place_of.items():
         places.setdefault(key, []).append(marker)
-    marker_of = {member: ids[0] for member, ids in groups.items() if ids}
-    names = {s['id']: s['name'] for s in merged}
+    names ={s['id']: s['name'] for s in merged}
     pole_towards = stopgroups.towards(sequences, marker_of, names, set(place_of))
     return {'list': merged, 'all': built, 'groups': groups, 'routes': routes, 'directions': ways, 'bayStations': platforms.resolve(built),
             'places': places, 'towards': pole_towards}
@@ -163,7 +170,32 @@ def _load_positions():
 
 
 def _load_trip_updates():
-    return _with_old_ids(supplement.with_own_ids(mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024))))
+    index = _with_old_ids(supplement.with_own_ids(mapping.trip_update_index(get_json(settings.PRESTOP_RT_TRIP_UPDATES_URL, limit=48 * 1024 * 1024))))
+    return with_inferred(index, time.time())
+
+
+# Runs of the hand-kept timetables a live bus was placed on by its path (_load_vehicles, N3): Marprom's feed names
+# them by its own trip ids, which no board knows. Each gets a trip update of its own under our run id, with the delay
+# the bus has against our times at its next stop, so boards, trip pages and journeys read it like any feed's.
+INFERRED_AGE = 180  # s an inferred update outlives the last report that placed its bus
+inferred_updates: dict[str, tuple[dict, float]] = {}
+
+
+def _infer_update(run_id: str, stop_id: Optional[str], delay: int, call: dict, now: float):
+    item = {'stopId': stop_id, 'arrival': {'delay': delay}, 'departure': {'delay': delay}}
+    if call.get('stopSequence') is not None:
+        item['stopSequence'] = call['stopSequence']
+    inferred_updates[run_id] = ({'trip': {'tripId': run_id, 'startDate': call.get('startDate')}, 'updates': [item], 'inferred': True}, now)
+
+
+def with_inferred(index: dict, now: float) -> dict:
+    """The trip-update index with the inferred updates still fresh, never over the feed's own for a run."""
+    for run_id, (update, at) in list(inferred_updates.items()):
+        if at < now - INFERRED_AGE:
+            inferred_updates.pop(run_id, None)
+        else:
+            index.setdefault(run_id, update)
+    return index
 
 
 positions = Cached(_load_positions, ttl=5, max_stale=120, revalidate=30)
@@ -345,6 +377,20 @@ motion_history = mapping.MotionHistory()
 loose_vehicles = mapping.LooseVehicles()
 
 
+def _service_day(trip: dict, now: float) -> date:
+    """The service day a feed entity's run started on: its `startDate`, else today."""
+    try:
+        return datetime.strptime(trip.get('startDate') or '', '%Y%m%d').date()
+    except ValueError:
+        return datetime.fromtimestamp(now, supplement.LOCAL).date()
+
+
+def _on_line(entity: dict, route_id: str) -> dict:
+    """A copy of a feed entity naming its line, so LooseVehicles matches it to that line's runs only."""
+    v = entity.get('vehicle') or {}
+    return {**entity, 'vehicle': {**v, 'trip': {**(v.get('trip') or {}), 'routeId': route_id}}}
+
+
 def _load_vehicles(drops: Optional[list] = None):
     """`drops`: collects each feed entity or timetable train left out and why (coverage.note)."""
     pos = positions.get()
@@ -356,26 +402,52 @@ def _load_vehicles(drops: Optional[list] = None):
     own = {t for t in trip_ids if t and supplement.owns(t)}
     infos = trip_info.get_many([t for t in trip_ids if t and t not in own])
     infos.update({t: info for t in own if (info := supplement.trip_info(t))})
-    unknown = [t for t in trip_ids if t and (infos.get(t) or {}).get('routeId') not in route_index]
+    known = {t for t, info in infos.items() if info.get('routeId')}
+    unknown =[t for t in trip_ids if t and (infos.get(t) or {}).get('routeId') not in route_index]
     if unknown and _safe(patterns):
         index = patterns.get().value
         for t in unknown:
             guess = infer_trip(updates.get(t), index, route_index)
             if guess:
                 infos[t] = {**(infos.get(t) or {}), **{k: v for k, v in guess.items() if v}}
+    # A hand-kept timetable's bus under a trip id that timetable lacks (Marprom's own numbering, or a bare 'MARPROM:',
+    # N3, 5 Nov) is drawn on its line either way, but placed on our run only by the path it follows (below).
+    # Likewise OTP's run of a line a correction (replaces.txt) replaces that day, or a run OTP lacks on such a line
+    # (Brežice 1, 2, Koper 9, Postojna, N3, 6 Nov): placed on the correction's runs of that line.
+    now = time.time()
+    stale_trips = {t for t in trip_ids if t and supplement.stale(t)}
+    lines: dict[int, str] = {}
+    for e, t in zip(pos.value, trip_ids):
+        trip = (e.get('vehicle') or {}).get('trip') or {}
+        route = (infos.get(t) or {}).get('routeId') or trip.get('routeId')
+        if t and t not in stale_trips and supplement.superseded(t, route, _service_day(trip, now), t in known):
+            lines[id(e)] = route
+    foreign_trips = stale_trips | {t for e, t in zip(pos.value, trip_ids) if id(e) in lines}
+    foreign = {id(e) for e, t in zip(pos.value, trip_ids) if t in foreign_trips}
     live = mapping.build_vehicles(pos.value, updates, infos, route_index, stop_names(), history=motion_history, drops=drops)
     # Vehicles the feed sends without a trip: on the map with the run of the operators' own timetables they are seen
     # to run (mapping.LooseVehicles), marked inferred; one that is a drawn vehicle under another id stays off.
-    now = time.time()
-    loose = [e for e in pos.value if not mapping.entity_trip(e, updates)]
-    for e, run_id, delay, stop_id in loose_vehicles.assign(loose, [v['tripId'] for v in live if v.get('tripId')], motion_history,
-                                                           lambda: supplement.running(now), now, drops):
+    loose = [_on_line(e, lines[id(e)]) if id(e) in lines else e
+             for e in pos.value if not mapping.entity_trip(e, updates) or id(e) in foreign]
+    by_vehicle = {v['id']: v for v in live if v.get('tripId') in foreign_trips}
+    placed_ids = set()
+    for e, run_id, delay, stop_id, call in loose_vehicles.assign(loose, [v['tripId'] for v in live if v.get('tripId') and v['id'] not in by_vehicle],
+                                                                 motion_history, lambda: supplement.running(now), now, drops):
+        trip = (e['vehicle'].get('trip') or {})
         placed = {**e, 'vehicle': {**e['vehicle'], 'trip': {'tripId': run_id}, 'stopId': stop_id}}
         for v in mapping.build_vehicles([placed], updates, {run_id: supplement.trip_info(run_id)}, route_index, stop_names(), now, motion_history):
             v['quality'] = 'inferred'
-            if v['delaySeconds'] is None:
-                v['delaySeconds'] = delay
+            if v['delaySeconds'] is None or trip.get('tripId'):
+                v['delaySeconds'] = delay  # the feed's own delay is against its own timetable, not ours
+            placed_ids.add(v['id'])
+            live = [w for w in live if w['id'] != v['id']]
             live.append(v)
+            if trip.get('tripId'):
+                _infer_update(run_id, stop_id, delay, call, now)
+    # The others stay drawn on their line, with no trip page to open (never the feed's id: it 404s).
+    for vehicle_id, v in by_vehicle.items():
+        if vehicle_id not in placed_ids:
+            v['tripId'] = None
     from . import sz
     for v in live:
         if v['mode'] == 'rail':
@@ -388,8 +460,13 @@ def _load_vehicles(drops: Optional[list] = None):
     except UpstreamError as e:
         logger.warning('Scheduled trains unavailable: %r', e)
         trains = []
-    # City buses of the hand-kept timetables (no live positions) by their timetable too.
-    trains += scheduled.city_buses(now, frozenset(v['tripId'] for v in live if v.get('tripId')), drops)
+    # City buses of the hand-kept timetables (no live positions) by their timetable too; not on a line whose buses report
+    # live now (Marprom, N3): one not placed on a run is drawn on its line already, a timetable copy would sit beside it.
+    reporting = {((e.get('vehicle') or {}).get('trip') or {}).get('routeId') for e in pos.value} - {None, ''}
+    skip = {v['tripId'] for v in live if v.get('tripId')}
+    if any(supplement.owns(r) for r in reporting):
+        skip |= {r['id'] for r in supplement.running(now, margin=300) if r.get('routeId') in reporting}
+    trains += scheduled.city_buses(now, frozenset(skip), drops)
     broken = [v for v in trains if not mapping.fits_contract(v)]
     if broken:
         logger.warning('Timetable vehicles left out, they break the contract: %s', ', '.join(str(v.get('id')) for v in broken[:5]))
@@ -610,7 +687,7 @@ _boards: dict[tuple, tuple[float, int, Optional[list[dict]]]] = {}
 
 
 def place_poles(stop_id: str) -> list[str]:
-    """The markers of the place `stop_id` is in (same-name poles within 60 m, stopgroups.places), key first;
+    """The markers of the place `stop_id` is in (poles within 40 m, same-name ones within 60 m: stopgroups.places), key first;
     just `stop_id` when it is in none."""
     snap = stops.peek() or stops.get()
     value = snap.value

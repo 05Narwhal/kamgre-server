@@ -112,6 +112,39 @@ class MergeTests(SimpleTestCase):
         self.assertEqual(next(s['name'] for s in merged if s['id'] == 'IJPP:rail'), 'Kranj')
 
 
+class SameSpotTests(SimpleTestCase):
+    """N9 rule 1: poles within 20 m going the same way are one stop whatever their names; never across a road."""
+    LAT, LON = 46.5344, 15.6459
+
+    def at(self, id_, name, metres_north, modes=('bus',)):
+        return stop(id_, name, north_of(self.LAT, metres_north), self.LON, modes)
+
+    def test_two_feeds_names_for_one_pole_are_one_stop_named_by_the_national_feed(self):
+        stops = [self.at('IJPP:1122368', 'Maribor ELKO', 0), self.at('MARPROM:680', 'Tržaška - Lidl', 8)]
+        merged, groups = stopgroups.merge(stops, ways={'IJPP:1122368': NORTH, 'MARPROM:680': NORTH})
+        self.assertEqual(groups['MARPROM:680'], ['IJPP:1122368', 'MARPROM:680'])
+        self.assertEqual([s['name'] for s in merged], ['Maribor ELKO'])
+
+    def test_opposite_ways_unknown_ways_far_poles_and_stations_stay_apart(self):
+        for ways, second_at, modes in [({'A:1': NORTH, 'B:1': [(0.0, -1.0)]}, 8, ('bus',)), ({'A:1': NORTH}, 8, ('bus',)),
+                                       ({'A:1': NORTH, 'B:1': NORTH}, 25, ('bus',)), ({'A:1': NORTH, 'B:1': NORTH}, 8, ('rail',))]:
+            merged, _ = stopgroups.merge([self.at('A:1', 'Trg', 0), self.at('B:1', 'Pošta', second_at, modes)], ways=ways)
+            self.assertEqual(len(merged), 2, (ways, second_at, modes))
+
+    def test_a_name_merge_never_chains_two_other_named_stops_apart(self):
+        """Ljubljana: LPP's Savsko naselje is 5 m from IJPP's Ljubljana Središka, LPP's own Središka 60 m on."""
+        stops = [self.at('LPP:s', 'Savsko naselje', 0), self.at('IJPP:1', 'Ljubljana Središka', 5), self.at('LPP:r', 'Središka', 60)]
+        _, groups = stopgroups.merge(stops, ways={s['id']: NORTH for s in stops})
+        self.assertNotIn('LPP:r', groups.get('LPP:s', []))
+        self.assertEqual(sorted(groups['LPP:s']), ['IJPP:1', 'LPP:s'])
+
+    def test_a_merged_away_id_resolves_to_its_group(self):
+        stops = [self.at('IJPP:1', 'Maribor ELKO', 0), self.at('MARPROM:680', 'Tržaška - Lidl', 8)]
+        snap = mock.Mock(value={'groups': stopgroups.merge(stops, ways={s['id']: NORTH for s in stops})[1]})
+        with mock.patch.object(sources.stops, 'peek', return_value=snap):
+            self.assertEqual(sources.stop_group('MARPROM:680'), ['IJPP:1', 'MARPROM:680'])
+
+
 class MemberNameTests(SimpleTestCase):
     def test_a_line_view_names_each_member_stop_itself(self):
         payload = {**LINE_PAYLOAD, 'patterns': [{**LINE_PAYLOAD['patterns'][0], 'stops': [
@@ -426,10 +459,23 @@ class PlaceTests(SimpleTestCase):
         out = stopgroups.places([self.at('X:a', 'Vas', 0), self.at('X:b', 'Vas', 38), self.at('X:c', 'Vas', 80)])
         self.assertEqual(out, {'X:a': 'X:a', 'X:b': 'X:a'})
 
-    def test_different_names_far_poles_and_stations_are_left_alone(self):
+    def test_any_names_within_40_m_share_a_place_far_poles_and_stations_are_left_alone(self):
+        """N9 rule 3: below z16 every pole within 40 m of the others is one place whatever its name; a railway station never."""
         out = stopgroups.places([self.at('X:a', 'Brežice K', 0), self.at('X:b', 'Brežice GD', 10), self.at('X:c', 'Brežice K', 70),
                                  self.at('SZ:1', 'Brežice', 5, ('rail',)), self.at('X:d', 'Brežice', 20)])
-        self.assertEqual(out, {})
+        self.assertEqual(out, {'X:a': 'X:a', 'X:b': 'X:a', 'X:d': 'X:a'})
+
+    def test_other_names_join_up_to_40_m_same_names_up_to_60_m(self):
+        self.assertEqual(stopgroups.places([self.at('X:a', 'Trg', 0), self.at('X:b', 'Pošta', 45)]), {})
+        self.assertEqual(stopgroups.places([self.at('X:a', 'Trg', 0), self.at('X:b', 'Trg', 55)]), {'X:a': 'X:a', 'X:b': 'X:a'})
+        # Chain-free: Pošta is 30 m from Trg's second pole but 55 m from the first, so it stays out.
+        self.assertEqual(stopgroups.places([self.at('X:a', 'Trg', 0), self.at('X:b', 'Trg', 25), self.at('X:c', 'Pošta', 55)]),
+                         {'X:a': 'X:a', 'X:b': 'X:a'})
+
+    def test_a_place_is_named_after_its_busiest_pole(self):
+        place_of = {'X:a': 'X:a', 'X:b': 'X:a', 'X:c': 'X:c', 'X:d': 'X:c'}
+        names = {'X:a': 'Brežice GD', 'X:b': 'Brežice K', 'X:c': 'Trg', 'X:d': 'Pošta'}
+        self.assertEqual(stopgroups.place_names(place_of, names, {'X:a': 3, 'X:b': 9}), {'X:a': 'Brežice K', 'X:c': 'Trg'})  # a tie: the smallest id
 
     def test_alike_names_from_two_feeds_share_a_place(self):
         self.assertEqual(stopgroups.places([self.at('LPP:1', 'Bavarski dvor', 0), self.at('IJPP:2', 'Ljubljana Bavarski dvor', 45)]),

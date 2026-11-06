@@ -298,6 +298,18 @@ def replaced(route_id: Optional[str], day: date) -> bool:
     return any(t['routeId'] == route_id and runs(feed, t['serviceId'], day) for t in feed['trips'].values())
 
 
+def superseded(trip_id: str, route_id: Optional[str], day: date, known: bool = True) -> bool:
+    """A live bus's run that a correction leaves with no board row and no trip page (N3, 6 Nov): OTP's run of a line
+    the correction replaces on that service day (corrected_board drops its calls), or a run OTP does not know (`known`
+    False) on a line the correction answers for. The correction's own runs are never superseded."""
+    feed = _correction(route_id or '')
+    if feed is None or not trip_id or _trip(feed, trip_id) is not None:
+        return False
+    if route_id not in feed['routes'] and route_id not in feed['replaces']:
+        return False
+    return not known or replaced(route_id, day)
+
+
 def leg_replaced(leg: dict) -> bool:
     """A journey leg (OTP's) riding a run a correction replaces (supplement.replaced), by the day it starts."""
     at = (leg.get('start') or {}).get('scheduledTime') or ''
@@ -599,7 +611,8 @@ def timetable_runs(now: float, before: int, after: int) -> list[dict]:
 
 def running(now: float, margin: int = 1800) -> list[dict]:
     """Runs of these timetables on the road around `now` (from `margin` s before their first departure to as long after
-    their last arrival), as mapping.match_run takes them: {'id', 'stops': [(lat, lon, scheduled epoch)], 'stopIds'}."""
+    their last arrival), as mapping.match_run takes them: {'id', 'routeId', 'date' (YYYYMMDD), 'stops': [(lat, lon,
+    scheduled epoch)], 'stopIds', 'sequences'}."""
     out = []
     today = datetime.fromtimestamp(now, LOCAL).date()
     for feed in _feeds().values():
@@ -607,6 +620,8 @@ def running(now: float, margin: int = 1800) -> list[dict]:
             base = day_start(day)
             for t in feed['trips'].values():
                 if base + t['stops'][0]['departure'] - margin <= now <= base + t['stops'][-1]['arrival'] + margin and runs(feed, t['serviceId'], day):
-                    out.append({'id': t['id'], 'stops': [(feed['stops'][s['stopId']]['lat'], feed['stops'][s['stopId']]['lon'], base + s['departure'])
-                                                         for s in t['stops']], 'stopIds': [s['stopId'] for s in t['stops']]})
+                    out.append({'id': t['id'], 'routeId': t['routeId'], 'date': day.strftime('%Y%m%d'),
+                                'stops': [(feed['stops'][s['stopId']]['lat'], feed['stops'][s['stopId']]['lon'], base + s['departure'])
+                                          for s in t['stops']], 'stopIds': [s['stopId'] for s in t['stops']],
+                                'sequences': [s['sequence'] for s in t['stops']]})
     return out

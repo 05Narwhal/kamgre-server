@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the city timetables at 02:15, after the night window (a missed night is caught up at the next start)
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+Persistent=true
+RandomizedDelaySec=2min
+
+[Install]
+WantedBy=timers.target

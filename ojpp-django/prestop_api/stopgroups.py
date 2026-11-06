@@ -23,7 +23,10 @@ normalised names match (see `normalize`) and:
   SAME_SPOT_METERS (one feed) or NEAR_METERS (two feeds), whichever way their busiest lines leave ("KOLODVOR" and
   "SŽ KOLODVOR", 5 m); or two feeds' namesake bus stations ("Velenje" and "AP Velenje", 83 m) within MERGE_METERS;
 - the override table says so (`merge_into`, see stopfix.py), which also may pin the marker (the
-  three bays of Kozina's bus station, Tržič's).
+  three bays of Kozina's bus station, Tržič's);
+- whatever their names, they lie within SAME_STOP_METERS and most vehicles at both travel the same way (`main_way`):
+  one spot on one side of the road is one stop for a rider (spec 2026-11-05 N9, rule 1). Railway stations are left out;
+  board rows from a member named otherwise say "from: <name>".
 
 Opposite sides of a road are different stops for the direction you travel: two groups never join
 when any pair across them goes different ways (unless alike or one pole), or lies more than MERGE_METERS
@@ -45,6 +48,8 @@ from .mapping import fold
 MERGE_METERS = 150
 NEAR_METERS = 75
 SAME_SPOT_METERS = 25
+# Poles this close whose main way agrees are one stop whatever their names (N9 rule 1: "Brežice gimnazija" / "Brežice gim.").
+SAME_STOP_METERS = 20
 # Two feeds' poles this close are one pole, whatever their lines do next: each feed's direction comes from its own
 # previous and next stop, so the city line turning off makes Zgornje Bitnje K (MOKranj:103 / IJPP:1121360, 0.3 m)
 # look 80° apart. Only opposite ways keep them apart, unless one of them is served both ways (IJPP's single
@@ -280,6 +285,10 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
                 way, d = main_way(wx, wy), meters(stops[x], stops[y])
                 if d > MERGE_METERS or (shared and way is None):
                     return False
+                # Stops named otherwise are one only at one spot (rule 1): a name merge can't chain LPP's Središka and
+                # Savsko naselje (76 m) through IJPP's Središka pole beside the one.
+                if d > SAME_STOP_METERS and not (keys[x] == keys[y] or similar(stops[x]['name'], stops[y]['name'])):
+                    return False
                 if way is False and not (alike(wx, wy) and not opposite(wx, wy)) and not same_pole(stops[x], stops[y], ways, d) \
                         and not one_place(stops[x], stops[y], ways, ends, d):
                     return False
@@ -296,12 +305,21 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         for dy in (-1, 0, 1):
             for dx in (-1, 0, 1):
                 for j in cells.get((cy + dy, cx + dx), ()):
-                    if j > i and (d := meters(a, stops[j])) <= MERGE_METERS and (keys[i] == keys[j] or similar(a['name'], stops[j]['name'])):
-                        pairs.append((d, i, j))
+                    if j <= i or (d := meters(a, stops[j])) > MERGE_METERS:
+                        continue
+                    if keys[i] == keys[j] or similar(a['name'], stops[j]['name']):
+                        pairs.append((d, i, j, True))
+                    elif d <= SAME_STOP_METERS and not (stations[i] or stations[j]):
+                        pairs.append((d, i, j, False))
     # Closest pairs first: a stop joins its nearest fitting namesake before a farther one can.
-    for d, i, j in sorted(pairs):
+    for d, i, j, named in sorted(pairs):
         a, b = stops[i], stops[j]
         namesakes = keys[i] == keys[j]
+        if not named:
+            # One spot, one way, any names (rule 1); the groups still may not hold an opposite pair (may_join).
+            if main_way(ways.get(a['id']), ways.get(b['id'])) and may_join(i, j):
+                join(i, j)
+            continue
         if stations[i] or stations[j]:
             if namesakes:
                 join(i, j)
@@ -350,7 +368,8 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
         if any(meters(x, y) > SAME_SPOT_METERS for x in placed for y in placed):
             placed = [max(placed, key=lambda x: ('rail' in x['modes'], sum(meters(x, y) <= SAME_SPOT_METERS for y in ordered)))]
         lat, lon = pin or (sum(s['latitude'] for s in placed) / len(placed), sum(s['longitude'] for s in placed) / len(placed))
-        merged = {**head, 'name': head['name'] if stations[order[0]] else _fullest([s['name'] for s in ordered]),
+        # The fullest of the names alike the head's: a pole named otherwise at the same spot (rule 1) doesn't name it.
+        merged = {**head, 'name': head['name'] if stations[order[0]] else _fullest([s['name'] for s in ordered if similar(s['name'], head['name'])]),
                   'latitude': round(lat, 6), 'longitude': round(lon, 6),
                   'modes': sorted({m for s in ordered for m in s['modes']}),
                   'operatorIds': sorted({o for s in ordered for o in (s.get('operatorIds') or [])}),
@@ -433,15 +452,17 @@ def place_sides(markers: list[dict], stops: list[dict], ways: dict, fixed: set[s
 # ---------------------------------------------------------------- one place on a zoomed-out map (spec 2026-11-04 M8)
 
 PLACE_METERS = 60  # same-name bus markers this close are one place below z16: one marker, one label, one board
+PLACE_ANY_METERS = 40  # bus markers this close are one place below z16 whatever their names and ways (N9 rule 3)
 
 
 def places(markers: list[dict]) -> dict[str, str]:
     """Marker id -> its place's key, for bus markers sharing a place with another (alone: not listed).
 
-    A place is markers with alike names (`similar`) every two of which lie within PLACE_METERS: closest pairs join
-    first and a join that would put two markers further apart is refused, so places never chain along a road and
-    stay at most PLACE_METERS wide. Railway stations are places of their own. The key is the place's smallest
-    marker id. Merging and ids are untouched (`merge`); this only says which markers to draw as one when zoomed out."""
+    A place is markers every two of which lie within PLACE_ANY_METERS, or within PLACE_METERS with alike names
+    (`similar`), whichever way their vehicles go: closest pairs join first and a join that would put two markers
+    further apart is refused, so places never chain along a road. Railway stations are places of their own. The key
+    is the place's smallest marker id (`place_names` gives its label). Merging and ids are untouched (`merge`); this
+    only says which markers to draw as one when zoomed out."""
     bus = [m for m in markers if 'rail' not in m['modes']]
     keys = [normalize(m['name']) for m in bus]
     cells: dict[tuple[int, int], list[int]] = {}
@@ -451,7 +472,8 @@ def places(markers: list[dict]) -> dict[str, str]:
     for i, a in enumerate(bus):
         cy, cx = _cell(a)
         for j in (j for dy in (-1, 0, 1) for dx in (-1, 0, 1) for j in cells.get((cy + dy, cx + dx), ())):
-            if j > i and (d := meters(a, bus[j])) <= PLACE_METERS and (keys[i] == keys[j] or similar(a['name'], bus[j]['name'])):
+            if j > i and (d := meters(a, bus[j])) <= PLACE_METERS and \
+                    (d <= PLACE_ANY_METERS or keys[i] == keys[j] or similar(a['name'], bus[j]['name'])):
                 pairs.append((d, i, j))
     alike = {(i, j) for _, i, j in pairs}
     of = list(range(len(bus)))
@@ -469,6 +491,15 @@ def places(markers: list[dict]) -> dict[str, str]:
             key = min(bus[k]['id'] for k in group)
             out.update({bus[k]['id']: key for k in group})
     return out
+
+
+def place_names(place_of: dict[str, str], names: dict[str, str], busy: dict[str, int]) -> dict[str, str]:
+    """Place key -> its label: the name of its busiest marker (`busy`: marker id -> runs through it), then the
+    smallest id on a tie."""
+    members: dict[str, list[str]] = {}
+    for marker, key in place_of.items():
+        members.setdefault(key, []).append(marker)
+    return {key: names[min(ids, key=lambda m: (-busy.get(m, 0), m))] for key, ids in members.items()}
 
 
 def towards(sequences: list[list[str]], marker_of: dict[str, str], names: dict[str, str], poles: set[str]) -> dict[str, str]:

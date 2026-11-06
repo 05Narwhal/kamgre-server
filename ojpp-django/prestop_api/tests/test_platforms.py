@@ -272,6 +272,18 @@ class ResolveTests(SimpleTestCase):
         far = _stop('IJPP:7777', 'Ljubljana AP', 46.0650, 14.5150)  # ~780 m away: another stop
         self.assertEqual(platforms.resolve([RAIL, far])[KEY]['ids'], [])
 
+    def test_a_city_feeds_pole_named_after_the_station_is_not_the_station(self):
+        # N7: Kranj's city buses stop at their own "Kranj AP" poles on the street; taken as the station, they were put in
+        # intercity bays (and Marprom's "AP Mlinska" beside Maribor AP likewise). City feeds keep their own points.
+        stops = [_stop('IJPP:1121237', 'Kranj AP', 46.245851, 14.354465), _stop('MOKranj:112', 'Kranj AP', 46.24590, 14.35460),
+                 _stop('MARPROM:7', 'AP Mlinska', 46.5598, 15.6560), _stop('IJPP:1127365', 'Maribor AP', 46.55956, 15.65575)]
+        found = platforms.resolve(stops)
+        self.assertEqual(found['kranj-ap']['ids'], ['IJPP:1121237'])
+        self.assertEqual(found['maribor-ap']['ids'], ['IJPP:1127365'])
+        with self.resolved(stops):
+            self.assertIsNone(platforms.station_key('MOKranj:112'))
+            self.assertEqual(platforms.station_key('IJPP:1121237'), 'kranj-ap')
+
     def test_a_station_matching_no_stop_is_reported(self):
         with self.resolved([RAIL, _stop('IJPP:1', 'Kranj AP', 46.2463, 14.3547), _stop('IJPP:2', 'Maribor AP', 46.55956, 15.65575), _stop('IJPP:3', 'Idrija', 46.00098, 14.02571)]):
             self.assertEqual(platforms.unresolved(), [KEY])

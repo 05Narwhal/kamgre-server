@@ -305,3 +305,53 @@ class CorrectionTests(SimpleTestCase):
 
     def test_otps_stops_list_the_lines_it_adds(self):
         self.assertEqual([r['gtfsId'] for r in supplement.added_lines()['MOKoper:200']], ['MOKoper:2', 'MOKoper:9'])
+
+    def test_a_live_bus_on_a_run_the_correction_replaced_is_superseded(self):
+        """N3, 6 Nov: OTP's run of a replaced line loses its board row (corrected_board), so its bus goes on our run."""
+        self.assertTrue(supplement.superseded('MOKoper:otp-9', 'MOKoper:9', THURSDAY))
+        self.assertFalse(supplement.superseded('MOKoper:otp-9', 'MOKoper:9', SATURDAY))   # OTP's runs that day
+        self.assertFalse(supplement.superseded('MOKoper:fix-9-1', 'MOKoper:9', THURSDAY))  # our own run
+        self.assertFalse(supplement.superseded('MOKoper:otp-2', 'MOKoper:2', THURSDAY))   # added runs, OTP's kept
+        self.assertTrue(supplement.superseded('MOKoper:new-2', 'MOKoper:2', THURSDAY, known=False))  # an id OTP lacks
+        self.assertTrue(supplement.superseded('MOKoper:otp-5', 'MOKoper:5', SATURDAY))    # `all`, any day of its dates
+        self.assertFalse(supplement.superseded('MOKoper:otp-4', 'MOKoper:4', THURSDAY, known=False))  # a line it leaves alone
+        self.assertFalse(supplement.superseded('IJPP:1', 'IJPP:9', THURSDAY, known=False))
+        self.assertFalse(supplement.superseded('MOKoper:otp-9', None, THURSDAY))
+
+    def test_vehicles_place_a_superseded_bus_on_the_corrections_run(self):
+        """sources._load_vehicles hands such a bus to LooseVehicles naming its line, keeps OTP's run out of the drawn
+        runs, files our run id when it is placed and drops the trip id it can't open when it is not."""
+        from prestop_api import sources
+        from prestop_api.upstream import Snapshot, UpstreamError
+
+        def entity(vid, trip):
+            return {'id': vid, 'vehicle': {'vehicle': {'id': vid}, 'trip': {'tripId': trip, 'startDate': '20261105'},
+                                          'timestamp': '1', 'position': {'latitude': 45.54, 'longitude': 13.73}}}
+        feed = [entity('A', 'MOKoper:otp-9'), entity('B', 'MOKoper:otp-9b'), entity('C', 'MOKoper:otp-4')]
+        infos = {'MOKoper:otp-9': {'routeId': 'MOKoper:9'}, 'MOKoper:otp-9b': {'routeId': 'MOKoper:9'}, 'MOKoper:otp-4': {'routeId': 'MOKoper:4'}}
+        cache = lambda value: mock.Mock(get=lambda: Snapshot(value, 0), peek=lambda: Snapshot(value, 0))
+        failing = mock.Mock(get=mock.Mock(side_effect=UpstreamError('x')))
+
+        def build(entities, updates, trips, *args, **kw):
+            return [{'id': e['id'], 'tripId': e['vehicle']['trip']['tripId'], 'mode': 'bus', 'routeName': '9', 'delaySeconds': None} for e in entities]
+        seen = {}
+
+        def assign(entities, drawn_runs, *args):
+            seen['lines'] = {e['id']: e['vehicle']['trip'].get('routeId') for e in entities}
+            seen['drawn'] = list(drawn_runs)
+            a = next(e for e in entities if e['id'] == 'A')
+            return [(a, 'MOKoper:fix-9-1', 60, 'MOKoper:200', {'stopSequence': 2, 'startDate': '20261105'})]
+        with mock.patch.multiple(sources, positions=cache(feed), trip_updates=cache({}), routes=cache({'MOKoper:9': {}, 'MOKoper:4': {}}),
+                                 stops=cache({}), patterns=failing, stop_names=lambda: {}, inferred_updates={}), \
+                mock.patch.object(sources.trip_info, 'get_many', return_value=infos), \
+                mock.patch.object(sources.mapping, 'build_vehicles', build), mock.patch.object(sources.mapping, 'fits_contract', return_value=True), \
+                mock.patch.object(sources.loose_vehicles, 'assign', assign), \
+                mock.patch('prestop_api.scheduled.vehicles', return_value=[]), mock.patch('prestop_api.scheduled.city_buses', return_value=[]):
+            out = {v['id']: v for v in sources._load_vehicles()}
+            filed = dict(sources.inferred_updates)
+        self.assertEqual(seen['lines'], {'A': 'MOKoper:9', 'B': 'MOKoper:9'})   # line 4 is OTP's: drawn as it is
+        self.assertEqual(seen['drawn'], ['MOKoper:otp-4'])
+        self.assertEqual((out['A']['tripId'], out['A']['quality'], out['A']['delaySeconds']), ('MOKoper:fix-9-1', 'inferred', 60))
+        self.assertIsNone(out['B']['tripId'])
+        self.assertEqual(out['C']['tripId'], 'MOKoper:otp-4')
+        self.assertEqual(list(filed), ['MOKoper:fix-9-1'])

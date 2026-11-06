@@ -1,0 +1,22 @@
+[Unit]
+Description=Prestop city timetable check (which hand-kept feed expires soon or has a new source timetable; /health cityTimetables)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=prestop
+Group=prestop
+EnvironmentFile=/etc/prestop/prestop.env
+WorkingDirectory=/opt/prestop/app
+ExecStart=/opt/prestop/venv/bin/python manage.py citytt_check
+# A few HEAD/GET requests to the operators' list pages and one small JSON file; no PDF downloads, no Valhalla.
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=200M
+TimeoutStartSec=5min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
