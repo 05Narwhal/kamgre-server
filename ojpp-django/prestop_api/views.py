@@ -716,6 +716,23 @@ def hop_send(request):
     return envelope(_hop(lambda hop: hop.send(body)), 'live', used=['none'])
 
 
+def _run_ends() -> dict[str, tuple[str, str]]:
+    """Route id -> (first stop, last stop) of its runs: the busiest ends (mapping.popular_ends), else the first run's;
+    {} without patterns."""
+    try:
+        runs = sources.patterns.get().value['patterns']
+        names = {s['id']: s['name'] for s in sources.stops.get().value['all']}
+    except UpstreamError:
+        return {}
+    by_route: dict[str, list[dict]] = {}
+    for p in runs:
+        ids = p.get('stops') or []
+        if p.get('routeId') and len(ids) > 1 and ids[0] in names:
+            by_route.setdefault(p['routeId'], []).append({'tripCount': 1, 'stops': [{'name': names[ids[0]]}, {'name': p.get('last') or names.get(ids[-1], '')}]})
+    # A loop (one stop at both ends, Brežice's Modra linija) gets that stop at both ends.
+    return {rid: mapping.popular_ends(ps, ('', '')) or (ps[0]['stops'][0]['name'], ps[0]['stops'][1]['name']) for rid, ps in by_route.items()}
+
+
 @require_GET
 @api
 def statistics_routes(request):
@@ -726,8 +743,13 @@ def statistics_routes(request):
     measured = set(TripDelay.objects.filter(service_date__gte=since).values_list('route_id', flat=True).distinct())
     items = []
     groups = variants.table()  # contract 4: groupId and via
+    plain = None
     for r in sources.routes.get().value.values():
         origin, destination = mapping.route_ends(r)
+        if not origin or not destination:
+            # A feed with neither "A – B" long names nor headsigns (Postojna's "Linija 1"): the ends its runs serve most.
+            plain = _run_ends() if plain is None else plain
+            origin, destination = plain.get(r['gtfsId']) or (origin or r.get('longName') or '', destination)
         operator = companies.canonical(r.get('agencyId'), ids) or f'{r["gtfsId"].split(":")[0]}:unknown'
         item = {'id': r['gtfsId'], 'name': mapping.route_name(r) or r['gtfsId'], 'operatorId': operator,
                 'mode': mapping.mode_of(r.get('mode')), 'origin': origin, 'destination': destination,
