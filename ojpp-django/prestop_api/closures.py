@@ -84,6 +84,23 @@ def is_closure(alert: dict) -> bool:
     return alert.get('kind') == 'replacement' and bool(CLOSURE.search(title)) and not title.startswith('dodatno')
 
 
+def is_connecting(alert: dict) -> bool:
+    """A notice of extra buses joining two lines past a closure ("DODATNO: Avtobusni prevoz za vezo (NG - LJ): Lesce Bled -
+    Bled Jezero"): its timetable's buses run beside the trains and replace none (timetable_buses)."""
+    return not is_closure(alert) and bool(zamudil.CONNECTING_TITLE.search(mapping.fold(alert.get('title') or '')))
+
+
+def connecting_trains(label: str) -> tuple[set[str], set[str]]:
+    """The trains a connecting bus joins, read from its timetable column: (the trains it takes riders off, the trains it
+    brings them to). "4290": the same train on both sides; "318/4211": off 318 onto 4211; "*2424/**2494 / 4219": off 2424
+    (workdays) or 2494 (weekends) onto 4219; "600 / *2409/**2499": off 600 onto 2409 or 2499."""
+    groups = re.split(r'\s+/\s+', label.strip())
+    if len(groups) == 1:
+        groups = groups[0].split('/')
+    numbers = [set(re.findall(r'\d+', g)) for g in groups]
+    return numbers[0], numbers[-1]
+
+
 def sides(alert: dict) -> list[list[str]]:
     """The station names on each side of the notice's section, e.g. "Ljubljana / Lesce Bled - Jesenice"
     → [['ljubljana', 'lesce bled'], ['jesenice']]."""
@@ -541,18 +558,21 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
         used: dict[str, tuple[dict, list[dict]]] = {}
         same: dict[tuple, dict] = {}  # (label, train, stations, times) -> the day's bus
         for a in alerts:
-            if not is_closure(a) or day not in _days(a):
+            connecting = is_connecting(a)
+            if not (connecting or is_closure(a)) or day not in _days(a):
                 continue
             number = notice_id(a)
             files = timetable_files(tables, a)
             data = next((f for f in files if sztimetables.valid_on(f, when)), None)
             if not data and any(f.get('status') in ('ok', 'unsure') for f in files):
                 # Its timetable runs no bus that day (it lists other days): every train runs.
-                out['decided'][(a['id'], day)] = {'all': True, 'yes': frozenset(), 'no': frozenset()}
+                if not connecting:
+                    out['decided'][(a['id'], day)] = {'all': True, 'yes': frozenset(), 'no': frozenset()}
                 continue
             if not data or data.get('status') not in ('ok', 'unsure'):
-                _warn_once(('notice', number, (data or {}).get('sha256')), 'SŽ notice %s: no usable replacement timetable (%s); its buses are guessed '
-                           'from the notice', number, (data or {}).get('status') or 'none read')
+                if not connecting:  # extra buses are never guessed
+                    _warn_once(('notice', number, (data or {}).get('sha256')), 'SŽ notice %s: no usable replacement timetable (%s); its buses are '
+                               'guessed from the notice', number, (data or {}).get('status') or 'none read')
                 continue
             used.setdefault(data.get('sha256') or str(id(data)), (data, []))[1].append(a)
         for sha in sorted(used):
@@ -563,6 +583,12 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
             named = [trains_of(a, day) for a in linked]
             only = None if any(n is None for n in named) else frozenset().union(*named)
             columns = _columns(data, stations)
+            if all(is_connecting(a) for a in linked):
+                # A connecting timetable: every bus is an extra one, whatever its column looks like, and decides no train.
+                columns = [(ti, ci, {**col, 'additional': True}, calls, why) for ti, ci, col, calls, why in columns]
+                linked_decides = False
+            else:
+                linked_decides = True
             usable, unusable = set(), set()
             for _, _, col, calls, why in columns:
                 if col.get('additional'):
@@ -572,7 +598,7 @@ def timetable_buses(trips: list[dict], alerts: list[dict], tables: sztimetables.
                     _warn_once(('column', sha, col.get('label')), 'SŽ notice %s: column %s of its timetable not used (%s); train %s keeps '
                                'the buses guessed from the notice', ','.join(notices), col.get('label'), why, col.get('train'))
             decision = {'all': data.get('status') == 'ok', 'yes': frozenset(usable - unusable), 'no': frozenset(unusable)}
-            for a in linked:
+            for a in linked if linked_decides else ():
                 out['decided'][(a['id'], day)] = decision
             missing = []
             for ti, ci, col, calls, why in columns:
@@ -660,6 +686,9 @@ def _timetable_bus(data: dict, ti: int, ci: int, col: dict, calls: list[dict], d
     first = next(iter(replaces), {})
     return {
         'id': bus_id, 'synthetic': True, 'source': 'timetable', 'additional': extra, 'label': label, 'numbers': numbers,
+        # A connecting bus (is_connecting) is a change between two trains, never a ride on its own (an SŽ ticket is not
+        # valid for it alone): only journeys ride it (journey_legs.connecting_ride); boards and the map leave it out.
+        **({'connecting': True} if linked and all(is_connecting(a) for a in linked) else {}),
         'notices': notices, 'trainTripId': train['id'] if train else None,
         'fromIndex': first.get('fromIndex'), 'toIndex': first.get('toIndex'), 'replaces': replaces,
         # Its own trip name ("BUS 318/2": train 318's second bus) on the line of the train's buses ("BUS 318").

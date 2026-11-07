@@ -495,7 +495,7 @@ def vehicles(now: Optional[float] = None, skip_trips: frozenset = frozenset(), l
     out, seen = [], {(mapping.route_name(t['route']), (t.get('scheduledDepartures') or t['departures'])[0]) for t in trips
                      if t['id'] in skip_trips and not mapping.is_replacement(t['route'])}
     stands = {}  # vehicle id -> the leg abroad it stands at the border station on (see the end)
-    for trip in trips + derived['synthetic']:
+    for trip in trips + [b for b in derived['synthetic'] if not b.get('connecting')]:  # a connecting bus is only a change
         times = trip.get('scheduledDepartures') or trip['departures']
         if not times[0] - BOARDING <= now <= times[-1] + ARRIVED + mapping.MAX_UNCONFIRMED_DELAY:
             continue  # not on its way even when very late

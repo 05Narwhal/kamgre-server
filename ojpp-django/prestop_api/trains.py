@@ -83,9 +83,13 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
     if trip and trip['stops']:
         from . import replacement
         # the stretches a bus runs instead that day, from the plan boards, lines and journeys use
-        sections = replacement.trip_sections(trip, scheduled.plan_at(replacement._epoch(trip['stops'][0]['scheduledDeparture']), wait=DAY_WAIT))
+        plan = scheduled.plan_at(replacement._epoch(trip['stops'][0]['scheduledDeparture']), wait=DAY_WAIT)
+        sections = replacement.trip_sections(trip, plan)
         if sections:
             trip['replacedSections'] = sections
+        connecting = replacement.connecting_buses(trip, plan)  # SŽ's change to another train past a closure
+        if connecting:
+            trip['connectingBuses'] = connecting
     route_id = run['route']['gtfsId']
     start = (run.get('departures') or [run['serviceDay']])[0]
     end = (run.get('arrivals') or [run['serviceDay'] + 86400])[-1]

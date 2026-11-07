@@ -155,7 +155,9 @@ class RecordTests(Uploaded):
     def test_each_replacement_timetable_in_effect_is_a_record_with_szs_own_number(self):
         self.upload()
         records = {r['ID_ovire'][0]: r for r in sz_list.records(date(2026, 11, 1))}
-        self.assertEqual(sorted(records), ['11268', '11285', '9459'])  # works, notices and the extra connecting bus are none
+        # Works and plain notices are none; the extra connecting bus's timetable is one (closures.is_connecting).
+        self.assertEqual(sorted(records), ['11268', '11277', '11285', '9459'])
+        self.assertEqual(records['11277']['Povezava'], ['https://potniski.sz.si/wp-content/uploads/2026/10/Lesce-Bled.pdf'])
         r = records['11285']
         self.assertEqual(r['Relacija'], ['Divača - Koper'])
         self.assertEqual(r['Cas'], ['09.11.2026-09.11.2026, 30.11.2026-30.11.2026'])
@@ -192,12 +194,12 @@ class ReadNoticesTests(Uploaded):
 
     def test_the_list_is_a_better_record_than_a_post_linking_the_same_pdf(self):
         self.upload()
-        self.assertEqual(self.read([]), {'11268', '11285', '9459'})
+        self.assertEqual(self.read([]), {'11268', '11277', '11285', '9459'})
 
     def test_a_notice_naming_its_trains_is_a_better_record_than_the_list(self):
         self.upload()
         known = {'ID_ovire': ['5'], 'Naslov': ['z'], 'Opis': [f'<p><a href="{PDF}">z</a></p>']}
-        self.assertEqual(self.read([known]), {'5', '11268', '9459'})
+        self.assertEqual(self.read([known]), {'5', '11268', '11277', '9459'})
 
     def test_without_an_upload_the_posts_are_read_as_before(self):
         self.assertEqual(self.read([]), {'1000000001'})
@@ -214,7 +216,7 @@ class ReadNoticesTests(Uploaded):
         raw, source = self.leading([known, other])
         self.assertEqual(source, 'szsite')
         records = {r['ID_ovire'][0]: r for r in raw}
-        self.assertEqual(sorted(records), ['11268', '11285', '6', '9459'])  # SŽ's number, not zamudil's, for the same PDF
+        self.assertEqual(sorted(records), ['11268', '11277', '11285', '6', '9459'])  # SŽ's number, not zamudil's, for the same PDF
         self.assertEqual(records['11285']['Vlaki'], [['2418', '2424']])
         self.assertEqual(records['11285']['VlakiPoDnevih'], [{'2026-11-09': ['2418']}])
         self.assertEqual(records['11285']['CasVir'], ['title'])
@@ -230,7 +232,7 @@ class ReadNoticesTests(Uploaded):
 
     def test_with_zamudil_off_the_list_alone_is_an_answer(self):
         raw, source = self.leading([])
-        self.assertEqual((source, sorted(r['ID_ovire'][0] for r in raw)), ('szsite', ['11268', '11285', '9459']))
+        self.assertEqual((source, sorted(r['ID_ovire'][0] for r in raw)), ('szsite', ['11268', '11277', '11285', '9459']))
 
     def test_an_upload_changes_the_version_the_notices_are_read_again_by(self):
         with mock.patch.object(closures.zamudil, 'version', return_value=()), mock.patch.object(closures.operator_notices.sz_news, 'peek', return_value=None):

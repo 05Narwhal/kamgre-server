@@ -910,12 +910,16 @@ def _with_replaced(data: list[dict]) -> None:
         if trip['mode'] != 'rail' or not trip['stops']:
             continue
         try:
-            sections = replacement.trip_sections(trip, scheduled.plan_at(replacement._epoch(trip['stops'][0]['scheduledDeparture']), wait=3))
+            plan = scheduled.plan_at(replacement._epoch(trip['stops'][0]['scheduledDeparture']), wait=3)
+            sections = replacement.trip_sections(trip, plan)
+            connecting = replacement.connecting_buses(trip, plan)
         except Exception as e:  # The trip is still useful without them.
             logger.warning('Replaced sections failed: %r', e)
             continue
         if sections:
             trip['replacedSections'] = sections
+        if connecting:
+            trip['connectingBuses'] = connecting
 
 
 def _with_observed(data: list[dict], found: dict[str, dict]) -> None:

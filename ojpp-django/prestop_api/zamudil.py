@@ -455,6 +455,9 @@ _FOOTNOTE_MARK = re.compile(r'\(\s*[!*]+\s*\)')  # SŽ's "((!*)2. - 6. november)
 PDF_LINK = re.compile(r'\[([^\]]*)\]\((https?://[^)\s]+?\.pdf)\)', re.I)
 MD_LINK = re.compile(r'\[([^\]]*)\]\((https?://[^)\s]+)\)')
 REPLACEMENT_TITLE = re.compile(r'nadomest(?:n\w*|\.)\s+prevoz|avtobusn\w*\s+(?:\w+\s+)?prevoz\s+na\s+relaciji')
+# Extra buses joining two lines past a closure, beside the trains ("DODATNO: Avtobusni prevoz za vezo (NG - LJ): Lesce Bled -
+# Bled Jezero in obratno", OTP's English "ADDITIONAL: Connecting bus service"); their PDF is a timetable too (closures.is_connecting).
+CONNECTING_TITLE = re.compile(r'prevoz\w*\s+za\s+vezo|povezovaln\w*\s+(?:avtobusn\w*\s+)?(?:prevoz|lini)|connecting\s+bus')
 _RELATION = re.compile(r'(?:.*:\s*|.*\bna relaciji\s+)?(.+?)\s+in obratno', re.I)
 
 

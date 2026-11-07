@@ -64,7 +64,7 @@ def served_stops(snap: dict) -> tuple[set, dict]:
     from . import scheduled
     for day in (today, today + timedelta(days=1)):
         plan = scheduled.day_plan(day) or {}
-        served |= {s.get('gtfsId') for bus in plan.get('synthetic') or [] for s in bus.get('stops') or []}
+        served |= {s.get('gtfsId') for bus in plan.get('synthetic') or [] if not bus.get('connecting') for s in bus.get('stops') or []}
     why = {i: 'no OTP pattern' if i not in by_stop and not supplement.owns(i) else f'no trip in {SERVICE_DAYS} days'
            for i in ids if i not in served}
     return served, why

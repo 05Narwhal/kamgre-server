@@ -184,6 +184,37 @@ def trip_sections(trip: dict, plan: Optional[dict]) -> list[dict]:
     return out
 
 
+def connecting_buses(trip: dict, plan: Optional[dict]) -> list[dict]:
+    """The connecting buses (closures.is_connecting) a train trip (trips.build_trip) meets that day, for its page:
+    {'busTripId', 'busName', 'fromIndex' (where riders leave this train for the bus, None: they come off another
+    train), 'toIndex' (where the bus brings riders onto this train, None: onto another one), 'from', 'to' (the bus's
+    stations), 'departure', 'arrival', 'otherTrains' (the train numbers on the bus's other side)}. Never a ride of its
+    own: boards and the map leave these buses out."""
+    from . import closures
+    number = sz.train_parts(trip.get('routeName') or '')[1]
+    if not number or not trip['stops'] or not plan:
+        return []
+    day = (trip.get('serviceDate') or '').replace('-', '')
+    own = [sz.station_key(s['name']) for s in trip['stops']]
+    out = []
+    for bus in sorted(plan.get('synthetic') or [], key=lambda b: b['departures'][0]):
+        if not bus.get('connecting') or bus['serviceDate'] != day:
+            continue
+        ins, outs = closures.connecting_trains(bus.get('label') or '')
+        stations = bus.get('stations') or bus['stops']
+        first, last = sz.station_key(stations[0].get('name') or ''), sz.station_key(stations[-1].get('name') or '')
+        a = own.index(first) if number in ins and first in own else None
+        b = own.index(last) if number in outs and last in own else None
+        if a is None and b is None:
+            continue
+        other = (outs if a is not None else set()) | (ins if b is not None else set())
+        out.append({'busTripId': bus['id'], 'busName': mapping.route_name(bus['route']), 'fromIndex': a, 'toIndex': b,
+                    'from': stations[0].get('name') or '', 'to': stations[-1].get('name') or '',
+                    'departure': mapping.iso(bus['departures'][0]), 'arrival': mapping.iso(bus['arrivals'][-1]),
+                    'otherTrains': sorted(other - {number}, key=int)})
+    return out
+
+
 def replaced_runs(plan: Optional[dict], departures: list[dict]) -> list[dict]:
     """The runs of a rail line on its day (its patterns' departures: {tripId, departure}) that a bus runs instead of,
     whole or in part, by departure (lineSchema.replacedRuns): {tripId, trainNumber, fromStop, toStop (the train's
@@ -343,7 +374,7 @@ def timetable_rows(plan: dict, kind: str, stops: set[str], start: float, end: fl
     out = []
     leave = kind == 'departure'
     for bus in plan.get('synthetic') or []:
-        if bus.get('source') != 'timetable':
+        if bus.get('source') != 'timetable' or bus.get('connecting'):  # a connecting bus is no departure of its own
             continue
         live = None
         last = len(bus['stops']) - 1

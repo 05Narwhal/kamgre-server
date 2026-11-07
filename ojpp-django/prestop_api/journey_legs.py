@@ -140,6 +140,7 @@ def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor,
     replacement timetable runs buses with their own times (`timetable_ride`), the walks at the journey's start
     or end move with them. None when a leg's train (or feed bus) does not run that day and no bus of the day
     makes the journey: OTP planned it on the timetable it knows, the rider would wait for a train that is a bus."""
+    legs, meta = connecting_ride(legs, meta, plan_for, road)
     out, out_meta = [], []
     shift_after = 0.0  # s the walks after a ride with its own times move by
     for n, (leg, m) in enumerate(zip(legs, meta)):
@@ -177,6 +178,88 @@ def rewrite(legs: list[dict], meta: list[dict], plan_for: PlanFor,
                              'platform': m['platform'] if k == 0 else None})
     # The buses' live delays, once the journey is decided (see _live).
     return [_with_live(l) for l in out], out_meta
+
+
+CONNECT_WAIT = 2 * 3600  # s: a connecting bus leaves at most this long after its train arrives (that day's run, not another)
+
+
+def connecting_ride(legs: list[dict], meta: list[dict], plan_for: PlanFor, road) -> tuple[list[dict], list[dict]]:
+    """A journey on trains that SŽ joins by a connecting bus past a closure (closures.is_connecting: Lesce Bled - Bled
+    Jezero in November 2026) changes to that bus: the train to the bus's first station, the bus, the train on from its
+    last one; OTP's change between the two trains (at Jesenice) goes. One train leg ("4290": train, bus, the same train)
+    or two in a row ("316/4205"). The bus is never a ride of its own: a train piece stays before it or after it (an SŽ
+    ticket is not valid for the bus alone). SŽ holds the train after it for the bus, so that train leaves when the bus
+    arrives if its timetable has it leave earlier, and runs on that much later. Unchanged when no such bus fits."""
+    rides = [n for n, leg in enumerate(legs) if leg['mode'] != 'walk']
+    for k, i in enumerate(rides):
+        for j in [i] + rides[k + 1:k + 2]:
+            joined = _join(legs, meta, i, j, plan_for, road)
+            if joined:
+                return joined
+    return legs, meta
+
+
+def _join(legs: list[dict], meta: list[dict], i: int, j: int, plan_for: PlanFor, road) -> Optional[tuple[list[dict], list[dict]]]:
+    first, last = legs[i], legs[j]
+    if first['mode'] != 'rail' or last['mode'] != 'rail' or not first.get('tripId') or not last.get('tripId'):
+        return None
+    plan = _plan_of(first, meta[i], plan_for)
+    buses = [b for b in (plan or {}).get('synthetic') or [] if b.get('connecting')]
+    if not buses:
+        return None
+    x, y = sz.train_parts(first.get('routeName') or '')[1], sz.train_parts(last.get('routeName') or '')[1]
+    tx = replaced_by.run_near(plan, first['tripId'], _ts(first['scheduledDeparture']))
+    ty = tx if i == j else replaced_by.run_near(_plan_of(last, meta[j], plan_for) or {}, last['tripId'], _ts(last['scheduledDeparture']))
+    if not (x and y and tx and ty):
+        return None
+    sx = _index(tx['stops'], first['origin'])
+    ex = _index(tx['stops'], first['destination'], sx if sx is not None else -1)
+    sy = sx if i == j else _index(ty['stops'], last['origin'])
+    ey = ex if i == j else _index(ty['stops'], last['destination'], sy if sy is not None else -1)
+    if None in (sx, ex, sy, ey):
+        return None
+    xkeys = [sz.station_key(s.get('name') or '') for s in tx['stops']]
+    ykeys = [sz.station_key(s.get('name') or '') for s in ty['stops']]
+    day = closures.service_date(tx)
+    ready, deadline = _ready(legs, i), _deadline(legs, j)
+    for bus in sorted(buses, key=lambda b: b['departures'][0]):
+        ins, outs = closures.connecting_trains(bus.get('label') or '')
+        if bus['serviceDate'] != day or x not in ins or y not in outs:
+            continue
+        stations = bus.get('stations') or bus['stops']
+        at, to = sz.station_key(stations[0].get('name') or ''), sz.station_key(stations[-1].get('name') or '')
+        p = next((n for n in range(sx, ex + 1) if xkeys[n] == at), None)
+        q = next((n for n in range((p + 1) if i == j and p is not None else sy, ey + 1) if ykeys[n] == to), None)
+        if p is None or q is None or (p == sx and q == ey):
+            continue  # not on the way, or the bus alone
+        leave, arrive = bus['departures'][0], bus['arrivals'][-1]
+        # When the rider is at its first station: off the train, else off the ride before, else for the train they planned.
+        reach = tx['arrivals'][p] if p > sx else ready if ready is not None else tx['departures'][sx]
+        if not reach <= leave <= reach + CONNECT_WAIT:
+            continue
+        wait = max(0.0, arrive - ty['departures'][q]) if q < ey else 0.0
+        end = ty['arrivals'][ey] + wait if q < ey else arrive
+        if deadline is not None and end > deadline:
+            continue
+        out, out_meta = list(legs[:i]), list(meta[:i])
+        if p > sx:
+            piece = _train_piece(first, tx, sx, p, 'c0')
+            out.append(piece)
+            out_meta.append({**meta[i], 'duration': _ts(piece['effectiveArrival']) - _ts(piece['effectiveDeparture'])})
+        ride = _bus_ride(first, bus, 0, len(stations) - 1, road, 'cbus', plan)
+        ride['alertIds'] = list(dict.fromkeys(bus.get('alertIds') or []))
+        out.append(ride)
+        out_meta.append({**meta[i], 'held': p > sx, 'platform': None, 'tripStart': None, 'blockId': None,
+                         'duration': _ts(ride['effectiveArrival']) - _ts(ride['effectiveDeparture'])})
+        if q < ey:
+            piece = _shift(_train_piece(last, ty, q, ey, 'c1'), wait)
+            piece.pop('platform', None)  # the track was where OTP had the change
+            piece.pop('platformUsual', None)
+            out.append(piece)
+            out_meta.append({**meta[j], 'held': True, 'platform': None,
+                             'duration': _ts(piece['effectiveArrival']) - _ts(piece['effectiveDeparture'])})
+        return out + legs[j + 1:], out_meta + meta[j + 1:]
+    return None
 
 
 def _with_live(leg: dict) -> dict:

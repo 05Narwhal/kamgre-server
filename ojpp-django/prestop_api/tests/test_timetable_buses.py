@@ -697,3 +697,156 @@ class NoticeWithoutOtpAlertTests(SimpleTestCase):
         rebuilt = timetabled(build('20261019', alerts=without + made))
         self.assertEqual(sorted(rebuilt), sorted(with_otp))
         self.assertTrue(rebuilt)
+
+
+class ConnectingBusTests(SimpleTestCase):
+    """SŽ's "DODATNO: Avtobusni prevoz za vezo" notices (11058, and 11277 in November 2026): buses between Lesce Bled
+    and Bled Jezero that join the Ljubljana trains to the Nova Gorica ones while both lines are closed past them. They
+    run beside the trains, replacing none."""
+
+    DOC = json.loads((Path(__file__).resolve().parent / 'fixtures' / 'szpdf' / '11058.expected.json').read_text(encoding='utf-8'))
+    TITLE = 'DODATNO: Avtobusni prevoz za vezo (NG-LJ): Lesce Bled - Bled Jezero in obratno (26.9. - 25.10.). '
+
+    @classmethod
+    def notice(cls, kind='other') -> dict:
+        raw = base64.b64encode(b'Alert:IJPP:SZ-OVIRA-11058').decode().rstrip('=')
+        return {'id': f'alert:{raw}', '_aliases': [f'alert:{raw}'], 'title': cls.TITLE, 'message': '', 'kind': kind,
+                'routeIds': [], 'stopIds': [], 'operatorId': 'IJPP:1161', '_from': epoch('2026-09-26'), '_to': epoch('2026-10-25', '23:59')}
+
+    @classmethod
+    def tables(cls) -> sztimetables.Timetables:
+        doc = {**cls.DOC, 'sha256': 'c' * 64, 'title': cls.TITLE, 'notices': ['11058']}
+        return sztimetables.Timetables({'11058': doc['sha256']}, {doc['sha256']: doc})
+
+    def connecting(self, plan: dict) -> list[dict]:
+        return sorted((b for b in plan['buses'] if '11058' in b.get('notices', [])), key=lambda b: b['departures'][0])
+
+    def test_saturday_runs_the_weekend_and_daily_buses(self):
+        plan = build('20261017', tables=self.tables(), alerts=[self.notice()])
+        buses = self.connecting(plan)
+        self.assertEqual([(b['label'], times(b)) for b in buses], [
+            ('600 / *2409/**2499', ['07:15', '07:35']), ('4290', ['08:20', '08:40']), ('316/4205', ['11:10', '11:30']),
+            ('312/601', ['16:58', '17:18']), ('4214/2423', ['17:50', '18:10']), ('*2424/**2494 / 4219', ['19:22', '19:42'])])
+        self.assertEqual({tuple(names(b)) for b in buses}, {('Lesce-Bled', 'Bled Jezero'), ('Bled Jezero', 'Lesce-Bled')})
+        # Extra buses: no train is replaced or hidden, also when OTP files the notice as a replacement.
+        self.assertTrue(all(b['additional'] and b['trainTripId'] is None and not b['replaces'] for b in buses))
+        self.assertEqual(closures.sections(plan['buses']), {})
+        self.assertEqual(plan['decided'], {})
+        replaced = build('20261017', tables=self.tables(), alerts=[self.notice(kind='replacement')])
+        self.assertEqual(closures.sections(replaced['buses']), {})
+
+    def test_outside_its_days_no_bus(self):
+        late = {**self.notice(), '_from': epoch('2026-10-26'), '_to': epoch('2026-11-08', '23:59')}
+        self.assertFalse(self.connecting(build('20261017', tables=self.tables(), alerts=[late])))
+
+
+def connecting_plan(day: str, extra=(), columns=None) -> dict:
+    """The day plan of `day` with 11058's connecting timetable beside the fixture ones (its first table's columns
+    replaced by `columns` when given)."""
+    doc = copy.deepcopy(ConnectingBusTests.DOC)
+    if columns is not None:
+        doc['tables'][0]['columns'] = columns
+    doc.update(sha256='c' * 64, title=ConnectingBusTests.TITLE, notices=['11058'])
+    tables = sztimetables.Timetables({**TABLES.notices, '11058': doc['sha256']}, {**TABLES.files, doc['sha256']: doc})
+    trips = feed(day) + list(extra)
+    with mock.patch.object(closures, 'inputs', return_value=([], [], {}, stop_index(trips))), \
+            mock.patch.object(closures.mapping, 'build_alerts', return_value=ALERTS + [ConnectingBusTests.notice()]), \
+            mock.patch.object(sztimetables, 'current', return_value=tables), \
+            mock.patch('prestop_api.stopfix.replacement_stops', return_value=[]):
+        return scheduled._derive_into({'key': None}, trips)
+
+
+def later_train(trip: dict, name: str, trip_id: str, frm: str, minutes: int) -> dict:
+    """`trip` as another train: from station `frm` on, `minutes` later."""
+    k = [s['name'] for s in trip['stops']].index(frm)
+    move = lambda xs: [x + minutes * 60 for x in xs[k:]]  # noqa: E731
+    return {**trip, 'id': trip_id, 'route': {**trip['route'], 'gtfsId': f'IJPP:r-{trip_id}', 'shortName': name}, 'stops': trip['stops'][k:],
+            'arrivals': move(trip['arrivals']), 'departures': move(trip['departures']), 'delays': trip['delays'][k:],
+            'scheduledArrivals': move(trip['scheduledArrivals']), 'scheduledDepartures': move(trip['scheduledDepartures'])}
+
+
+class ConnectingJourneyTests(SimpleTestCase):
+    """Saturday 17 October: 11058's connecting bus 4290 leaves Lesce Bled at 08:20 and reaches Bled Jezero at 08:40; the
+    feed has train LP 4290 at Lesce Bled at 07:49 and on from Bled Jezero at 08:28 (SŽ holds it for the bus)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.trips = {t['route']['shortName']: t for t in feed('20261017')}
+        cls.plan = connecting_plan('20261017')
+
+    def rewrite(self, legs, metas, plan=None):
+        return journey_legs.rewrite(legs, metas, lambda when: plan or self.plan, ROAD)
+
+    def test_the_train_to_lesce_bled_the_bus_then_the_same_train_held_for_it(self):
+        legs, meta = self.rewrite([leg_on(self.trips['LP 4290'], 'Ljubljana', 'Bohinjska Bistrica')], [META])
+        self.assertEqual(rides(legs), [('LP 4290', 'Ljubljana', '06:52', 'Lesce-Bled', '07:48'),
+                                       ('BUS 4290', 'Lesce-Bled', '08:20', 'Bled Jezero', '08:40'),
+                                       ('LP 4290', 'Bled Jezero', '08:40', 'Bohinjska Bistrica', '08:59')])  # 12 min later
+        self.assertEqual([m.get('held', False) for m in meta], [False, True, True])  # SŽ's changes: one ride
+        bus = legs[1]
+        self.assertEqual((bus['mode'], bus['replacement'], bus.get('replacesTrain')), ('bus', True, None))
+        self.assertEqual(bus['alertIds'], [ConnectingBusTests.notice()['id']])
+        self.assertNotIn('platform', legs[2])
+
+    def test_two_trains_change_by_the_bus_not_at_jesenice(self):
+        onward = later_train(self.trips['LP 4290'], 'LP 4211', 'IJPP:t-4211', 'Jesenice', 40)  # Bled Jezero 09:08
+        columns = copy.deepcopy(ConnectingBusTests.DOC['tables'][0]['columns'])
+        next(c for c in columns if c['label'] == '4290').update(label='4290/4211')
+        plan = connecting_plan('20261017', [onward], columns)
+        first, then = leg_on(self.trips['LP 4290'], 'Ljubljana', 'Jesenice'), leg_on(onward, 'Jesenice', 'Bohinjska Bistrica')
+        legs, meta = self.rewrite([first, walk(then), then], [META, WALK, META], plan)
+        self.assertEqual(rides(legs), [('LP 4290', 'Ljubljana', '06:52', 'Lesce-Bled', '07:48'),
+                                       ('BUS 4290/4211', 'Lesce-Bled', '08:20', 'Bled Jezero', '08:40'),
+                                       ('LP 4211', 'Bled Jezero', '09:08', 'Bohinjska Bistrica', '09:27')])  # leaves on time
+        self.assertEqual([l['mode'] for l in legs], ['rail', 'bus', 'rail'])  # the change at Jesenice is gone
+
+    def test_towards_ljubljana_off_the_train_at_bled_jezero(self):
+        back = self.trips['LP 4291']  # Bled Jezero 19:06, Lesce Bled 19:50
+        extra = {'label': '4291', 'train': '4291', 'part': None, 'vehicle': 'BUS', 'mark': None, 'additional': True, 'footnotes': [],
+                 'calls': [{'station': 'BLED JEZERO', 'dep': '19:10'}, {'station': 'LESCE BLED', 'arr': '19:30'}], 'problems': []}
+        doc = copy.deepcopy(ConnectingBusTests.DOC)
+        columns = doc['tables'][0]['columns'] + [extra]  # the Lesce Bled - Bled Jezero table holds it; direction is by its calls
+        legs, _ = self.rewrite([leg_on(back, 'Bohinjska Bistrica', 'Ljubljana')], [META], connecting_plan('20261017', columns=columns))
+        self.assertEqual([r[0] for r in rides(legs)][:3], ['LP 4291', 'BUS 4291', 'LP 4291'])
+        self.assertEqual(rides(legs)[1], ('BUS 4291', 'Bled Jezero', '19:10', 'Lesce-Bled', '19:30'))
+        self.assertEqual(rides(legs)[2][1:3], ('Lesce-Bled', '19:50'))  # its train leaves when it would
+
+    def test_never_the_bus_alone(self):
+        legs, _ = self.rewrite([leg_on(self.trips['LP 4290'], 'Lesce-Bled', 'Bled Jezero')], [META]) or ([], [])
+        self.assertFalse([l for l in legs if l['routeName'] == 'BUS 4290' and l['origin']['name'] == 'Lesce-Bled'
+                          and l['destination']['name'] == 'Bled Jezero'])
+
+    def test_another_train_does_not_take_it(self):
+        legs, _ = self.rewrite([leg_on(self.trips['4292'], 'Bohinjska Bistrica', 'Jesenice')], [META]) or ([], [])
+        self.assertFalse([l for l in legs if l.get('tripId') and 'cbus' in l['id']])
+
+    def test_no_board_row_or_vehicle_of_its_own(self):
+        bus = next(b for b in self.plan['synthetic'] if b.get('connecting') and b['label'] == '4290')
+        lesce = bus['stops'][0]['gtfsId']
+        rows = replacement.timetable_rows(self.plan, 'departure', {lesce}, epoch('2026-10-17'), epoch('2026-10-17', '23:59'), {}, False)
+        self.assertFalse([r for r in rows if r['tripId'] == bus['id']])
+        self.assertTrue(rows)  # the replacement buses still leave from there
+        trips = [t for runs in self.plan['trips'].values() for t in runs]
+        with mock.patch.object(scheduled, 'timetable', _Value(trips)), mock.patch.object(scheduled, 'shapes', _Value({})), \
+                mock.patch.object(scheduled, '_derive', return_value=self.plan), mock.patch.object(scheduled, '_road_shape', return_value=None):
+            drawn = {v['tripId'] for v in scheduled.vehicles(now=epoch('2026-10-17', '08:30'), live={})}
+        self.assertNotIn(bus['id'], drawn)
+
+    def test_the_trains_page_names_its_connecting_bus(self):
+        t = self.trips['LP 4290']
+        trip = {'routeName': 'LP 4290', 'serviceDate': '2026-10-17', 'stops': [{'name': s['name']} for s in t['stops']]}
+        names = [s['name'] for s in t['stops']]
+        [bus] = replacement.connecting_buses(trip, self.plan)
+        self.assertEqual((bus['busName'], bus['fromIndex'], bus['toIndex'], bus['from'], bus['to'], bus['otherTrains']),
+                         ('BUS 4290', names.index('Lesce-Bled'), names.index('Bled Jezero'), 'Lesce-Bled', 'Bled Jezero', []))
+        self.assertEqual((hhmm(bus['departure']), hhmm(bus['arrival'])), ('08:20', '08:40'))
+        # Another train (4292 to Jesenice) meets none; another day none either.
+        self.assertEqual(replacement.connecting_buses({**trip, 'routeName': '4292'}, self.plan), [])
+        self.assertEqual(replacement.connecting_buses({**trip, 'serviceDate': '2026-10-18'}, self.plan), [])
+
+    def test_connecting_trains_are_read_from_the_column(self):
+        self.assertEqual(closures.connecting_trains('4290'), ({'4290'}, {'4290'}))
+        self.assertEqual(closures.connecting_trains('318/4211'), ({'318'}, {'4211'}))
+        self.assertEqual(closures.connecting_trains('*2424/**2494 / 4219'), ({'2424', '2494'}, {'4219'}))
+        self.assertEqual(closures.connecting_trains('600 / *2409/**2499'), ({'600'}, {'2409', '2499'}))

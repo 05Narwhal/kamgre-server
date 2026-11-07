@@ -148,7 +148,8 @@ def spans(notice: dict) -> list[tuple[date, date]]:
 
 
 def _is_timetable(notice: dict) -> bool:
-    return bool(notice.get('pdf')) and bool(zamudil.REPLACEMENT_TITLE.search(mapping.fold(notice['title'])))
+    title = mapping.fold(notice['title'])
+    return bool(notice.get('pdf')) and bool(zamudil.REPLACEMENT_TITLE.search(title) or zamudil.CONNECTING_TITLE.search(title))
 
 
 def records(today: date) -> list[dict]:
