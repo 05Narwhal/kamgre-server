@@ -742,12 +742,16 @@ def train_class(item: dict) -> dict:
 
 
 def classes(day: date) -> dict[str, dict]:
-    """Train number (text) → the class SŽ plans for it on `day`; empty without that date's copy."""
+    """Train number (text) → the class SŽ plans for it on `day`; empty without that date's copy. Our reader's sets
+    of that day lead (szsite/sets.py); zamudil's record stays where it names the same series (it has the features),
+    and zamudil alone covers the trains the reader did not reach, or every train while the reader has no list."""
+    from .szsite import sets
     found = copy(CLASSES, day) if enabled() else None
     data = (found or {}).get('data')
+    ours = sets.classes(day)
     key = day.isoformat()
     hit = _classes.get(key)
-    if hit and hit[0] is data:
+    if hit and hit[0] is data and hit[2] is ours:
         return hit[1]
     out: dict[str, dict] = {}
     for item in (data or {}).get('rollingStock') or []:
@@ -755,9 +759,13 @@ def classes(day: date) -> dict[str, dict]:
         for n in item.get('trainNumbers') or []:
             if str(n).isdigit():
                 out.setdefault(str(int(n)), made)
+    for n, made in ours.items():
+        theirs = out.get(n)
+        if theirs is None or made['series'] not in ('unknown', theirs['series']):
+            out[n] = made
     if len(_classes) > 16:
         _classes.clear()
-    _classes[key] = (data, out)
+    _classes[key] = (data, out, ours)
     return out
 
 

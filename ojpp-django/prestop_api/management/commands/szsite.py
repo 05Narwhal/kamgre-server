@@ -1,7 +1,7 @@
 """Our own reader of SŽ's passenger site, as a service or one fetch at a time (prestop_api/szsite).
 
     manage.py szsite                          # the loop plus the 127.0.0.1 server the API reads (one process, SIGTERM stops it)
-    manage.py szsite --once live              # one fetch of live, status or boards, and a one-line summary
+    manage.py szsite --once live              # one fetch of live, status, boards or sets, and a one-line summary
     manage.py szsite --clearance edge.json    # use a browser's cookies and user agent (local testing; no solver needed)
 
 Settings / environment: PRESTOP_SZSITE_SOLVER (FlareSolverr's URL), PRESTOP_SZSITE_DIR (state folder),
@@ -24,10 +24,10 @@ PORT = 8095
 
 
 class Command(BaseCommand):
-    help = "Read SŽ's site (live trains, notices, works, station boards) and serve it to the API on 127.0.0.1."
+    help = "Read SŽ's site (live trains, notices, works, station boards, train sets) and serve it to the API on 127.0.0.1."
 
     def add_arguments(self, parser):
-        parser.add_argument('--once', choices=['live', 'status', 'boards'], help='fetch one job once and print a summary')
+        parser.add_argument('--once', choices=['live', 'status', 'boards', 'sets'], help='fetch one job once and print a summary')
         parser.add_argument('--station', help="with --once boards: the station's SŽ code (default: Ljubljana, 42300)")
         parser.add_argument('--clearance', help="JSON file with a browser's {cookies, userAgent}")
         parser.add_argument('--port', type=int, default=int(os.environ.get('PRESTOP_SZSITE_PORT') or PORT))

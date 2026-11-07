@@ -131,6 +131,21 @@ class UsageTests(TestCase):
 
 
 @skipUnless(TOP_PY.exists(), 'the deploy bundle is not next to this checkout')
+@skipUnless(TOP_PY.exists(), 'the deploy bundle is not next to this checkout')
+class LearningSqlTests(TestCase):
+    def test_sz_trains_come_from_the_train_tables(self):
+        from prestop_statistics.models import TrainCoverDay, TrainStay
+        today = datetime.now(top.TZ).date()
+        for d in range(2, 5):
+            TrainCoverDay.objects.create(day=today - timedelta(days=d), trains=500, reported=490, collector_seconds=86400)
+        TrainStay.objects.create(from_number='2010', to_number='2520', station='s', level='likely', arrival=0, departure=600,
+                                 last_seen=today, learned_on=today)
+        with mock.patch.object(top, 'psql', run_sql):
+            lr = top.learning()
+        row = next(f for f in lr['feeds'] if f['feed'] == 'SŽ trains')
+        self.assertEqual((row['run'], row['likely'], row['sure']), (3, 1, 0))
+
+
 class SzsiteTests(SimpleTestCase):
     """The SŽ reader panel on the Data tab and its alerts (README: SŽ reader)."""
     NOW = 1_800_000_000.0
@@ -142,7 +157,8 @@ class SzsiteTests(SimpleTestCase):
                 'works': {'at': self.NOW - 300, 'ok': True, 'error': None, 'count': 48},
                 'delays': {'at': self.NOW - 300, 'ok': True, 'error': None, 'count': 15},
                 'board-42300': {'at': self.NOW - 60, 'ok': True, 'error': None, 'count': 13},
-                'board-43400': {'at': self.NOW - 90, 'ok': True, 'error': None, 'count': 9}}
+                'board-43400': {'at': self.NOW - 90, 'ok': True, 'error': None, 'count': 9},
+                'train_sets': {'at': self.NOW - 3 * 3600, 'ok': True, 'error': None, 'count': 180}}
         z = {'on': True, 'warp_on': True, 'proxy': 'http://127.0.0.1:40000', 'paused': False, 'in_service': True,
              'units': {u: dict(active) for u in top.SZSITE_UNITS}, 'jobs': jobs, 'cleared_at': self.NOW - 900,
              'solves': [self.NOW - 900], 'warp': {'ip': '2a09:bac1::75', 'colo': 'VIE', 'warp': 'on'},
@@ -179,10 +195,25 @@ class SzsiteTests(SimpleTestCase):
         self.assertIn('challenge', drawn)
         self.assertIn('1/2', drawn)
 
-    def test_live_trains_resting_at_night_is_not_stale(self):
+    def test_live_trains_at_night_are_read_every_two_minutes(self):
         z = self.reader(in_service=False)
-        z['jobs']['active_trains']['at'] = self.NOW - 3 * 3600
+        z['jobs']['active_trains']['at'] = self.NOW - 300
+        z['jobs']['board-43400']['at'] = self.NOW - 3 * 3600  # boards rest while no train runs
         self.assertEqual(top.szsite_alerts(z, self.NOW), [])
+        z['jobs']['active_trains']['at'] = self.NOW - 3 * 3600
+        self.assertEqual({t for _, _, t in top.szsite_alerts(z, self.NOW)}, {'SŽ reader live trains: stale'})
+
+    def test_sz_trains_join_the_learning_feeds(self):
+        today = date(2026, 11, 7)
+        full = (500, 490, 86400)
+        tc = {d: full for d in range(2, 6)}  # four counted days, yesterday not recorded yet (before 04:30)
+        tc[6] = (500, 300, 86400)            # SŽ reported too few that day
+        row = top.train_feed(today, tc, {'likely': 2}, True)
+        self.assertEqual((row['feed'], row['open'], row['run'], row['likely'], row['sure']), ('SŽ trains', False, 4, 2, 0))
+        self.assertEqual(row['opens'], today + timedelta(days=2))  # yesterday, today, tomorrow still to count
+        self.assertEqual(row['days'][-6:], [False, True, True, True, True, False])
+        tc.update({d: full for d in range(1, 8)})
+        self.assertTrue(top.train_feed(today, tc, {}, True)['open'])
 
     def test_the_warp_exit_is_checked_once_a_minute_and_new_ips_are_kept(self):
         top.WARP.update(at=0.0, last=None, ips=[])

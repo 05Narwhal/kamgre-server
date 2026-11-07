@@ -2,8 +2,9 @@
 
 Only when PRESTOP_SZSITE_STATUS_URL is set (the server sets it with PRESTOP_SZSITE=on): with the reader off nothing is
 listed. A reader that does not answer makes every entry unavailable; a job past twice its interval is stale. Outside
-service hours (00:30-04:30) the live list is not fetched, so its last good answer counts as live then. Train sets
-(`sz:site-classes`) are listed once the reader has a job for them (N-B5: not in the loop yet).
+service hours (00:30-04:30) the live list is read every NIGHT_LIVE_EVERY s, so it is stale only past twice that.
+Train sets (`sz:site-classes`) are read once a service day from 01:00: stale 28 h after the last good list (a missed night
+shows by the next morning).
 """
 import json
 import time
@@ -13,13 +14,13 @@ from typing import Callable, Optional
 
 from django.conf import settings
 
-from .jobs import LIVE_EVERY, STATUS_EVERY
+from .jobs import LIVE_EVERY, NIGHT_LIVE_EVERY, STATUS_EVERY
 
 # id, name, capabilities, the reader's job names (first one present counts), its interval in s
 ENTRIES = (
     ('sz:site-notices', "SŽ notices list (our reader of SŽ's website)", ['alerts'], ('notices',), STATUS_EVERY),
     ('sz:site-works', "Works on railway lines (our reader of SŽ's website)", ['alerts'], ('works',), STATUS_EVERY),
-    ('sz:site-classes', "Train sets per train (our reader of SŽ's website)", ['vehicles'], ('train_sets', 'classes'), 24 * 3600),
+    ('sz:site-classes', "Train sets per train (our reader of SŽ's website)", ['vehicles'], ('train_sets',), 14 * 3600),
     ('sz:site-live', "SŽ live trains and delays (our reader of SŽ's website)", ['vehicles'], ('active_trains',), LIVE_EVERY),
 )
 CACHE = 15  # s: server:top asks /health every few seconds
@@ -47,15 +48,13 @@ def entries(status: Optional[dict], now: float) -> list[dict]:
     out = []
     for id_, name, capabilities, names, every in ENTRIES:
         job = next((jobs[n] for n in names if isinstance(jobs.get(n), dict)), None)
-        if status is not None and job is None and id_ == 'sz:site-classes':
-            continue  # no train-set job in the reader yet
         at = float(job.get('at') or 0) if job else 0
+        if id_ == 'sz:site-live' and not in_service:
+            every = NIGHT_LIVE_EVERY
         if not job or not at:
             state = 'unavailable'
         elif not job.get('ok'):
             state = 'stale'
-        elif id_ == 'sz:site-live' and not in_service:
-            state = 'live'
         else:
             state = 'live' if now - at <= 2 * every + 120 else 'stale'
         stamp = _iso(at) if at else None

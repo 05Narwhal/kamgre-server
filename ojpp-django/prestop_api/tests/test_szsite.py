@@ -428,10 +428,56 @@ class JobTests(SimpleTestCase):
         self.assertEqual({j: every[j]['error'] for j in every},
                          {'active_trains': 'challenge', 'notices': 'down', 'works': 'down', 'delays': 'down', 'board-42300': 'down'})
 
-    def test_live_tasks_sleep_at_night(self):
-        loop = jobs.Loop(mock.Mock(), self.store, self.ids(), clock=lambda: 1000.0, wall=lambda: T0 + 8 * 3600)
-        loop.tasks = [t for t in loop.tasks if t.name != 'status']
+    def test_live_runs_slower_at_night_and_boards_only_while_trains_run(self):
+        # A few trains run between 00:30 and 04:30 (LPV 2691, RG 605, LPV 2200 at 03:40 on 7 Nov).
+        fake = mock.Mock()
+        fake.ajax.return_value = json.dumps(trains())
+        now = [1000.0]
+        loop = jobs.Loop(fake, self.store, self.ids(), clock=lambda: now[0], wall=lambda: T0 + 8 * 3600)
+        boards = next(t for t in loop.tasks if t.name == 'boards')
+        loop.tasks = [t for t in loop.tasks if t.name == 'live']
+        self.assertFalse(boards.due(now[0], T0 + 8 * 3600))  # no live list yet
+        self.assertEqual(loop.step(), 'live')
+        self.assertTrue(boards.due(now[0], T0 + 8 * 3600))  # the list has trains
+        now[0] += jobs.LIVE_EVERY
         self.assertIsNone(loop.step())
+        now[0] += jobs.NIGHT_LIVE_EVERY - jobs.LIVE_EVERY
+        self.assertEqual(loop.step(), 'live')
+        self.store.keep('active_trains', [], now=T0 + 8 * 3600)  # no train runs: no board is read
+        self.assertFalse(boards.due(now[0] + 10_000, T0 + 8 * 3600))
+        self.assertTrue(boards.due(now[0] + 10_000, T0))  # in service hours always
+
+    def test_train_sets_search_every_pair_then_keep_todays_list(self):
+        fake = mock.Mock()
+        fake.get.side_effect = [text('finder-results.html'), '<html>Ni povezav.</html>']
+        sets = jobs.TrainSets(pairs=[('42300', '43400'), ('43400', '42300')])
+        day = __import__('datetime').date(2026, 11, 7)
+        with mock.patch.object(jobs, 'today', return_value=mock.Mock(**{'date.return_value': day})):
+            first = sets(fake, self.store)
+            self.assertIsNone(self.store.load('train_sets'))  # kept only after the last search
+            last = sets(fake, self.store)
+        self.assertEqual(fake.get.call_args_list[0][0][1]['entry-station'], '42300')
+        self.assertEqual(fake.get.call_args_list[0][0][1]['departure-date'], '07.11.2026')
+        self.assertEqual((first['search'], last['search'], last['count']), ('1/2', '2/2', 0))
+        saved = self.store.load('train_sets')['data']
+        self.assertEqual(saved['date'], '2026-11-07')
+        self.assertEqual(saved['trains']['512']['slug'], 'sz-312-siemens-desiro-troclenski')
+        self.assertEqual(last['trains'], len(saved['trains']))
+        # Wanted again only once the day changes, and from 01:00.
+        at = lambda h: __import__('datetime').datetime(2026, 11, 7, h, 5, tzinfo=jobs.LOCAL).timestamp()
+        self.assertFalse(sets.wanted(self.store, at(12)))
+        nxt = lambda h: __import__('datetime').datetime(2026, 11, 8, h, 5, tzinfo=jobs.LOCAL).timestamp()
+        self.assertFalse(sets.wanted(self.store, nxt(0)))
+        self.assertTrue(sets.wanted(self.store, nxt(1)))
+
+    def test_a_finder_page_with_trains_but_no_set_starts_over(self):
+        fake = mock.Mock()
+        fake.get.return_value = '<div>Vlak: IC 512</div>'
+        sets = jobs.TrainSets(pairs=[('42300', '43400'), ('43400', '42300')])
+        sets.next = 1
+        with self.assertRaises(SiteError):
+            sets(fake, self.store)
+        self.assertEqual(sets.next, 0)
 
 
 class ServeTests(SimpleTestCase):
@@ -462,6 +508,12 @@ class ServeTests(SimpleTestCase):
         self.clock[0] = T0 + 120
         self.assertEqual(self.get('/active_trains')[0], 200)
         self.clock[0] = T0 + 121
+        self.assertEqual(self.get('/active_trains')[0], 503)
+        night = T0 + 8 * 3600
+        self.store.keep('active_trains', trains(), now=night)
+        self.clock[0] = night + jobs.NIGHT_LIVE_EVERY + 120  # read every 2 min at night
+        self.assertEqual(self.get('/active_trains')[0], 200)
+        self.clock[0] += 1
         self.assertEqual(self.get('/active_trains')[0], 503)
 
     def test_train_data_is_what_tracks_polls(self):
@@ -503,14 +555,17 @@ class HealthTests(SimpleTestCase):
         with override_settings(PRESTOP_SZSITE_STATUS_URL=''):
             self.assertEqual(health.health(T0, fetch=lambda url: self.fail('fetched')), [])
 
-    def test_fresh_stale_failed_and_classes_left_out(self):
+    def test_fresh_stale_failed_and_classes(self):
         rows = health.entries(self.status(notices=(T0 - 60, True), works=(T0 - 3 * 3600, True), active_trains=(T0 - 20, False)), T0)
-        self.assertEqual(self.by_id(rows), {'sz:site-notices': 'live', 'sz:site-works': 'stale', 'sz:site-live': 'stale'})
+        self.assertEqual(self.by_id(rows), {'sz:site-notices': 'live', 'sz:site-works': 'stale', 'sz:site-classes': 'unavailable',
+                                            'sz:site-live': 'stale'})
+        sets = lambda age: self.by_id(health.entries(self.status(train_sets=(T0 - age, True)), T0))['sz:site-classes']
+        self.assertEqual((sets(20 * 3600), sets(29 * 3600)), ('live', 'stale'))
         self.assertEqual(rows[0]['updatedAt'], '2026-10-26T19:12:20Z')
 
-    def test_night_keeps_live_and_no_answer_is_unavailable(self):
-        night = dict(self.status(active_trains=(T0 - 3 * 3600, True)), inService=False)
-        self.assertEqual(self.by_id(health.entries(night, T0))['sz:site-live'], 'live')
+    def test_night_reads_live_slower_and_no_answer_is_unavailable(self):
+        night = lambda age: self.by_id(health.entries(dict(self.status(active_trains=(T0 - age, True)), inService=False), T0))['sz:site-live']
+        self.assertEqual((night(300), night(3 * 3600)), ('live', 'stale'))
         down = health.entries(None, T0)
         self.assertEqual({r['status'] for r in down}, {'unavailable'})
         self.assertIn('sz:site-classes', self.by_id(down))

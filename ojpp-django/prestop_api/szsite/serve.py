@@ -1,7 +1,7 @@
 """The reader's answers to the API, over HTTP on 127.0.0.1 only (the API's workers read them like derp-si's scraper).
 
 - `/active_trains`: the last good list of SŽ's running trains, as SŽ gives it (`sz.parse_trains` reads it). 503 once it
-  is older than FRESH s, so `upstream.Mirrors` goes on to the next URL (derp-si) instead of showing stale positions.
+  is older than FRESH s (at night NIGHT_LIVE_EVERY more), so `upstream.Mirrors` goes on to the next URL (derp-si) instead of showing stale positions.
 - `/train_data?date=YYYY-MM-DD`: {"trains": [{train_id, ijpp_id, platform}]} for `tracks.py`; 503 when no board of
   that date has been read.
 - `/works`: {"at", "works": [...]}, the works on the lines. `/status`: every job's state.
@@ -41,7 +41,8 @@ class Handler(BaseHTTPRequestHandler):
         now = self.server.clock()
         if url.path == '/active_trains':
             saved = store.load('active_trains')
-            if not saved or now - float(saved.get('at') or 0) > FRESH:
+            fresh = FRESH if in_service(now) else jobs.NIGHT_LIVE_EVERY + FRESH  # polled every 2 min at night
+            if not saved or now - float(saved.get('at') or 0) > fresh:
                 return self._send(503, {'error': 'stale', 'age': None if not saved else round(now - float(saved.get('at') or 0))})
             return self._send(200, saved['data'])
         if url.path == '/train_data':

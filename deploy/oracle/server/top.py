@@ -46,8 +46,10 @@ SERVICES = ['prestop-web', 'prestop-collector', 'prestop-push', 'prestop-ingest'
 TIMERS = ['prestop-egress', 'prestop-watchdog', 'prestop-szpdf', 'prestop-nightly', 'prestop-backup']
 # Our SŽ website reader (README: SŽ reader), only while PRESTOP_SZSITE=on. Job intervals as in prestop_api/szsite/jobs.py.
 SZSITE_UNITS = ['prestop-szsite', 'prestop-szsite-solver', 'prestop-szsite-warp']
-SZSITE_JOBS = [('active_trains', 'live trains', 30), ('notices', 'notices', 900), ('works', 'works', 900), ('delays', 'delays', 900)]
+SZSITE_JOBS = [('active_trains', 'live trains', 30), ('notices', 'notices', 900), ('works', 'works', 900), ('delays', 'delays', 900),
+               ('train_sets', 'train sets', 14 * 3600)]
 SZSITE_BOARD_EVERY = 300
+SZSITE_NIGHT_LIVE_EVERY = 120  # szsite/jobs.py NIGHT_LIVE_EVERY: the live list at night (00:30-04:30)
 WARP_TRACE = 'https://www.cloudflare.com/cdn-cgi/trace'
 WARP_EVERY = 60        # s between checks of the WARP exit (one small request through the proxy)
 TABS = [('overview', 'Overview'), ('system', 'System'), ('services', 'Services'), ('traffic', 'Traffic'),
@@ -976,14 +978,16 @@ def szsite_jobs(z, now=None):
         if not j.get('ok'):
             return 'error'
         return 'live' if now - float(j['at']) <= 2 * every + 120 else 'stale'
+    night = not z.get('in_service', True)
     rows = []
     for key, label, every in SZSITE_JOBS:
         j = jobs.get(key)
-        st = 'live' if key == 'active_trains' and j and j.get('ok') and not z.get('in_service', True) else state(j, every)
+        st = state(j, SZSITE_NIGHT_LIVE_EVERY if key == 'active_trains' and night else every)
         rows.append((label, st, (j or {}).get('count'), (j or {}).get('at'), (j or {}).get('error')))
     boards = {k: v for k, v in jobs.items() if k.startswith('board-') and isinstance(v, dict)}
     if boards:
-        states = [state(v, SZSITE_BOARD_EVERY) for v in boards.values()]
+        # At night the boards are read only while trains run, so a good old board is not stale then.
+        states = ['live' if night and v.get('ok') else state(v, SZSITE_BOARD_EVERY) for v in boards.values()]
         fresh = sum(s == 'live' for s in states)
         errors = sorted({v.get('error') for v in boards.values() if not v.get('ok') and v.get('error')})
         worst = 'live' if fresh == len(states) else 'error' if 'error' in states else 'stale'
@@ -1019,6 +1023,24 @@ def logs():
 # of it and the feed had vehicles for FEED_SECONDS; GATE_DAYS of them in a row within the last 56 days open the feed,
 # and the nightly job then learns it. Keep the numbers in step with stays.py.
 FULL_DAY, FEED_SECONDS, GATE_DAYS, BUDGET = 82080, 3600, 7, 4320
+# SŽ trains (prestop_statistics/train_stays.py): a day counts when the collector ran FULL_DAY and SŽ reported COVERED of
+# the timetable's trains (TrainCoverDay, written by the nightly run after 04:30 for the day before).
+TRAINS_FEED, TRAINS_COVERED = 'SŽ trains', 0.95
+
+
+def train_feed(today, tc, levels, ok_today):
+    """The Feeds row of SŽ's trains from TrainCoverDay ({days ago: (trains, reported, collector s)}) and TrainStay levels."""
+    def counted(d):
+        t, rep, sec = tc.get(d, (0, 0, 0))
+        return bool(t) and sec >= FULL_DAY and rep >= TRAINS_COVERED * t
+    last = 1 if 1 in tc else 2  # before tonight's run, yesterday has no row yet
+    run, opened = 0, False
+    for d in range(56, last - 1, -1):
+        run = run + 1 if counted(d) else 0
+        opened = opened or run >= GATE_DAYS
+    at = GATE_DAYS - run - (last - 1) if ok_today else GATE_DAYS + 1
+    return {'feed': TRAINS_FEED, 'open': opened, 'run': run, 'opens': today + timedelta(days=max(0, at)),
+            'sure': levels.get('sure', 0), 'likely': levels.get('likely', 0), 'days': [counted(d) for d in range(14, 0, -1)]}
 
 
 def learning():
@@ -1029,8 +1051,11 @@ def learning():
         where day > '{today}'::date - 57 and version >= 2
       union all select 's', 0, feed || ' ' || level, count(*) from prestop_statistics_staydeparture where level <> '' group by feed, level
       union all select 'l', '{today}'::date - max(learned_on), '', 0 from prestop_statistics_staydeparture having count(*) > 0
-      union all select 'c', sum(misses), level, sum(hits) from prestop_statistics_staycheck where day >= '{today}'::date - 14 group by level""")
-    col, fs, feeds, lv, hits, miss, learned = {}, {}, set(), {}, {}, {}, None
+      union all select 'c', sum(misses), level, sum(hits) from prestop_statistics_staycheck where day >= '{today}'::date - 14 group by level
+      union all select 't', '{today}'::date - day, reported || ' ' || collector_seconds, trains from prestop_statistics_traincoverday
+        where day > '{today}'::date - 57
+      union all select 'z', 0, level, count(*) from prestop_statistics_trainstay group by level""")
+    col, fs, feeds, lv, hits, miss, learned, tc, tlv = {}, {}, set(), {}, {}, {}, None, {}, {}
     for r in rows:
         k, a, b, c = (r.split('|') + ['', '', ''])[:4]
         a, c = int(a or 0), int(c or 0)
@@ -1047,6 +1072,11 @@ def learning():
             learned = a
         elif k == 'c':
             hits[b], miss[b] = c, a
+        elif k == 't':
+            reported, _, seconds = b.partition(' ')
+            tc[a] = (c, int(reported or 0), int(seconds or 0))
+        elif k == 'z':
+            tlv[b] = c
     down = max(0, elapsed - col.get(0, 0))
     if 0 not in col and elapsed > 600:
         status = ('bad', 'collector is not recording')
@@ -1073,9 +1103,12 @@ def learning():
         out.append({'feed': f, 'open': opened, 'run': run, 'opens': today + timedelta(days=at),
                     'sure': lv.get((f, 'sure'), 0), 'likely': lv.get((f, 'likely'), 0),
                     'days': [counted(f, d) for d in range(14, 0, -1)]})
+    if tc or tlv:
+        out.append(train_feed(today, tc, tlv, today_ok))
     hour = datetime.now(TZ).hour
+    buses_missing = any(f['open'] for f in out if f['feed'] != TRAINS_FEED) and (learned is None or learned > 0)
     return {'today': today, 'share': pct(col.get(0, 0), elapsed), 'down': down, 'status': status, 'feeds': out,
-            'nightly_missing': any(f['open'] for f in out) and hour >= 5 and (learned is None or learned > 0),
+            'nightly_missing': hour >= 5 and (buses_missing or bool(tc) and 1 not in tc),
             'checks': {lvl: (hits[lvl], hits[lvl] + miss[lvl]) for lvl in ('sure', 'likely') if lvl in hits},
             'collector': [(today - timedelta(days=d), col.get(d, 0) / 86400) for d in range(14, 0, -1)]}
 
@@ -1814,7 +1847,7 @@ def szsite_panel(w, z=None, now=None):
                           cell('–' if count is None else count, 8, 'text', True), cell('  ' + (ago(at) if at else '–'), 14, 'dim'),
                           (err or '', 'bad' if err in ('challenge', 'blocked') else 'warn')))
         if not z.get('in_service', True):
-            body.append(L(('live trains are not fetched 00:30–04:30', 'faint')))
+            body.append(L(('night (00:30–04:30): live trains every 2 min, boards only while trains run', 'faint')))
     return panel('SŽ reader', body, w, 'our reader of potniski.sz.si')
 
 

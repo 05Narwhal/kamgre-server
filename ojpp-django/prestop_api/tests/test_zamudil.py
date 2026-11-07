@@ -575,6 +575,28 @@ class TrainClassTests(ZamudilCase):
         zamudil.class_of('36', DAY)['features'].append('x')
         self.assertNotIn('x', zamudil.class_of('36', DAY)['features'])  # each caller gets its own copy
 
+    def test_our_readers_sets_lead_and_zamudil_fills_the_rest(self):
+        from prestop_api.szsite import sets
+        from prestop_api.szsite.store import Store
+        folder = tempfile.mkdtemp()
+        Store(folder).keep('train_sets', {'date': DAY.isoformat(), 'trains': {
+            '36': {'set': 'SŽ 310 “Pendolino”', 'slug': 'emg-310-316-pendolino'},       # same series: zamudil's record (features)
+            '512': {'set': 'SŽ 510 Stadler FLIRT', 'slug': 'sz-510-stadler-flirt'},   # another series: SŽ's
+            '70': {'set': 'Nov vlak', 'slug': 'x'},                                   # a name we do not know: zamudil's
+            '99999': {'set': 'SŽ 312 Siemens Desiro (dvočleni)', 'slug': 'y'}}}, count=4)
+        sets._memo.update(looked=float('-inf'), stamp=None)
+        with override_settings(PRESTOP_SZSITE_DIR=folder, PRESTOP_SZSITE_CLASSES=True):
+            self.assertEqual(zamudil.class_of('36', DAY)['source'], 'zamudil.si')
+            flirt = zamudil.class_of('512', DAY)
+            self.assertEqual((flirt['series'], flirt['source']), ('510', 'potniski.sz.si'))
+            self.assertEqual(zamudil.class_of('70', DAY)['series'], '541')
+            self.assertEqual((zamudil.class_of('99999', DAY)['series'], zamudil.class_of('99999', DAY)['cars']), ('312', 2))
+            self.assertEqual(zamudil.class_of('18', DAY)['series'], '313')  # not searched: zamudil's
+            self.assertEqual(sets.classes(date(2026, 10, 28)), {})  # the reader's list is of one day only
+        sets._memo.update(looked=float('-inf'), stamp=None)
+        zamudil._classes.clear()
+        self.assertEqual(zamudil.class_of('512', DAY)['series'], '312')  # switch off: zamudil's alone
+
     def test_a_train_missing_from_a_part_filled_list_takes_its_last_known_class(self):
         """zamudil fills a day's list through the day (7 Nov, 00:00: 35 trains, IC 350 not among them)."""
         later = date(2026, 10, 28)

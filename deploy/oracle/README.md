@@ -145,7 +145,7 @@ From Windows, `yarn server:top` (optionally `yarn server:top 5` for every 5 s, o
 
 It has seven tabs, switched with ←/→, Tab, 1–7 or a click (`?` lists the keys, `p` pauses, `+`/`-` change the speed): **Overview** (what needs a look, resources, traffic, services, health), **System** (CPU, memory, network and disk graphs, top processes), **Services** (state, uptime, restarts, CPU history, the timers' last and next runs, backups), **Traffic** (visitors per minute, API connections and hourly bytes, this month's outbound data with its pace and per-day/per-hour graphs from vnstat), **Data** (`/health`, coverage, every source, PostgreSQL and Redis), **Learning** and **Logs** (warnings and errors of the KamGre units in the last 24 h). It is read-only: the month's outbound data is worked out from the egress guard's counter file and vnstat the way `egress-guard.sh` does, without running the guard.
 
-Its **Learning** tab (refreshed once a minute) follows the stay-on learning (`prestop_statistics/stays.py`). It shows how much of today the collector has recorded and how many of the 72 allowed minutes of downtime are used. A day counts only at 95 % or more, and 7 counted days in a row open a feed. It also lists each feed's streak with the day it will open, the feeds already open with their `sure`/`likely` counts, and the last 14 days of the nightly check. It turns red when today will not count, or when a feed is open but the 04:30 nightly learning has not run.
+Its **Learning** tab (refreshed once a minute) follows the stay-on learning (`prestop_statistics/stays.py`). It shows how much of today the collector has recorded and how many of the 72 allowed minutes of downtime are used. A day counts only at 95 % or more, and 7 counted days in a row open a feed. SŽ trains are a row of their own (`prestop_statistics/train_stays.py`): their day counts when the collector ran 95 % of it and SŽ reported 95 % of the timetable's trains. It also lists each feed's streak with the day it will open, the feeds already open with their `sure`/`likely` counts, and the last 14 days of the nightly check. It turns red when today will not count, or when a feed is open but the 04:30 nightly learning has not run.
 
 `yarn server:update` refreshes Arriva's notices without a deploy (`yarn server:update --check` only reads them and says how many). arriva.si has blocked networks outside Slovenia, this server's among them, so `notices-remote.sh` reads the posts on your PC and sends them over SSH to `prestop-manage arriva_notices --import`, which checks them and writes `/var/lib/prestop/arriva-posts.json`; a bad answer leaves the old notices in place. The API's workers notice the file by themselves, with no restart. `yarn server:push` does the same at the end of every deploy, and a failure there does not fail the deploy. While the server can read the site itself, the newer read wins. `/health` lists `operator-site:arriva`, with `stale` once the last read is more than an hour old from the site or three days old from an upload. `sudo prestop-manage arriva_notices` shows what the server holds.
 
@@ -215,7 +215,10 @@ source and those stay behind it as fallbacks (each URL list in `prestop_producti
 stale, so the next source is used). Its notices list (saved every 15 minutes) leads zamudil.si's notices while it is
 under an hour old, taking zamudil's train numbers along for the same timetable; `PRESTOP_SZSITE_NOTICES=off` puts zamudil.si
 first again. Its works ("Dela na progi", drawn along the track between the stations SŽ names) lead zamudil.si's maintenance
-the same way; `PRESTOP_SZSITE_WORKS=off` puts zamudil.si first again.
+the same way; `PRESTOP_SZSITE_WORKS=off` puts zamudil.si first again. Its planned train sets (8 timetable-finder searches
+along the main lines from 01:00, one a minute) lead zamudil.si's classes for today; trains it does not reach (branch lines)
+keep zamudil's, and with no list of today zamudil's alone count; `PRESTOP_SZSITE_CLASSES=off` puts zamudil.si first again.
+At night (00:30–04:30) live trains are read every 2 minutes and the boards only while trains run.
 
 **Cost: $0.** Nothing is created in Oracle Cloud: Docker (Ubuntu's `docker.io`), a FlareSolverr container and our reader run on
 the existing A1 VM, bound to `127.0.0.1` only. Downloads from SŽ (≈ 0.6–2.2 GB/day) are inbound and free; outbound is only the
@@ -234,7 +237,7 @@ requests themselves, ≈ 5,000 a day × ~1 KB ≈ **5 MB/day**, well inside the 
 3. On your computer: `yarn server:push`. `update.sh` runs `server/szsite.sh`, which installs Docker once, pulls FlareSolverr
    (`ghcr.io/flaresolverr/flaresolverr:v3.5.2`) and starts `prestop-szsite-solver`, `prestop-szsite` and the guard timer.
 4. Check: `curl -s https://api.kamgre.si/api/v1/health` lists `sz:site-notices`, `sz:site-works` and `sz:site-live`
-   (`sz:site-classes` once the reader reads train sets); in `server:top` the **Sources** line names any that are not live, and
+   and `sz:site-classes` (train sets); in `server:top` the **Sources** line names any that are not live, and
    the services list shows `prestop-szsite*`. On the server: `journalctl -u prestop-szsite -n 30` and
    `curl -s 127.0.0.1:8095/status`.
 

@@ -129,6 +129,8 @@ PRESTOP_SZSITE_STATUS_URL = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZSI
 PRESTOP_SZSITE_NOTICES = False if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_NOTICES', default='off') == 'on'
 # SŽ's works (the reader's PRESTOP_SZSITE_DIR/works.json) ahead of zamudil.si's maintenance while fresh (szsite/works.py).
 PRESTOP_SZSITE_WORKS = False if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_WORKS', default='off') == 'on'
+# SŽ's planned train sets (the reader's PRESTOP_SZSITE_DIR/train_sets.json, today's) ahead of zamudil.si's (szsite/sets.py).
+PRESTOP_SZSITE_CLASSES = False if 'test' in sys.argv[1:2] else env('PRESTOP_SZSITE_CLASSES', default='off') == 'on'
 # The notices' replacement-timetable PDFs, read by `manage.py szpdf_sync` (prestop_api/szpdf) into one JSON
 # file per PDF plus index.json, which the API reads (prestop_api/sztimetables.py). Tests set their own directory.
 PRESTOP_SZ_TIMETABLES_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_TIMETABLES_DIR', default=str(root / 'data/sz-timetables'))

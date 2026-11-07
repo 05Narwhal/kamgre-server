@@ -56,6 +56,7 @@ if env('PRESTOP_SZSITE', default='off') == 'on':
     PRESTOP_SZSITE_STATUS_URL = f'{_SZSITE}/status'  # /health sz:site-*
     PRESTOP_SZSITE_NOTICES = env('PRESTOP_SZSITE_NOTICES', default='on') == 'on'  # its list ahead of zamudil.si
     PRESTOP_SZSITE_WORKS = env('PRESTOP_SZSITE_WORKS', default='on') == 'on'  # its works ahead of zamudil.si's
+    PRESTOP_SZSITE_CLASSES = env('PRESTOP_SZSITE_CLASSES', default='on') == 'on'  # its train sets ahead of zamudil.si's
 
 # The nightly city timetable check's result (prestop-citytt-check.timer writes, /health reads).
 PRESTOP_CITYTT_CHECK_FILE = '/var/lib/prestop/citytt-check.json'
