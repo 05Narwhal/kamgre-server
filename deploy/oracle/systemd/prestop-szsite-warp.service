@@ -6,9 +6,13 @@ Before=prestop-szsite-solver.service
 
 [Service]
 ExecStartPre=-/usr/bin/docker rm -f prestop-warp
-# Proxy mode only: no NET_ADMIN and no tun device, so it cannot change the VM's routes. The anonymous
-# registration (no Cloudflare account) is kept in /var/lib/prestop/warp.
-ExecStart=/usr/bin/docker run --rm --name prestop-warp --network host \
+# Proxy mode only, no tun device. warp-svc must install its own routing rule (fwmark policy) and without NET_ADMIN it
+# reconnects forever (7 Nov: FirewallRepairFailed), so the container has NET_ADMIN but its OWN network namespace
+# (not --network host): the rule exists only inside the container and the VM's routes cannot be touched. The proxy
+# is published on the VM's loopback only (daemon.json "ip" is 127.0.0.1 as well). The anonymous registration
+# (no Cloudflare account) is kept in /var/lib/prestop/warp.
+ExecStart=/usr/bin/docker run --rm --name prestop-warp \
+  --cap-add NET_ADMIN --sysctl net.ipv4.conf.all.src_valid_mark=1 -p 127.0.0.1:40000:40001 \
   -v /var/lib/prestop/warp:/var/lib/cloudflare-warp \
   --memory 256m --memory-swap 256m --pids-limit 128 --security-opt no-new-privileges \
   prestop-warp:local
