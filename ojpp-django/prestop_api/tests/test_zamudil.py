@@ -131,9 +131,9 @@ class KeepsTheLastCopyTests(ZamudilCase):
             zamudil._write(Path(self.dir.name) / f'{name}.json', {'data': {'notices': []}, 'fetchedAt': 1, 'checkedAt': 1})
         self.fetched()
         zamudil.prune()
-        # notices stay PAST_LISTS days (notice_records), other copies only from today on
+        # notices and classes stay PAST_LISTS days (notice_records, class_of's fallback), other copies only from today on
         self.assertEqual(sorted(p.name for p in Path(self.dir.name).glob('*.json')),
-                         ['notices-2026-10-19.json', 'notices-2026-10-26.json', 'notices-2026-10-27.json'])
+                         ['assignments-2026-10-26.json', 'notices-2026-10-19.json', 'notices-2026-10-26.json', 'notices-2026-10-27.json'])
 
     def stored(self, day: date, data: dict):
         zamudil._write(Path(self.dir.name) / f'notices-{day.isoformat()}.json', {'data': data, 'fetchedAt': 1, 'checkedAt': 1})
@@ -570,9 +570,22 @@ class TrainClassTests(ZamudilCase):
         coaches = zamudil.class_of('70', DAY)
         self.assertEqual((coaches['series'], coaches['name']), ('541', 'Vlak v različnih sestavah vagonov'))
         self.assertIsNone(zamudil.class_of('99999', DAY))
-        self.assertIsNone(zamudil.class_of('36', date(2026, 10, 28)))  # no copy of that date
+        self.assertIsNone(zamudil.class_of('36', date(2026, 10, 26)))  # no copy of that date or before
+        self.assertEqual(zamudil.class_of('36', date(2026, 10, 28))['series'], '310')  # a later date: today's class
         zamudil.class_of('36', DAY)['features'].append('x')
         self.assertNotIn('x', zamudil.class_of('36', DAY)['features'])  # each caller gets its own copy
+
+    def test_a_train_missing_from_a_part_filled_list_takes_its_last_known_class(self):
+        """zamudil fills a day's list through the day (7 Nov, 00:00: 35 trains, IC 350 not among them)."""
+        later = date(2026, 10, 28)
+        zamudil._copies[(zamudil.CLASSES, later.isoformat())] = {'data': {'serviceDate': later.isoformat(), 'rollingStock': [
+            {'name': 'SŽ 312 Siemens Desiro (tročleni)', 'features': {}, 'trainNumbers': [36]}]}, 'fetchedAt': NOON, 'checkedAt': NOON, 'error': None}
+        zamudil._looked[(zamudil.CLASSES, later.isoformat())] = (1e12, None)
+        with mock.patch.object(zamudil, 'today', return_value=later):
+            self.assertEqual(zamudil.class_of('36', later)['series'], '312')  # the day's own list leads
+            self.assertEqual(zamudil.class_of('512', later)['series'], '312')  # yesterday's list fills the gap
+            self.assertEqual(zamudil.class_of('18', later)['series'], '313')
+            self.assertIsNone(zamudil.class_of('99999', later))
 
     def test_names(self):
         self.assertEqual(zamudil.train_class({'name': 'SŽ 312 Siemens Desiro (dvočleni)', 'features': {}})['cars'], 2)

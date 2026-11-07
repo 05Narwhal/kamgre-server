@@ -178,17 +178,18 @@ def _store(endpoint: str, day: Optional[str], value: dict):
 
 
 def prune(now: Optional[float] = None):
-    """Copies of dates before today go (from memory and the directory), notices PAST_LISTS days later (notice_records)."""
+    """Copies of dates before today go (from memory and the directory), notices and classes PAST_LISTS days later
+    (notice_records; class_of's fallback to a train's last known class)."""
     first = today().isoformat()
     notices_from = (today() - timedelta(days=PAST_LISTS)).isoformat()
-    for key in [k for k in _copies if k[1] and k[1] < (notices_from if k[0] == NOTICES else first)]:
+    for key in [k for k in _copies if k[1] and k[1] < (notices_from if k[0] in (NOTICES, CLASSES) else first)]:
         _copies.pop(key, None)
         _looked.pop(key, None)
     where = directory()
     if where is None or not where.exists():
         return
     for path in where.glob('*-????-??-??.json'):
-        if path.stem[-10:] < (notices_from if path.stem[:-11] == NOTICES else first):
+        if path.stem[-10:] < (notices_from if path.stem[:-11] in (NOTICES, CLASSES) else first):
             try:
                 path.unlink()
             except OSError:
@@ -758,8 +759,18 @@ def classes(day: date) -> dict[str, dict]:
 
 
 def class_of(number: Optional[str], day: date) -> Optional[dict]:
-    """The planned class of train `number` on service day `day` (a copy of it), or None."""
-    found = classes(day).get(str(number).lstrip('0')) if number else None
+    """The planned class of train `number` on service day `day` (a copy of it), or None. zamudil fills a day's list
+    through the day (35 of ~550 trains at midnight, 7 Nov) and has none for later dates: a train missing from it takes
+    its class from the latest earlier day's list that has it (up to PAST_LISTS days back; a train's set rarely changes)."""
+    if not number:
+        return None
+    key = str(number).lstrip('0')
+    found = classes(day).get(key)
+    start = min(day, today())
+    for back in range(0 if start < day else 1, PAST_LISTS + 1):
+        if found:
+            break
+        found = classes(start - timedelta(days=back)).get(key)
     return {**found, 'features': list(found['features'])} if found else None
 
 
