@@ -38,6 +38,16 @@ class MergeTests(SimpleTestCase):
         self.assertEqual(len(merged), 1)
         self.assertEqual(groups['IJPP:1121238'], ['IJPP:1121237', 'IJPP:1121238', 'MOKranj:112'])
 
+    def test_a_stop_sent_elsewhere_by_an_override_joins_only_there(self):
+        """Gosposvetska (2026-11-07): IJPP's SE-bound pole (served both ways) sits 4 m from LPP's NW-bound pole, one pole by
+        same_pole; the overrides send each IJPP pole to its own side's LPP pole, and the two sides must stay apart."""
+        nw_ijpp, nw_lpp = stop('IJPP:1167336', 'Gosposvetska', 46.056129, 14.502123), stop('LPP:nw', 'Gosposvetska', 46.056194, 14.502028)
+        se_ijpp, se_lpp = stop('IJPP:1167386', 'Gosposvetska', 46.05616, 14.50204), stop('LPP:se', 'Gosposvetska', 46.054905, 14.503717)
+        ways = {'IJPP:1167336': WEST, 'LPP:nw': WEST, 'IJPP:1167386': EAST + WEST, 'LPP:se': EAST}
+        _, groups = stopgroups.merge([nw_ijpp, nw_lpp, se_ijpp, se_lpp], forced={'IJPP:1167336': 'LPP:nw', 'IJPP:1167386': 'LPP:se'}, ways=ways)
+        self.assertEqual(sorted(groups['LPP:nw']), ['IJPP:1167336', 'LPP:nw'])
+        self.assertEqual(sorted(groups['LPP:se']), ['IJPP:1167386', 'LPP:se'])
+
     def test_opposite_sides_never_merge_even_with_alike_names(self):
         stops = [stop('IJPP:1', 'Ljubljana Rakovnik', 46.03, 14.52), stop('LPP:1', 'Rakovnik', north_of(46.03, 20), 14.52),
                  stop('IJPP:2', 'Ljubljana Rakovnik', north_of(46.03, 5), 14.52)]

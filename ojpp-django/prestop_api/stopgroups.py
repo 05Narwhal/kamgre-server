@@ -314,6 +314,10 @@ def merge(stops: list[dict], forced: Optional[dict[str, str]] = None,
     # Closest pairs first: a stop joins its nearest fitting namesake before a farther one can.
     for d, i, j, named in sorted(pairs):
         a, b = stops[i], stops[j]
+        # A stop the override table sends somewhere joins only there: Gosposvetska's SE-bound IJPP pole, 4 m from LPP's
+        # NW-bound one, was one pole by same_pole, and the two overrides then chained both sides into one stop.
+        if a['id'] in forced or b['id'] in forced:
+            continue
         namesakes = keys[i] == keys[j]
         if not named:
             # One spot, one way, any names (rule 1); the groups still may not hold an opposite pair (may_join).
