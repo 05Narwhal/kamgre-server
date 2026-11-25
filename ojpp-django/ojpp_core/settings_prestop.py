@@ -108,6 +108,8 @@ PRESTOP_ZAMUDIL_DIR = '' if 'test' in sys.argv[1:2] else env('PRESTOP_ZAMUDIL_DI
 PRESTOP_SZ_NOTICES_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NOTICES_URL', default=['https://api.modra.ninja/sz/ovire_raw?lang=sl'])
 # The last good notices, so a restart while every notices URL fails keeps today's closures (closures.py).
 PRESTOP_SZ_NOTICES_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_FILE', default=str(root / 'data/sz-notices.json'))
+# SŽ closure days kept for the ghost-trip rule (prestop_api/gps_habit.py, `manage gps_habit --learn`).
+PRESTOP_GHOST_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_GHOST_FILE', default=str(root / 'data/ghost-closures.json'))
 # SŽ's own RSS (its "Obvestila za potnike"; no bot check): every post in effect, and the timetables they link ahead.
 PRESTOP_SZ_NEWS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NEWS_URL', default=['https://potniski.sz.si/feed/?category_name=obvestila-za-potnike'])
 # Arriva's posts read elsewhere and uploaded (manage.py arriva_notices, `yarn server:update`), for when its site blocks the server.

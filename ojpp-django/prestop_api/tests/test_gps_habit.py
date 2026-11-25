@@ -216,6 +216,59 @@ class RarelyRunsTests(SimpleTestCase):
         self.assertEqual(gps_habit.stop_key('Ljubljana AP'), 'ljubljana')
         self.assertFalse(gps_habit.on_corridor('Ljubljana Šiška', {'ljubljana'}))
 
+    def test_closure_days_are_stored_merged_and_pruned_and_long_closures_left_out(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        train = {'stops': [{'name': n} for n in ('Ljubljana', 'Kranj', 'Lesce-Bled', 'Jesenice')]}
+        works = {'kind': 'replacement', 'title': 'Vozni red nadomestnega prevoza: Ljubljana - Jesenice in obratno (2. - 6. november).',
+                 '_dates': [f'202611{d:02}' for d in range(2, 7)]}
+        standing = {'kind': 'replacement', 'title': 'Vozni red nadomestnega prevoza: Kranj - Jesenice in obratno (do 12. decembra).',
+                    '_dates': [(date(2026, 1, 1) + timedelta(days=i)).strftime('%Y%m%d') for i in range(40)]}
+        sections = gps_habit.closure_sections([works, standing], [train])
+        self.assertEqual(len(sections), 1)  # 40 days of a standing closure: how the line runs, not ghost days
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / 'ghost.json')
+            old = [(sections[0][0], {date(2026, 9, 1)})]  # older than LONG days: dropped
+            gps_habit.save_closures(old, path, date(2026, 9, 2))
+            self.assertEqual(gps_habit.save_closures(sections, path, date(2026, 11, 25)), 1)
+            later = [(sections[0][0], {date(2026, 11, 20)})]
+            gps_habit.save_closures(later, path, date(2026, 11, 26))
+            stored = gps_habit._sections_from(json.loads(Path(path).read_text(encoding='utf-8')))
+            self.assertEqual(stored, [(sections[0][0], {date(2026, 11, d) for d in (2, 3, 4, 5, 6, 20)})])
+            Path(path).write_text('not json', encoding='utf-8')
+            gps_habit.load_closures(path)  # an unreadable file is no closure days, not an error
+
+    def test_the_shipped_seed_excuses_a6343_on_its_closure_run_days(self):
+        # Seeded (--seed) from local copies of SŽ's list and zamudil's daily notices: SŽ's full closure Ljubljana –
+        # Jesenice 2–6 Nov, when A6343 ran.
+        with override_settings(PRESTOP_GHOST_FILE=''):
+            sections = gps_habit.load_closures()
+        route = {'gtfsId': LESCE, 'shortName': 'A6343', 'agency': {'gtfsId': ARRIVA}, 'patterns': [
+            {'directionId': 0, 'stops': [{'name': 'Ljubljana AP'}, {'name': 'Lesce ŽP'}],
+             'trips': [{'activeDates': ['20261105'], 'departureStoptime': {'scheduledDeparture': 8 * 3600 + 2700}}]}]}
+        days = gps_habit.closed_lines(gps_habit.listing(route), sections)[(ARRIVA, 'A6343')]
+        self.assertTrue({date(2026, 11, 5), date(2026, 11, 6)} <= days)
+        self.assertFalse({date(2026, 11, d) for d in range(12, 25)} & days)  # its quiet weekdays stay judged
+        self.assertTrue(all(len(d) <= gps_habit.MAX_CLOSURE for _, d in sections))
+
+    def test_notices_read_from_saved_copies(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            listed, daily = Path(tmp) / 'notices.json', Path(tmp) / 'notices-2026-11-03.json'
+            listed.write_text(json.dumps({'data': [{'id': '11307', 'from': '2026-11-07', 'to': '2026-11-11', 'text': '',
+                                                     'title': 'Vozni red nadomestnega prevoza: Lesce Bled - Jesenice in obratno (7. - 11. november).'}]}), encoding='utf-8')
+            daily.write_text(json.dumps({'data': {'serviceDate': '2026-11-03', 'notices': [
+                {'summary': 'Vozni red nadomestnega prevoza: Ljubljana - Jesenice / Beljak (A) in obratno (2. - 6. november).'},
+                {'summary': 'Povezava: [Vozni red nadomestnega prevoza](https://example.invalid/x.pdf)'}]}}), encoding='utf-8')
+            alerts = gps_habit.notices_from_files([listed, daily])
+        from prestop_api import closures
+        self.assertEqual([sorted(closures._days(a)) for a in alerts],
+                         [[f'202611{d:02}' for d in range(7, 12)], [f'202611{d:02}' for d in range(2, 7)]])
+        self.assertTrue(all(closures.is_closure(a) for a in alerts))
+
     def test_a_trip_running_on_some_days_is_irregular(self):
         seen, live = history()
         for d in WEEKDAYS[::2]:

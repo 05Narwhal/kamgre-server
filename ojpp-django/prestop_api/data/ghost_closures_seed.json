@@ -1,0 +1,341 @@
+{
+ "savedAt": "2026-11-25",
+ "sections": [
+  {
+   "keys": [
+    "anhovo",
+    "novagorica",
+    "plave",
+    "solkan"
+   ],
+   "days": [
+    "2026-11-20",
+    "2026-11-23"
+   ]
+  },
+  {
+   "keys": [
+    "bledjezero",
+    "bohinjskabela",
+    "bohinjskabistrica",
+    "jesenice",
+    "kocna",
+    "nomenj",
+    "podhom",
+    "vintgar"
+   ],
+   "days": [
+    "2026-10-31",
+    "2026-11-01",
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-07",
+    "2026-11-08",
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11"
+   ]
+  },
+  {
+   "keys": [
+    "borovnica",
+    "brezovica",
+    "ljubljana",
+    "ljubljanadolgimost",
+    "ljubljanativoli",
+    "notranjegorice",
+    "preserje"
+   ],
+   "days": [
+    "2026-11-14"
+   ]
+  },
+  {
+   "keys": [
+    "branik",
+    "dornberk",
+    "dutovlje",
+    "kopriva",
+    "kreplje",
+    "prvacina",
+    "sezana",
+    "stanjel",
+    "steske"
+   ],
+   "days": [
+    "2026-11-13",
+    "2026-11-14",
+    "2026-11-15"
+   ]
+  },
+  {
+   "keys": [
+    "branik",
+    "dornberk",
+    "prvacina",
+    "stanjel",
+    "steske"
+   ],
+   "days": [
+    "2026-11-24",
+    "2026-11-25",
+    "2026-11-26",
+    "2026-11-27"
+   ]
+  },
+  {
+   "keys": [
+    "celje",
+    "celjelava",
+    "petrovce",
+    "zalec"
+   ],
+   "days": [
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-13"
+   ]
+  },
+  {
+   "keys": [
+    "crnomelj",
+    "dobravice",
+    "gradac",
+    "metlika"
+   ],
+   "days": [
+    "2026-11-17"
+   ]
+  },
+  {
+   "keys": [
+    "divaca",
+    "hrpeljekozina",
+    "koper"
+   ],
+   "days": [
+    "2026-11-09",
+    "2026-11-15",
+    "2026-11-16",
+    "2026-11-29",
+    "2026-11-30"
+   ]
+  },
+  {
+   "keys": [
+    "florjan",
+    "paskavas",
+    "smartnoobpaki",
+    "sostanj",
+    "velenje",
+    "velenjepesje"
+   ],
+   "days": [
+    "2026-11-11",
+    "2026-11-12"
+   ]
+  },
+  {
+   "keys": [
+    "gaber",
+    "radohovavas",
+    "sentlovrenc",
+    "stefan",
+    "trebnje",
+    "velikaloka"
+   ],
+   "days": [
+    "2026-11-18"
+   ]
+  },
+  {
+   "keys": [
+    "globoko",
+    "jesenice",
+    "kranj",
+    "lescebled",
+    "litostroj",
+    "ljubljana",
+    "ljubljanastegne",
+    "ljubljanavizmarje",
+    "medno",
+    "medvode",
+    "otoce",
+    "podnart",
+    "radovljica",
+    "retece",
+    "skofjaloka",
+    "slovenskijavornik",
+    "zirovnica"
+   ],
+   "days": [
+    "2026-11-02",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-07",
+    "2026-11-08",
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11"
+   ]
+  },
+  {
+   "keys": [
+    "grahovo",
+    "hudajuzna",
+    "mostnasoci",
+    "podbrdo",
+    "podmelec"
+   ],
+   "days": [
+    "2026-11-16",
+    "2026-11-17",
+    "2026-11-18",
+    "2026-11-19"
+   ]
+  },
+  {
+   "keys": [
+    "grlava",
+    "ivanjkovci",
+    "lipovci",
+    "ljutomer",
+    "ljutomermesto",
+    "mekotnjak",
+    "murskasobota",
+    "ormoz",
+    "pavlovci",
+    "pusenci",
+    "verzej"
+   ],
+   "days": [
+    "2026-11-22",
+    "2026-11-23"
+   ]
+  },
+  {
+   "keys": [
+    "grlava",
+    "ivanjkovci",
+    "lipovci",
+    "ljutomer",
+    "ljutomermesto",
+    "mekotnjak",
+    "murskasobota",
+    "verzej"
+   ],
+   "days": [
+    "2026-11-15",
+    "2026-11-17"
+   ]
+  },
+  {
+   "keys": [
+    "hudo",
+    "mirnapec",
+    "novomesto"
+   ],
+   "days": [
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06"
+   ]
+  },
+  {
+   "keys": [
+    "ivancnagorica",
+    "polzevo",
+    "visnjagora"
+   ],
+   "days": [
+    "2026-11-20"
+   ]
+  },
+  {
+   "keys": [
+    "ivancnagorica",
+    "radohovavas",
+    "sentvidpristicni"
+   ],
+   "days": [
+    "2026-11-19"
+   ]
+  },
+  {
+   "keys": [
+    "jesenice",
+    "lescebled",
+    "slovenskijavornik",
+    "zirovnica"
+   ],
+   "days": [
+    "2026-11-07",
+    "2026-11-08",
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11"
+   ]
+  },
+  {
+   "keys": [
+    "lipovci",
+    "murskasobota"
+   ],
+   "days": [
+    "2026-11-24"
+   ]
+  },
+  {
+   "keys": [
+    "ljubljana",
+    "ljubljanapolje",
+    "ljubljanazalog"
+   ],
+   "days": [
+    "2026-11-15"
+   ]
+  },
+  {
+   "keys": [
+    "ljubljana",
+    "ljubljanarakovnik",
+    "ljubljanavodmat"
+   ],
+   "days": [
+    "2026-11-15"
+   ]
+  },
+  {
+   "keys": [
+    "moskanjci",
+    "ormoz",
+    "oslusevci",
+    "ptuj",
+    "velikanedelja",
+    "zamusani"
+   ],
+   "days": [
+    "2026-10-26",
+    "2026-10-27",
+    "2026-10-28",
+    "2026-10-29",
+    "2026-10-30",
+    "2026-11-03",
+    "2026-11-04",
+    "2026-11-05",
+    "2026-11-06",
+    "2026-11-09",
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13"
+   ]
+  }
+ ]
+}

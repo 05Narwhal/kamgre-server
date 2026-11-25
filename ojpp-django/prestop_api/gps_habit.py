@@ -195,6 +195,8 @@ JUDGED_FEEDS = ('IJPP:', 'LPP:', 'MARPROM:')       # (b) feeds whose buses send 
 REPLACEMENT_OPERATORS = frozenset({'IJPP:1161'})   # (b) SŽ: its buses run instead of trains (mapping.REPLACEMENT_AGENCIES)
 ROUTE_TRIPS_Q = ('query($id: String!) { route(id: $id) { gtfsId shortName agency { gtfsId } patterns { directionId '
                  'stops { name } trips { activeDates departureStoptime { scheduledDeparture } } } } }')
+MAX_CLOSURE = 31  # days: a longer closure ("do 12. decembra", a year of works Divača – Koper) is how the line runs,
+#                  not days a ghost may run; leaving it in would excuse every day on its corridor
 STOP_SUFFIXES = ('avtobusnapostaja', 'zelezniskapostaja', 'postaja', 'ap', 'zp')
 
 
@@ -243,8 +245,8 @@ def on_corridor(name: str, keys) -> bool:
 
 def closure_sections(alerts, trains) -> list[tuple[set, set]]:
     """(station keys of the closed section, its days) per SŽ closure notice (`closures.is_closure`: buses instead of
-    trains), the section widened to every station a train passes between its sides (`closures.corridor`, so
-    'Ljubljana - Jesenice' covers Lesce Bled and Kranj)."""
+    trains) of at most MAX_CLOSURE days, the section widened to every station a train passes between its sides
+    (`closures.corridor`, so 'Ljubljana - Jesenice' covers Lesce Bled and Kranj)."""
     from datetime import datetime
     from prestop_api import closures
     out = []
@@ -253,7 +255,7 @@ def closure_sections(alerts, trains) -> list[tuple[set, set]]:
             continue
         keys = closures.corridor(closures.sides(a), trains)
         days = {datetime.strptime(d, '%Y%m%d').date() for d in closures._days(a)}
-        if keys and days:
+        if keys and days and len(days) <= MAX_CLOSURE:
             out.append((keys, days))
     return out
 
@@ -429,3 +431,97 @@ def backtest(today: date, days: int, listed: list, past=None, ghost_rate: float 
             'hiddenOn2DaysItRan': sum(1 for n in ran_on.values() if n >= 2),
             'lines': sorted(({'line': k, 'hidden': v['hidden'], 'ran': v['ran'], 'days': sorted(v['days']),
                               'rate': sum(v['rates']) / len(v['rates'])} for k, v in lines.items()), key=lambda x: -x['hidden'])}
+
+
+# Closure days kept (part 6b-3b): SŽ drops a notice from its list once it ends and the server keeps no closure
+# history, so `manage gps_habit --learn` (nightly) adds the closures in effect to PRESTOP_GHOST_FILE, kept LONG days.
+# SEED_FILE holds the closures of 2–11 and 19–22 Nov read from local copies of SŽ's list and zamudil's daily notices
+# (`--seed`), so the first backtests can leave A6343's 5–6 Nov runs out of its rate.
+SEED_FILE = 'data/ghost_closures_seed.json'
+
+
+def _sections_from(body) -> list[tuple[set, set]]:
+    out = []
+    for s in (body or {}).get('sections') or []:
+        try:
+            out.append((set(s['keys']), {date.fromisoformat(d) for d in s['days']}))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def merge_sections(*lists, since: Optional[date] = None) -> list[tuple[set, set]]:
+    """One (keys, days) per closed section, the days of every list joined; days before `since` dropped."""
+    merged: dict = {}
+    for sections in lists:
+        for keys, days in sections:
+            merged.setdefault(frozenset(keys), set()).update(d for d in days if since is None or d >= since)
+    return [(set(k), d) for k, d in merged.items() if d]
+
+
+def load_closures(path: Optional[str] = None) -> list[tuple[set, set]]:
+    """The stored closure sections (PRESTOP_GHOST_FILE) and the seed's; [] for any that cannot be read (fail safe:
+    no closure days only means a ghost is not excused on them)."""
+    import json
+    from pathlib import Path
+    from django.conf import settings
+    out = []
+    for p in (Path(__file__).parent / SEED_FILE, path if path is not None else getattr(settings, 'PRESTOP_GHOST_FILE', '')):
+        try:
+            out.append(_sections_from(json.loads(Path(p).read_text(encoding='utf-8'))) if p else [])
+        except (OSError, ValueError):
+            out.append([])
+    return merge_sections(*out)
+
+
+def save_closures(sections, path: str, today: date) -> int:
+    """Adds `sections` to the file at `path` (days older than LONG dropped), written to a temporary file and then
+    moved over the old one. -> the number of sections stored."""
+    import json
+    import os
+    from pathlib import Path
+    target = Path(path)
+    try:
+        old = _sections_from(json.loads(target.read_text(encoding='utf-8')))
+    except (OSError, ValueError):
+        old = []
+    merged = merge_sections(old, sections, since=today - timedelta(days=LONG))
+    body = {'savedAt': today.isoformat(), 'sections': sorted(
+        ({'keys': sorted(k), 'days': sorted(d.isoformat() for d in days)} for k, days in merged), key=lambda s: s['keys'])}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(target.name + '.tmp')
+    tmp.write_text(json.dumps(body, ensure_ascii=False, indent=1), encoding='utf-8')
+    os.replace(tmp, target)
+    return len(merged)
+
+
+def rail_trains(trips) -> list[dict]:
+    """SŽ's trains among a day's timetable trips (as closures.synthesize takes them), for `closures.corridor`."""
+    from prestop_api import mapping
+    return [t for t in trips if not mapping.is_replacement(t['route'])
+            and (t['route'].get('agency') or {}).get('gtfsId') in mapping.REPLACEMENT_AGENCIES]
+
+
+def notices_from_files(paths) -> list[dict]:
+    """Closure alerts from saved copies: SŽ's list (`data/szsite/notices.json`: {'data': [{id, from, to, title, text}]})
+    and zamudil's daily notices (`notices-<day>.json`: in effect on its serviceDate, or the days its title gives)."""
+    import json
+    from pathlib import Path
+    from prestop_api import sz_list, zamudil
+    out = []
+    for p in paths:
+        body = json.loads(Path(p).read_text(encoding='utf-8'))
+        data = body.get('data')
+        if isinstance(data, list):
+            out += [sz_list._alert(n, sz_list.spans(n)) for n in data if isinstance(n, dict) and n.get('title')]
+            continue
+        day = date.fromisoformat((data or {}).get('serviceDate') or '')
+        for n in (data or {}).get('notices') or []:
+            title = n.get('summary') or ''
+            if not title or title.startswith('Povezava'):
+                continue
+            spans = zamudil.title_spans(title, day) or [(day, day)]
+            if not any(a <= day <= b for a, b in spans):
+                spans = [(day, day)]
+            out.append(sz_list._alert({'id': f'z-{day}-{len(out)}', 'title': title, 'text': ''}, spans))
+    return out
