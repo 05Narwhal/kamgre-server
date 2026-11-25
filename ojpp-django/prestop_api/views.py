@@ -23,7 +23,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from . import journeys as planner
 from .citytt import watch
-from . import citynet, citytt, city_feeds, coverage, geometry, mapping, maplinks, operator_notices, platforms, sources, stopservice, supplement, sz_list, trips, variants, warm
+from . import citynet, citytt, city_feeds, coverage, geometry, gps_habit, mapping, maplinks, operator_notices, platforms, sources, stopservice, supplement, sz_list, trips, variants, warm
 from . import operators as companies
 from .upstream import Cached, UpstreamError, otp
 
@@ -299,7 +299,8 @@ def health(request):
     body = {'api': 'ready', 'database': database, 'sources': srcs, 'collector': _collector_source() if database == 'ready' else None,
             'maintenance': _maintenance(), 'coverage': coverage.latest(), 'outages': outages(srcs), 'sz': _sz_debug(),
             'bayStations': {'unresolved': platforms.unresolved()}, 'cityFeeds': city_feeds.latest(),
-            'cityTimetables': watch.latest(datetime.now(supplement.LOCAL).date())}
+            'cityTimetables': watch.latest(datetime.now(supplement.LOCAL).date()),
+            'ghostTrips': gps_habit.summary()}  # B1: the listed buses that almost never run, removed or labelled
     return JsonResponse(body, status=200 if database == 'ready' else 503)
 
 

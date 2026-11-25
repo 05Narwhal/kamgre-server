@@ -367,3 +367,122 @@ class RarelyRunsTests(SimpleTestCase):
             self.assertEqual(gps_habit.ghost_mode(), 'hide')
         with self.settings(GHOST_TRIPS='bogus'):
             self.assertEqual(gps_habit.ghost_mode(), 'off')
+
+
+# ---------------------------------------------------------------- stored verdicts and the shared check (part 6c)
+MONDAY = date(2026, 11, 24)
+MONDAY_NOON = DAY + 12 * 3600
+OPERATOR_OF = {A6345: ARRIVA, LESCE: ARRIVA, M6: MARPROM}
+
+
+class StoredVerdictTests(SimpleTestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.path = str(Path(self.dir.name) / gps_habit.VERDICT_FILE)
+        gps_habit.reset_stored()
+        self.addCleanup(gps_habit.reset_stored)
+
+    def store(self, body):
+        gps_habit.write_json(self.path, body)
+        gps_habit.reset_stored()
+
+    def learned(self, today=MONDAY, listed=LISTED, seen_live=None, old=None):
+        seen, live = seen_live or history()
+        return gps_habit.learn_verdicts(today, listed, (seen, live, OPERATOR_OF), CLOSED, old)
+
+    def check(self, *args, live=False, now=MONDAY_NOON):
+        with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path):
+            return gps_habit.trip_verdict(*args, live=live, now=now)
+
+    def a6343(self, **kw):
+        return self.check(ARRIVA, 'A6343', 0, 8 * 3600 + 2700, MONDAY, **kw)
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_the_nightly_verdict_removes_a6343_until_live_data_comes(self):
+        body = self.learned()
+        self.assertEqual([{k: r[k] for k in ('operator', 'name', 'direction', 'kind', 'start', 'verdict', 'rate', 'judgedAt')}
+                          for r in body['slots'] if r['name'] == 'A6343'],
+                         [{'operator': ARRIVA, 'name': 'A6343', 'direction': 0, 'kind': 'w', 'start': 8 * 3600 + 2700,
+                           'verdict': 'ghost', 'rate': 0.0, 'judgedAt': '2026-11-24'}])
+        self.assertFalse(any(r['name'] == 'A6345' for r in body['slots']))
+        self.store(body)
+        self.assertEqual(self.a6343(), 'ghost')
+        self.assertIsNone(self.a6343(live=True))  # a vehicle or an update on it: shown at once
+        self.assertIsNone(self.check(ARRIVA, 'A6343', 1, 8 * 3600 + 2700, MONDAY))  # the other direction
+        self.assertIsNone(self.check(ARRIVA, 'A6345', 0, 8 * 3600 + 1800, MONDAY))
+
+    def test_the_switch_marks_or_turns_it_off(self):
+        self.store(self.learned())
+        with override_settings(GHOST_TRIPS='mark'):
+            self.assertEqual(self.a6343(), 'irregular')
+        with override_settings(GHOST_TRIPS='off'):
+            gps_habit.reset_stored()
+            self.assertIsNone(self.a6343())
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_stale_or_unreadable_verdicts_hide_nothing(self):
+        self.store(self.learned())
+        self.assertIsNone(self.a6343(now=MONDAY_NOON + (gps_habit.STALE + 1) * 86400))
+        gps_habit.reset_stored()
+        with open(self.path, 'w', encoding='utf-8') as f:
+            f.write('{not json')
+        self.assertIsNone(self.a6343())
+        gps_habit.reset_stored()
+        self.path = self.path + '.missing'
+        self.assertIsNone(self.a6343())
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_a_closure_day_shows_the_ghost_as_irregular(self):
+        body = {**self.learned(), 'learnedAt': '2026-11-03',  # as if learned during SŽ's 2–6 Nov closure
+                'closed': [{'operator': ARRIVA, 'name': 'A6343', 'days': [f'2026-11-0{d}' for d in range(2, 7)]}]}
+        self.store(body)
+        with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path):
+            self.assertEqual(gps_habit.trip_verdict(ARRIVA, 'A6343', 0, 8 * 3600 + 2700, date(2026, 11, 4),
+                                                    now=MONDAY_NOON - 20 * 86400), 'irregular')
+
+    def test_a_ghost_keeps_its_verdict_after_its_route_id_leaves_the_timetable(self):
+        old = self.learned()
+        # 1 Dec: OTP lists A6343 only as IJPP:67714, from 1 Dec, so nothing of its history can be judged any more.
+        renumbered = [row(NEW, ARRIVA, 'A6343', 8 * 3600 + 2700, [date(2026, 12, 1) + timedelta(days=i) for i in range(5)]),
+                      LISTED[1]]
+        body = self.learned(today=date(2026, 12, 1), listed=renumbered, old=old)
+        self.assertEqual([(r['name'], r['verdict'], r['judgedAt']) for r in body['slots'] if r['name'] == 'A6343'],
+                         [('A6343', 'ghost', '2026-11-24')])
+        # once the slot is seen running again, the old verdict goes
+        seen, live = history([((NEW, date(2026, 12, 1)), [8 * 3600 + 2700])])
+        seen[(NEW, date(2026, 12, 1))] = [8 * 3600 + 2700]
+        body = self.learned(today=date(2026, 12, 2), listed=renumbered, seen_live=(seen, live), old=old)
+        self.assertFalse(any(r['name'] == 'A6343' for r in body['slots']))
+        # and an old verdict is dropped after LONG days
+        body = self.learned(today=date(2026, 11, 24) + timedelta(days=gps_habit.LONG + 1), listed=renumbered, old=old)
+        self.assertFalse(any(r['name'] == 'A6343' for r in body['slots']))
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_the_board_drops_a_ghost_labels_an_irregular_and_keeps_a_live_one(self):
+        body = self.learned()
+        body['slots'].append({'operator': ARRIVA, 'name': 'A6343', 'direction': 0, 'kind': 'w', 'start': 13 * 3600 + 1800,
+                              'verdict': 'irregular', 'rate': 0.4, 'days': 10, 'judgedAt': '2026-11-24'})
+        self.store(body)
+        rows = [stoptime('ghost', LESCE, ARRIVA, 8 * 3600 + 2700, 8 * 3600 + 2700),
+                stoptime('live', LESCE, ARRIVA, 8 * 3600 + 2700, 8 * 3600 + 2700, realtime=True),
+                stoptime('odd', LESCE, ARRIVA, 13 * 3600 + 1800, 13 * 3600 + 1800)]
+        for r in rows:
+            r['trip']['directionId'] = 0
+        drops = []
+        with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path), \
+                mock.patch.object(gps_habit, 'habit', return_value=KNOWN), mock.patch('time.time', return_value=DAY + 8 * 3600):
+            board = {r['tripId']: r for r in mapping.build_board('IJPP:ap', rows, 'departure', [], drops=drops)}
+        self.assertEqual(sorted(board), ['live', 'odd'])
+        self.assertTrue(board['odd'].get('oftenMissing'))
+        self.assertNotIn('oftenMissing', board['live'])
+        self.assertEqual([d['reason'] for d in drops], ['never seen running'])
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_health_counts_the_stored_verdicts(self):
+        self.store(self.learned())
+        with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path):
+            s = gps_habit.summary(MONDAY_NOON)
+        self.assertEqual((s['mode'], s['learnedAt'], s['ghosts']), ('hide', '2026-11-24', 1))

@@ -6,7 +6,7 @@ import re
 import time
 import unicodedata
 from collections import Counter, deque
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Iterable, Optional
 
 RAIL_MODES = {'RAIL', 'TRAM', 'SUBWAY', 'MONORAIL', 'FUNICULAR', 'CABLE_CAR', 'GONDOLA'}
@@ -688,6 +688,12 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
             other_end = ends[0 if kind == 'arrival' else 1] or other_end
         route_id = route.get('gtfsId') or f'{stop_id.split(":")[0]}:unknown'
         trip_id = trip.get('gtfsId') or f'{route_id}-{scheduled}'
+        # A listed trip that almost never runs (gps_habit.trip_verdict, B1): gone until live data for it comes.
+        verdict = gps_habit.trip_verdict((route.get('agency') or {}).get('gtfsId'), route.get('shortName'), trip.get('directionId'),
+                                         first_departure, date.fromtimestamp(day + 43200), sent, now) if ghost_on else None
+        if verdict == 'ghost':
+            coverage.note(drops, 'never seen running', st)
+            continue
         # When the trip leaves its first stop ("HH:MM"): what its departure usually does is learned under it (A5).
         start = (trip.get('departureStoptime') or {}).get('scheduledDeparture')
         out.append({
@@ -708,6 +714,8 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         })
         if is_replacement(route):
             out[-1]['replacement'] = True
+        if verdict == 'irregular':
+            out[-1]['oftenMissing'] = True
         # An operator or line that normally sends live data sent none since the trip set off: probably not running
         # (spec 2026-11-25 B1, gps_habit.py). Listed still, marked, in case it comes.
         if not sent and not canceled and isinstance(first_departure, int) and ghost_on and now >= day + first_departure + gps_habit.GRACE:

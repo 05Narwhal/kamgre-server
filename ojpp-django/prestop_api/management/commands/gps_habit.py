@@ -3,7 +3,7 @@ have marked on recorded days, and how many marked trips still came (false marks)
 listed buses the run-rate rule (part 5) would have hidden on each recorded day, learned only from the days before it,
 and how many of them ran anyway (false hides), with the stored SŽ closure days left out of each line's rate. Read-only
 (asks OTP for the timetables of steady operators' lines). `--learn` (nightly): adds today's SŽ closures to
-PRESTOP_GHOST_FILE. `--seed FILE ...`: the closures in saved notice copies (SŽ's list, zamudil's daily notices), written
+PRESTOP_GHOST_FILE, then stores the ghost/irregular verdicts beside it (gps_habit.VERDICT_FILE). `--seed FILE ...`: the closures in saved notice copies (SŽ's list, zamudil's daily notices), written
 to `--out` (default the seed file shipped with the code, gps_habit.SEED_FILE)."""
 import json
 from datetime import date
@@ -31,7 +31,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         today = options['today'] or date.today()
         if options['learn'] or options['seed']:
-            return self.closures(today, options['seed'], options['out'])
+            self.closures(today, options['seed'], options['out'])
+            return self.verdicts(today) if options['learn'] else None
         known = gps_habit.learn_from_db(today)
         self.stdout.write(f"steady operators: {len(known['operators'])}, steady lines: {len(known['steady'])}, "
                           f"partial lines: {len(known['partial'])}, rarely live lines: {len(known['rare'])}")
@@ -46,11 +47,10 @@ class Command(BaseCommand):
             self.stdout.write(f"{d['day']}: lines {d['lines']} (steady {d['steady']}, partial {d['partial']}, operators {d['operators']}), marked {d['marked']}, live {d['live']}, came late {d['late']} ({share})")
         self.stdout.write(json.dumps(result['mostMarked']))
 
-    def backtest(self, today, days, known, rates):
-        from datetime import timedelta
+    def listed(self, known, operator_of):
+        """listing() rows of the steady operators' judgeable lines (OTP asked once per line), and how many failed."""
         from prestop_api.upstream import otp
-        past = gps_habit.history(today - timedelta(days=days + gps_habit.LONG), today - timedelta(days=1))
-        routes = sorted(r for r, o in past[2].items() if o in known['operators'] and gps_habit.judgeable(r, o, None))
+        routes = sorted(r for r, o in operator_of.items() if o in known['operators'] and gps_habit.judgeable(r, o, None))
         self.stdout.write(f'asking the timetable of {len(routes)} lines of {len(known["operators"])} steady operators ...')
         listed, failed = [], 0
         for route in routes:
@@ -58,6 +58,12 @@ class Command(BaseCommand):
                 listed += gps_habit.listing(otp().query(gps_habit.ROUTE_TRIPS_Q, {'id': route}).get('route') or {})
             except Exception:  # the timetable service did not answer: that line is left out
                 failed += 1
+        return listed, failed
+
+    def backtest(self, today, days, known, rates):
+        from datetime import timedelta
+        past = gps_habit.history(today - timedelta(days=days + gps_habit.LONG), today - timedelta(days=1))
+        listed, failed = self.listed(known, past[2])
         sections = gps_habit.load_closures()
         closed = gps_habit.closed_lines(listed, sections)
         self.stdout.write(f'closure sections stored {len(sections)}, lines with closure days {len(closed)}: '
@@ -93,3 +99,31 @@ class Command(BaseCommand):
             self.stdout.write(f"  {len(keys)} stations ({', '.join(sorted(keys)[:4])} ...): {' '.join(sorted(d.isoformat()[5:] for d in days))}")
         stored = gps_habit.save_closures(sections, path, today)
         self.stdout.write(f'{len(alerts)} notices, {len(trains)} trains, {len(sections)} closures; {stored} sections in {path}')
+
+    def verdicts(self, today):
+        """Learns today's ghost/irregular verdicts into gps_habit.VERDICT_FILE (beside PRESTOP_GHOST_FILE)."""
+        import time
+        from datetime import timedelta
+        from pathlib import Path
+        path = gps_habit.verdict_path()
+        if not path:
+            self.stdout.write('PRESTOP_GHOST_FILE unset: no verdicts stored')
+            return
+        began = time.monotonic()
+        known = gps_habit.learn_from_db(today)
+        past = gps_habit.history(today - timedelta(days=gps_habit.LONG), today - timedelta(days=1))
+        listed, failed = self.listed(known, past[2])
+        try:
+            old = json.loads(Path(path).read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            old = None
+        body = gps_habit.learn_verdicts(today, listed, past, gps_habit.closed_lines(listed, gps_habit.load_closures()), old)
+        gps_habit.write_json(path, body)
+        kinds = [r['verdict'] for r in body['slots']]
+        self.stdout.write(f"verdicts: {kinds.count('ghost')} ghost, {kinds.count('irregular')} irregular slots, "
+                          f"{len(body['closed'])} lines with closure days, lines left out {failed}, "
+                          f"{time.monotonic() - began:.0f} s; {path}")
+        for r in body['slots']:
+            if r['verdict'] == 'ghost':
+                self.stdout.write(f"  ghost {r['operator']} {r['name']} dir {r['direction']} {r['kind']} "
+                                  f"{r['start'] // 3600:02d}:{r['start'] % 3600 // 60:02d} rate {r.get('rate')} over {r.get('days')} d")

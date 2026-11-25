@@ -525,3 +525,131 @@ def notices_from_files(paths) -> list[dict]:
                 spans = [(day, day)]
             out.append(sz_list._alert({'id': f'z-{day}-{len(out)}', 'title': title, 'text': ''}, spans))
     return out
+
+
+# Stored verdicts (part 6c): the nightly `manage gps_habit --learn` judges every slot of the steady operators' lines
+# (asking OTP once per line) and writes VERDICT_FILE beside PRESTOP_GHOST_FILE. Requests read only that file, through
+# trip_verdict(), the one check every trip list goes through. A verdict the current listing can no longer judge (A6343's
+# route id 67295 becomes 67714 on 1 Dec: its old run days leave OTP) is kept up to LONG days, unless the slot now runs.
+VERDICT_FILE = 'ghost-trips.json'
+STALE = 3   # days: older verdicts hide nothing (fail safe: the nightly learn stopped)
+CHECK = 60  # s between looks at the verdict file
+_stored = {'at': 0.0, 'mtime': None, 'path': None, 'value': None, 'body': None}
+
+
+def verdict_path(path: Optional[str] = None) -> str:
+    from pathlib import Path
+    from django.conf import settings
+    base = path if path is not None else getattr(settings, 'PRESTOP_GHOST_FILE', '')
+    return str(Path(base).with_name(VERDICT_FILE)) if base else ''
+
+
+def learn_verdicts(today: date, listed: list, past: tuple, closed: Optional[dict] = None, old: Optional[dict] = None) -> dict:
+    """The verdicts for `today`, learned from the GHOST_DAYS days before it as backtest() does, as the stored body:
+    {'learnedAt', 'slots': [{operator, name, direction, kind, start, verdict, rate, days, judgedAt}],
+    'closed': [{operator, name, days}]} (closure days from yesterday on). `old`: the previous body."""
+    seen, operator_live, operator_of = past
+    first, last = today - timedelta(days=GHOST_DAYS), today - timedelta(days=1)
+    ever = {(operator_of[t['route']], t['name']) for t in listed if t['route'] in operator_of}
+    trips = [(r, d, s) for (r, d), starts in seen.items() if first <= d <= last for s in starts]
+    ops = learn(trips, operator_of, set(operator_of))['operators']
+    slots = learn_slots(listed, seen, operator_live, ops, ever, first, last, None, closed)
+    judged = judge(slots, ran_ever(listed, seen, today - timedelta(days=LONG), last))
+    rows = {(*key, start): {'verdict': v, 'rate': round(rate, 3), 'days': days, 'judgedAt': today.isoformat()}
+            for key, items in judged.items() for start, v, rate, days in items}
+    for r in (old or {}).get('slots') or []:
+        try:
+            key, at = (r['operator'], r['name'], r['direction'], r['kind'], int(r['start'])), date.fromisoformat(r['judgedAt'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if at < today - timedelta(days=LONG) or any(k[:4] == key[:4] and abs(k[4] - key[4]) <= SLOP for k in rows):
+            continue
+        now = next((x for x in slots.get(key[:4], ()) if abs(x[0] - key[4]) <= SLOP), None)
+        if now and now[2] >= MIN_OBSERVABLE and now[1] / now[2] >= IRREGULAR_RATE:
+            continue  # judged normal now
+        if any((t['operator'], t['name'], t['direction']) == key[:3] and abs(t['start'] - key[4]) <= SLOP
+               and any(at < d <= last and kind(d) == key[3] and _near(seen.get((t['route'], d), []), t['start'], SLOP)
+                       for d in t['dates']) for t in listed):
+            continue  # seen running since it was judged
+        rows[key] = {k: r[k] for k in ('verdict', 'rate', 'days', 'judgedAt') if k in r}
+    return {'learnedAt': today.isoformat(),
+            'slots': [{'operator': k[0], 'name': k[1], 'direction': k[2], 'kind': k[3], 'start': k[4], **v}
+                      for k, v in sorted(rows.items(), key=lambda x: tuple(str(p) for p in x[0]))],
+            'closed': [{'operator': o, 'name': n, 'days': sorted(d.isoformat() for d in days if d >= last)}
+                       for (o, n), days in sorted((closed or {}).items(), key=lambda x: (str(x[0][0]), x[0][1]))
+                       if any(d >= last for d in days)]}
+
+
+def write_json(path: str, body: dict) -> None:
+    import json
+    import os
+    from pathlib import Path
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(target.name + '.tmp')
+    tmp.write_text(json.dumps(body, ensure_ascii=False, indent=1), encoding='utf-8')
+    os.replace(tmp, target)
+
+
+def read_verdicts(body: dict, today: date) -> dict:
+    """The stored body as {'judged': judge() form, 'closed': closed form, 'learnedAt': date}; nothing judged when it
+    is older than STALE days."""
+    learned = date.fromisoformat(body['learnedAt'])
+    if learned < today - timedelta(days=STALE):
+        return {'judged': {}, 'closed': {}, 'learnedAt': learned}
+    judged, closed = defaultdict(list), {}
+    for r in body.get('slots') or []:
+        if r.get('verdict') in ('ghost', 'irregular'):
+            judged[(r['operator'], r['name'], r['direction'], r['kind'])].append(
+                (int(r['start']), r['verdict'], r.get('rate'), r.get('days')))
+    for r in body.get('closed') or []:
+        closed[(r['operator'], r['name'])] = {date.fromisoformat(d) for d in r['days']}
+    return {'judged': dict(judged), 'closed': closed, 'learnedAt': learned}
+
+
+def stored(now: Optional[float] = None, path: Optional[str] = None) -> dict:
+    """The stored verdicts, looked at every CHECK s and read again when the file changed; nothing judged when the
+    file is missing, unreadable or stale (fail safe: today's behaviour)."""
+    import json
+    import os
+    from pathlib import Path
+    now = time.time() if now is None else now
+    path = verdict_path() if path is None else path
+    if _stored['value'] is not None and _stored['path'] == path and now - _stored['at'] < CHECK:
+        return _stored['value']
+    try:
+        mtime = os.stat(path).st_mtime
+        if mtime != _stored['mtime'] or _stored['path'] != path or _stored.get('body') is None:
+            _stored['body'] = json.loads(Path(path).read_text(encoding='utf-8'))
+        value = read_verdicts(_stored['body'], date.fromtimestamp(now))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        mtime, value = None, {'judged': {}, 'closed': {}, 'learnedAt': None}
+        _stored['body'] = None
+    _stored.update(at=now, mtime=mtime, path=path, value=value)
+    return value
+
+
+def reset_stored() -> None:
+    _stored.update(at=0.0, mtime=None, path=None, value=None, body=None)
+
+
+def trip_verdict(operator: Optional[str], name: Optional[str], direction, start: Optional[int], day: date,
+                 live: bool = False, now: Optional[float] = None) -> Optional[str]:
+    """The one check every trip list goes through (B1): 'ghost' (remove it everywhere), 'irregular' (show it, labelled
+    "often does not run", ranked last) or None. Live data for the trip (a GTFS-RT update or a vehicle on it) -> None
+    at once. GHOST_TRIPS 'mark' shows a ghost as irregular; 'off', or verdicts stale or unreadable -> None.
+    `start`: the trip's scheduled departure from its first stop, s after its service day began (OTP's)."""
+    mode = ghost_mode()
+    if live or mode == 'off' or not isinstance(start, int):
+        return None
+    known = stored(now)
+    v = verdict(known['judged'], operator, name, direction, start, day, known['closed'])
+    return 'irregular' if v == 'ghost' and mode == 'mark' else v
+
+
+def summary(now: Optional[float] = None) -> dict:
+    """/health `ghostTrips`: the switch, when the verdicts were learned and how many slots each holds."""
+    known = stored(now)
+    rows = [v for items in known['judged'].values() for _, v, _, _ in items]
+    return {'mode': ghost_mode(), 'learnedAt': known['learnedAt'].isoformat() if known['learnedAt'] else None,
+            'ghosts': rows.count('ghost'), 'irregular': rows.count('irregular')}

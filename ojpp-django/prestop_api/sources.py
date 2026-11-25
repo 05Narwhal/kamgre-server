@@ -45,7 +45,7 @@ BOARD_Q = '''query($id: String!, $start: Long, $range: Int, $n: Int, $omit: Bool
     stoptimesWithoutPatterns(startTime: $start, timeRange: $range, numberOfDepartures: $n, omitNonPickups: $omit, omitCanceled: false) {
       serviceDay scheduledArrival scheduledDeparture realtimeArrival realtimeDeparture realtime realtimeState
       headsign stopPosition pickupType dropoffType stop { platformCode }
-      trip { gtfsId tripHeadsign route { gtfsId shortName longName mode agency { gtfsId } }
+      trip { gtfsId directionId tripHeadsign route { gtfsId shortName longName mode agency { gtfsId } }
         departureStoptime { stopPosition scheduledDeparture stop { gtfsId name } } arrivalStoptime { stopPosition stop { gtfsId name } } } } } }'''
 TRIP_FIELDS = 'gtfsId directionId tripHeadsign route { gtfsId } arrivalStoptime { stop { name } }'
 
