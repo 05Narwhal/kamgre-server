@@ -194,7 +194,8 @@ NEVER_JUDGED = ('IJPP:LPP-',)                     # (c)
 JUDGED_FEEDS = ('IJPP:', 'LPP:', 'MARPROM:')       # (b) feeds whose buses send live data; any other feed never judged
 REPLACEMENT_OPERATORS = frozenset({'IJPP:1161'})   # (b) SŽ: its buses run instead of trains (mapping.REPLACEMENT_AGENCIES)
 ROUTE_TRIPS_Q = ('query($id: String!) { route(id: $id) { gtfsId shortName agency { gtfsId } patterns { directionId '
-                 'trips { activeDates departureStoptime { scheduledDeparture } } } } }')
+                 'stops { name } trips { activeDates departureStoptime { scheduledDeparture } } } } }')
+STOP_SUFFIXES = ('avtobusnapostaja', 'zelezniskapostaja', 'postaja', 'ap', 'zp')
 
 
 def ghost_mode() -> str:
@@ -204,16 +205,70 @@ def ghost_mode() -> str:
 
 
 def listing(route: dict) -> list[dict]:
-    """The listed trips of an OTP `route` (ROUTE_TRIPS_Q): operator, line name, direction, start s, service dates."""
+    """The listed trips of an OTP `route` (ROUTE_TRIPS_Q): operator, line name, direction, start s, service dates, and
+    `ends` (first and last stop names of the pattern; empty when OTP gave no stops)."""
     from datetime import datetime
     out = []
     for p in route.get('patterns') or []:
+        stops = [s.get('name') or '' for s in p.get('stops') or []]
+        ends = (stops[0], stops[-1]) if stops else ()
         for t in p.get('trips') or []:
             start = (t.get('departureStoptime') or {}).get('scheduledDeparture')
             if isinstance(start, int):
                 out.append({'route': route.get('gtfsId') or '', 'operator': (route.get('agency') or {}).get('gtfsId'),
                             'name': route.get('shortName') or '', 'direction': p.get('directionId'), 'start': start,
-                            'dates': {datetime.strptime(d, '%Y%m%d').date() for d in t.get('activeDates') or []}})
+                            'dates': {datetime.strptime(d, '%Y%m%d').date() for d in t.get('activeDates') or []},
+                            'ends': ends})
+    return out
+
+
+def stop_key(name: str) -> str:
+    """A bus stop's name as an SŽ station key (`sz.station_key`) without the bus/rail station words:
+    'Lesce ŽP' → 'lesce', 'Ljubljana AP' → 'ljubljana', 'Kranj AP' → 'kranj'."""
+    from prestop_api import sz
+    key = sz.station_key(name)
+    for suffix in STOP_SUFFIXES:
+        if key.endswith(suffix) and len(key) > len(suffix):
+            return key[:-len(suffix)]
+    return key
+
+
+def on_corridor(name: str, keys) -> bool:
+    """True when a bus stop is at a station of a closed section (`closures.corridor` keys): the stop's key begins the
+    station's ('lesce' ~ 'lescebled', 'ljubljana' ~ 'ljubljana'). Matching too much only shows a ghost as irregular on
+    that line's closure days, the safe side."""
+    key = stop_key(name)
+    return len(key) >= 3 and any(k.startswith(key) for k in keys)
+
+
+def closure_sections(alerts, trains) -> list[tuple[set, set]]:
+    """(station keys of the closed section, its days) per SŽ closure notice (`closures.is_closure`: buses instead of
+    trains), the section widened to every station a train passes between its sides (`closures.corridor`, so
+    'Ljubljana - Jesenice' covers Lesce Bled and Kranj)."""
+    from datetime import datetime
+    from prestop_api import closures
+    out = []
+    for a in alerts:
+        if not closures.is_closure(a):
+            continue
+        keys = closures.corridor(closures.sides(a), trains)
+        days = {datetime.strptime(d, '%Y%m%d').date() for d in closures._days(a)}
+        if keys and days:
+            out.append((keys, days))
+    return out
+
+
+def closed_lines(listed, sections) -> dict:
+    """{(operator, line name): days} for learn_slots/verdict's `closed`: the days of every closure whose section holds
+    both ends of one of the line's patterns (A6343 Ljubljana AP – Lesce ŽP on SŽ's Ljubljana – Jesenice closure)."""
+    out: dict = {}
+    for t in listed:
+        ends = t.get('ends') or ()
+        if len(ends) != 2:
+            continue
+        for keys, days in sections:
+            if on_corridor(ends[0], keys) and on_corridor(ends[1], keys):
+                out.setdefault((t['operator'], t['name']), set()).update(days)
     return out
 
 

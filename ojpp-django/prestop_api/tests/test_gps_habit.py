@@ -194,6 +194,28 @@ class RarelyRunsTests(SimpleTestCase):
         t = rows[0]
         self.assertEqual(gps_habit.verdict(judged, t['operator'], t['name'], t['direction'], t['start'], date(2026, 12, 1)), 'ghost')
 
+    def test_a_closure_on_the_rail_between_a_lines_ends_gives_its_closed_days(self):
+        # SŽ's full closure Ljubljana – Jesenice / Beljak, 2–6 Nov: Lesce Bled lies on it only through the trains' stops.
+        alert = {'kind': 'replacement', 'title': 'Vozni red nadomestnega prevoza: Ljubljana - Jesenice / Beljak (A) in obratno '
+                                                 '(2. - 6. november).', '_dates': [f'202611{d:02}' for d in range(2, 7)]}
+        train = {'stops': [{'name': n} for n in ('Ljubljana', 'Ljubljana Šiška', 'Kranj', 'Lesce-Bled', 'Žirovnica', 'Jesenice')]}
+        other = {'kind': 'replacement', 'title': 'Vozni red nadomestnega prevoza: Divača - Koper in obratno (9. november).',
+                 '_dates': ['20261109']}
+        extra = {'kind': 'replacement', 'title': 'DODATNO: Avtobusni prevoz za vezo (NG - LJ): Lesce Bled - Bled Jezero',
+                 '_dates': ['20261124']}
+        sections = gps_habit.closure_sections([alert, other, extra], [train])
+        self.assertEqual(len(sections), 1)  # Divača – Koper has no train here, the connecting bus is no closure
+        route = {'gtfsId': LESCE, 'shortName': 'A6343', 'agency': {'gtfsId': ARRIVA}, 'patterns': [
+            {'directionId': 0, 'stops': [{'name': 'Ljubljana AP'}, {'name': 'Kranj AP'}, {'name': 'Lesce ŽP'}],
+             'trips': [{'activeDates': ['20261105'], 'departureStoptime': {'scheduledDeparture': 8 * 3600 + 2700}}]}]}
+        koper = {'gtfsId': A6345, 'shortName': 'A1000', 'agency': {'gtfsId': ARRIVA}, 'patterns': [
+            {'directionId': 0, 'stops': [{'name': 'Ljubljana AP'}, {'name': 'Koper AP'}],
+             'trips': [{'activeDates': ['20261105'], 'departureStoptime': {'scheduledDeparture': 9 * 3600}}]}]}
+        closed = gps_habit.closed_lines(gps_habit.listing(route) + gps_habit.listing(koper), sections)
+        self.assertEqual(closed, {(ARRIVA, 'A6343'): {date(2026, 11, d) for d in range(2, 7)}})
+        self.assertEqual(gps_habit.stop_key('Ljubljana AP'), 'ljubljana')
+        self.assertFalse(gps_habit.on_corridor('Ljubljana Šiška', {'ljubljana'}))
+
     def test_a_trip_running_on_some_days_is_irregular(self):
         seen, live = history()
         for d in WEEKDAYS[::2]:
