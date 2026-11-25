@@ -184,6 +184,9 @@ MIN_OBSERVABLE = 6
 GHOST_RATE = 0.2       # run rate at or below: ghost (listed, almost never runs)
 IRREGULAR_RATE = 0.6   # run rate below: irregular (runs on some listed days)
 SLOP = 120             # s: the same slot across days and feed versions
+DAY_SHARE = 0.8        # a day counts only if this share of the operator's other listed trips was matched live then
+#                        (prod, before 10 Nov: Marprom's live buses were matched to ~10 % of its weekday trips, so
+#                        every Marprom slot looked like a ghost; backtest 16 Nov: 489 of 499 hidden ran)
 NEVER_JUDGED = ('IJPP:LPP-',)                     # (c)
 JUDGED_FEEDS = ('IJPP:', 'LPP:', 'MARPROM:')       # (b) feeds whose buses send live data; any other feed never judged
 REPLACEMENT_OPERATORS = frozenset({'IJPP:1161'})   # (b) SŽ: its buses run instead of trains (mapping.REPLACEMENT_AGENCIES)
@@ -232,11 +235,35 @@ def _near(starts: list, start: int, span: int) -> int:
     return bisect_right(starts, start + span) - bisect_left(starts, start - span)
 
 
-def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first: date, last: date) -> dict:
+def matched(listed, seen: dict, first: date, last: date) -> dict:
+    """How much of each operator's listing was matched live per day first..last, over judgeable lines:
+    {(operator, day): [seen, listed], (operator, line name, day): [seen, listed]}."""
+    out = defaultdict(lambda: [0, 0])
+    for t in listed:
+        if not judgeable(t['route'], t['operator'], t['name']):
+            continue
+        for day in t['dates']:
+            if first <= day <= last:
+                hit = _near(seen.get((t['route'], day), []), t['start'], SLOP) > 0
+                for key in ((t['operator'], day), (t['operator'], t['name'], day)):
+                    out[key][0] += hit
+                    out[key][1] += 1
+    return dict(out)
+
+
+def observed(counts: dict, operator, name, day: date) -> bool:
+    """The operator's other lines were matched live on `day` well enough (DAY_SHARE) to hold a missing trip against."""
+    op, own = counts.get((operator, day), (0, 0)), counts.get((operator, name, day), (0, 0))
+    listed = op[1] - own[1]
+    return listed > 0 and (op[0] - own[0]) / listed >= DAY_SHARE
+
+
+def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first: date, last: date, counts=None) -> dict:
     """Run counts per slot over the days first..last (inclusive). `listed`: listing() rows; `seen` {(route, day):
     sorted starts live}; `operator_live` {(operator, day): sorted starts live}; `operators`: the steady operators;
-    `ever` {(operator, line name)} live in the last LONG days.
+    `ever` {(operator, line name)} live in the last LONG days; `counts`: matched() over those days (else worked out).
     -> {(operator, name, direction, kind): [[start, runs, observable days]]}"""
+    counts = matched(listed, seen, first, last) if counts is None else counts
     slots = defaultdict(list)
     for t in listed:
         op, route = t['operator'], t['route']
@@ -248,6 +275,8 @@ def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first:
             own = seen.get((route, day), [])
             if _near(operator_live.get((op, day), []), t['start'], NEAR) - _near(own, t['start'], NEAR) <= 0:
                 continue  # nothing else of the operator live then: the collector or the operator was down
+            if not observed(counts, op, t['name'], day):
+                continue  # most of the operator's trips were not matched that day: its data, not its buses
             rows = slots[(op, t['name'], t['direction'], kind(day))]
             row = next((r for r in rows if abs(r[0] - t['start']) <= SLOP), None)
             if row is None:
@@ -258,7 +287,7 @@ def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first:
     return dict(slots)
 
 
-def judge(slots: dict, ran: dict) -> dict:
+def judge(slots: dict, ran: dict, ghost_rate: float = GHOST_RATE) -> dict:
     """The slots that rarely run: {(operator, name, direction, kind): [(start, 'ghost' | 'irregular', rate, days)]}.
     `ran`: ran_ever() over the LONG days; a slot never seen live itself is never judged (safety rule (a))."""
     out = {}
@@ -267,7 +296,7 @@ def judge(slots: dict, ran: dict) -> dict:
             if not any(abs(s - start) <= SLOP for s in ran.get(key, ())):
                 continue
             if days >= MIN_OBSERVABLE and runs / days < IRREGULAR_RATE:
-                out.setdefault(key, []).append((start, 'ghost' if runs / days <= GHOST_RATE else 'irregular', runs / days, days))
+                out.setdefault(key, []).append((start, 'ghost' if runs / days <= ghost_rate else 'irregular', runs / days, days))
     return out
 
 
@@ -298,33 +327,39 @@ def history(first: date, last: date) -> tuple:
     return seen, operator_live, operator_of
 
 
-def backtest(today: date, days: int, listed: list, past=None) -> dict:
+def backtest(today: date, days: int, listed: list, past=None, ghost_rate: float = GHOST_RATE) -> dict:
     """For each of the `days` days D before `today`, judge from the GHOST_DAYS days before D (no look-ahead) and count
     on D the hidden slot-days (ghosts listed and observable on D) and how many of them ran anyway (false hides).
     `listed`: listing() rows of the lines to judge; `past`: history() (read from the database when None)."""
     seen, operator_live, operator_of = past or history(today - timedelta(days=days + LONG), today - timedelta(days=1))
     ever = {(operator_of[t['route']], t['name']) for t in listed if t['route'] in operator_of}
-    out, lines, ran_on = [], defaultdict(lambda: [0, 0]), Counter()
+    counts = matched(listed, seen, today - timedelta(days=days + GHOST_DAYS), today - timedelta(days=1))
+    out, ran_on = [], Counter()
+    lines = defaultdict(lambda: {'hidden': 0, 'ran': 0, 'rates': [], 'days': set()})
     for offset in range(days, 0, -1):
         day = today - timedelta(days=offset)
         first = day - timedelta(days=GHOST_DAYS)
         trips = [(r, d, s) for (r, d), starts in seen.items() if first <= d < day for s in starts]
         ops = learn(trips, operator_of, set(operator_of))['operators']
         ran = ran_ever(listed, seen, day - timedelta(days=LONG), day - timedelta(days=1))
-        judged = judge(learn_slots(listed, seen, operator_live, ops, ever, first, day - timedelta(days=1)), ran)
+        judged = judge(learn_slots(listed, seen, operator_live, ops, ever, first, day - timedelta(days=1), counts), ran, ghost_rate)
         hidden = ran = irregular = 0
-        for key, rows in learn_slots(listed, seen, operator_live, ops, ever, day, day).items():
+        for key, rows in learn_slots(listed, seen, operator_live, ops, ever, day, day, counts).items():
             for start, runs, _ in rows:
                 v = verdict(judged, *key[:3], start, day)
                 irregular += v == 'irregular'
                 if v == 'ghost':
                     hidden += 1
                     ran += runs > 0
-                    lines[f'{key[0]} {key[1]}'][0] += 1
-                    lines[f'{key[0]} {key[1]}'][1] += runs > 0
+                    line = lines[f'{key[0]} {key[1]}']
+                    line['hidden'] += 1
+                    line['ran'] += runs > 0
+                    line['days'].add(day.isoformat())
+                    line['rates'] += [r for s, _, r, _ in judged[key] if abs(s - start) <= SLOP][:1]
                     ran_on[(key, start)] += runs > 0
         out.append({'day': day.isoformat(), 'operators': len(ops), 'hidden': hidden, 'ranAnyway': ran, 'irregular': irregular})
     hidden, ran = sum(d['hidden'] for d in out), sum(d['ranAnyway'] for d in out)
     return {'days': out, 'hidden': hidden, 'ranAnyway': ran, 'falseShare': ran / hidden if hidden else 0.0,
             'hiddenOn2DaysItRan': sum(1 for n in ran_on.values() if n >= 2),
-            'lines': sorted(({'line': k, 'hidden': h, 'ran': r} for k, (h, r) in lines.items()), key=lambda x: -x['hidden'])}
+            'lines': sorted(({'line': k, 'hidden': v['hidden'], 'ran': v['ran'], 'days': sorted(v['days']),
+                              'rate': sum(v['rates']) / len(v['rates'])} for k, v in lines.items()), key=lambda x: -x['hidden'])}

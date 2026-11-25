@@ -19,6 +19,8 @@ class Command(BaseCommand):
         parser.add_argument('--days', type=int, default=7)
         parser.add_argument('--today', type=date.fromisoformat, default=None, help='measure up to this day (YYYY-MM-DD)')
         parser.add_argument('--no-timetable', action='store_true', help='skip the timetable lookups (no marked counts)')
+        parser.add_argument('--rates', default=str(gps_habit.GHOST_RATE),
+                            help='backtest: ghost run-rate thresholds to compare, comma-separated (e.g. 0.1,0.2)')
 
     def handle(self, *args, **options):
         today = options['today'] or date.today()
@@ -26,7 +28,7 @@ class Command(BaseCommand):
         self.stdout.write(f"steady operators: {len(known['operators'])}, steady lines: {len(known['steady'])}, "
                           f"partial lines: {len(known['partial'])}, rarely live lines: {len(known['rare'])}")
         if options['backtest']:
-            return self.backtest(today, options['days'], known)
+            return self.backtest(today, options['days'], known, [float(r) for r in options['rates'].split(',') if r.strip()])
         if not options['measure']:
             return
         from prestop_api.views import scheduled_trip_counts
@@ -36,7 +38,7 @@ class Command(BaseCommand):
             self.stdout.write(f"{d['day']}: lines {d['lines']} (steady {d['steady']}, partial {d['partial']}, operators {d['operators']}), marked {d['marked']}, live {d['live']}, came late {d['late']} ({share})")
         self.stdout.write(json.dumps(result['mostMarked']))
 
-    def backtest(self, today, days, known):
+    def backtest(self, today, days, known, rates):
         from datetime import timedelta
         from prestop_api.upstream import otp
         past = gps_habit.history(today - timedelta(days=days + gps_habit.LONG), today - timedelta(days=1))
@@ -48,10 +50,13 @@ class Command(BaseCommand):
                 listed += gps_habit.listing(otp().query(gps_habit.ROUTE_TRIPS_Q, {'id': route}).get('route') or {})
             except Exception:  # the timetable service did not answer: that line is left out
                 failed += 1
-        result = gps_habit.backtest(today, days, listed, past)
-        for d in result['days']:
-            self.stdout.write(f"{d['day']}: steady operators {d['operators']}, hidden {d['hidden']}, ran anyway {d['ranAnyway']}, irregular {d['irregular']}")
-        self.stdout.write(f"total hidden {result['hidden']}, ran anyway {result['ranAnyway']} ({100 * result['falseShare']:.1f} %), "
-                          f"slots hidden on 2+ days they ran {result['hiddenOn2DaysItRan']}, lines left out {failed}")
-        for line in result['lines']:
-            self.stdout.write(f"  {line['line']}: hidden {line['hidden']} slot-days, ran {line['ran']}")
+        for rate in rates:
+            result = gps_habit.backtest(today, days, listed, past, rate)
+            self.stdout.write(f'--- ghost at run rate <= {rate:.2f} (day share {gps_habit.DAY_SHARE})')
+            for d in result['days']:
+                self.stdout.write(f"{d['day']}: steady operators {d['operators']}, hidden {d['hidden']}, ran anyway {d['ranAnyway']}, irregular {d['irregular']}")
+            self.stdout.write(f"total hidden {result['hidden']}, ran anyway {result['ranAnyway']} ({100 * result['falseShare']:.1f} %), "
+                              f"slots hidden on 2+ days they ran {result['hiddenOn2DaysItRan']}, lines left out {failed}")
+            for line in result['lines']:
+                self.stdout.write(f"  {line['line']}: hidden {line['hidden']} slot-days, ran {line['ran']}, rate {line['rate']:.2f}, "
+                                  f"days {' '.join(d[5:] for d in line['days'])}")

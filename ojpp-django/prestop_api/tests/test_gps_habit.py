@@ -216,7 +216,7 @@ class RarelyRunsTests(SimpleTestCase):
         for d in WEEKDAYS:
             for op in (ARRIVA, 'IJPP:nomago', 'IJPP:1161'):
                 live[(op, d)] = sorted(live.get((op, d), []) + [10 * 3600 + 600, 10 * 3600 + 1200])
-        listed = [row(r, op, name, 10 * 3600, WEEKDAYS) for r, op, name in lines]
+        listed = [row(r, op, name, 10 * 3600, WEEKDAYS) for r, op, name in lines] + [LISTED[1]]  # + A6345, matched daily
         ever = {(op, name) for _, op, name in lines}
         slots = gps_habit.learn_slots(listed, seen, live, {ARRIVA, 'IJPP:nomago', 'IJPP:1161'}, ever, WEEKDAYS[0], WEEKDAYS[-1])
         judged = gps_habit.judge(slots, gps_habit.ran_ever(listed, seen, WEEKDAYS[0], WEEKDAYS[-1]))
@@ -232,6 +232,30 @@ class RarelyRunsTests(SimpleTestCase):
         judged = self.judged(seen_live=(seen, live))
         self.assertIsNone(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 8 * 3600 + 2700, date(2026, 11, 24)))  # 3 < MIN_OBSERVABLE
 
+    def test_days_most_of_the_operators_trips_were_not_matched_do_not_count(self):
+        # Prod before 10 Nov: Marprom's live buses were matched to ~10 % of its weekday trips (one line a day here),
+        # from then on to all; every slot then looked rarely run, and 489 of 499 hidden on 16 Nov ran.
+        names = [f'G{i}' for i in range(10)]
+        listed = [row(f'MARPROM:{i}', MARPROM, n, 8 * 3600 + 600 * i, WEEKDAYS) for i, n in enumerate(names)]
+        seen, live = {}, {}
+        for j, d in enumerate(WEEKDAYS):
+            for i in range(10):
+                if j >= len(WEEKDAYS) - 5 or i == j % 10:
+                    seen[(f'MARPROM:{i}', d)] = [8 * 3600 + 600 * i]
+            live[(MARPROM, d)] = sorted(s for (_, day), v in seen.items() if day == d for s in v)
+        ever = {(MARPROM, n) for n in names}
+
+        def judged():
+            slots = gps_habit.learn_slots(listed, seen, live, {MARPROM}, ever, WEEKDAYS[0], WEEKDAYS[-1])
+            return gps_habit.judge(slots, gps_habit.ran_ever(listed, seen, WEEKDAYS[0], WEEKDAYS[-1]))
+
+        with mock.patch.object(gps_habit, 'DAY_SHARE', 0):
+            self.assertTrue(judged())  # the old rule: the poorly matched days count as missed runs
+        self.assertEqual(judged(), {})  # only the 5 well-matched weekdays count: < MIN_OBSERVABLE, nothing judged
+        counts = gps_habit.matched(listed, seen, WEEKDAYS[0], WEEKDAYS[-1])
+        self.assertFalse(gps_habit.observed(counts, MARPROM, 'G0', WEEKDAYS[0]))
+        self.assertTrue(gps_habit.observed(counts, MARPROM, 'G0', WEEKDAYS[-1]))
+
     def test_backtest_counts_hidden_and_ran_anyway_without_look_ahead(self):
         operator_of = {A6345: ARRIVA, LESCE: ARRIVA, M6: MARPROM}
         seen, live = history()
@@ -242,6 +266,10 @@ class RarelyRunsTests(SimpleTestCase):
         self.assertEqual(result['hidden'], len(nov))  # A6343 hidden on every quiet weekday 10–21 Nov
         self.assertEqual(result['ranAnyway'], 0)
         self.assertEqual([x['line'] for x in result['lines']], [f'{ARRIVA} A6343'])
+        self.assertEqual(result['lines'][0]['days'], [d.isoformat() for d in nov])
+        self.assertLessEqual(result['lines'][0]['rate'], gps_habit.GHOST_RATE)
+        with mock.patch.object(gps_habit, 'learn', return_value={'operators': frozenset({ARRIVA})}):
+            self.assertEqual(gps_habit.backtest(date(2026, 11, 24), 14, listed, (seen, live, operator_of), 0.0)['hidden'], 0)
 
     def test_switch_defaults_to_off(self):
         self.assertEqual(gps_habit.ghost_mode(), 'off')
