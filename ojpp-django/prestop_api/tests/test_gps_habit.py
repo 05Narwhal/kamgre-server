@@ -129,6 +129,8 @@ class CityBusTests(SimpleTestCase):
 D0 = date(2026, 10, 27)  # a Tuesday; 28 days of history to 23 Nov
 WEEKDAYS = [D0 + timedelta(days=i) for i in range(28) if (D0 + timedelta(days=i)).weekday() < 5]
 RUN_DAYS = {date(2026, 11, 5), date(2026, 11, 6)}
+# SŽ's full closure Ljubljana – Jesenice ran 2–6 Nov; A6343 ran only on two of those days.
+CLOSED = {(ARRIVA, 'A6343'): {date(2026, 11, 2) + timedelta(days=i) for i in range(5)}}
 NEW = 'IJPP:67714'
 
 
@@ -161,10 +163,21 @@ OPS = {ARRIVA, 'IJPP:lpp'}
 
 
 class RarelyRunsTests(SimpleTestCase):
-    def judged(self, listed=LISTED, seen_live=None):
+    def judged(self, listed=LISTED, seen_live=None, closed=CLOSED):
         seen, live = seen_live or history()
         ran = gps_habit.ran_ever(listed, seen, WEEKDAYS[0], WEEKDAYS[-1])
-        return gps_habit.judge(gps_habit.learn_slots(listed, seen, live, OPS, EVER, WEEKDAYS[0], WEEKDAYS[-1]), ran)
+        return gps_habit.judge(gps_habit.learn_slots(listed, seen, live, OPS, EVER, WEEKDAYS[0], WEEKDAYS[-1], closed=closed), ran)
+
+    def test_a6343_without_its_closure_days_is_only_irregular(self):
+        # Prod backtest 25 Nov: its two runs (5–6 Nov) in ~14 observable weekdays give 0.14–0.17, above GHOST_RATE.
+        judged = self.judged(closed=None)
+        monday = date(2026, 11, 24)
+        self.assertEqual(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 8 * 3600 + 2700, monday), 'irregular')
+
+    def test_on_a_closure_day_a_ghost_is_shown_as_irregular(self):
+        judged = self.judged()
+        self.assertEqual(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 8 * 3600 + 2700, date(2026, 11, 24), CLOSED), 'ghost')
+        self.assertEqual(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 8 * 3600 + 2700, date(2026, 11, 5), CLOSED), 'irregular')
 
     def test_a6343_is_a_ghost_before_it_leaves_and_a6345_is_not(self):
         judged = self.judged()
@@ -218,7 +231,8 @@ class RarelyRunsTests(SimpleTestCase):
                 live[(op, d)] = sorted(live.get((op, d), []) + [10 * 3600 + 600, 10 * 3600 + 1200])
         listed = [row(r, op, name, 10 * 3600, WEEKDAYS) for r, op, name in lines] + [LISTED[1]]  # + A6345, matched daily
         ever = {(op, name) for _, op, name in lines}
-        slots = gps_habit.learn_slots(listed, seen, live, {ARRIVA, 'IJPP:nomago', 'IJPP:1161'}, ever, WEEKDAYS[0], WEEKDAYS[-1])
+        slots = gps_habit.learn_slots(listed, seen, live, {ARRIVA, 'IJPP:nomago', 'IJPP:1161'}, ever, WEEKDAYS[0], WEEKDAYS[-1],
+                                      closed=CLOSED)
         judged = gps_habit.judge(slots, gps_habit.ran_ever(listed, seen, WEEKDAYS[0], WEEKDAYS[-1]))
         self.assertEqual([k[1] for k in judged], ['A6343'])  # the control: the same numbers on a national Arriva line
         for route, op, name in lines[:-1]:
@@ -259,17 +273,18 @@ class RarelyRunsTests(SimpleTestCase):
     def test_backtest_counts_hidden_and_ran_anyway_without_look_ahead(self):
         operator_of = {A6345: ARRIVA, LESCE: ARRIVA, M6: MARPROM}
         seen, live = history()
-        nov = [d for d in WEEKDAYS if d >= date(2026, 11, 10)]
+        # from 11 Nov: history starts 27 Oct and closure days 2–6 Nov do not count, so 10 Nov has 5 < MIN_OBSERVABLE
+        nov = [d for d in WEEKDAYS if d >= date(2026, 11, 11)]
         listed = [row(LESCE, ARRIVA, 'A6343', 8 * 3600 + 2700, WEEKDAYS), row(A6345, ARRIVA, 'A6345', 8 * 3600 + 1800, WEEKDAYS)]
         with mock.patch.object(gps_habit, 'learn', return_value={'operators': frozenset({ARRIVA})}):
-            result = gps_habit.backtest(date(2026, 11, 24), 14, listed, (seen, live, operator_of))
-        self.assertEqual(result['hidden'], len(nov))  # A6343 hidden on every quiet weekday 10–21 Nov
+            result = gps_habit.backtest(date(2026, 11, 24), 14, listed, (seen, live, operator_of), closed=CLOSED)
+        self.assertEqual(result['hidden'], len(nov))  # A6343 hidden on every quiet weekday 11–21 Nov
         self.assertEqual(result['ranAnyway'], 0)
         self.assertEqual([x['line'] for x in result['lines']], [f'{ARRIVA} A6343'])
         self.assertEqual(result['lines'][0]['days'], [d.isoformat() for d in nov])
         self.assertLessEqual(result['lines'][0]['rate'], gps_habit.GHOST_RATE)
         with mock.patch.object(gps_habit, 'learn', return_value={'operators': frozenset({ARRIVA})}):
-            self.assertEqual(gps_habit.backtest(date(2026, 11, 24), 14, listed, (seen, live, operator_of), 0.0)['hidden'], 0)
+            self.assertEqual(gps_habit.backtest(date(2026, 11, 24), 14, listed, (seen, live, operator_of))['hidden'], 0)
 
     def test_switch_defaults_to_off(self):
         self.assertEqual(gps_habit.ghost_mode(), 'off')

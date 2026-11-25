@@ -181,7 +181,10 @@ def measure(today: date, days: int = 7, scheduled=None, grace: int = GRACE) -> d
 #     are filed under Arriva's and Nomago's ids but never send GPS); (c) LPP's copies in the national feed.
 GHOST_DAYS = 28
 MIN_OBSERVABLE = 6
-GHOST_RATE = 0.2       # run rate at or below: ghost (listed, almost never runs)
+GHOST_RATE = 0.05      # run rate at or below: ghost (listed, almost never runs). Prod backtest 25 Nov (11–24 Nov):
+#                        0.05 hid 7 slot-days, 0 ran; 0.10 / 0.15 / 0.20 hid 26 / 51 / 82 and 7.7 / 11.8 / 11.0 % ran
+#                        (N0138, A6140, N6293, A8530 run on ~1 listed day in 7–10: a rate threshold r hides about r
+#                        of runs). A6343 (0.14–0.17) is caught only with its SŽ closure days left out (`closed`).
 IRREGULAR_RATE = 0.6   # run rate below: irregular (runs on some listed days)
 SLOP = 120             # s: the same slot across days and feed versions
 DAY_SHARE = 0.8        # a day counts only if this share of the operator's other listed trips was matched live then
@@ -258,10 +261,13 @@ def observed(counts: dict, operator, name, day: date) -> bool:
     return listed > 0 and (op[0] - own[0]) / listed >= DAY_SHARE
 
 
-def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first: date, last: date, counts=None) -> dict:
+def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first: date, last: date, counts=None,
+                closed: Optional[dict] = None) -> dict:
     """Run counts per slot over the days first..last (inclusive). `listed`: listing() rows; `seen` {(route, day):
     sorted starts live}; `operator_live` {(operator, day): sorted starts live}; `operators`: the steady operators;
-    `ever` {(operator, line name)} live in the last LONG days; `counts`: matched() over those days (else worked out).
+    `ever` {(operator, line name)} live in the last LONG days; `counts`: matched() over those days (else worked out);
+    `closed` {(operator, line name): days}: days with an SŽ closure on the rail the line follows, left out of its rate
+    (A6343 ran on 5–6 Nov only, SŽ's full closure Ljubljana – Jesenice; on other days it never runs).
     -> {(operator, name, direction, kind): [[start, runs, observable days]]}"""
     counts = matched(listed, seen, first, last) if counts is None else counts
     slots = defaultdict(list)
@@ -270,7 +276,7 @@ def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first:
         if op not in operators or not judgeable(route, op, t['name']) or (op, t['name']) not in ever:
             continue
         for day in t['dates']:
-            if not first <= day <= last:
+            if not first <= day <= last or day in (closed or {}).get((op, t['name']), ()):
                 continue
             own = seen.get((route, day), [])
             if _near(operator_live.get((op, day), []), t['start'], NEAR) - _near(own, t['start'], NEAR) <= 0:
@@ -300,13 +306,15 @@ def judge(slots: dict, ran: dict, ghost_rate: float = GHOST_RATE) -> dict:
     return out
 
 
-def verdict(judged: dict, operator: Optional[str], name: Optional[str], direction, start: Optional[int], day: date) -> Optional[str]:
-    """'ghost', 'irregular' or None for a listed trip, from its slot on `day`'s kind."""
+def verdict(judged: dict, operator: Optional[str], name: Optional[str], direction, start: Optional[int], day: date,
+            closed: Optional[dict] = None) -> Optional[str]:
+    """'ghost', 'irregular' or None for a listed trip, from its slot on `day`'s kind. On a closure day of its line
+    (`closed`, as in learn_slots) a ghost may run, so it is only 'irregular'."""
     if start is None:
         return None
     for s, v, _, _ in judged.get((operator, name or '', direction, kind(day)), ()):
         if abs(s - start) <= SLOP:
-            return v
+            return 'irregular' if v == 'ghost' and day in (closed or {}).get((operator, name or ''), ()) else v
     return None
 
 
@@ -327,10 +335,12 @@ def history(first: date, last: date) -> tuple:
     return seen, operator_live, operator_of
 
 
-def backtest(today: date, days: int, listed: list, past=None, ghost_rate: float = GHOST_RATE) -> dict:
+def backtest(today: date, days: int, listed: list, past=None, ghost_rate: float = GHOST_RATE,
+             closed: Optional[dict] = None) -> dict:
     """For each of the `days` days D before `today`, judge from the GHOST_DAYS days before D (no look-ahead) and count
     on D the hidden slot-days (ghosts listed and observable on D) and how many of them ran anyway (false hides).
-    `listed`: listing() rows of the lines to judge; `past`: history() (read from the database when None)."""
+    `listed`: listing() rows of the lines to judge; `past`: history() (read from the database when None);
+    `closed`: as in learn_slots (a closure day of a line is judged with the closure known, as live use would)."""
     seen, operator_live, operator_of = past or history(today - timedelta(days=days + LONG), today - timedelta(days=1))
     ever = {(operator_of[t['route']], t['name']) for t in listed if t['route'] in operator_of}
     counts = matched(listed, seen, today - timedelta(days=days + GHOST_DAYS), today - timedelta(days=1))
@@ -342,11 +352,12 @@ def backtest(today: date, days: int, listed: list, past=None, ghost_rate: float 
         trips = [(r, d, s) for (r, d), starts in seen.items() if first <= d < day for s in starts]
         ops = learn(trips, operator_of, set(operator_of))['operators']
         ran = ran_ever(listed, seen, day - timedelta(days=LONG), day - timedelta(days=1))
-        judged = judge(learn_slots(listed, seen, operator_live, ops, ever, first, day - timedelta(days=1), counts), ran, ghost_rate)
+        judged = judge(learn_slots(listed, seen, operator_live, ops, ever, first, day - timedelta(days=1), counts, closed),
+                       ran, ghost_rate)
         hidden = ran = irregular = 0
         for key, rows in learn_slots(listed, seen, operator_live, ops, ever, day, day, counts).items():
             for start, runs, _ in rows:
-                v = verdict(judged, *key[:3], start, day)
+                v = verdict(judged, *key[:3], start, day, closed)
                 irregular += v == 'irregular'
                 if v == 'ghost':
                     hidden += 1
