@@ -288,13 +288,21 @@ def hjoin(left, lw, right, rw, gap=1):
     return out
 
 
-def columns(w, left, right, min_w=104):
-    """Panels (functions of a width) in two columns when the window is wide enough, else one under the other."""
+def columns(w, panels, min_w=104):
+    """Panels (functions of a width) in two columns when the window is wide enough, else one under the other. Each goes
+    under the shorter column, so no box waits for the one beside it to end. A panel that draws nothing takes no room."""
     if w < min_w:
-        return [line for f in left + right for line in f(w)]
+        return [line for f in panels for line in f(w)]
     lw = (w - 1) // 2
     rw = w - 1 - lw
-    return hjoin([x for f in left for x in f(lw)], lw, [x for f in right for x in f(rw)], rw)
+    left, right = [], []
+    for f in panels:
+        # the columns differ by one cell at most, so the height is the same in either
+        if len(right) < len(left):
+            right += f(rw)
+        else:
+            left += f(lw)
+    return hjoin(left, lw, right, rw)
 
 
 def kv(label, *parts, lw=11):
@@ -1522,9 +1530,9 @@ def tab_overview(w):
     note = ['all clear', f'{len(a)} to check', f'{len(a)} to check'][worst]
     return (panel('Needs a look' if a else 'Status', alerts_(w - 4), w, note, ['ok', 'warn', 'bad'][worst]) +
             columns(w, [lambda cw: panel('Resources', resources(cw - 4), cw, f'last {dur(len(SAMPLER.h["cpu"]) * UI["interval"])}', to='system'),
-                        lambda cw: panel('Traffic', traffic_(cw - 4), cw, to='traffic')],
-                    [lambda cw: panel('Services', services(cw - 4), cw, to='services'),
-                     lambda cw: panel('Health', health_(cw - 4), cw, to='data')]))
+                        lambda cw: panel('Services', services(cw - 4), cw, to='services'),
+                        lambda cw: panel('Traffic', traffic_(cw - 4), cw, to='traffic'),
+                        lambda cw: panel('Health', health_(cw - 4), cw, to='data')]))
 
 
 def tab_system(w):
@@ -1586,14 +1594,15 @@ def tab_system(w):
 
     def procs(cw):
         iw = cw - 4
-        rows = [L(cell('PID', 7, 'dim', True), ('  ', 'dim'), cell('USER', 10, 'dim'), cell('CPU', 7, 'dim', True), cell('MEM', 10, 'dim', True),
-                  ('   ', 'dim'), ('COMMAND', 'dim'))]
+        user, mem, gap = (10, 10, 3) if iw >= 70 else (8, 9, 2)
+        rows = [L(cell('PID', 7, 'dim', True), ('  ', 'dim'), cell('USER', user, 'dim'), cell('CPU', 7, 'dim', True), cell('MEM', mem, 'dim', True),
+                  (' ' * gap, 'dim'), ('COMMAND', 'dim'))]
         for p in s['procs'][:12]:
-            rows.append(L(cell(p['pid'], 7, 'faint', True), ('  ', 'text'), cell(p['user'], 10, 'dim'),
-                          cell(f'{p["cpu"]:.1f}%', 7, level_style(p['cpu'], 50, 90), True), cell(size(p['rss']), 10, 'text', True),
-                          ('   ', 'text'), (p['cmd'], 'text')))
+            rows.append(L(cell(p['pid'], 7, 'faint', True), ('  ', 'text'), cell(p['user'], user, 'dim'),
+                          cell(f'{p["cpu"]:.1f}%', 7, level_style(p['cpu'], 50, 90), True), cell(size(p['rss']), mem, 'text', True),
+                          (' ' * gap, 'text'), (p['cmd'], 'text')))
         return panel('Processes', rows, cw, f'top {min(12, len(s["procs"]))} of {s["nprocs"]} by CPU')
-    return columns(w, [cpu, memory], [network, disk]) + procs(w)
+    return columns(w, [cpu, memory, network, disk, procs])
 
 
 def tab_services(w):
@@ -1679,7 +1688,6 @@ def tab_traffic(w):
             body += [L(('guard ', 'dim'), (', '.join(flags) if flags else 'letting everyone in', 'warn' if flags else 'ok'))]
         return panel('API', body or unavailable('traffic'), cw, f':{API_PORT}')
 
-    out += columns(w, [visitors], [api])
     iw = w - 4
     if e:
         body = [L((f'{e["used_gb"]:.1f} GB', 'bold'), (f' of {e["limit"]} GB sent in {e["month"]}', 'dim'), ('   stage ', 'dim'),
@@ -1708,7 +1716,7 @@ def tab_traffic(w):
         out += panel('Outbound data', body, w, 'egress guard, every 5 min')
     else:
         out += panel('Outbound data', unavailable('egress'), w)
-    return out
+    return out + columns(w, [visitors, api])
 
 
 def tab_data(w):
@@ -1750,6 +1758,9 @@ def tab_data(w):
             if rt:
                 body.append(kv('ijpp-rt', ('● ', status_style(rt.get('status'))), str(rt.get('status')),
                                (f'  since {clock(parse_iso(rt.get("since")), "%d %b %H:%M")}' if rt.get('since') else '', 'dim')))
+        classes = next((x['classes'] for x in h.get('sources') or [] if x.get('id') == 'sz:site-classes' and x.get('classes')), None)
+        if classes:
+            body.append(sz_classes_line(classes))
         for o in h.get('outages') or []:
             body.append(kv('Outage', ('● ', 'bad'), (f'{o.get("id")} {o.get("status")} for {o.get("minutes")} min', 'bad'),
                            (f'  last answer {clock(parse_iso(o["since"]), "%d %b %H:%M")}' if o.get('since') else '  no answer since start', 'dim')))
@@ -1802,7 +1813,18 @@ def tab_data(w):
                 kv('keys', ' · '.join(f'{k} {v}' for k, v in r['keys'].items()) or '0'),
                 kv('ops', (f'{r["ops"]}/s  ', 'text')) + spark(DB_HIST['ops'], max(0, iw - 22), style='rx', name='operations a second')]
         return panel('Redis', body, cw, f'{r["version"]} · up {dur(r["uptime"])}')
-    return columns(w, [api], [sources]) + columns(w, [postgres], [redis_]) + szsite_panel(w)
+    return columns(w, [api, sources, postgres, redis_, szsite_panel])
+
+
+def sz_classes_line(c):
+    """Which source gives today's planned train classes (/health, sz:site-classes): zamudil.si leading means SŽ's list is
+    missing or stale."""
+    trains = c.get('trains') or {}
+    total = sum(trains.values())
+    ours = c.get('lead') == 'potniski.sz.si'
+    share = f'{pct(trains.get("potniski.sz.si", 0), total):.0f} % of {total}' if total else 'no trains'
+    return kv('SŽ classes', ('● ', 'ok' if ours else 'warn'), ('SŽ' if ours else 'zamudil.si leads', 'text' if ours else 'warn'),
+              (f'  {share} from SŽ' if total else f'  {share}', 'dim'))
 
 
 def szsite_panel(w, z=None, now=None):
@@ -1824,7 +1846,7 @@ def szsite_panel(w, z=None, now=None):
         body.append(kv('Paused', ('memory under 2 GB: szsite-guard stopped it', 'warn'), lw=13))
     solves = z.get('solves') or []
     body.append(kv('Clearance', (f'solved {ago(z["cleared_at"])}' if z.get('cleared_at') else 'none yet', 'text'),
-                   (f'  · {len(solves)} solve{"s" * (len(solves) != 1)} today' + (f', last {clock(solves[-1])}' if solves else ''), 'dim'), lw=13))
+                   (f' · {len(solves)} solve{"s" * (len(solves) != 1)} today' + (f', last {clock(solves[-1])}' if solves else ''), 'dim'), lw=13))
     wp = z.get('warp')
     if not z['warp_on']:
         body.append(kv('WARP', ('off', 'dim'), ("  SŽ sees this VM's own IP", 'faint'), lw=13))
@@ -1847,7 +1869,7 @@ def szsite_panel(w, z=None, now=None):
                           cell('–' if count is None else count, 8, 'text', True), cell('  ' + (ago(at) if at else '–'), 14, 'dim'),
                           (err or '', 'bad' if err in ('challenge', 'blocked') else 'warn')))
         if not z.get('in_service', True):
-            body.append(L(('night (00:30–04:30): live trains every 2 min, boards only while trains run', 'faint')))
+            body.append(L(('night (00:30–04:30): trains every 2 min, fewer boards', 'faint')))
     return panel('SŽ reader', body, w, 'our reader of potniski.sz.si')
 
 
@@ -2159,9 +2181,8 @@ def tab_usage(w):
             rows.append(L(('no visitors yet', 'dim')))
         rows += [[], kv('Hop', f'{u["sends"]:,} routes sent', (f' · {u["presence"]:,} presence pings', 'dim'))]
         return panel('Platforms', rows, cw)
-    out += columns(w, [users], [fresh]) + requests(w) + columns(w, [hours], [joined])
-    out += columns(w, [lambda cw: table(cw, 'Features', u['features'], 14)], [lambda cw: table(cw, 'Top endpoints', u['routes'], 22)], min_w=120)
-    out += platforms(w)
+    out += columns(w, [users, fresh]) + requests(w) + columns(w, [hours, joined])
+    out += columns(w, [lambda cw: table(cw, 'Features', u['features'], 14), lambda cw: table(cw, 'Top endpoints', u['routes'], 22), platforms], min_w=120)
     out += [L(('  A person counts once a day: days cannot be linked, on purpose, so there is no "users this month".', 'faint'))]
     return out
 

@@ -122,8 +122,10 @@ class UsageTests(TestCase):
             for name, _ in top.PERIODS:
                 top.UI['period'] = name
                 top.POLL['usage'] = type('P', (), {'value': self.usage(), 'error': None})()
-                for w in (80, 104, 120, 160):
-                    drawn = text(top.fit(x, w) for x in top.tab_usage(w))
+                for w in (80, 104, 120, 160, 200):
+                    lines = top.tab_usage(w)
+                    self.assertLessEqual(gaps(lines), 1)
+                    drawn = text(top.fit(x, w) for x in lines)
                     for word in ('Users per day', 'New users per day', 'Requests per day', 'All users so far', 'Features', 'Top endpoints', 'Platforms'):
                         self.assertIn(word, drawn)
                     self.assertTrue(all(len(x) == w for x in drawn.splitlines()))
@@ -235,7 +237,7 @@ class MouseTests(SimpleTestCase):
 
     def test_a_graph_keeps_its_hover_data_through_panel_and_columns(self):
         chart = lambda cw: top.panel('Chart', top.bars([5, 9], cw - 4, 3, labels=['a', 'b'], name='items'), cw)  # noqa: E731
-        lines = [top.fit(x, 120) for x in top.columns(120, [chart], [chart])]
+        lines = [top.fit(x, 120) for x in top.columns(120, [chart, chart])]
         view = self.view(lines)
         right = [x for x0, x1, _, x in view['regions'][1] if x0 > 60]
         self.assertTrue(right)
@@ -293,3 +295,41 @@ class MouseTests(SimpleTestCase):
             line = top.tabbar(100, 'usage')
         self.assertEqual(len({s.key for _, _, _, s in top.regions([line])[0]}), len(top.TABS))
         self.assertIn('Usage', text([line]))
+
+
+def gaps(lines):
+    """The tallest run of rows left empty under a box, as wide as the box, before the next box."""
+    rows = [''.join(t for t, _ in line) for line in lines]
+    worst = 0
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch != '╰':
+                continue
+            span = slice(x, row.index('╯', x) + 1)
+            for n, below in enumerate(rows[y + 1:]):
+                if below[span].strip():
+                    if below[span].strip()[0] in '╭─':  # another box, not a line of plain text
+                        worst = max(worst, n)
+                    break
+    return worst
+
+
+@skipUnless(TOP_PY.exists(), 'the deploy bundle is not next to this checkout')
+class LayoutTests(SimpleTestCase):
+    def box(self, name, rows):
+        return lambda w: top.panel(name, [top.L('x')] * rows, w)
+
+    def test_boxes_stack_in_the_shorter_column_with_no_gaps_and_narrow_keeps_one_column(self):
+        boxes = [self.box('a', 12), self.box('b', 3), lambda w: [], self.box('c', 2), self.box('d', 9), self.box('e', 1)]
+        for w in (120, 160, 200):
+            out = top.columns(w, boxes)
+            self.assertEqual(gaps(out), 0)
+            self.assertTrue(all(top.width(x) == w for x in out))
+            self.assertIn(' c ', text(out[5:6]))  # under b, not waiting for a to end
+        narrow = text(top.columns(80, boxes))
+        self.assertEqual([narrow.index(f' {n} ') for n in 'abcde'], sorted(narrow.index(f' {n} ') for n in 'abcde'))
+
+    def test_the_sz_class_line_says_when_zamudil_took_over(self):
+        line = text([top.sz_classes_line({'lead': 'potniski.sz.si', 'trains': {'potniski.sz.si': 97, 'zamudil.si': 3}})])
+        self.assertIn('97 % of 100 from SŽ', line)
+        self.assertIn('zamudil.si leads', text([top.sz_classes_line({'lead': 'zamudil.si', 'trains': {}})]))
