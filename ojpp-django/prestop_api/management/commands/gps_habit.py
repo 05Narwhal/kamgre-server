@@ -39,8 +39,8 @@ class Command(BaseCommand):
     def backtest(self, today, days, known):
         from datetime import timedelta
         from prestop_api.upstream import otp
-        past = gps_habit.history(today - timedelta(days=days + gps_habit.GHOST_DAYS), today - timedelta(days=1))
-        routes = sorted(r for r, o in past[2].items() if o in known['operators'] and not r.startswith(gps_habit.NEVER_JUDGED))
+        past = gps_habit.history(today - timedelta(days=days + gps_habit.LONG), today - timedelta(days=1))
+        routes = sorted(r for r, o in past[2].items() if o in known['operators'] and gps_habit.judgeable(r, o, None))
         self.stdout.write(f'asking the timetable of {len(routes)} lines of {len(known["operators"])} steady operators ...')
         listed, failed = [], 0
         for route in routes:

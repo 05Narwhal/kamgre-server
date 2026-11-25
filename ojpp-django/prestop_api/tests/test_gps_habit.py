@@ -163,7 +163,8 @@ OPS = {ARRIVA, 'IJPP:lpp'}
 class RarelyRunsTests(SimpleTestCase):
     def judged(self, listed=LISTED, seen_live=None):
         seen, live = seen_live or history()
-        return gps_habit.judge(gps_habit.learn_slots(listed, seen, live, OPS, EVER, WEEKDAYS[0], WEEKDAYS[-1]))
+        ran = gps_habit.ran_ever(listed, seen, WEEKDAYS[0], WEEKDAYS[-1])
+        return gps_habit.judge(gps_habit.learn_slots(listed, seen, live, OPS, EVER, WEEKDAYS[0], WEEKDAYS[-1]), ran)
 
     def test_a6343_is_a_ghost_before_it_leaves_and_a6345_is_not(self):
         judged = self.judged()
@@ -195,6 +196,33 @@ class RarelyRunsTests(SimpleTestCase):
         seen, live = history()
         slots = gps_habit.learn_slots(LISTED, seen, live, OPS | {MARPROM}, EVER - {(ARRIVA, 'A6343')}, WEEKDAYS[0], WEEKDAYS[-1])
         self.assertNotIn((ARRIVA, 'A6343', 0, 'w'), slots)
+
+    def test_rule_a_a_slot_never_seen_live_itself_is_never_judged(self):
+        # A6343's 14:30 is listed every weekday but never seen live (say a subcontractor's bus without GPS): kept,
+        # although its 08:45 (seen on 5–6 Nov) is a ghost and Arriva is steady.
+        judged = self.judged(listed=LISTED + [row(LESCE, ARRIVA, 'A6343', 14 * 3600 + 1800, WEEKDAYS)])
+        monday = date(2026, 11, 24)
+        self.assertEqual(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 8 * 3600 + 2700, monday), 'ghost')
+        self.assertIsNone(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 14 * 3600 + 1800, monday))
+
+    def test_rules_b_and_c_replacement_buses_town_feeds_and_lpp_copies_are_never_judged(self):
+        # Each is listed every weekday, seen live once (on 5 Nov) under a steady operator: a ghost by its numbers.
+        lines = [('Ptuj:1', ARRIVA, '1'), ('Postojna:3', 'IJPP:nomago', '3'), ('Sevnica:2', ARRIVA, '2'),
+                 ('Brezice:1', ARRIVA, '1'), ('IJPP:27501', 'IJPP:1161', 'BUS 27501'), ('IJPP:9', ARRIVA, 'BUS 27503'),
+                 (LPP_COPY, ARRIVA, '25'), (LESCE, ARRIVA, 'A6343')]
+        seen, live = history()
+        for route, op, _ in lines:
+            seen[(route, date(2026, 11, 5))] = [10 * 3600]
+        for d in WEEKDAYS:
+            for op in (ARRIVA, 'IJPP:nomago', 'IJPP:1161'):
+                live[(op, d)] = sorted(live.get((op, d), []) + [10 * 3600 + 600, 10 * 3600 + 1200])
+        listed = [row(r, op, name, 10 * 3600, WEEKDAYS) for r, op, name in lines]
+        ever = {(op, name) for _, op, name in lines}
+        slots = gps_habit.learn_slots(listed, seen, live, {ARRIVA, 'IJPP:nomago', 'IJPP:1161'}, ever, WEEKDAYS[0], WEEKDAYS[-1])
+        judged = gps_habit.judge(slots, gps_habit.ran_ever(listed, seen, WEEKDAYS[0], WEEKDAYS[-1]))
+        self.assertEqual([k[1] for k in judged], ['A6343'])  # the control: the same numbers on a national Arriva line
+        for route, op, name in lines[:-1]:
+            self.assertFalse(gps_habit.judgeable(route, op, name), route)
 
     def test_days_the_operator_sent_nothing_do_not_count(self):
         seen, live = history()

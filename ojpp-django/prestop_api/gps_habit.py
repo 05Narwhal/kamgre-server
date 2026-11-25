@@ -174,12 +174,19 @@ def measure(today: date, days: int = 7, scheduled=None, grace: int = GRACE) -> d
 # (collector up, operator reporting). Only operators steady over their lines (learn()['operators']) are judged, and
 # only slots with MIN_OBSERVABLE observable listed days; LPP's copies in the national feed and lines never live in
 # LONG days never are. `GHOST_TRIPS` (settings): hide | mark | off; off (the default until measured) changes nothing.
+# Hard safety rules (prod sweep 25 Nov: 26 of 31 naive "ghost lines" were real buses without GPS), each never judged:
+# (a) a slot not itself seen live in the LONG days (a trip always run by a bus without GPS, e.g. a subcontractor's,
+#     however steady its operator); (b) SŽ's replacement buses (operator IJPP:1161, lines "BUS <train no>") and every
+#     feed that is not the national one or a live city feed (the hand-kept Ptuj, Postojna, Sevnica, Brežice town feeds
+#     are filed under Arriva's and Nomago's ids but never send GPS); (c) LPP's copies in the national feed.
 GHOST_DAYS = 28
 MIN_OBSERVABLE = 6
 GHOST_RATE = 0.2       # run rate at or below: ghost (listed, almost never runs)
 IRREGULAR_RATE = 0.6   # run rate below: irregular (runs on some listed days)
 SLOP = 120             # s: the same slot across days and feed versions
-NEVER_JUDGED = ('IJPP:LPP-',)
+NEVER_JUDGED = ('IJPP:LPP-',)                     # (c)
+JUDGED_FEEDS = ('IJPP:', 'LPP:', 'MARPROM:')       # (b) feeds whose buses send live data; any other feed never judged
+REPLACEMENT_OPERATORS = frozenset({'IJPP:1161'})   # (b) SŽ: its buses run instead of trains (mapping.REPLACEMENT_AGENCIES)
 ROUTE_TRIPS_Q = ('query($id: String!) { route(id: $id) { gtfsId shortName agency { gtfsId } patterns { directionId '
                  'trips { activeDates departureStoptime { scheduledDeparture } } } } }')
 
@@ -204,6 +211,23 @@ def listing(route: dict) -> list[dict]:
     return out
 
 
+def judgeable(route: str, operator: Optional[str], name: Optional[str]) -> bool:
+    """Safety rules (b) and (c): False for a line that must never be judged, whatever its history."""
+    return (route.startswith(JUDGED_FEEDS) and not route.startswith(NEVER_JUDGED)
+            and operator not in REPLACEMENT_OPERATORS and not (name or '').upper().startswith('BUS '))
+
+
+def ran_ever(listed, seen: dict, first: date, last: date) -> dict:
+    """Safety rule (a): the listed starts seen live on any day first..last (the LONG days), whether or not the
+    operator sent anything else then. -> {(operator, name, direction, kind): [start]}"""
+    out = defaultdict(list)
+    for t in listed:
+        for day in t['dates']:
+            if first <= day <= last and _near(seen.get((t['route'], day), []), t['start'], SLOP) > 0:
+                out[(t['operator'], t['name'], t['direction'], kind(day))].append(t['start'])
+    return dict(out)
+
+
 def _near(starts: list, start: int, span: int) -> int:
     return bisect_right(starts, start + span) - bisect_left(starts, start - span)
 
@@ -216,7 +240,7 @@ def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first:
     slots = defaultdict(list)
     for t in listed:
         op, route = t['operator'], t['route']
-        if op not in operators or route.startswith(NEVER_JUDGED) or (op, t['name']) not in ever:
+        if op not in operators or not judgeable(route, op, t['name']) or (op, t['name']) not in ever:
             continue
         for day in t['dates']:
             if not first <= day <= last:
@@ -234,11 +258,14 @@ def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first:
     return dict(slots)
 
 
-def judge(slots: dict) -> dict:
-    """The slots that rarely run: {(operator, name, direction, kind): [(start, 'ghost' | 'irregular', rate, days)]}."""
+def judge(slots: dict, ran: dict) -> dict:
+    """The slots that rarely run: {(operator, name, direction, kind): [(start, 'ghost' | 'irregular', rate, days)]}.
+    `ran`: ran_ever() over the LONG days; a slot never seen live itself is never judged (safety rule (a))."""
     out = {}
     for key, rows in slots.items():
         for start, runs, days in rows:
+            if not any(abs(s - start) <= SLOP for s in ran.get(key, ())):
+                continue
             if days >= MIN_OBSERVABLE and runs / days < IRREGULAR_RATE:
                 out.setdefault(key, []).append((start, 'ghost' if runs / days <= GHOST_RATE else 'irregular', runs / days, days))
     return out
@@ -275,7 +302,7 @@ def backtest(today: date, days: int, listed: list, past=None) -> dict:
     """For each of the `days` days D before `today`, judge from the GHOST_DAYS days before D (no look-ahead) and count
     on D the hidden slot-days (ghosts listed and observable on D) and how many of them ran anyway (false hides).
     `listed`: listing() rows of the lines to judge; `past`: history() (read from the database when None)."""
-    seen, operator_live, operator_of = past or history(today - timedelta(days=days + GHOST_DAYS), today - timedelta(days=1))
+    seen, operator_live, operator_of = past or history(today - timedelta(days=days + LONG), today - timedelta(days=1))
     ever = {(operator_of[t['route']], t['name']) for t in listed if t['route'] in operator_of}
     out, lines, ran_on = [], defaultdict(lambda: [0, 0]), Counter()
     for offset in range(days, 0, -1):
@@ -283,7 +310,8 @@ def backtest(today: date, days: int, listed: list, past=None) -> dict:
         first = day - timedelta(days=GHOST_DAYS)
         trips = [(r, d, s) for (r, d), starts in seen.items() if first <= d < day for s in starts]
         ops = learn(trips, operator_of, set(operator_of))['operators']
-        judged = judge(learn_slots(listed, seen, operator_live, ops, ever, first, day - timedelta(days=1)))
+        ran = ran_ever(listed, seen, day - timedelta(days=LONG), day - timedelta(days=1))
+        judged = judge(learn_slots(listed, seen, operator_live, ops, ever, first, day - timedelta(days=1)), ran)
         hidden = ran = irregular = 0
         for key, rows in learn_slots(listed, seen, operator_live, ops, ever, day, day).items():
             for start, runs, _ in rows:
