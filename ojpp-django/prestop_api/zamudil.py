@@ -741,10 +741,20 @@ def train_class(item: dict) -> dict:
     return out
 
 
+def merged_class(ours: dict, theirs: Optional[dict]) -> dict:
+    """Our reader's class of a train (szsite/sets.py) over zamudil's: SŽ's set, cars and the features its page states
+    lead; the features SŽ does not state come from zamudil's record when it names the same series."""
+    reported = set(ours.get('reported') or ())
+    out = {k: v for k, v in ours.items() if k != 'reported'}
+    if theirs is not None and theirs['series'] == ours['series']:
+        out['features'] = [*ours['features'], *(f for f in theirs['features'] if f not in reported and f not in ours['features'])]
+    return out
+
+
 def classes(day: date) -> dict[str, dict]:
     """Train number (text) → the class SŽ plans for it on `day`; empty without that date's copy. Our reader's sets
-    of that day lead (szsite/sets.py); zamudil's record stays where it names the same series (it has the features),
-    and zamudil alone covers the trains the reader did not reach, or every train while the reader has no list."""
+    of that day lead (szsite/sets.py, merged_class); zamudil keeps a train only where the reader names no series it
+    knows, and alone covers the trains the reader did not reach, or every train while the reader has no list."""
     from .szsite import sets
     found = copy(CLASSES, day) if enabled() else None
     data = (found or {}).get('data')
@@ -761,12 +771,22 @@ def classes(day: date) -> dict[str, dict]:
                 out.setdefault(str(int(n)), made)
     for n, made in ours.items():
         theirs = out.get(n)
-        if theirs is None or made['series'] not in ('unknown', theirs['series']):
-            out[n] = made
+        if theirs is None or made['series'] != 'unknown':
+            out[n] = merged_class(made, theirs)
     if len(_classes) > 16:
         _classes.clear()
     _classes[key] = (data, out, ours)
     return out
+
+
+def class_sources(day: date) -> dict:
+    """Where `day`'s planned classes come from (for /health): {'lead': our reader's site while it has that day's list,
+    else zamudil.si, 'trains': {source: number of trains}}."""
+    from .szsite import sets
+    counts: dict[str, int] = {}
+    for made in classes(day).values():
+        counts[made['source']] = counts.get(made['source'], 0) + 1
+    return {'lead': sets.SOURCE_NAME if sets.classes(day) else SOURCE_NAME, 'trains': counts}
 
 
 def class_of(number: Optional[str], day: date) -> Optional[dict]:

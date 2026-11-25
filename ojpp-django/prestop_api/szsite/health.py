@@ -4,7 +4,8 @@ Only when PRESTOP_SZSITE_STATUS_URL is set (the server sets it with PRESTOP_SZSI
 listed. A reader that does not answer makes every entry unavailable; a job past twice its interval is stale. Outside
 service hours (00:30-04:30) the live list is read every NIGHT_LIVE_EVERY s, so it is stale only past twice that.
 Train sets (`sz:site-classes`) are read once a service day from 01:00: stale 28 h after the last good list (a missed night
-shows by the next morning).
+shows by the next morning). Its entry also carries `classes`: which source leads today's planned classes and how many
+trains each gives (zamudil.class_sources), so server:top can show when zamudil.si took over.
 """
 import json
 import time
@@ -68,5 +69,15 @@ def health(now: Optional[float] = None, fetch: Callable[[str], Optional[dict]] =
         return []
     now = time.time() if now is None else now
     if _last['value'] is None or now - _last['at'] > CACHE:
-        _last.update(at=now, value=entries(fetch(url), now))
+        _last.update(at=now, value=with_class_sources(entries(fetch(url), now)))
     return _last['value']
+
+
+def with_class_sources(out: list[dict]) -> list[dict]:
+    """`classes` on the sz:site-classes entry (see the module text); left out if the count fails."""
+    from .. import zamudil
+    try:
+        sources = zamudil.class_sources(zamudil.today())
+    except Exception:  # health must answer whatever the class lists hold
+        return out
+    return [{**e, 'classes': sources} if e['id'] == 'sz:site-classes' else e for e in out]

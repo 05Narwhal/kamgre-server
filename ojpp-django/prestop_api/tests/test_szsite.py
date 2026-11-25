@@ -149,7 +149,15 @@ class ParserTests(SimpleTestCase):
 
     def test_train_sets(self):
         sets = parse.train_sets(text('finder-results.html'))
-        self.assertEqual(sets['512'], {'set': 'SŽ 312 Siemens Desiro (tročleni)', 'slug': 'sz-312-siemens-desiro-troclenski'})
+        self.assertEqual(sets['512'], {'set': 'SŽ 312 Siemens Desiro (tročleni)', 'slug': 'sz-312-siemens-desiro-troclenski',
+                                       'category': 'IC', 'features': sets['512']['features']})
+        # Category from "Vlak: IC 351"; features from the set's yes/no rows and counts, bikes only while not commented out.
+        self.assertEqual(sets['351']['category'], 'IC')
+        self.assertEqual(sets['351']['features'], {'air-conditioning': True, 'wifi': False, 'power-outlets': True, 'accessible': False})
+        self.assertEqual({s['category'] for s in sets.values()} - {'IC', 'ICS', 'LPV', 'RG', 'EC'}, set())
+        self.assertTrue(all('bikes' not in s['features'] for s in sets.values()))
+        self.assertEqual(parse.set_features('<p>Prostor za invalidski voziček:</p> <p>2</p><!-- <p>Wi-Fi:</p> <div class="div-yes"></div> -->'),
+                         {'accessible': True})
         self.assertIn('sz-510-stadler-flirt', {s['slug'] for s in sets.values()})
         self.assertEqual(sets['502']['slug'], 'emg-313-stadler-kiss-dvopodni')
         with self.assertRaises(SiteError):
@@ -469,6 +477,29 @@ class JobTests(SimpleTestCase):
         nxt = lambda h: __import__('datetime').datetime(2026, 11, 8, h, 5, tzinfo=jobs.LOCAL).timestamp()
         self.assertFalse(sets.wanted(self.store, nxt(0)))
         self.assertTrue(sets.wanted(self.store, nxt(1)))
+
+    def test_the_live_lists_train_ends_are_learned_and_searched_at_night(self):
+        rows = [{'St_vlaka': '2652', 'Postaja_SZ_OD': '42300', 'Postaja_SZ_DO': '42356', 'Rang': 'LP', 'Koordinate': ''},
+                {'St_vlaka': '27521', 'Postaja_SZ_OD': '44200', 'Postaja_SZ_DO': '44352', 'Rang': 'BUS', 'Koordinate': ''},
+                {'St_vlaka': '1246', 'Postaja_SZ_OD': '78400', 'Postaja_SZ_DO': '42300', 'Rang': 'EC', 'Koordinate': ''},
+                {'St_vlaka': '3200', 'Postaja_SZ_OD': '43100', 'Postaja_SZ_DO': '43150', 'Rang': 'RG', 'Koordinate': ''}]
+        self.assertEqual(parse.relations(rows), {('42300', '42356'), ('43100', '43150')})  # no buses, no foreign ends
+        self.assertEqual(jobs.learn_pairs(self.store, rows, day='2026-11-07'), 2)
+        self.assertEqual(jobs.learn_pairs(self.store, rows, day='2026-11-08'), 0)
+        self.assertEqual(self.store.load('set_pairs')['data'], {'42300 42356': '2026-11-08', '43100 43150': '2026-11-08'})
+        jobs.learn_pairs(self.store, rows[:1], day='2026-11-23')  # 43100 → 43150 not seen for PAIRS_KEEP days: dropped
+        self.assertEqual(self.store.load('set_pairs')['data'], {'42300 42356': '2026-11-23'})
+        pairs = jobs.set_pairs(self.store)
+        self.assertEqual((pairs[:len(jobs.SET_PAIRS)], pairs[len(jobs.SET_PAIRS):]), (jobs.SET_PAIRS, [('42300', '42356')]))
+        # The night's run plans them; a branch page with trains but no set counts as empty instead of starting over.
+        fake = mock.Mock()
+        fake.get.return_value = '<div>Vlak: EC 1246</div>'
+        sets = jobs.TrainSets()
+        sets.plan(self.store)
+        sets.day, sets.next = jobs.today().date(), len(pairs) - 1
+        summary = sets(fake, self.store)
+        self.assertEqual(fake.get.call_args[0][1]['exit-station'], '42356')
+        self.assertEqual((summary['count'], sets.next), (0, 0))
 
     def test_a_finder_page_with_trains_but_no_set_starts_over(self):
         fake = mock.Mock()

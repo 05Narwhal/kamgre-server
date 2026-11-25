@@ -5,9 +5,10 @@
 - `status`: page 438 every 15 min: notices (-> sz_list.save), works, highlighted delays.
 - `boards`: the BOARDS busiest stations' departure boards, one station per request, spread over 5 minutes: tracks.
   At night one every 3 min, and only while the last live list had trains.
-- `sets`: the planned train set of every train (the timetable finder, one search per SET_PAIRS pair, a minute apart),
-  once a service day from 01:00, or at once when no list is stored: `train_sets` {'date', 'trains'} for
-  szsite/sets.py (zamudil.si fills the trains these searches do not reach).
+- `sets`: the planned train set of every train (the timetable finder, one search per pair a minute apart: SET_PAIRS
+  plus the ends of every train the live list showed in the last PAIRS_KEEP days, `set_pairs`, which reaches the branch
+  lines), once a service day from 01:00, or at once when no list is stored: `train_sets` {'date', 'trains'} for
+  szsite/sets.py (zamudil.si fills only the trains and features these searches do not give).
 - One job at a time, each task with its own Backoff; a challenge or an IP block holds every task back (the site is
   refusing us, not one page).
 
@@ -18,7 +19,7 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
@@ -36,9 +37,11 @@ BOARDS = {'42300': 'Ljubljana', '43400': 'Maribor', '43100': 'Celje', '42200': '
 LIVE_EVERY, STATUS_EVERY, BOARD_EVERY = 30, 900, 30  # s; 10 boards every 30 s = each every 5 min
 NIGHT_LIVE_EVERY, NIGHT_BOARD_EVERY = 120, 180  # s outside service hours
 # Timetable-finder searches for the train sets: both ways along each main line between BOARDS stations (a search
-# lists the trains of every connection, through trains and changes alike). Branch-line trains are not reached.
-SET_PAIRS = [(a, b) for x, y in (('42300', '43400'), ('42300', '42400'), ('42300', '44352'), ('42300', '42600'))
+# lists the trains of every connection, through trains and changes alike). Branch lines come from `set_pairs`.
+SET_PAIRS = [(a, b) for x, y in (('42300', '43400'), ('42300', '42400'), ('42300', '44352'), ('42300', '42600'),
+                                 ('42300', '42001'))
              for a, b in ((x, y), (y, x))]
+PAIRS_KEEP = 14  # days a train's ends seen in the live list stay searched (weekend-only trains come back within this)
 SETS_EVERY, SETS_FROM = 60, 1  # s between searches; local hour the night's run starts
 STATIONS_TTL = 6 * 3600
 STATIONS_RETRY = 300
@@ -95,7 +98,31 @@ def fetch_live(client: Client, store: Store, **_) -> dict:
     kept, error = store.keep('active_trains', rows)
     if not kept:
         raise SiteError(error or 'layout', 'the list collapsed')
+    learn_pairs(store, rows)
     return {'count': len(rows), 'bytes': len(raw.encode('utf-8'))}
+
+
+def learn_pairs(store: Store, rows: list[dict], day: Optional[str] = None) -> int:
+    """Note the ends of every running train (parse.relations) under `set_pairs` {'a b': last day seen}, dropping the
+    pairs not seen for PAIRS_KEEP days; written only when something changed. Returns the number of new pairs."""
+    day = day or today().date().isoformat()
+    known = dict(((store.load('set_pairs') or {}).get('data') or {}))
+    first = (datetime.fromisoformat(day) - timedelta(days=PAIRS_KEEP)).date().isoformat()
+    kept = {k: seen for k, seen in known.items() if seen >= first}
+    new = 0
+    for a, b in parse.relations(rows):
+        key = f'{a} {b}'
+        new += key not in kept
+        kept[key] = day
+    if kept != known:
+        store.keep('set_pairs', kept)
+    return new
+
+
+def set_pairs(store: Store) -> list[tuple[str, str]]:
+    """SET_PAIRS, then the learned train ends not among them (sorted: the same order every night)."""
+    learned = [tuple(k.split(' ')) for k in sorted(((store.load('set_pairs') or {}).get('data') or {}))]
+    return list(dict.fromkeys([*SET_PAIRS, *(p for p in learned if len(p) == 2)]))
 
 
 def fetch_status(client: Client, store: Store, **_) -> dict:
@@ -161,8 +188,14 @@ class TrainSets:
     is kept as `train_sets`. A search without trains adds nothing; a page with trains but no set starts over."""
 
     def __init__(self, pairs: Optional[list[tuple[str, str]]] = None):
+        self.fixed = pairs
         self.pairs = pairs or SET_PAIRS
         self.day, self.next, self.found = None, 0, {}
+
+    def plan(self, store: Store) -> list[tuple[str, str]]:
+        """The pairs of the run that starts now (fixed ones in tests, else set_pairs)."""
+        self.pairs = self.fixed or set_pairs(store)
+        return self.pairs
 
     def wanted(self, store: Store, wall: float) -> bool:
         """Today's list is missing, and it is after SETS_FROM (or no list of any day is stored)."""
@@ -174,13 +207,15 @@ class TrainSets:
         day = today().date()
         if self.day != day:
             self.day, self.next, self.found = day, 0, {}
+        if self.next == 0:
+            self.plan(store)
         a, b = self.pairs[self.next]
         page = client.get('/vozni-redi-results/', {'action': 'timetables_search', 'current-language': 'sl', 'entry-station': a,
                                                    'exit-station': b, 'departure-date': day.strftime('%d.%m.%Y')})
         try:
             sets = parse.train_sets(page)
         except SiteError:
-            if 'Vlak:' in page:
+            if 'Vlak:' in page and (self.fixed or (a, b) in SET_PAIRS):  # a main line always has sets: the layout changed
                 self.next = 0
                 raise
             sets = {}
@@ -284,7 +319,7 @@ def run_once(name: str, client: Client, store: Store, ids: Optional[StationIds] 
             summary = fetch_status(client, store)
         elif name == 'sets':
             sets = TrainSets()
-            for _ in sets.pairs:
+            for _ in sets.plan(store):
                 summary = sets(client, store)
         else:
             summary = Boards(ids)(client, store, code=code)

@@ -20,7 +20,14 @@ TABLE = re.compile(r'<table\b([^>]*)>(.*?)</table>', re.S | re.I)
 ROW = re.compile(r'<tr\b[^>]*>(.*?)</tr>', re.S | re.I)
 CELL = re.compile(r'<t([hd])\b[^>]*>(.*?)</t[hd]>', re.S | re.I)
 OPTION = re.compile(r'<option\b[^>]*value="(\d+)"[^>]*\bselected\b[^>]*>(.*?)</option>', re.S | re.I)
-SET_BLOCK = re.compile(r'<div class="single-train-details.*?<h5>(.*?)</h5>.*?href="https://potniski\.sz\.si/train/([a-z0-9-]+)/"', re.S)
+SET_BLOCK = re.compile(r'<div class="single-train-details.*?<h5>(.*?)</h5>(.*?)href="https://potniski\.sz\.si/train/([a-z0-9-]+)/"', re.S)
+PROPERTY = re.compile(r'<p>\s*([^<:]+?)\s*:\s*</p>\s*(?:<div>\s*)?<div class="div-(yes|no)"', re.S)
+COUNT = re.compile(r'<p>\s*([^<:]+?)\s*:\s*</p>\s*<(?:p|span|div)[^>]*>\s*(\d+)\s*<', re.S)
+COMMENT = re.compile(r'<!--.*?-->', re.S)
+# the set's properties on SŽ's page (yes/no, or a count) → our trainClass features; bikes is commented out on the page
+# (Nov 2026) and counts only while SŽ shows it
+FEATURES = {'Klima naprava': 'air-conditioning', 'Wi-Fi': 'wifi', 'Vtičnice': 'power-outlets', 'Prostor za kolesa': 'bikes',
+            'Nizkopodnost': 'accessible', 'Prostor za invalidski voziček': 'accessible'}
 TRAIN_LABEL = re.compile(r'Vlak:\s*(?:<span[^>]*>)?\s*([^<]*?)\s*(?:</span>|<)')
 
 
@@ -51,6 +58,17 @@ def _work_days(item: dict) -> tuple[Optional[str], Optional[str]]:
         return date(y1, m1, d1).isoformat(), date(y2, m2, d2).isoformat()
     except ValueError:
         return None, None
+
+
+def relations(rows: list[dict]) -> set[tuple[str, str]]:
+    """The (from, to) station codes of every running train in an aktivni_vlaki list (SŽ buses left out): the ends the
+    timetable finder is searched between for the train sets. Only Slovenian codes (4xxxx); foreign ends are dropped."""
+    out = set()
+    for row in rows:
+        a, b = str(row.get('Postaja_SZ_OD') or ''), str(row.get('Postaja_SZ_DO') or '')
+        if row.get('Rang') != 'BUS' and a != b and all(re.fullmatch(r'4\d{4}', c) for c in (a, b)):
+            out.add((a, b))
+    return out
 
 
 def works(page: str) -> list[dict]:
@@ -134,16 +152,33 @@ def departures(page: str) -> dict:
     return {'code': chosen.group(1), 'name': _plain(chosen.group(2)), 'rows': rows}
 
 
+def set_features(fragment: str) -> dict[str, bool]:
+    """The features one set block states, {feature: yes}: a feature is yes when any of its properties says so
+    (low floor or wheelchair places → accessible). Properties inside HTML comments are not shown, so not stated."""
+    fragment = COMMENT.sub('', fragment)
+    out: dict[str, bool] = {}
+    for label, answer in PROPERTY.findall(fragment):
+        if (ours := FEATURES.get(label.strip())):
+            out[ours] = out.get(ours, False) or answer == 'yes'
+    for label, count in COUNT.findall(fragment):
+        if (ours := FEATURES.get(label.strip())):
+            out[ours] = out.get(ours, False) or int(count) > 0
+    return out
+
+
 def train_sets(page: str) -> dict[str, dict]:
-    """The planned train set of each train in a timetable-finder answer: {train number: {'set': name, 'slug': slug}}
-    (slug of its /train/<slug>/ page). A block belongs to the nearest "Vlak: IC 512" before it."""
+    """The planned train set of each train in a timetable-finder answer: {train number: {'set': name, 'slug': slug,
+    'category': 'IC', 'features': {feature: yes}}} (slug of its /train/<slug>/ page; features as set_features).
+    A block belongs to the nearest "Vlak: IC 512" before it."""
     labels = [(m.start(), m.group(1)) for m in TRAIN_LABEL.finditer(page)]
     out = {}
     for block in SET_BLOCK.finditer(page):
         before = [name for at, name in labels if at < block.start()]
         number = re.search(r'\d+', before[-1]) if before else None
         if number:
-            out[number.group(0)] = {'set': _plain(block.group(1)), 'slug': block.group(2)}
+            category = before[-1][:number.start()].strip()
+            out[number.group(0)] = {'set': _plain(block.group(1)), 'slug': block.group(3), 'category': category,
+                                    'features': set_features(block.group(2))}
     if not out:
         raise SiteError('layout', 'no train sets found')
     return out
