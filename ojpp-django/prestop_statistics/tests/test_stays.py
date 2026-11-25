@@ -72,6 +72,37 @@ class GateTests(TestCase):
         complete(days[3])
         self.assertEqual(stays.gate_opens(stays.complete_days(days[-1], days[0])['IJPP']), TODAY)
 
+    def test_weekends_a_feed_never_runs_are_skipped_not_streak_breaking(self):
+        # CELEBUS / MOMS: no vehicles on Saturdays and Sundays. The collector ran all 14 days.
+        days = [TODAY - timedelta(days=i) for i in range(1, 15)]
+        for d in days:
+            RecorderDay.objects.update_or_create(day=d, feed='*', defaults={'seconds': 86000, 'version': 2})
+        work = [d for d in days if d.weekday() < 5]
+        complete(*work, feed='CELEBUS')
+        since, until = days[-1], days[0]
+        quiet = stays.quiet_days(since, until)
+        self.assertEqual(quiet['CELEBUS'], {d for d in days if d.weekday() >= 5})
+        self.assertIsNone(stays.gate_opens(stays.complete_days(since, until)['CELEBUS']))  # the old rule: never opens
+        opened = stays.gate_opens(stays.complete_days(since, until)['CELEBUS'], quiet['CELEBUS'])
+        self.assertEqual(opened, sorted(work)[6] + timedelta(days=1))  # the 7th counted weekday, weekend in between
+
+    def test_a_workday_with_no_vehicles_while_other_workdays_had_some_still_resets(self):
+        days = [TODAY - timedelta(days=i) for i in range(1, 15)]
+        for d in days:
+            RecorderDay.objects.update_or_create(day=d, feed='*', defaults={'seconds': 86000, 'version': 2})
+        work = sorted(d for d in days if d.weekday() < 5)
+        complete(*[d for d in work if d != work[4]], feed='CELEBUS')  # the feed failed on one workday
+        since, until = days[-1], days[0]
+        quiet = stays.quiet_days(since, until)
+        self.assertNotIn(work[4], quiet['CELEBUS'])
+        self.assertIsNone(stays.gate_opens(stays.complete_days(since, until)['CELEBUS'], quiet['CELEBUS']))
+
+    def test_a_day_the_collector_was_down_is_never_quiet(self):
+        days = [TODAY - timedelta(days=i) for i in range(1, 15)]
+        complete(*[d for d in days if d.weekday() < 5], feed='CELEBUS')
+        quiet = stays.quiet_days(days[-1], days[0])  # weekends: no collector row at all
+        self.assertEqual(quiet.get('CELEBUS', set()), set())
+
     def test_a_feed_without_its_own_complete_days_stays_closed(self):
         days = [TODAY - timedelta(days=i) for i in range(1, 8)]
         complete(*days)

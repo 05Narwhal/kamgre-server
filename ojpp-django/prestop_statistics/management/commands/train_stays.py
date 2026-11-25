@@ -13,12 +13,14 @@ NEVER_LISTED = 40
 
 def status_lines(s: dict) -> list[str]:
     out = [f'Staying on the train on {s["today"]}. A day counts with the collector at {ts.stays.FULL_DAY / 86400:.0%} or more and '
-           f'{ts.COVERED:.0%} or more of its trains reported.', '']
-    out.append('day          collector  trains reported        counts')
+           f'{ts.COVERED:.0%} or more of its trains reported (leaving out the trains SŽ never reports).', '']
+    out.append('day          collector  trains never reported        counts')
     for d in s['days']:
-        share = f'{d["reported"] / d["trains"]:6.1%}' if d['trains'] else '    - '
+        base = ts.reportable(d)
+        share = f'{d["reported"] / base:6.1%}' if base > 0 else '    - '
+        never = '    ?' if d.get('unreported') is None else f'{d["unreported"]:5}'
         why = ' + '.join(d['misses'])
-        out.append(f'{d["day"]}  {d["collector"]:8.1%}  {d["trains"]:6} {d["reported"]:4} {share}  {"yes" if d["counts"] else f"no ({why})"}'
+        out.append(f'{d["day"]}  {d["collector"]:8.1%}  {d["trains"]:6} {never} {d["reported"]:8} {share}  {"yes" if d["counts"] else f"no ({why})"}'
                    f'{"" if d["recorded"] else "  (not recorded yet: a coming night backfills it)"}')
     if not s['days']:
         out.append('(no days rolled up or recorded in the last days)')

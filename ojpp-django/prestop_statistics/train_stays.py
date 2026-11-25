@@ -19,7 +19,8 @@ said otherwise (docs/research/2026-10-31-train-stays.md):
   gets none (a split or a join the notices do not explain). A `sure` that a day contradicted is at most `likely` for
   DEMOTE_DAYS.
 - Gate: nothing is learned before SŽ's live data covered GATE_DAYS consecutive days (stays.gate_opens): the collector
-  ran at least stays.FULL_DAY and at least COVERED of the day's timetable trains had a reported delay.
+  ran at least stays.FULL_DAY and at least COVERED of the day's timetable trains had a reported delay, leaving out the
+  trains SŽ reported on none of the stored days (`unreported`: international ones; they alone failed every weekend).
 
 Joined trains come from zamudil.si's notices only (zamudil.joined_trains): SŽ says which train joins which, the
 timetable says where. Which set to sit in is said only when the notice says it. The timetable lists a coupled stretch
@@ -159,9 +160,11 @@ def rollups(day: date) -> dict[str, dict]:
             for r in TrainDay.objects.filter(service_date=day).values(*fields)}
 
 
-def observe(day: date, runs: dict[str, dict], rows: dict[str, dict], classes: Optional[dict] = None) -> tuple[list[dict], dict]:
+def observe(day: date, runs: dict[str, dict], rows: dict[str, dict], classes: Optional[dict] = None,
+            ever: Optional[set] = None) -> tuple[list[dict], dict]:
     """(TrainLinkDay fields of every candidate, TrainCoverDay fields) of one day. `classes`: number -> the planned
-    class that day (zamudil.classes); a pair planned in two series is skipped."""
+    class that day (zamudil.classes); a pair planned in two series is skipped. `ever`: the numbers SŽ reported on any
+    stored day (ever_reported); the day's trains outside it are `unreported` (None: not known)."""
     classes = classes or {}
     links = []
     for c in candidates(runs):
@@ -173,8 +176,25 @@ def observe(day: date, runs: dict[str, dict], rows: dict[str, dict], classes: Op
         links.append({**{k: c[k] for k in ('station', 'station_name', 'arrival', 'departure')}, 'day': day,
                       'from_number': c['from'], 'to_number': c['to'], 'skipped': skipped,
                       'from_delay': end_delay(a.get('stops') or []), 'to_delay': start_delay(b.get('stops') or [])})
-    reported = sum(1 for n in runs if any(s.get('delay') is not None for s in (rows.get(n) or {}).get('stops') or []))
-    return links, {'day': day, 'trains': len(runs), 'reported': reported}
+    reported = sum(1 for n in runs if _has_report(rows.get(n)))
+    unreported = None if ever is None else sum(1 for n in runs if n not in ever and not _has_report(rows.get(n)))
+    return links, {'day': day, 'trains': len(runs), 'reported': reported, 'unreported': unreported}
+
+
+def _has_report(row: Optional[dict]) -> bool:
+    return any(s.get('delay') is not None for s in (row or {}).get('stops') or [])
+
+
+def ever_reported(since: date, until: date) -> Optional[set]:
+    """The train numbers SŽ reported a delay for on any day in [since, until], or None while fewer than GATE_DAYS
+    days are rolled up (too little history to call a train one SŽ never reports)."""
+    from prestop_statistics.models import TrainDay
+    days, out = set(), set()
+    for d, number, stops in TrainDay.objects.filter(service_date__range=(since, until)).values_list('service_date', 'number', 'stops').iterator():
+        days.add(d)
+        if number not in out and _has_report({'stops': stops}):
+            out.add(number)
+    return out if len(days) >= GATE_DAYS else None
 
 
 def outcome(link: dict, turn: int = MIN_TURN) -> str:
@@ -192,13 +212,16 @@ def outcome(link: dict, turn: int = MIN_TURN) -> str:
     return CONTRADICT if b < expected - TOLERANCE else LATER
 
 
-def record(day: date, runs: Optional[dict] = None, rows: Optional[dict] = None, classes: Optional[dict] = None) -> dict:
+def record(day: date, runs: Optional[dict] = None, rows: Optional[dict] = None, classes: Optional[dict] = None,
+           ever: Optional[set] = None) -> dict:
     """Store one day's evidence (TrainLinkDay, TrainCoverDay) with the level each pair had then, and return the live
     check: {level: [hits, misses]}; a `sure` miss is logged."""
     from prestop_statistics.models import RecorderDay, TrainCoverDay, TrainLinkDay, TrainStay
     runs = timetable(day) if runs is None else runs
     rows = rollups(day) if rows is None else rows
-    links, cover = observe(day, runs, rows, classes)
+    if ever is None:
+        ever = ever_reported(day - timedelta(days=KEEP_DAYS), day)
+    links, cover = observe(day, runs, rows, classes, ever)
     levels = {(s.from_number, s.to_number): s for s in TrainStay.objects.all()}
     turns = station_turns(list(TrainLinkDay.objects.filter(day__gte=day - timedelta(days=KEEP_DAYS), day__lt=day).values()))
     tally: dict[str, list] = defaultdict(lambda: [0, 0])
@@ -215,15 +238,27 @@ def record(day: date, runs: Optional[dict] = None, rows: Optional[dict] = None, 
     with transaction.atomic():
         TrainLinkDay.objects.filter(day=day).delete()
         TrainLinkDay.objects.bulk_create([TrainLinkDay(**link) for link in links], batch_size=2000)
-        TrainCoverDay.objects.update_or_create(day=day, defaults={'trains': cover['trains'], 'reported': cover['reported'], 'collector_seconds': seconds})
+        TrainCoverDay.objects.update_or_create(day=day, defaults={'trains': cover['trains'], 'reported': cover['reported'], 'unreported': cover['unreported'],
+                                                                     'collector_seconds': seconds})
     return {'pairs': len(links), 'trains': cover['trains'], 'reported': cover['reported'], 'check': dict(tally)}
 
 
 # ---------------------------------------------------------------- learning
 
+def reportable(cover: dict) -> int:
+    """The day's timetable trains less the ones SŽ never reports (`unreported`): on a weekend's ~280 trains the ~17
+    international ones SŽ never reports (Venezia, Zalaegerszeg, Graz ...) alone pushed the share under COVERED (B2)."""
+    return cover['trains'] - (cover.get('unreported') or 0)
+
+
+def covered(cover: dict) -> bool:
+    """COVERED of the day's reportable trains had a reported delay."""
+    return reportable(cover) > 0 and cover['reported'] >= COVERED * reportable(cover)
+
+
 def complete(covers: list[dict]) -> set[date]:
-    """The days SŽ's live data covered: the collector ran FULL_DAY and COVERED of the timetable trains were reported."""
-    return {c['day'] for c in covers if c['trains'] and c['collector_seconds'] >= stays.FULL_DAY and c['reported'] >= COVERED * c['trains']}
+    """The days SŽ's live data covered: the collector ran FULL_DAY and COVERED of the trains SŽ reports at all were."""
+    return {c['day'] for c in covers if c['collector_seconds'] >= stays.FULL_DAY and covered(c)}
 
 
 def station_turns(links: list[dict]) -> dict[str, int]:
@@ -340,6 +375,7 @@ def learn(today: date) -> dict:
 
 
 BACKFILL = 7  # past days recorded per night
+RECOUNT = 14  # days recorded before `unreported` was kept, filled in per night (one OTP timetable each)
 
 
 def backlog(today: date) -> list[date]:
@@ -349,6 +385,18 @@ def backlog(today: date) -> list[date]:
     rolled = set(TrainDay.objects.filter(service_date__gte=since, service_date__lt=today - timedelta(days=1)).values_list('service_date', flat=True).distinct())
     done = set(TrainCoverDay.objects.filter(day__gte=since).values_list('day', flat=True))
     return sorted(rolled - done, reverse=True)
+
+
+def recount(day: date, ever: Optional[set], runs: Optional[dict] = None) -> Optional[int]:
+    """Fill in `unreported` of a day recorded before it was kept (its links stay as recorded, planned classes and
+    all); None while `ever` is not known."""
+    from prestop_statistics.models import TrainCoverDay
+    if ever is None:
+        return None
+    runs = timetable(day) if runs is None else runs
+    unreported = observe(day, runs, rollups(day), ever=ever)[1]['unreported']
+    TrainCoverDay.objects.filter(day=day).update(unreported=unreported)
+    return unreported
 
 
 def nightly(now: Optional[float] = None) -> Optional[dict]:
@@ -363,11 +411,18 @@ def nightly(now: Optional[float] = None) -> Optional[dict]:
         return None  # the collector restarted after tonight's run
     yesterday = today - timedelta(days=1)
     from prestop_api import zamudil
-    recorded = record(yesterday, classes=zamudil.classes(yesterday))
+    ever = ever_reported(today - timedelta(days=KEEP_DAYS), yesterday)
+    recorded = record(yesterday, classes=zamudil.classes(yesterday), ever=ever)
     # Days rolled up before this ran (the first night after a deploy): from the timetable of that date, without the
     # planned classes (zamudil keeps no copy of past dates). A few a night, so the gate counts the stored days.
     for day in backlog(today)[:BACKFILL]:
-        recorded[day.isoformat()] = record(day)
+        recorded[day.isoformat()] = record(day, ever=ever)
+    since = today - timedelta(days=KEEP_DAYS)
+    for day in TrainCoverDay.objects.filter(day__gte=since, unreported__isnull=True).order_by('-day').values_list('day', flat=True)[:RECOUNT]:
+        try:
+            recorded[f'{day.isoformat()} unreported'] = recount(day, ever)
+        except Exception as e:  # noqa: BLE001 - OTP may no longer have the day: it keeps the share it had
+            logger.info('Recount of %s skipped: %r', day, e)
     TrainLinkDay.objects.filter(day__lt=today - timedelta(days=KEEP_DAYS)).delete()
     TrainCoverDay.objects.filter(day__lt=today - timedelta(days=KEEP_DAYS)).delete()
     return {'recorded': recorded, **learn(today)}
@@ -640,7 +695,7 @@ SHORT_TRAIN = 3     # stops: "short" in the list of trains never reported
 def _misses(cover: dict) -> list[str]:
     """What keeps a day from counting (`complete`): 'collector', 'reported'."""
     return [name for name, ok in (('collector', cover['collector_seconds'] >= stays.FULL_DAY),
-                                  ('reported', cover['trains'] and cover['reported'] >= COVERED * cover['trains'])) if not ok]
+                                  ('reported', covered(cover))) if not ok]
 
 
 def _estimated(day: date, runs_of) -> Optional[dict]:
@@ -651,7 +706,7 @@ def _estimated(day: date, runs_of) -> Optional[dict]:
     except Exception as e:  # noqa: BLE001 - OTP may no longer have the day: the list goes on without it
         logger.info('Timetable of %s for the status unavailable: %r', day, e)
         return None
-    cover = observe(day, runs, rollups(day))[1]
+    cover = observe(day, runs, rollups(day), ever=ever_reported(day - timedelta(days=KEEP_DAYS), day))[1]
     seconds = RecorderDay.objects.filter(day=day, feed='*').values_list('seconds', flat=True).first() or 0
     return {**cover, 'collector_seconds': seconds}
 
@@ -691,7 +746,7 @@ def status(today: Optional[date] = None, runs_of=None) -> dict:
     today = today or trips.service_day()
     runs_of = runs_of or _runs
     since = today - timedelta(days=KEEP_DAYS)
-    covers = list(TrainCoverDay.objects.filter(day__gte=since, day__lt=today).values('day', 'trains', 'reported', 'collector_seconds'))
+    covers = list(TrainCoverDay.objects.filter(day__gte=since, day__lt=today).values('day', 'trains', 'reported', 'unreported', 'collector_seconds'))
     recorded = {c['day'] for c in covers}
     # The first look after a deploy: stored days not recorded yet, which the coming nights backfill and then count.
     recent = {today - timedelta(days=k) for k in range(1, STATUS_DAYS + 1)}
@@ -711,7 +766,7 @@ def status(today: Optional[date] = None, runs_of=None) -> dict:
     first_free = latest + timedelta(days=1) if latest else today
     earliest = opens if is_open else max(today, first_free + timedelta(days=max(0, GATE_DAYS - streak)))
 
-    days = [{'day': d, 'trains': rows[d]['trains'], 'reported': rows[d]['reported'], 'collector': rows[d]['collector_seconds'] / 86400,
+    days = [{'day': d, 'trains': rows[d]['trains'], 'reported': rows[d]['reported'], 'unreported': rows[d].get('unreported'), 'collector': rows[d]['collector_seconds'] / 86400,
              'counts': d in counted, 'recorded': d in recorded, 'misses': _misses(rows[d])} for d in sorted(recent & set(rows))]
     learned = list(TrainStay.objects.values('from_number', 'to_number', 'level'))
     levels = Counter(s['level'] for s in learned)

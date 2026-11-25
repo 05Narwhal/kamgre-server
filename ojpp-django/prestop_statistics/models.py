@@ -273,6 +273,9 @@ class TrainCoverDay(models.Model):
     trains = models.IntegerField(default=0)
     reported = models.IntegerField(default=0)
     collector_seconds = models.IntegerField(default=0)
+    # Of `trains`, the ones SŽ reported on none of the stored days (international trains, mostly): left out of the
+    # share the gate asks for (B2). Null: recorded before, so the nightly backfill records the day again.
+    unreported = models.IntegerField(null=True, default=None)
 
 
 class TrainStay(models.Model):

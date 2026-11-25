@@ -50,7 +50,7 @@ class Command(BaseCommand):
             return
         today = trips.service_day()
         since, until = stays.window(today)
-        days = stays.complete_days(since, until)
+        days, quiet = stays.complete_days(since, until), stays.quiet_days(since, until)
         learned = stays.learned_on()
         rows = list(StayDeparture.objects.values('feed', 'route_id', 'kind', 'origin', 'level'))
         counts: dict[str, Counter] = defaultdict(Counter)
@@ -66,11 +66,11 @@ class Command(BaseCommand):
             return
         self.stdout.write(f'\n{"feed":<10} {"days":>4} {"run":>5}  {"gate":<30} {"sure":>5} {"likely":>6} {"depot":>6}')
         for f in feeds:
-            got = days.get(f, set())
+            got, idle = days.get(f, set()), quiet.get(f, set())
             run, d = 0, until
-            while d in got:
-                run, d = run + 1, d - timedelta(days=1)
-            opened = stays.gate_opens(got)
+            while d in got or d in idle:  # days without service are passed over (stays.quiet_days)
+                run, d = run + (d in got), d - timedelta(days=1)
+            opened = stays.gate_opens(got, idle)
             gate = f'open since {opened}' if opened else f'opens {today + timedelta(days=stays.GATE_DAYS - run)} if all count'
             c = counts.get(f, Counter())
             self.stdout.write(f'{f:<10} {len(got):>4} {run:>2}/{stays.GATE_DAYS}  {gate:<30} {c["sure"]:>5} {c["likely"]:>6} {c["depot"]:>6}')

@@ -357,3 +357,46 @@ class Joined(TestCase):
     def test_timetable_coupling(self):
         runs = {'1': run('1', ('A', 0, 0), ('B', 600, 660), ('C', 1200, 1200)), '2': run('2', ('A', 30, 30), ('B', 630, 680), ('D', 1300, 1300))}
         self.assertEqual(ts.timetable_coupled(runs), [{'trains': ('1', '2'), 'from': 'A', 'to': 'B', 'source': 'timetable'}])
+
+
+class NeverReportedTrains(TestCase):
+    """B2: trains SŽ reports on no day (international: Venezia, Zalaegerszeg, Graz ...) are left out of the share."""
+
+    # prod, `train_stays --status` 25 Nov: (day, trains, reported); never reported over the window: ~17 a day
+    PROD = [(date(2026, 11, 15), 287, 270), (date(2026, 11, 16), 612, 599), (date(2026, 11, 17), 612, 598),
+            (date(2026, 11, 18), 610, 599), (date(2026, 11, 19), 611, 599), (date(2026, 11, 20), 614, 604),
+            (date(2026, 11, 21), 275, 257), (date(2026, 11, 22), 286, 270), (date(2026, 11, 23), 612, 600),
+            (date(2026, 11, 24), 612, 599)]
+
+    def covers(self, unreported):
+        return [{'day': d, 'trains': t, 'reported': r, 'unreported': unreported(t, r), 'collector_seconds': FULL} for d, t, r in self.PROD]
+
+    def test_the_prod_weeks_weekends_count_once_never_reported_trains_are_left_out(self):
+        before = ts.complete(self.covers(lambda t, r: None))  # recorded before: the old share
+        self.assertEqual(sorted(d.day for d in before), [16, 17, 18, 19, 20, 23, 24])
+        self.assertIsNone(ts.stays.gate_opens(before))
+        after = ts.complete(self.covers(lambda t, r: t - r))  # every missing train is one SŽ never reports
+        self.assertEqual(len(after), 10)
+        self.assertEqual(ts.stays.gate_opens(after), date(2026, 11, 22))
+
+    def test_a_day_with_reportable_trains_missing_still_fails(self):
+        day = {'day': TODAY, 'trains': 287, 'reported': 250, 'unreported': 17, 'collector_seconds': FULL}
+        self.assertEqual(ts.complete([day]), set())  # 250 of 270: 92.6 %
+        self.assertEqual(ts.complete([{**day, 'reported': 0, 'unreported': 287}]), set())  # nothing to report: never counts
+
+    def test_never_reported_needs_a_week_of_history_and_ignores_trains_reported_before(self):
+        for k in range(1, 8):
+            day = TODAY - timedelta(days=k)
+            for number in ('3295', '3294', '500', '501', '700', '701', '800'):
+                TrainDay.objects.create(service_date=day, number=number, stops=[{'delay': 60 if (number != '800' or k == 3) else None}])
+            TrainDay.objects.create(service_date=day, number='801', stops=[{'delay': None}])
+        self.assertIsNone(ts.ever_reported(TODAY - timedelta(days=7), TODAY - timedelta(days=2)))  # 6 days: too little
+        ever = ts.ever_reported(TODAY - timedelta(days=7), TODAY)
+        self.assertNotIn('801', ever)
+        self.assertIn('800', ever)  # reported once: missing today counts against the day
+        rows = {n: {'stops': stops([60])} for n in RUNS if n not in ('800', '801')}
+        cover = ts.observe(TODAY, RUNS, rows, ever=ever)[1]
+        self.assertEqual((cover['trains'], cover['reported'], cover['unreported']), (8, 6, 1))
+        self.assertFalse(ts.covered(cover))  # 6 of 7: 800 is one SŽ does report
+        rows['800'] = {'stops': stops([60])}
+        self.assertTrue(ts.covered(ts.observe(TODAY, RUNS, rows, ever=ever)[1]))  # 7 of 7, 801 left out

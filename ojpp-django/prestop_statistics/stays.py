@@ -19,7 +19,8 @@ Levels, per departure and kind of day, from the observations before the day (onl
 - likely: at least LIKELY_DAYS days and LIKELY_SHARE;
 - otherwise none: a normal change.
 
-Gate: nothing is learned for a feed before it has GATE_DAYS consecutive complete days, so nothing is shown either (no
+Gate: nothing is learned for a feed before it has GATE_DAYS complete days in a row (days it has no service, such as a
+town's weekends, are passed over: quiet_days), so nothing is shown either (no
 stays and no delay carried over from the previous trip). Live check: every night yesterday's stays are compared with
 what the vehicles did (StayCheck); a feed whose `sure` missed is capped at `likely` for DEMOTE_DAYS. The collector
 runs all of it once a night (nightly), after the service day has ended. Rail has no vehicle feed, so no trains.
@@ -84,25 +85,57 @@ def _feed(trip_id: str) -> str:
 
 # ---------------------------------------------------------------- the gate
 
+def _recorded(since: date, until: date) -> tuple[set[date], list[tuple]]:
+    """(the days the collector ran at least FULL_DAY, [(day, feed, seconds)] of the feeds)."""
+    rows = list(RecorderDay.objects.filter(day__range=(since, until), version__gte=blocks.RECORDER_VERSION).values_list('day', 'feed', 'seconds'))
+    return {d for d, f, s in rows if f == '*' and s >= FULL_DAY}, [r for r in rows if r[1] != '*']
+
+
 def complete_days(since: date, until: date) -> dict[str, set[date]]:
     """feed -> the days in [since, until] that count: the collector ran at least FULL_DAY and the feed had vehicles."""
-    rows = list(RecorderDay.objects.filter(day__range=(since, until), version__gte=blocks.RECORDER_VERSION).values_list('day', 'feed', 'seconds'))
-    collector = {d for d, f, s in rows if f == '*' and s >= FULL_DAY}
+    collector, rows = _recorded(since, until)
     out: dict[str, set[date]] = defaultdict(set)
     for d, f, s in rows:
-        if f != '*' and d in collector and s >= FEED_SECONDS:
+        if d in collector and s >= FEED_SECONDS:
             out[f].add(d)
     return out
 
 
-def gate_opens(days: set[date]) -> Optional[date]:
-    """The day after the first GATE_DAYS consecutive complete days, or None."""
-    run, prev = 0, None
-    for d in sorted(days):
-        run = run + 1 if prev and d - prev == timedelta(days=1) else 1
-        prev = d
-        if run >= GATE_DAYS:
-            return d + timedelta(days=1)
+def quiet_days(since: date, until: date) -> dict[str, set[date]]:
+    """feed -> the days in [since, until] it had no service to observe: the collector ran FULL_DAY, the feed had
+    vehicles for less than FEED_SECONDS, and on most of the collector's full days of that kind (workday, Saturday,
+    Sunday/holiday) it had none either (Celje's and Murska Sobota's buses do not run at weekends). A day of a kind the
+    feed usually runs on, or a day the collector was down, is not quiet: it still breaks the run."""
+    collector, rows = _recorded(since, until)
+    ran: dict[str, set[date]] = defaultdict(set)
+    for d, f, s in rows:
+        if d in collector and s >= FEED_SECONDS:
+            ran[f].add(d)
+    kinds: dict[str, set[date]] = defaultdict(set)
+    for d in collector:
+        kinds[day_kind(d)].add(d)
+    out: dict[str, set[date]] = {}
+    for f in {f for _, f, _ in rows}:
+        idle = {k for k, ds in kinds.items() if len(ds & ran[f]) * 2 < len(ds)}
+        out[f] = {d for d in collector - ran[f] if day_kind(d) in idle}
+    return out
+
+
+def gate_opens(days: set[date], quiet: Optional[set[date]] = None) -> Optional[date]:
+    """The day after the first GATE_DAYS complete days in a row, or None. A `quiet` day (no service to observe, see
+    quiet_days) is passed over: it neither counts nor breaks the run; any other day that is not complete breaks it."""
+    if not days:
+        return None
+    quiet = quiet or set()
+    run, d, last = 0, min(days), max(days)
+    while d <= last:
+        if d in days:
+            run += 1
+            if run >= GATE_DAYS:
+                return d + timedelta(days=1)
+        elif d not in quiet:
+            run = 0
+        d += timedelta(days=1)
     return None
 
 
@@ -302,8 +335,8 @@ def window(day: date) -> tuple[date, date]:
 def gather(day: date) -> tuple[dict, dict, dict]:
     """(complete days per feed, gate opening per feed, histories) from the window before `day`."""
     since, until = window(day)
-    days = complete_days(since, until)
-    opens = {feed: gate_opens(d) for feed, d in days.items()}
+    days, quiet = complete_days(since, until), quiet_days(since, until)
+    opens = {feed: gate_opens(d, quiet.get(feed)) for feed, d in days.items()}
     obs = observations(days, learn_depots(since, until), feeds_seen_between(since, until))
     return days, opens, histories(obs)
 
