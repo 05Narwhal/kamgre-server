@@ -1,0 +1,10 @@
+[Unit]
+Description=Morning shape pass at 03:20, after the SŽ readers and the city timetable check (a missed night is skipped)
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+RandomizedDelaySec=5min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

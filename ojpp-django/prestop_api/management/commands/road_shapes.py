@@ -6,6 +6,12 @@
     manage.py road_shapes --max-requests 200      # stop after this many Valhalla requests (re-run to continue)
     manage.py road_shapes --dry-run               # count only, no requests
     manage.py road_shapes --match --gap 0         # also map-match every feed shape (local router: no gap)
+    manage.py road_shapes --morning               # the daily pass before people travel (prestop-shapes.timer)
+
+`--morning` routes the legs of today's and tomorrow's replacement buses first (the feed's and the ones made up from
+notices and SŽ's timetables), then the bus legs of pass 2, then works out the shape of every train pattern the feed
+gives only its stops for (raillines.shape_from_others, railtrack.along; kept in RoadLeg, no router). It skips pass 1:
+shape_checks.json is read-only on the server and each deploy replaces it.
 
 Two passes, both resumable and rate-limited (one request per `--gap` seconds, 10 locations each):
 1. Check: where a feed shape's points lie more than roads.SPARSE metres apart between two stops, the
@@ -23,18 +29,20 @@ A re-run with nothing new makes no Valhalla request.
 """
 import json
 import time
+from datetime import timedelta
 
 import requests
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
-from prestop_api import geometry, mapping, roads, stopfix
-from prestop_api.trips import _corrected
+from prestop_api import closures, geometry, mapping, raillines, roads, scheduled, stopfix
+from prestop_api.trips import _corrected, road_shape
 from prestop_api.upstream import USER_AGENT, otp
 
 ROUTES_Q = '{ routes(transportModes: [BUS, COACH]) { gtfsId } }'
 PATTERNS_Q = '''query($ids: [String]) { routes(ids: $ids) { gtfsId shortName mode agency { gtfsId }
   patterns { code stops { gtfsId name lat lon } patternGeometry { points } } } }'''
+RAIL_Q = '{ routes(transportModes: [RAIL]) { patterns { code stops { gtfsId name lat lon } patternGeometry { points } } } }'
 CHUNK = 100
 
 
@@ -48,21 +56,27 @@ class Command(BaseCommand):
         parser.add_argument('--gap', type=float, default=1.0, help='seconds between Valhalla requests')
         parser.add_argument('--dry-run', action='store_true', help='only count what would be requested')
         parser.add_argument('--match', action='store_true', help='also map-match every feed shape onto the roads')
+        parser.add_argument('--morning', action='store_true', help="the daily pass: replacement buses of today and tomorrow, bus legs, train shapes")
 
-    def handle(self, *args, routes='', feeds='', max_requests=0, gap=1.0, dry_run=False, match=False, **options):
+    def handle(self, *args, routes='', feeds='', max_requests=0, gap=1.0, dry_run=False, match=False, morning=False, **options):
         if not settings.PRESTOP_VALHALLA_URL and not dry_run:
             self.stderr.write('PRESTOP_VALHALLA_URL is empty: nothing can be routed.')
             return
         self.budget, self.gap, self.dry, self.requests = max_requests, gap, dry_run, 0
         self.session = requests.Session()
         self.session.headers['User-Agent'] = USER_AGENT
+        missing_days = self._replacements() if morning else []  # first: the request budget must not run out before them
         patterns = self._patterns([r for r in routes.split(',') if r], [f for f in feeds.split(',') if f])
         self.stdout.write(f'{len(patterns)} bus patterns')
         if match:
             self._match(patterns)
-        checked = self._check(patterns)
+        checked = roads.checks() if morning else self._check(patterns)
         self._route(patterns, checked)
+        if morning:
+            self._rail()
         self.stdout.write(f'done: {self.requests} Valhalla requests')
+        if missing_days:
+            raise CommandError(f'no timetable for {", ".join(missing_days)}: its replacement buses are not routed')
 
     # ------------------------------------------------------------ input
 
@@ -81,6 +95,49 @@ class Command(BaseCommand):
                         out.append({'route': route['gtfsId'], 'code': p['code'], 'stops': stops,
                                     'coords': [[s['lon'], s['lat']] for s in stops] if replacement else coords, 'replacement': replacement})
         return out
+
+    # ------------------------------------------------------------ morning: replacement buses, trains
+
+    def _replacements(self) -> list[str]:
+        """Route the legs of today's and tomorrow's replacement buses; returns the days without a plan."""
+        today = scheduled.service_day()
+        runs, missing = {}, []
+        for day in (today, today + timedelta(days=1)):
+            plan = scheduled.day_plan(day, wait=120, refresh=True)
+            if not plan:
+                missing.append(day.isoformat())
+                continue
+            stamp = day.strftime('%Y%m%d')
+            buses = [b['stops'] for b in plan['synthetic'] if b['serviceDate'] == stamp]
+            # The feed's own replacement buses call at the stations; they are drawn from SŽ's replacement stops.
+            buses += [closures.relocate(t['stops']) for trips in plan['trips'].values() for t in trips
+                      if mapping.is_replacement(t['route']) and t['id'] not in plan['suppressed'] and closures.service_date(t) == stamp]
+            for stops in buses:
+                stops = [s for s in stops if s.get('lat') is not None]
+                if len(stops) >= 2:
+                    runs[tuple(roads.leg_key(a, b) for a, b in zip(stops, stops[1:]))] = stops
+        self.stdout.write(f'{len(runs)} replacement bus patterns today and tomorrow')
+        self._route([{'stops': stops, 'coords': [[s['lon'], s['lat']] for s in stops]} for stops in runs.values()], {},
+                    listed=self.dry)
+        return missing
+
+    def _rail(self):
+        """The shape of every train pattern the feed gives only its stops for, as the trip page works it out."""
+        raillines.feed_shapes.get()  # the other trains' shapes shape_from_others borrows
+        sparse = straight = 0
+        for route in otp().query(RAIL_Q, timeout=(5, 90))['routes']:
+            for p in route.get('patterns') or []:
+                stops = [s for s in _corrected(p.get('stops') or []) if s.get('lat') is not None]
+                coords = mapping.decode_polyline((p.get('patternGeometry') or {}).get('points') or '')
+                if len(stops) < 2 or len(geometry.trim_spurs(coords)) > raillines.SPARSE * len(stops):
+                    continue
+                sparse += 1
+                if not raillines.shape_from_others(stops):
+                    straight += 1
+                    self.stdout.write(f'rail: no train has a shape for {p["code"]} {stops[0].get("name")} – {stops[-1].get("name")}')
+                if not self.dry:
+                    road_shape(coords, stops, 'rail', None)
+        self.stdout.write(f'rail: {sparse} patterns without a feed shape, {straight} with none from another train either')
 
     def _spend(self) -> bool:
         """Whether another request may be sent (and wait the gap before it)."""
@@ -148,7 +205,7 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------ pass 2: route bad legs
 
-    def _route(self, patterns: list[dict], checked: dict):
+    def _route(self, patterns: list[dict], checked: dict, listed: bool = False):
         runs, keys = [], set()
         for p in patterns:
             bad = roads.bad_segments(p['coords'], p['stops'], checked)
@@ -174,6 +231,11 @@ class Command(BaseCommand):
                     windows.append(window)
                     missing -= wanted
         self.stdout.write(f'route: {len(keys)} legs to replace, {len(cached)} already stored, {len(windows)} requests')
+        if listed:
+            pairs = {(a.get('name') or '?', b.get('name') or '?') for stops in runs for a, b in zip(stops, stops[1:])
+                     if roads.leg_key(a, b) in keys - cached}
+            for a, b in sorted(pairs):
+                self.stdout.write(f'  to route: {a} → {b}')
         if self.dry:
             return
         routed = 0

@@ -1,0 +1,25 @@
+[Unit]
+Description=Prestop morning shape pass: road shapes for replacement buses and bus legs, rail shapes for trains without one
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=prestop
+Group=prestop
+EnvironmentFile=/etc/prestop/prestop.env
+WorkingDirectory=/opt/prestop/app
+# The public FOSSGIS Valhalla, one request a second, each leg once ever (RoadLeg table); what a night's cap leaves
+# over is routed the next night.
+ExecStart=/opt/prestop/venv/bin/python manage.py road_shapes --morning --gap 1 --max-requests 1500
+# Low priority next to the API on the free A1 VM, like prestop-nightly; done before people travel (03:20 + 60 min).
+# Two days' timetables and every bus pattern are in memory at once (about 1.3 GB at the peak).
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=60%
+MemoryMax=2G
+TimeoutStartSec=60min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
