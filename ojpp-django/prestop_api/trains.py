@@ -57,8 +57,9 @@ def runs_on(day: date) -> list[dict]:
 def find_run(number: str, day: date) -> Optional[dict]:
     """The run of train `number` that day: of an international train's legs the one in Slovenia (abroad.main_run); a
     number listed on two routes (LP 4208) is one train, the first found."""
-    runs = [t for t in runs_on(day) if number_of(t['route']) == number]
-    return (abroad.main_run(runs) if len(runs) > 1 else None) or next(iter(runs), None)
+    every = runs_on(day)
+    runs = [t for t in every if number_of(t['route']) == number]
+    return abroad.carrier(runs, every) or (abroad.main_run(runs) if len(runs) > 1 else None) or next(iter(runs), None)
 
 
 def vehicle_of(number: str, trip: Optional[dict] = None) -> Optional[dict]:
@@ -80,6 +81,10 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
         return None
     found = trips.load_trips([run['id']], day).get(run['id'])
     trip = trips.build_trip(found, {}, geometry=False) if found else None  # polled: the shape comes once, from /trips
+    carried = number_of(run['route']) != number  # through coaches in another train (abroad.carrier): their own ends
+    own = next((t for t in runs_on(day) if number_of(t['route']) == number), None) if carried else None
+    if trip and own:
+        trip = trips.as_coaches(trip, mapping.route_name(own['route']), day)
     if trip and trip['stops']:
         from . import replacement
         # the stretches a bus runs instead that day, from the plan boards, lines and journeys use
@@ -98,9 +103,12 @@ def train(number: str, day: date, lang: str) -> Optional[dict]:
                   and (a['_to'] is None or a['_to'] >= start) and leg_alerts.on_listed_day(a, start, end)]
     except UpstreamError:
         alerts = []
-    category, _ = sz.train_parts(mapping.route_name(run['route']))
-    return {'number': number, 'name': mapping.route_name(run['route']) or number, 'category': category, 'date': day.isoformat(),
-            'routeId': route_id, 'tripId': run['id'], 'trip': trip, 'vehicle': vehicle_of(number, trip) if day == scheduled.service_day() else None,
+    name = mapping.route_name((own or run)['route'])
+    category, _ = sz.train_parts(name)
+    # through coaches: the line and the train on the map are the carrier's (its route has their stops here)
+    return {'number': number, 'name': name or number, 'category': category, 'date': day.isoformat(),
+            'routeId': route_id, 'tripId': run['id'], 'trip': trip,
+            'vehicle': vehicle_of(number_of(run['route']) or number, trip) if day == scheduled.service_day() else None,
             'alerts': alerts, **({'trainClass': planned} if (planned := zamudil.class_of(number, day)) else {}), **stay_links(number, day, run)}
 
 

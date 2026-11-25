@@ -154,9 +154,35 @@ def main_run(runs: Sequence[dict]) -> Optional[dict]:
 
 
 def legs_of(route_name: Optional[str], trips: Sequence[dict]) -> list[dict]:
-    """The timetable's trips (scheduled._trips_for) of this train's number."""
+    """The timetable's trips (scheduled._trips_for) of this train's number; for through coaches with no leg in
+    Slovenia of their own, also the train that carries them here (carrier)."""
     number = _number(route_name)
-    return [t for t in trips if number and t['route'].get('mode') == 'RAIL' and _number(_route_name(t['route'])) == number]
+    own = [t for t in trips if number and t['route'].get('mode') == 'RAIL' and _number(_route_name(t['route'])) == number]
+    ride = carrier(own, trips)
+    return [*own, ride] if ride else own
+
+
+def carrier(legs: Sequence[dict], trips: Sequence[dict]) -> Optional[dict]:
+    """The train that carries a number's through coaches across Slovenia: the feed gives EN 40414 (Zagreb - Zürich)
+    only its legs abroad, Zagreb - Dobova and Jesenice - Villach, and runs it here as EN 414. A run in Slovenia that
+    leaves the station one of `legs` ends at and reaches the station another starts from, each within MAX_GAP; both
+    ends must match, so a train that only reaches a border station (R 4437 to Šentilj) rides in nothing. None when
+    `legs` already have a run in Slovenia, or none fits."""
+    legs = [t for t in legs if t.get('stops')]
+    if not legs or any(_inside(t) > 1 for t in legs):
+        return None
+    ids = {t['id'] for t in legs}
+    best, gap = None, None
+    for run in trips:
+        if run['route'].get('mode') != 'RAIL' or run['id'] in ids or len(run.get('stops') or ()) < 2 or _inside(run) < 2:
+            continue
+        start, leave = run['stops'][0]['gtfsId'], run['scheduledDepartures'][0]
+        end, reach = run['stops'][-1]['gtfsId'], run['scheduledArrivals'][-1]
+        into = [leave - t['scheduledArrivals'][-1] for t in legs if t['stops'][-1]['gtfsId'] == start and 0 <= leave - t['scheduledArrivals'][-1] <= MAX_GAP]
+        out = [t['scheduledDepartures'][0] - reach for t in legs if t['stops'][0]['gtfsId'] == end and 0 <= t['scheduledDepartures'][0] - reach <= MAX_GAP]
+        if into and out and (gap is None or min(into) + min(out) < gap):
+            best, gap = run, min(into) + min(out)
+    return best
 
 
 def _joined(run: dict, legs: Sequence[dict]) -> tuple[list[dict], list[dict]]:
@@ -269,7 +295,10 @@ def learn(trips: Sequence[dict]) -> None:
         number = _number(_route_name(t['route'])) if t['route'].get('mode') == 'RAIL' else None
         if number:
             days.setdefault((t['serviceDay'], number), []).append(t)
+    runs = [t for t in trips if t['route'].get('mode') == 'RAIL' and _inside(t) > 1]
     for (_, number), legs in sorted(days.items(), key=lambda item: item[0][0]):
+        ride = carrier(legs, runs)  # through coaches: the train they ride in here
+        legs = [*legs, ride] if ride else legs
         run = main_run(legs)
         if run:
             whole = whole_run(run, [*legs, *map(_a_day_earlier, legs)])  # a run just after midnight goes on from last evening's leg

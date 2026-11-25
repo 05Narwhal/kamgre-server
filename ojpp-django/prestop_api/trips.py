@@ -421,6 +421,15 @@ def build_trip(entry: dict, typical: dict[str, float], geometry: bool = True, dw
     }
 
 
+def as_coaches(trip: dict, route_name: str, day: date) -> dict:
+    """`trip`, a carrier's run (abroad.carrier), as through coaches `route_name` riding in it read it: the carrier's
+    stops in Slovenia, the coaches' own stops abroad, ends and name."""
+    kept = {k: v for k, v in trip.items() if k not in ('stopsBefore', 'stopsAfter', 'comesFrom', 'longName')}
+    stops = trip.get('stops') or []
+    static = {'routeName': route_name, 'id': trip['id'], 'destination': stops[-1]['name'] if stops else trip.get('destination')}
+    return {**kept, 'destination': static['destination'], **_outside_slovenia(static, stops, day)}
+
+
 def _outside_slovenia(static: dict, stops: list[dict], day: date) -> dict:
     """An international train's whole run (abroad.whole_run): its stops abroad as text beside `stops`, its real ends
     and the name they make. From the timetable in memory, never waiting: until it's there, the table's ends."""

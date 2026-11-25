@@ -229,6 +229,29 @@ class WholeRunTests(SimpleTestCase):
                 for leg in legs:
                     self.assertEqual(abroad.train_ends(leg['route']['shortName'], 'Maribor', 'Ljubljana'), (comes, goes))
 
+    def test_through_coaches_ride_in_the_train_that_carries_them(self):
+        # The feed of 2026-11-25: EN 40414 (Zagreb - Zürich coaches) has only its legs abroad, Zagreb - Dobova and
+        # Jesenice - Villach; through Slovenia it rides in EN 414. EN 40465 comes back in EN 415.
+        carrier = _leg('IJPP:453054', 'EN 414', ('Dobova', 1219), ('Ljubljana', 1300), ('Jesenice', 1326))
+        own = [_leg('IJPP:INTL-1', 'EN 40414', ('Zagreb Glavni kolodvor', 1179), ('Zaprešić', 1191), ('Dobova', 1204)),
+               _leg('IJPP:INTL-2', 'EN 40414', ('Jesenice', 1337), ('Villach Hauptbahnhof', 1373), ('Stuttgart Hauptbahnhof', 1900))]
+        other = _leg('IJPP:9', 'LPV 2200', ('Dobova', 1210), ('Ljubljana', 1320))  # leaves Dobova too, never reaches Jesenice
+        timetable = [carrier, other, *own, _leg('IJPP:INTL-3', 'EN 414', ('Jesenice', 1337), ('Villach Hauptbahnhof', 1373))]
+        self.assertIs(abroad.carrier(own, timetable), carrier)
+        legs = abroad.legs_of('EN 40414', timetable)
+        run = abroad.main_run(legs)
+        self.assertIs(run, carrier)
+        whole = abroad.whole_run(run, legs)
+        self.assertEqual([r['name'] for r in whole['before']], ['Zagreb Glavni kolodvor', 'Zaprešić'])
+        self.assertEqual([r['name'] for r in whole['after']], ['Villach Hauptbahnhof', 'Stuttgart Hauptbahnhof'])
+        abroad.learn(timetable)
+        self.assertEqual(abroad.train_ends('EN 40414'), ('Zagreb', 'Stuttgart'))
+        self.assertEqual(abroad.legs_of('EN 414', timetable)[0]['id'], 'IJPP:453054')  # the carrier's own legs stay its own
+        # A train that only reaches the border station (R 4437, Spielfeld - Šentilj) rides in nothing that leaves from there.
+        onward = _leg('IJPP:5', 'RG 873', ('Šentilj', 1210), ('Maribor', 1220))
+        self.assertEqual(abroad.legs_of('R 4437', [onward, _leg('IJPP:INTL-4', 'R 4437', ('Spielfeld-Straß', 1150), ('Šentilj', 1205))])[0]['id'], 'IJPP:INTL-4')
+        self.assertEqual(len(abroad.legs_of('R 4437', [onward, _leg('IJPP:INTL-4', 'R 4437', ('Spielfeld-Straß', 1150), ('Šentilj', 1205))])), 1)
+
     def test_a_stop_abroad_is_text_only_by_the_timetable(self):
         legs = FAMILIES['EC out'][0]
         row = abroad.whole_run(legs[1], legs)['after'][-1]
