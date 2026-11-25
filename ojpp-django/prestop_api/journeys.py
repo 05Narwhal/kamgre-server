@@ -59,7 +59,7 @@ PLAN_Q = '''query($origin: PlanLabeledLocationInput!, $destination: PlanLabeledL
         from { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } }
           rentalVehicle { vehicleId vehicleType { formFactor } rentalNetwork { networkId } } }
         to { name lat lon stop { gtfsId platformCode } vehicleRentalStation { stationId rentalNetwork { networkId } } vehicleParking { name } }
-        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId tripHeadsign blockId departureStoptime { scheduledDeparture } stoptimes { stop { gtfsId name } } }
+        route { gtfsId shortName longName mode agency { gtfsId } } headsign trip { gtfsId directionId tripHeadsign blockId departureStoptime { scheduledDeparture } stoptimes { stop { gtfsId name } } }
         legGeometry { points } alerts { id } intermediatePlaces { name lat lon stop { gtfsId } } } } } } }'''
 
 
@@ -1090,6 +1090,23 @@ def within_time(journeys: list[dict], req: dict) -> list[dict]:
     return [j for j in journeys if fits(j)]
 
 
+def _ghost_verdict(l: dict, route: dict, live: bool) -> Optional[str]:
+    """gps_habit.trip_verdict for a ride. Its service day: the trip left its first stop `start` s after that day
+    began, before this leg starts, so the leg's start less `start` falls on that day (a trip runs well under 24 h)."""
+    from . import gps_habit
+    trip = l.get('trip') or {}
+    start = (trip.get('departureStoptime') or {}).get('scheduledDeparture')
+    if not isinstance(start, int):
+        return None
+    day = datetime.fromtimestamp(_ts(l['start']['scheduledTime']) - start, LOCAL).date()
+    return gps_habit.trip_verdict((route.get('agency') or {}).get('gtfsId'), route.get('shortName'), trip.get('directionId'), start, day, live)
+
+
+def often_missing_last(journeys: list[dict]) -> list[dict]:
+    """Journeys riding a trip that often does not run (`oftenMissing`, B1) after the others, each side in its order."""
+    return sorted(journeys, key=lambda j: any(leg.get('oftenMissing') for leg in j['legs']))
+
+
 def by_arrival(journeys: list[dict]) -> list[dict]:
     """Insane order: earliest arrival first, then the latest departure."""
     return sorted(journeys, key=lambda j: (_ts(j['effectiveArrival']), -_ts(j['effectiveDeparture'])))
@@ -1124,7 +1141,7 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
         # Still a walk from or to the middle: the journey uses another stop ("Kranj Globus"), not the town's stations.
         stray = len(raw) > 1 and ((from_town and not raw[0].get('transitLeg')) or (to_town and not raw[-1].get('transitLeg')))
         key = hashlib.sha1('|'.join(f'{(l.get("trip") or {}).get("gtfsId")}@{l["start"]["scheduledTime"]}' for l in raw).encode()).hexdigest()[:16]
-        legs, meta = [], []
+        legs, meta, ghost = [], [], False
         raw = [_placed_leg(l, updates) if l.get('transitLeg') else l for l in raw]
         for i, l in enumerate(raw):
             transit = bool(l.get('transitLeg'))
@@ -1166,6 +1183,13 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             })
             if transit and mapping.is_replacement(route):
                 legs[-1]['replacement'] = True
+            # A listed trip that almost never runs (gps_habit.trip_verdict, B1): no journey rides it until live data comes.
+            verdict = _ghost_verdict(l, route, bool(start_est) or (l.get('trip') or {}).get('gtfsId') in updates) if transit else None
+            if verdict == 'ghost':
+                ghost = True
+                break
+            if verdict == 'irregular':
+                legs[-1]['oftenMissing'] = True
             if transit:
                 legs[-1]['alertIds'].extend(_matched_alerts(l, legs[-1], alerts))
                 # OTP attaches a route's notices for their whole window and the whole line; keep those for
@@ -1205,6 +1229,8 @@ def build_journeys(data: dict, req: dict, alerts: list[dict], plan_for=None) -> 
             meta.append({'transit': transit, 'interline': bool(l.get('interlineWithPreviousLeg')), 'duration': l.get('duration') or 0,
                          'realtime': bool(start_est), 'platform': platform, 'blockId': trip.get('blockId'),
                          'tripStart': (trip.get('departureStoptime') or {}).get('scheduledDeparture')})
+        if ghost:
+            continue
         # Contract 2: live, the vehicle's previous trip, or how late the departure usually is (predictions.py).
         predictions.annotate(legs, raw)
         if plan_for:

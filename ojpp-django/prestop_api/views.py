@@ -582,6 +582,7 @@ def journeys(request):
         from . import pricing
         result = [pricing.price_journey(j, req['priceProfile'], language(request)) for j in result]
         result = pricing.rank(pricing.member_rides(result, req), req)
+    result = planner.often_missing_last(result)  # B1: a bus that often does not run is the last resort
     if not result and errors:
         codes = {e.get('code') for e in errors}
         if codes & {'OUTSIDE_BOUNDS', 'LOCATION_NOT_FOUND'}:
@@ -989,7 +990,7 @@ def line_detail(request, route_id):
     line = trips.load_line(route_id, _day_param(request))
     if not line:
         raise ApiError(404, 'LINE_NOT_FOUND', 'This line is not in the current timetable.')
-    line = _with_final_delays(line)
+    line = without_ghosts(_with_final_delays(line))
     # Contract 4: the line's group, what sets it apart, and the other variants of the group.
     grouped = {**variants.of(line['id']), 'variants': variants.siblings(line['id'])}
     patterns = _dense(line['patterns'])
@@ -1000,6 +1001,30 @@ def line_detail(request, route_id):
         if runs is not None:
             extra['replacedRuns'] = runs
     return envelope({**line, **grouped, 'patterns': patterns, **extra}, 'scheduled', used=['otp:timetables'])
+
+
+def without_ghosts(line: dict, updates: Optional[dict] = None) -> dict:
+    """The line screen's departures through gps_habit.trip_verdict (B1): a trip that almost never runs is left out
+    until live data for it comes, one that often does not run gets `oftenMissing`. The cached line is not changed."""
+    if gps_habit.ghost_mode() == 'off' or line.get('mode') == 'rail':
+        return line
+    if updates is None:
+        from . import trainlive
+        updates = trainlive.trip_updates()
+    day = date.fromisoformat(line['serviceDate'])
+    began = datetime.combine(day, datetime.min.time(), trips.LJUBLJANA).timestamp()  # OTP's start times count from here
+    patterns = []
+    for p in line['patterns']:
+        direction = int(p['directionId']) if p.get('directionId') in ('0', '1') else None
+        kept = []
+        for d in p.get('departures') or []:
+            start = round(datetime.fromisoformat(d['departure']).timestamp() - began)
+            v = gps_habit.trip_verdict(line.get('operatorId'), line.get('name'), direction, start, day, d['tripId'] in updates)
+            if v != 'ghost':
+                kept.append({**d, 'oftenMissing': True} if v == 'irregular' else d)
+        changed = kept != (p.get('departures') or [])
+        patterns.append({**p, 'departures': kept, 'tripCount': len(kept)} if changed else p)
+    return {**line, 'patterns': patterns}
 
 
 def _replaced_runs(patterns: list[dict], day: date) -> Optional[list[dict]]:

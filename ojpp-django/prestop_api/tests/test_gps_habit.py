@@ -486,3 +486,48 @@ class StoredVerdictTests(SimpleTestCase):
         with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path):
             s = gps_habit.summary(MONDAY_NOON)
         self.assertEqual((s['mode'], s['learnedAt'], s['ghosts']), ('hide', '2026-11-24', 1))
+
+    def with_irregular_1330(self):
+        body = self.learned()
+        body['slots'].append({'operator': ARRIVA, 'name': 'A6343', 'direction': 0, 'kind': 'w', 'start': 13 * 3600 + 1800,
+                              'verdict': 'irregular', 'rate': 0.4, 'days': 10, 'judgedAt': '2026-11-24'})
+        self.store(body)
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_the_planner_drops_a_ghost_ride_and_puts_an_irregular_one_last(self):
+        from prestop_api import journeys
+        self.with_irregular_1330()
+
+        def leg(start, leaves):  # a ride boarded `leaves` s into its service day, its trip leaving its first stop at `start`
+            return {'trip': {'gtfsId': 'IJPP:t', 'directionId': 0, 'departureStoptime': {'scheduledDeparture': start}},
+                    'start': {'scheduledTime': mapping.iso(DAY + leaves)}}
+        route = {'shortName': 'A6343', 'agency': {'gtfsId': ARRIVA}}
+        with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path), mock.patch('time.time', return_value=MONDAY_NOON):
+            self.assertEqual(journeys._ghost_verdict(leg(8 * 3600 + 2700, 9 * 3600 + 600), route, False), 'ghost')
+            self.assertIsNone(journeys._ghost_verdict(leg(8 * 3600 + 2700, 9 * 3600 + 600), route, True))
+            self.assertEqual(journeys._ghost_verdict(leg(13 * 3600 + 1800, 14 * 3600), route, False), 'irregular')
+            self.assertIsNone(journeys._ghost_verdict(leg(8 * 3600 + 2700, 9 * 3600 + 600), {**route, 'shortName': 'A6345'}, False))
+        odd, fine = {'id': 'odd', 'legs': [{'oftenMissing': True}]}, {'id': 'fine', 'legs': [{}]}
+        self.assertEqual([j['id'] for j in journeys.often_missing_last([odd, fine, {**fine, 'id': 'fine2'}])], ['fine', 'fine2', 'odd'])
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_the_line_page_drops_a_ghost_time_and_labels_an_irregular_one(self):
+        from prestop_api import views
+        self.with_irregular_1330()
+        at = lambda s: mapping.iso(DAY + s)
+        line = {'id': LESCE, 'name': 'A6343', 'operatorId': ARRIVA, 'mode': 'bus', 'serviceDate': '2026-11-24',
+                'patterns': [{'id': 'p0', 'directionId': '0', 'tripCount': 3, 'departures': [
+                    {'tripId': 'ghost', 'departure': at(8 * 3600 + 2700)}, {'tripId': 'odd', 'departure': at(13 * 3600 + 1800)},
+                    {'tripId': 'normal', 'departure': at(14 * 3600 + 1800)}]},
+                    {'id': 'p1', 'directionId': '1', 'tripCount': 1, 'departures': [{'tripId': 'back', 'departure': at(8 * 3600 + 2700)}]}]}
+        with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path), mock.patch('time.time', return_value=MONDAY_NOON):
+            out = views.without_ghosts(line, updates={})
+            live = views.without_ghosts(line, updates={'ghost': {}})
+        p0 = out['patterns'][0]
+        self.assertEqual([(d['tripId'], d.get('oftenMissing', False)) for d in p0['departures']], [('odd', True), ('normal', False)])
+        self.assertEqual(p0['tripCount'], 2)
+        self.assertIs(out['patterns'][1], line['patterns'][1])  # the other direction is untouched
+        self.assertEqual(len(line['patterns'][0]['departures']), 3)  # the cached line is not changed
+        self.assertEqual([d['tripId'] for d in live['patterns'][0]['departures']], ['ghost', 'odd', 'normal'])
+        with override_settings(GHOST_TRIPS='off'):
+            self.assertIs(views.without_ghosts(line, updates={}), line)
