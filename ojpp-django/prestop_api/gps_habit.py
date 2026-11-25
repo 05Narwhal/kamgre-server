@@ -206,6 +206,13 @@ def ghost_mode() -> str:
     return mode if mode in ('hide', 'mark') else 'off'
 
 
+def direction_of(value) -> Optional[int]:
+    """A slot's direction: 0 or 1, else None. OTP gives a pattern's directionId as an int (-1 when the feed has none:
+    the whole IJPP feed) and a trip's as a string (null when the feed has none), so the nightly learn (patterns) and
+    the boards and planner (trips) must both go through this, or no verdict is ever found (prod, 25 Nov: A6343)."""
+    return {0: 0, 1: 1, '0': 0, '1': 1}.get(value) if isinstance(value, (int, str)) and not isinstance(value, bool) else None
+
+
 def listing(route: dict) -> list[dict]:
     """The listed trips of an OTP `route` (ROUTE_TRIPS_Q): operator, line name, direction, start s, service dates, and
     `ends` (first and last stop names of the pattern; empty when OTP gave no stops)."""
@@ -218,7 +225,7 @@ def listing(route: dict) -> list[dict]:
             start = (t.get('departureStoptime') or {}).get('scheduledDeparture')
             if isinstance(start, int):
                 out.append({'route': route.get('gtfsId') or '', 'operator': (route.get('agency') or {}).get('gtfsId'),
-                            'name': route.get('shortName') or '', 'direction': p.get('directionId'), 'start': start,
+                            'name': route.get('shortName') or '', 'direction': direction_of(p.get('directionId')), 'start': start,
                             'dates': {datetime.strptime(d, '%Y%m%d').date() for d in t.get('activeDates') or []},
                             'ends': ends})
     return out
@@ -352,14 +359,25 @@ def learn_slots(listed, seen: dict, operator_live: dict, operators, ever, first:
 
 def judge(slots: dict, ran: dict, ghost_rate: float = GHOST_RATE) -> dict:
     """The slots that rarely run: {(operator, name, direction, kind): [(start, 'ghost' | 'irregular', rate, days)]}.
-    `ran`: ran_ever() over the LONG days; a slot never seen live itself is never judged (safety rule (a))."""
+    `ran`: ran_ever() over the LONG days. Safety rule (a): a slot never seen live itself is judged only when its line
+    (same key) has slots seen live and every one of them is a ghost (A6343: 4 of its 6 trips ran on 5–6 Nov only, the
+    other 2 never; the line does not run). On a line that runs, an unseen slot is a bus without GPS: never judged."""
     out = {}
     for key, rows in slots.items():
-        for start, runs, days in rows:
-            if not any(abs(s - start) <= SLOP for s in ran.get(key, ())):
-                continue
-            if days >= MIN_OBSERVABLE and runs / days < IRREGULAR_RATE:
-                out.setdefault(key, []).append((start, 'ghost' if runs / days <= ghost_rate else 'irregular', runs / days, days))
+        seen, unseen = [], []
+        for row in rows:
+            (seen if any(abs(s - row[0]) <= SLOP for s in ran.get(key, ())) else unseen).append(row)
+        verdicts = []
+        for start, runs, days in seen:
+            rate = runs / days if days else 1.0
+            ok = days >= MIN_OBSERVABLE and rate < IRREGULAR_RATE
+            verdicts.append((start, 'ghost' if rate <= ghost_rate else 'irregular', rate, days) if ok else None)
+        dead = bool(verdicts) and all(v and v[1] == 'ghost' for v in verdicts)
+        for start, runs, days in unseen if dead else ():
+            if days >= MIN_OBSERVABLE and runs / days <= ghost_rate:
+                verdicts.append((start, 'ghost', runs / days, days))
+        if any(verdicts):
+            out[key] = [v for v in verdicts if v]
     return out
 
 
@@ -369,7 +387,7 @@ def verdict(judged: dict, operator: Optional[str], name: Optional[str], directio
     (`closed`, as in learn_slots) a ghost may run, so it is only 'irregular'."""
     if start is None:
         return None
-    for s, v, _, _ in judged.get((operator, name or '', direction, kind(day)), ()):
+    for s, v, _, _ in judged.get((operator, name or '', direction_of(direction), kind(day)), ()):
         if abs(s - start) <= SLOP:
             return 'irregular' if v == 'ghost' and day in (closed or {}).get((operator, name or ''), ()) else v
     return None
@@ -559,7 +577,8 @@ def learn_verdicts(today: date, listed: list, past: tuple, closed: Optional[dict
             for key, items in judged.items() for start, v, rate, days in items}
     for r in (old or {}).get('slots') or []:
         try:
-            key, at = (r['operator'], r['name'], r['direction'], r['kind'], int(r['start'])), date.fromisoformat(r['judgedAt'])
+            key = (r['operator'], r['name'], direction_of(r.get('direction')), r['kind'], int(r['start']))
+            at = date.fromisoformat(r['judgedAt'])
         except (KeyError, TypeError, ValueError):
             continue
         if at < today - timedelta(days=LONG) or any(k[:4] == key[:4] and abs(k[4] - key[4]) <= SLOP for k in rows):
@@ -600,7 +619,7 @@ def read_verdicts(body: dict, today: date) -> dict:
     judged, closed = defaultdict(list), {}
     for r in body.get('slots') or []:
         if r.get('verdict') in ('ghost', 'irregular'):
-            judged[(r['operator'], r['name'], r['direction'], r['kind'])].append(
+            judged[(r['operator'], r['name'], direction_of(r.get('direction')), r['kind'])].append(
                 (int(r['start']), r['verdict'], r.get('rate'), r.get('days')))
     for r in body.get('closed') or []:
         closed[(r['operator'], r['name'])] = {date.fromisoformat(d) for d in r['days']}

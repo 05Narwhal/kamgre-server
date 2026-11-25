@@ -285,13 +285,29 @@ class RarelyRunsTests(SimpleTestCase):
         slots = gps_habit.learn_slots(LISTED, seen, live, OPS | {MARPROM}, EVER - {(ARRIVA, 'A6343')}, WEEKDAYS[0], WEEKDAYS[-1])
         self.assertNotIn((ARRIVA, 'A6343', 0, 'w'), slots)
 
-    def test_rule_a_a_slot_never_seen_live_itself_is_never_judged(self):
-        # A6343's 14:30 is listed every weekday but never seen live (say a subcontractor's bus without GPS): kept,
-        # although its 08:45 (seen on 5–6 Nov) is a ghost and Arriva is steady.
-        judged = self.judged(listed=LISTED + [row(LESCE, ARRIVA, 'A6343', 14 * 3600 + 1800, WEEKDAYS)])
+    def test_rule_a_a_slot_never_seen_live_is_judged_only_on_a_line_whose_seen_slots_are_all_ghosts(self):
+        # Prod 25 Nov: A6343's 13:30 and 05:54 were never seen live; its 08:45, 14:30, 07:05 and 13:00 ran only on
+        # 5–6 Nov (SŽ closure days). A line that has shown it reports, and whose every seen trip is a ghost, does not run
+        # its unseen trips either, so they are ghosts too.
         monday = date(2026, 11, 24)
+        judged = self.judged(listed=LISTED + [row(LESCE, ARRIVA, 'A6343', 13 * 3600 + 1800, WEEKDAYS)])
         self.assertEqual(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 8 * 3600 + 2700, monday), 'ghost')
-        self.assertIsNone(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 14 * 3600 + 1800, monday))
+        self.assertEqual(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 13 * 3600 + 1800, monday), 'ghost')
+        # A running line's unseen trip (a subcontractor's bus without GPS) stays: its seen slots are not ghosts.
+        judged = self.judged(listed=LISTED + [row(A6345, ARRIVA, 'A6345', 17 * 3600, WEEKDAYS)])
+        self.assertIsNone(gps_habit.verdict(judged, ARRIVA, 'A6345', 0, 17 * 3600, monday))
+        # So does one beside a seen slot that is only irregular (it runs on some days).
+        seen, live = history()
+        for d in WEEKDAYS[::2]:
+            if d not in RUN_DAYS:
+                seen[(LESCE, d)] = [8 * 3600 + 2700]
+                live[(ARRIVA, d)] = sorted(live[(ARRIVA, d)] + [8 * 3600 + 2700])
+        judged = self.judged(listed=LISTED + [row(LESCE, ARRIVA, 'A6343', 13 * 3600 + 1800, WEEKDAYS)], seen_live=(seen, live))
+        self.assertEqual(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 8 * 3600 + 2700, monday), 'irregular')
+        self.assertIsNone(gps_habit.verdict(judged, ARRIVA, 'A6343', 0, 13 * 3600 + 1800, monday))
+        # Nor on a line with no seen slot at all: never judged.
+        judged = self.judged(listed=[row(LESCE, ARRIVA, 'A6343', 13 * 3600 + 1800, WEEKDAYS), LISTED[1]])
+        self.assertEqual(judged, {})
 
     def test_rules_b_and_c_replacement_buses_town_feeds_and_lpp_copies_are_never_judged(self):
         # Each is listed every weekday, seen live once (on 5 Nov) under a steady operator: a ghost by its numbers.
@@ -481,6 +497,34 @@ class StoredVerdictTests(SimpleTestCase):
         self.assertTrue(board['odd'].get('oftenMissing'))
         self.assertNotIn('oftenMissing', board['live'])
         self.assertEqual([d['reason'] for d in drops], ['never seen running'])
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_otps_direction_shapes_match_the_learned_slots(self):
+        # Prod 25 Nov: the IJPP feed has no direction_id. OTP gives its patterns directionId -1 (what the nightly learn
+        # reads) and its trips directionId null (what boards and the planner read); feeds that have one give the
+        # pattern an int and the trip a string. Every shape must find the same verdict, or nothing is ever hidden.
+        def route(direction, shown):
+            return {'gtfsId': LESCE, 'shortName': 'A6343', 'agency': {'gtfsId': ARRIVA}, 'patterns': [
+                {'directionId': direction, 'stops': [{'name': 'Ljubljana AP'}, {'name': 'Lesce ŽP'}],
+                 'trips': [{'activeDates': [d.strftime('%Y%m%d') for d in WEEKDAYS],
+                            'departureStoptime': {'scheduledDeparture': 8 * 3600 + 2700}}]}]}, shown
+        for listed_as, trip_says in (route(-1, None), route(0, '0'), route(1, '1')):
+            self.store(self.learned(listed=gps_habit.listing(listed_as) + [LISTED[1]]))
+            rows = [stoptime('ghost', LESCE, ARRIVA, 8 * 3600 + 2700, 8 * 3600 + 2700)]
+            rows[0]['trip']['directionId'] = trip_says
+            leg = {'trip': {'gtfsId': 'IJPP:t', 'directionId': trip_says, 'departureStoptime': {'scheduledDeparture': 8 * 3600 + 2700}},
+                   'start': {'scheduledTime': mapping.iso(DAY + 9 * 3600)}}
+            from prestop_api import journeys
+            with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path), \
+                    mock.patch.object(gps_habit, 'habit', return_value=KNOWN), mock.patch('time.time', return_value=DAY + 8 * 3600):
+                self.assertEqual(mapping.build_board('IJPP:ap', rows, 'departure', []), [], listed_as['patterns'][0]['directionId'])
+                self.assertEqual(journeys._ghost_verdict(leg, {'shortName': 'A6343', 'agency': {'gtfsId': ARRIVA}}, False), 'ghost')
+        # The file prod holds now was written with -1: read as "no direction", it matches the board's null.
+        body = self.learned()
+        for r in body['slots']:
+            r['direction'] = -1
+        self.store(body)
+        self.assertEqual(self.check(ARRIVA, 'A6343', None, 8 * 3600 + 2700, MONDAY), 'ghost')
 
     @override_settings(GHOST_TRIPS='hide')
     def test_health_counts_the_stored_verdicts(self):
