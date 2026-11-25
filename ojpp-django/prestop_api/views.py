@@ -885,6 +885,7 @@ def trip_list(request):
     geometry = request.GET.get('geometry', '1') != '0'
     found = trips.load_trips(ids, _day_param(request))
     data = [trips.build_trip(found[t], geometry=geometry, **_typical(found[t])) for t in ids if t in found]
+    data = [t for t in data if not _is_ghost(t)]  # B1: listed but almost never runs, until live data for it comes
     _with_observed(data, found)
     data = _dense(data)
     _with_replaced(data)
@@ -899,6 +900,8 @@ def trip_detail(request, trip_id):
     if not found:
         raise ApiError(404, 'TRIP_NOT_FOUND', 'This trip is not in the current timetable.')
     data = trips.build_trip(found, **_typical(found))
+    if _is_ghost(data):
+        raise ApiError(404, 'TRIP_NOT_RUNNING', 'This bus is in the timetable but almost never runs.')
     _with_observed([data], {trip_id: found})
     [data] = _dense([data])
     _with_replaced([data])
@@ -1001,6 +1004,17 @@ def line_detail(request, route_id):
         if runs is not None:
             extra['replacedRuns'] = runs
     return envelope({**line, **grouped, 'patterns': patterns, **extra}, 'scheduled', used=['otp:timetables'])
+
+
+def _is_ghost(trip: dict) -> bool:
+    """A direct link to a bus trip that almost never runs (gps_habit.trip_verdict, B1), with no live data for it."""
+    if trip.get('mode') == 'rail' or not trip.get('stops') or gps_habit.ghost_mode() == 'off':
+        return False
+    day = date.fromisoformat(trip['serviceDate'])
+    began = datetime.combine(day, datetime.min.time(), trips.LJUBLJANA).timestamp()  # OTP's start times count from here
+    start = round(datetime.fromisoformat(trip['stops'][0]['scheduledDeparture']).timestamp() - began)
+    direction = int(trip['directionId']) if trip.get('directionId') in ('0', '1') else None
+    return gps_habit.trip_verdict(trip.get('operatorId'), trip.get('routeName'), direction, start, day, bool(trip.get('realtime'))) == 'ghost'
 
 
 def without_ghosts(line: dict, updates: Optional[dict] = None) -> dict:

@@ -361,8 +361,10 @@ class RarelyRunsTests(SimpleTestCase):
         with mock.patch.object(gps_habit, 'learn', return_value={'operators': frozenset({ARRIVA})}):
             self.assertEqual(gps_habit.backtest(date(2026, 11, 24), 14, listed, (seen, live, operator_of))['hidden'], 0)
 
-    def test_switch_defaults_to_off(self):
-        self.assertEqual(gps_habit.ghost_mode(), 'off')
+    def test_switch_defaults_to_hide(self):
+        self.assertEqual(gps_habit.ghost_mode(), 'hide')  # settings_prestop, measured on prod 11-24 Nov (part 6c-1)
+        with self.settings(GHOST_TRIPS='off'):
+            self.assertEqual(gps_habit.ghost_mode(), 'off')
         with self.settings(GHOST_TRIPS='hide'):
             self.assertEqual(gps_habit.ghost_mode(), 'hide')
         with self.settings(GHOST_TRIPS='bogus'):
@@ -531,3 +533,27 @@ class StoredVerdictTests(SimpleTestCase):
         self.assertEqual([d['tripId'] for d in live['patterns'][0]['departures']], ['ghost', 'odd', 'normal'])
         with override_settings(GHOST_TRIPS='off'):
             self.assertIs(views.without_ghosts(line, updates={}), line)
+
+    @override_settings(GHOST_TRIPS='hide')
+    def test_a_direct_link_to_a_ghost_trip_says_it_is_not_running(self):
+        from django.test import RequestFactory
+        from prestop_api import trips, views
+        self.store(self.learned())
+        at = lambda s: mapping.iso(DAY + s)
+
+        def trip(tid, name='A6343', start=8 * 3600 + 2700, **kw):
+            return {'id': tid, 'routeName': name, 'operatorId': ARRIVA, 'mode': 'bus', 'directionId': '0',
+                    'serviceDate': '2026-11-24', 'realtime': False, 'stops': [{'scheduledDeparture': at(start)}], **kw}
+        with mock.patch.object(gps_habit, 'verdict_path', return_value=self.path), mock.patch('time.time', return_value=MONDAY_NOON):
+            self.assertTrue(views._is_ghost(trip('ghost')))
+            self.assertFalse(views._is_ghost(trip('live', realtime=True)))  # live data: shown at once
+            self.assertFalse(views._is_ghost(trip('other', name='A6345')))
+            self.assertFalse(views._is_ghost(trip('back', directionId='1')))
+            self.assertFalse(views._is_ghost(trip('rail', mode='rail')))
+            with override_settings(GHOST_TRIPS='off'):
+                self.assertFalse(views._is_ghost(trip('ghost')))
+            request = RequestFactory().get('/trips/IJPP:ghost')
+            with mock.patch.object(trips, 'load_trips', return_value={'IJPP:ghost': {'static': {}}}),                     mock.patch.object(trips, 'build_trip', return_value=trip('IJPP:ghost')),                     mock.patch.object(views, '_typical', return_value={}):
+                response = views.trip_detail(request, 'IJPP:ghost')
+        self.assertEqual(response.status_code, 404)
+        self.assertIn(b'TRIP_NOT_RUNNING', response.content)

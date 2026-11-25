@@ -173,7 +173,7 @@ def measure(today: date, days: int = 7, scheduled=None, grace: int = GRACE) -> d
 # listed day counts only when it is observable: the operator sent live data for other trips within NEAR of the start
 # (collector up, operator reporting). Only operators steady over their lines (learn()['operators']) are judged, and
 # only slots with MIN_OBSERVABLE observable listed days; LPP's copies in the national feed and lines never live in
-# LONG days never are. `GHOST_TRIPS` (settings): hide | mark | off; off (the default until measured) changes nothing.
+# LONG days never are. `GHOST_TRIPS` (settings): hide (the default, measured 11-24 Nov) | mark | off; off changes nothing.
 # Hard safety rules (prod sweep 25 Nov: 26 of 31 naive "ghost lines" were real buses without GPS), each never judged:
 # (a) a slot not itself seen live in the LONG days (a trip always run by a bus without GPS, e.g. a subcontractor's,
 #     however steady its operator); (b) SŽ's replacement buses (operator IJPP:1161, lines "BUS <train no>") and every
@@ -202,7 +202,7 @@ STOP_SUFFIXES = ('avtobusnapostaja', 'zelezniskapostaja', 'postaja', 'ap', 'zp')
 
 def ghost_mode() -> str:
     from django.conf import settings
-    mode = str(getattr(settings, 'GHOST_TRIPS', 'off')).lower()
+    mode = str(getattr(settings, 'GHOST_TRIPS', 'hide')).lower()
     return mode if mode in ('hide', 'mark') else 'off'
 
 

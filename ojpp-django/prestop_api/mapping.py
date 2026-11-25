@@ -652,7 +652,7 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
     live, updates = live or {}, updates or {}
     out = []
     known, now = None, time.time()
-    ghost_on = gps_habit.ghost_mode() != 'off'  # GHOST_TRIPS: off until measured on prod
+    ghost_on = gps_habit.ghost_mode() != 'off'  # GHOST_TRIPS (settings): hide | mark | off
     for st in stoptimes:
         trip = st.get('trip') or {}
         route = trip.get('route') or {}

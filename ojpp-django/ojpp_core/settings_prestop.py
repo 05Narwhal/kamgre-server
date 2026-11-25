@@ -110,6 +110,9 @@ PRESTOP_SZ_NOTICES_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ
 PRESTOP_SZ_NOTICES_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_SZ_NOTICES_FILE', default=str(root / 'data/sz-notices.json'))
 # SŽ closure days kept for the ghost-trip rule (prestop_api/gps_habit.py, `manage gps_habit --learn`).
 PRESTOP_GHOST_FILE = '' if 'test' in sys.argv[1:2] else env('PRESTOP_GHOST_FILE', default=str(root / 'data/ghost-closures.json'))
+# Listed buses that almost never run: hide (removed everywhere until live data comes) | mark (shown as "often doesn't
+# run") | off (shown as listed). Measured on prod 11-24 Nov: no false hides (spec 2026-11-25 B1).
+GHOST_TRIPS = env('PRESTOP_GHOST_TRIPS', default='hide')
 # SŽ's own RSS (its "Obvestila za potnike"; no bot check): every post in effect, and the timetables they link ahead.
 PRESTOP_SZ_NEWS_URL = [] if 'test' in sys.argv[1:2] else env.list('PRESTOP_SZ_NEWS_URL', default=['https://potniski.sz.si/feed/?category_name=obvestila-za-potnike'])
 # Arriva's posts read elsewhere and uploaded (manage.py arriva_notices, `yarn server:update`), for when its site blocks the server.
