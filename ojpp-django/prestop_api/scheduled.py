@@ -397,12 +397,17 @@ def city_buses(now: Optional[float] = None, skip_trips: frozenset = frozenset(),
     positions, where their timetable puts them (quality "scheduled"), on the feed's shape or else on the roads
     between their stops. A run a live vehicle is drawn on (`skip_trips`: one the feed reports without a trip, matched
     by mapping.LooseVehicles) is left to it."""
-    from . import coverage, supplement
+    from . import coverage, gps_habit, supplement
     now = now or time.time()
     out = []
     for trip in supplement.timetable_runs(now, BOARDING, ARRIVED):
         if trip['id'] in skip_trips:
             coverage.note(drops, 'has a live vehicle', trip)
+            continue
+        # An operator or line that normally sends live data and sent none: probably not running (gps_habit.py, B1).
+        operator = (trip['route'].get('agency') or {}).get('gtfsId')
+        if gps_habit.ghost_mode() != 'off' and gps_habit.no_live_data(operator, trip['route'].get('gtfsId'), trip['departures'][0], False, now):
+            coverage.note(drops, 'no live data from a live operator', trip)
             continue
         stops = trip['stops']
         key = ';'.join([trip['shapeKey'], *(s['gtfsId'] for s in stops)])

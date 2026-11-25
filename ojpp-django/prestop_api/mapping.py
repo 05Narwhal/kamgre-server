@@ -648,9 +648,11 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
     """`live`: trip id -> the delay its vehicle shows (build_vehicles); a delay beyond MAX_UNCONFIRMED_DELAY stays on
     the board only when the trip's vehicle shows it too, else the row has no live data. `updates`: the trip updates
     (trip_update_index), for the run each is about (update_run). `drops`: the stoptimes left out and why (coverage.note)."""
-    from . import abroad, coverage, stopfix
+    from . import abroad, coverage, gps_habit, stopfix
     live, updates = live or {}, updates or {}
     out = []
+    known, now = None, time.time()
+    ghost_on = gps_habit.ghost_mode() != 'off'  # GHOST_TRIPS: off until measured on prod
     for st in stoptimes:
         trip = st.get('trip') or {}
         route = trip.get('route') or {}
@@ -665,6 +667,7 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         day = st['serviceDay']
         scheduled = day + (st['scheduledArrival'] if kind == 'arrival' else st['scheduledDeparture'])
         realtime = bool(st.get('realtime'))
+        sent = realtime or trip.get('gtfsId') in updates or trip.get('gtfsId') in live  # live data came, believed or not
         canceled = st.get('realtimeState') == 'CANCELED'
         effective = day + (st['realtimeArrival'] if kind == 'arrival' else st['realtimeDeparture'])
         first_departure = (trip.get('departureStoptime') or {}).get('scheduledDeparture')
@@ -705,6 +708,12 @@ def build_board(stop_id: str, stoptimes: Iterable[dict], kind: str, alerts: list
         })
         if is_replacement(route):
             out[-1]['replacement'] = True
+        # An operator or line that normally sends live data sent none since the trip set off: probably not running
+        # (spec 2026-11-25 B1, gps_habit.py). Listed still, marked, in case it comes.
+        if not sent and not canceled and isinstance(first_departure, int) and ghost_on and now >= day + first_departure + gps_habit.GRACE:
+            known = gps_habit.habit(now) if known is None else known
+            if gps_habit.no_live_data(out[-1]['operatorId'], route_id, day + first_departure, False, now, known):
+                out[-1]['noLiveData'] = True
     return out
 
 
